@@ -70,3 +70,8 @@ specification.
 
 The projects under `temp/` are reference material only. They are excluded from
 version control and are not dependencies of this library.
+
+## License
+
+Copyright (c) 2026 Miklos Maroti <mmaroti@math.u-szeged.hu>.
+Licensed under the [Apache License, Version 2.0](LICENSE).
