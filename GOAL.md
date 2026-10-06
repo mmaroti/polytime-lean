@@ -32,7 +32,8 @@ Specific schemas may impose such properties when their algorithms need them.
 
 Fixing P and an admissible S determines the specialized program `P_S`, its
 precise input and output domains, and every temporary/state domain. Each
-domain remains a family in N, written `D_{P,S}(N)`. Its Lean values may use
+domain remains a family indexed by N and declared auxiliary size parameters,
+written `D_{P,S}(a)` for a complete size assignment a. Its Lean values may use
 ordinary mathematical types associated with S. S itself is fixed mathematical
 context, not runtime input and not something the machine must encode.
 
@@ -73,22 +74,29 @@ arbitrary Lean functions or predicates associated with S.
 
 ## Data domains and representations
 
-The primary complexity parameter is an explicit natural number N. Every data
-domain, after fixing P and S, is a family `D N`, fixed apart from N; its
-description must guarantee
-a polynomial bound on the encoded length of every possible member. All inputs,
-outputs, and intermediate stored values belong to such bounded domains.
+The primary complexity parameter is an explicit natural number N. A finite
+parameter context may also declare natural parameters K, L, and others, each
+with a fixed polynomial upper bound in N. A size assignment supplies N and all
+auxiliary values; it is admissible when those bounds hold. Every data domain,
+after fixing P and S, is a family `D a` over these assignments. Its description
+must guarantee one polynomial encoding bound in N, uniformly over every
+admissible assignment and every domain value. All inputs, outputs, and
+intermediate stored values belong to such bounded domains.
 Runtime claims are polynomial in N, not necessarily in the encoded input
 length. No reverse bound
 from input length to N is required for this notion.
 
 For each domain description, its encoding certificate proves the existence of
-one polynomial p such that, for every N and every `x : D N`,
-`length (encode x) ≤ p(N)`. This p may depend arbitrarily on the program schema
+one polynomial p such that, for every admissible a and every `x : D a`,
+`length (encode x) ≤ p(a.N)`. This p may depend arbitrarily on the program schema
 P and fixed S, but cannot be selected separately for each N or each value.
 Polynomial witnesses are internal: formalization users should not
 calculate or carry explicit coefficients, degrees, total operation counts, or
-composed size bounds. Constructors and closure lemmas should discharge these
+composed size bounds. The complete assignment determines the exact encoding
+width; N alone determines a polynomial upper bound. Size parameters need not
+be fields of domain values or included in their encodings. Their eventual
+machine interface is separate from this data-domain layer.
+Constructors and closure lemmas should discharge these
 qualitative polynomial claims. The domain may have exponentially many
 elements; the length of each representation is polynomially bounded.
 
@@ -119,6 +127,21 @@ Examples of required domains include:
   lists must be included in the library's encoding proof.
 - Dependent records containing K and L with `K ≤ N`, `L ≤ N`, followed by a
   K-by-L matrix over a fixed finite carrier.
+
+The initial implemented layer uses a recursive domain language with `Fixed`,
+`Product`, `Sum`, and `Power`. A Fixed domain supplies an explicit equivalence
+with `Fin k`; its binary labels use `Nat.clog 2 k` bits. Product concatenates
+fields from a fixed finite list. Sum uses a binary alternative tag, its
+payload, and canonical zero padding to the maximum payload width. Power
+contains an exact number of entries, specified by any natural-coefficient
+multivariate polynomial in the size parameters, including constants.
+
+These constructors give fixed-width codecs with round-trip and canonical
+decoding theorems, and automatically compose polynomial-size certificates.
+Matrix examples use external K,L indices and exact tuples; bounded lists and
+dependent records carrying dimensions remain later extensions. The present
+definitions establish no algorithmic runtime claim. Mathlib polynomial
+construction is noncomputable; an executable program layer is future work.
 
 Representations should provide encoding, decoding, a round-trip theorem, and
 encoded-size bounds. Finite indexing needs an explicit enumeration, not just
