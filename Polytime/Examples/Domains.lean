@@ -27,51 +27,49 @@ namespace Polytime.Examples.Domains
 
 noncomputable section
 
-def context : SizeContext Empty := ⟨Empty.elim⟩
-def assignment (N : ℕ) : SizeAssignment Empty := ⟨N, Empty.elim⟩
+abbrev context : SizeContext := ⟨Empty, inferInstance⟩
+def assignment : SizeAssignment context := Empty.elim
 
-example (N : ℕ) : context.Admissible (assignment N) := by intro k; exact Empty.elim k
+def emptyFixed : DomainExpr context := .fixed (FinitePresentation.fin 0)
+def singletonFixed : DomainExpr context := .fixed (FinitePresentation.fin 1)
 
-def emptyFixed : DomainExpr Empty := .fixed (FinitePresentation.fin 0)
-def singletonFixed : DomainExpr Empty := .fixed (FinitePresentation.fin 1)
-
-example (N : ℕ) : emptyFixed.bitWidth context (assignment N) = 0 := by
+example : emptyFixed.bitWidth assignment = 0 := by
   simp [emptyFixed, FinitePresentation.bitWidth, FinitePresentation.fin]
 
-example (N : ℕ) : IsEmpty (emptyFixed.Value context (assignment N)) := by
+example : IsEmpty (emptyFixed.Value assignment) := by
   simp only [emptyFixed, DomainExpr.value_fixed, FinitePresentation.fin]
   infer_instance
 
-example (N : ℕ) : singletonFixed.bitWidth context (assignment N) = 0 := by
+example : singletonFixed.bitWidth assignment = 0 := by
   simp [singletonFixed, FinitePresentation.bitWidth, FinitePresentation.fin]
 
 example : (RawCodec.fin 0).decode (fun i => Fin.elim0 i) = none := by decide
 example : (RawCodec.fin 1).toBitCodec.decode (BitVec.ofNat 0 0) = some ⟨0, by decide⟩ := by
   decide
 
-example (N : ℕ) : (DomainExpr.product []).bitWidth context (assignment N) = 0 := by simp
-example (N : ℕ) : (DomainExpr.sum []).bitWidth context (assignment N) = 0 := by simp
+example : (DomainExpr.product []).bitWidth assignment = 0 := by simp
+example : (DomainExpr.sum []).bitWidth assignment = 0 := by simp
 
 example : RawCodec.unit.toBitCodec.decode (BitVec.ofNat 0 0) = some PUnit.unit := by decide
 
-def zeroPower : DomainExpr Empty := .power emptyFixed (SizeExpr.constant 0)
+def zeroPower : DomainExpr context := .power emptyFixed (SizeExpr.constant 0)
 
-example (N : ℕ) : zeroPower.bitWidth context (assignment N) = 0 := by simp [zeroPower]
+example : zeroPower.bitWidth assignment = 0 := by simp [zeroPower]
 
-example (N : ℕ) : Unique (zeroPower.Value context (assignment N)) := by
+example : Unique (zeroPower.Value assignment) := by
   simp only [zeroPower, DomainExpr.value_power, SizeExpr.eval_constant]
   infer_instance
 
-example (N : ℕ) : IsEmpty ((DomainExpr.power emptyFixed (SizeExpr.constant 1)).Value
-    context (assignment N)) := by
+example : IsEmpty ((DomainExpr.power emptyFixed (SizeExpr.constant 1)).Value
+    assignment) := by
   simp only [DomainExpr.value_power, SizeExpr.eval_constant, emptyFixed, DomainExpr.value_fixed,
     FinitePresentation.fin]
   infer_instance
 
-def alternatives : DomainExpr Empty :=
+def alternatives : DomainExpr context :=
   .sum [.fixed (FinitePresentation.fin 2), .fixed (FinitePresentation.fin 3)]
 
-example (N : ℕ) : alternatives.bitWidth context (assignment N) = 3 := by
+example : alternatives.bitWidth assignment = 3 := by
   simp [alternatives, FinitePresentation.bitWidth, FinitePresentation.fin]
   decide
 
@@ -134,11 +132,38 @@ def lifted : FinitePresentation.{1} where
 example (x : lifted.Carrier) : lifted.codec.decode (lifted.codec.encode x) = some x :=
   lifted.codec.decode_encode x
 
-def nested : DomainExpr Empty :=
-  .product [alternatives, .power (.power singletonFixed SizeExpr.main) (SizeExpr.main ^ 2)]
+def nested : DomainExpr Matrices.context :=
+  .product [Matrices.domain Matrices.field5,
+    .power (.power (.fixed (FinitePresentation.fin 2))
+      (SizeExpr.parameter (ctx := Matrices.context) .K))
+      (SizeExpr.parameter (ctx := Matrices.context) .L ^ 2)]
 
-example : ∃ p : Polynomial ℕ, ∀ a, context.Admissible a → nested.bitWidth context a ≤ p.eval a.N :=
-  nested.polynomially_bounded context
+example : ∃ p : SizeExpr Matrices.context, ∀ a, nested.bitWidth a ≤ p.eval a :=
+  nested.polynomially_bounded
+
+/-- Even a parameter named N is an ordinary name, without special bounds. -/
+inductive PeerParameter | N | K | L
+  deriving DecidableEq
+
+instance : Fintype PeerParameter :=
+  ⟨{.N, .K, .L}, by intro k; cases k <;> simp⟩
+
+abbrev peerContext : SizeContext := ⟨PeerParameter, inferInstance⟩
+def peerAssignment : SizeAssignment peerContext
+  | .N => 0
+  | .K => 7
+  | .L => 11
+
+def peerExponent : SizeExpr peerContext :=
+  SizeExpr.parameter (ctx := peerContext) .N ^ 2 +
+    SizeExpr.parameter (ctx := peerContext) .K * SizeExpr.parameter (ctx := peerContext) .L
+
+example : peerExponent.eval peerAssignment = 77 := by
+  simp [peerExponent, SizeExpr.eval_parameter (ctx := peerContext), peerAssignment]
+
+example : ∃ p : SizeExpr peerContext, ∀ a,
+    (DomainExpr.power (.fixed (FinitePresentation.fin 2)) peerExponent).bitWidth a ≤ p.eval a :=
+  DomainExpr.polynomially_bounded _
 
 end
 end Polytime.Examples.Domains

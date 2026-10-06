@@ -5,6 +5,13 @@ the intended goal; proposals and open questions are not yet settled decisions.
 The reference projects under `temp/` inform the design but remain outside this
 repository's implementation scope.
 
+Size parameters now have equal roles. The data layer has no distinguished N
+and no admissibility bounds between parameters. Algorithms will be polynomial
+in all declared size parameters; choosing their sum or maximum as an aggregate
+belongs to the future algorithm layer. Generic algorithm discussions below
+using N should be read as shorthand for such an aggregate. In examples such
+as CSP with N variables, N is an ordinary declared parameter.
+
 ## Intended mathematical interface
 
 Make mathematical proofs of polynomial-time algorithms straightforward to
@@ -32,15 +39,17 @@ Specific schemas may impose such properties when their algorithms need them.
 
 Fixing P and an admissible S determines the specialized program `P_S`, its
 precise input and output domains, and every temporary/state domain. Each
-domain remains a family indexed by N and declared auxiliary size parameters,
+domain remains a family indexed by its declared size parameters,
 written `D_{P,S}(a)` for a complete size assignment a. Its Lean values may use
 ordinary mathematical types associated with S. S itself is fixed mathematical
 context, not runtime input and not something the machine must encode.
 
 For every admissible fixed S and every declared domain, there exists a
-polynomial size bound valid for all N and all members of that domain. Both
+multivariate polynomial size bound valid for all size assignments and members
+of that domain. Both
 coefficients and degree may depend arbitrarily on P, S, and the particular
-domain declaration. They may not depend on the runtime input or on N.
+domain declaration. They may not depend on the runtime input or on the values
+of the size parameters.
 This is a separate requirement from the algorithm's runtime certificate.
 
 Each `P_S` has a finite program/machine description independent of N. The
@@ -74,26 +83,26 @@ arbitrary Lean functions or predicates associated with S.
 
 ## Data domains and representations
 
-The primary complexity parameter is an explicit natural number N. A finite
-parameter context may also declare natural parameters K, L, and others, each
-with a fixed polynomial upper bound in N. A size assignment supplies N and all
-auxiliary values; it is admissible when those bounds hold. Every data domain,
-after fixing P and S, is a family `D a` over these assignments. Its description
-must guarantee one polynomial encoding bound in N, uniformly over every
-admissible assignment and every domain value. All inputs, outputs, and
-intermediate stored values belong to such bounded domains.
-Runtime claims are polynomial in N, not necessarily in the encoded input
-length. No reverse bound
-from input length to N is required for this notion.
+`SizeContext` names all parameters through a finite type. Each parameter has
+the same role, and a `SizeAssignment` maps each name to an arbitrary natural
+number. A context may name N, K, and L without imposing any bounds between
+their values. Every data domain, after fixing P and S, is a family `D a` over
+these assignments. Its description guarantees one multivariate polynomial
+encoding bound in all the parameters, uniformly over every assignment and
+every domain value. All inputs, outputs, and intermediate stored values
+belong to such bounded domains. Runtime certificates will separately establish
+polynomial bounds in all size parameters, possibly using their sum or maximum
+as an aggregate; the data layer does not select an aggregate.
 
 For each domain description, its encoding certificate proves the existence of
-one polynomial p such that, for every admissible a and every `x : D a`,
-`length (encode x) ≤ p(a.N)`. This p may depend arbitrarily on the program schema
-P and fixed S, but cannot be selected separately for each N or each value.
+one multivariate polynomial p such that, for every a and every `x : D a`,
+`length (encode x) ≤ p.eval a`. This p may depend arbitrarily on the program
+schema P and fixed S, but cannot be selected separately for each assignment
+or each value.
 Polynomial witnesses are internal: formalization users should not
 calculate or carry explicit coefficients, degrees, total operation counts, or
 composed size bounds. The complete assignment determines the exact encoding
-width; N alone determines a polynomial upper bound. Size parameters need not
+width. Size parameters need not
 be fields of domain values or included in their encodings. Their eventual
 machine interface is separate from this data-domain layer.
 Constructors and closure lemmas should discharge these
@@ -125,8 +134,8 @@ Examples of required domains include:
   Polynomial encoded size should follow from generic nested-list rules without
   asking users to compute the resulting polynomial. Framing, tags, and empty
   lists must be included in the library's encoding proof.
-- Dependent records containing K and L with `K ≤ N`, `L ≤ N`, followed by a
-  K-by-L matrix over a fixed finite carrier.
+- K-by-L matrices over a fixed finite carrier, with K and L as independent
+  size parameters. Dependent records carrying dimensions are a later extension.
 
 The initial implemented layer uses a recursive domain language with `Fixed`,
 `Product`, `Sum`, and `Power`. A Fixed domain supplies an explicit equivalence

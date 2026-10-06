@@ -16,96 +16,67 @@ limitations under the License.
 -/
 
 import Mathlib.Algebra.MvPolynomial.Eval
-import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Tactic
 
 /-! # Size parameters
 
-`none` names the primary parameter N; `some k` names an auxiliary parameter.
-Bounds concern admissible assignments, not the definition of domain values.
+A context names finitely many parameters. Every name has the same role, and
+an assignment gives each name an arbitrary natural value. No parameter bounds
+or distinguished complexity parameter belong to this data layer.
 -/
 
 namespace Polytime
 
-structure SizeContext (Param : Type) [Fintype Param] where
-  bound : Param → Polynomial ℕ
+structure SizeContext where
+  Parameter : Type
+  finiteParameters : Fintype Parameter
 
-structure SizeAssignment (Param : Type) where
-  N : ℕ
-  auxiliary : Param → ℕ
+attribute [instance] SizeContext.finiteParameters
 
-namespace SizeAssignment
-
-def valuation (a : SizeAssignment Param) : Option Param → ℕ
-  | none => a.N
-  | some k => a.auxiliary k
-
-end SizeAssignment
-
-namespace SizeContext
-
-def Admissible [Fintype Param] (ctx : SizeContext Param) (a : SizeAssignment Param) : Prop :=
-  ∀ k, a.auxiliary k ≤ (ctx.bound k).eval a.N
-
-end SizeContext
-
-abbrev SizeExpr (Param : Type) := MvPolynomial (Option Param) ℕ
+abbrev SizeAssignment (ctx : SizeContext) := ctx.Parameter → ℕ
+abbrev SizeExpr (ctx : SizeContext) := MvPolynomial ctx.Parameter ℕ
 
 namespace SizeExpr
 
+variable {ctx : SizeContext}
+
 noncomputable section
 
-def main : SizeExpr Param := MvPolynomial.X none
-def parameter (k : Param) : SizeExpr Param := MvPolynomial.X (some k)
-def constant (n : ℕ) : SizeExpr Param := MvPolynomial.C n
+def parameter (k : ctx.Parameter) : SizeExpr ctx := MvPolynomial.X k
+def constant (n : ℕ) : SizeExpr ctx := MvPolynomial.C n
 
-def eval (e : SizeExpr Param) (a : SizeAssignment Param) : ℕ :=
-  MvPolynomial.eval a.valuation e
+def eval (e : SizeExpr ctx) (a : SizeAssignment ctx) : ℕ :=
+  MvPolynomial.eval a e
 
-def envelope [Fintype Param] (e : SizeExpr Param) (ctx : SizeContext Param) : Polynomial ℕ :=
-  e.eval₂ Polynomial.C (fun | none => Polynomial.X | some k => ctx.bound k)
+@[simp] theorem eval_parameter (k : ctx.Parameter) (a : SizeAssignment ctx) :
+    eval (parameter k) a = a k := by
+  simp [eval, parameter]
 
-@[simp] theorem eval_main (a : SizeAssignment Param) : eval main a = a.N := by
-  simp [eval, main, SizeAssignment.valuation]
-
-@[simp] theorem eval_parameter (k : Param) (a : SizeAssignment Param) :
-    eval (parameter k) a = a.auxiliary k := by
-  simp [eval, parameter, SizeAssignment.valuation]
-
-@[simp] theorem eval_constant (n : ℕ) (a : SizeAssignment Param) : eval (constant n) a = n := by
+@[simp] theorem eval_constant (n : ℕ) (a : SizeAssignment ctx) : eval (constant n) a = n := by
   simp [eval, constant]
 
-@[simp] theorem eval_add (e f : SizeExpr Param) (a : SizeAssignment Param) :
+@[simp] theorem eval_zero (a : SizeAssignment ctx) : eval (0 : SizeExpr ctx) a = 0 := by
+  simp [eval]
+
+@[simp] theorem eval_one (a : SizeAssignment ctx) : eval (1 : SizeExpr ctx) a = 1 := by
+  simp [eval]
+
+@[simp] theorem eval_add (e f : SizeExpr ctx) (a : SizeAssignment ctx) :
     eval (e + f) a = eval e a + eval f a := by simp [eval]
 
-@[simp] theorem eval_mul (e f : SizeExpr Param) (a : SizeAssignment Param) :
+@[simp] theorem eval_mul (e f : SizeExpr ctx) (a : SizeAssignment ctx) :
     eval (e * f) a = eval e a * eval f a := by simp [eval]
 
-@[simp] theorem eval_pow (e : SizeExpr Param) (n : ℕ) (a : SizeAssignment Param) :
+@[simp] theorem eval_pow (e : SizeExpr ctx) (n : ℕ) (a : SizeAssignment ctx) :
     eval (e ^ n) a = eval e a ^ n := by simp [eval]
 
-theorem eval_mono (e : SizeExpr Param) (a b : Option Param → ℕ) (h : ∀ k, a k ≤ b k) :
-    MvPolynomial.eval a e ≤ MvPolynomial.eval b e := by
+/-- Natural-coefficient size expressions are monotone in every parameter. -/
+theorem eval_mono (e : SizeExpr ctx) (a b : SizeAssignment ctx) (h : ∀ k, a k ≤ b k) :
+    e.eval a ≤ e.eval b := by
   induction e using MvPolynomial.induction_on with
-  | C n => simp
+  | C n => simp [eval]
   | add e f he hf => simpa using Nat.add_le_add he hf
-  | mul_X e k he => simpa using Nat.mul_le_mul he (h k)
-
-theorem eval_le_envelope [Fintype Param] (e : SizeExpr Param) (ctx : SizeContext Param)
-    (a : SizeAssignment Param) (ha : ctx.Admissible a) :
-    e.eval a ≤ (e.envelope ctx).eval a.N := by
-  have heq : (e.envelope ctx).eval a.N =
-      MvPolynomial.eval (fun | none => a.N | some k => (ctx.bound k).eval a.N) e := by
-    induction e using MvPolynomial.induction_on with
-    | C n => simp [envelope]
-    | add e f he hf => simpa [envelope] using congrArg₂ (· + ·) he hf
-    | mul_X e k he => cases k <;> simp_all [envelope]
-  rw [heq]
-  apply eval_mono
-  intro k
-  cases k with
-  | none => exact le_rfl
-  | some k => exact ha k
+  | mul_X e k he => simpa [eval] using Nat.mul_le_mul he (h k)
 
 end
 end SizeExpr
