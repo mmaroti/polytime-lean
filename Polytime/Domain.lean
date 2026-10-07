@@ -28,6 +28,7 @@ headers are included in these codecs.
 
 namespace Polytime
 
+-- u: fixed carriers and the mathematical values of domain expressions.
 universe u
 
 structure FixedPresentation where

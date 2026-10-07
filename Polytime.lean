@@ -18,5 +18,7 @@ limitations under the License.
 import Polytime.Size
 import Polytime.Encoding
 import Polytime.Domain
+import Polytime.EncodedDomain
+import Polytime.Algorithm
 import Polytime.Examples.Matrices
 import Polytime.Examples.Domains

@@ -28,6 +28,9 @@ consecutive blocks from least to most significant; sum payloads have zero paddin
 
 namespace Polytime
 
+-- u: encoded carriers; v: target carriers when transporting a codec along an equivalence.
+universe u v
+
 private def join (a : BitVec m) (b : BitVec n) : BitVec (m + n) :=
   (b ++ a).cast (Nat.add_comm n m)
 

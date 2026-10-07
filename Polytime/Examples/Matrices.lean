@@ -28,6 +28,9 @@ in row-major order: rows first, then entries within each row.
 
 namespace Polytime.Examples.Matrices
 
+-- u: the fixed scalar carrier used for matrix entries.
+universe u
+
 inductive Parameter | K | L
   deriving DecidableEq
 
