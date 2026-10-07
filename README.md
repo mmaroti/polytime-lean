@@ -43,10 +43,14 @@ The library currently provides:
   including the field `ZMod 5`, with independent dimensions K and L.
 - `Polytime.Examples.Domains`: checked boundary cases and binary layouts.
 
-`DomainExpr` directly defines its mathematical values (`Value`), exact bit
+`DomainExpression` directly defines its mathematical values (`Value`), exact bit
 width (`bitWidth`), codecs (`encode` and `decode`), and polynomial upper bound
 (`sizeBound`) by recursion on the expression. The size-bound proof is separate
 from the width computation.
+
+Each constructor has one canonical encoding through `BitCodec`, directly to and
+from `BitVec` of the exact width. Fixed domains retain their `FixedPresentation`
+to identify mathematical values with binary labels.
 
 For example:
 

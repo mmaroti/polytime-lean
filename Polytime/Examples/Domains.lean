@@ -30,47 +30,47 @@ noncomputable section DomainExamples
 abbrev context : SizeContext := ⟨Empty, inferInstance⟩
 def assignment : SizeAssignment context := Empty.elim
 
-def emptyFixed : DomainExpr context := .fixed (FinitePresentation.fin 0)
-def singletonFixed : DomainExpr context := .fixed (FinitePresentation.fin 1)
+def emptyFixed : DomainExpression context := .fixed (FixedPresentation.fin 0)
+def singletonFixed : DomainExpression context := .fixed (FixedPresentation.fin 1)
 
 example : emptyFixed.bitWidth assignment = 0 := by
-  simp [emptyFixed, FinitePresentation.bitWidth, FinitePresentation.fin]
+  simp [emptyFixed, FixedPresentation.bitWidth, FixedPresentation.fin]
 
 example : IsEmpty (emptyFixed.Value assignment) := by
-  simp only [emptyFixed, DomainExpr.value_fixed, FinitePresentation.fin]
+  simp only [emptyFixed, DomainExpression.value_fixed, FixedPresentation.fin]
   infer_instance
 
 example : singletonFixed.bitWidth assignment = 0 := by
-  simp [singletonFixed, FinitePresentation.bitWidth, FinitePresentation.fin]
+  simp [singletonFixed, FixedPresentation.bitWidth, FixedPresentation.fin]
 
-example : (RawCodec.fin 0).decode (fun i => Fin.elim0 i) = none := by decide
-example : (RawCodec.fin 1).toBitCodec.decode (BitVec.ofNat 0 0) = some ⟨0, by decide⟩ := by
+example : (BitCodec.fin 0).decode (BitVec.ofNat 0 0) = none := by decide
+example : (BitCodec.fin 1).decode (BitVec.ofNat 0 0) = some ⟨0, by decide⟩ := by
   decide
 
-example : (DomainExpr.product []).bitWidth assignment = 0 := by simp
-example : (DomainExpr.sum []).bitWidth assignment = 0 := by simp
+example : (DomainExpression.product []).bitWidth assignment = 0 := by simp
+example : (DomainExpression.sum []).bitWidth assignment = 0 := by simp
 
-example : RawCodec.unit.toBitCodec.decode (BitVec.ofNat 0 0) = some PUnit.unit := by decide
+example : BitCodec.unit.decode (BitVec.ofNat 0 0) = some PUnit.unit := by decide
 
-def zeroPower : DomainExpr context := .power emptyFixed (SizeExpression.constant 0)
+def zeroPower : DomainExpression context := .power emptyFixed (SizeExpression.constant 0)
 
 example : zeroPower.bitWidth assignment = 0 := by simp [zeroPower]
 
 example : Unique (zeroPower.Value assignment) := by
-  simp only [zeroPower, DomainExpr.value_power, SizeExpression.eval_constant]
+  simp only [zeroPower, DomainExpression.value_power, SizeExpression.eval_constant]
   infer_instance
 
-example : IsEmpty ((DomainExpr.power emptyFixed (SizeExpression.constant 1)).Value
+example : IsEmpty ((DomainExpression.power emptyFixed (SizeExpression.constant 1)).Value
     assignment) := by
-  simp only [DomainExpr.value_power, SizeExpression.eval_constant, emptyFixed, DomainExpr.value_fixed,
-    FinitePresentation.fin]
+  simp only [DomainExpression.value_power, SizeExpression.eval_constant, emptyFixed, DomainExpression.value_fixed,
+    FixedPresentation.fin]
   infer_instance
 
-def alternatives : DomainExpr context :=
-  .sum [.fixed (FinitePresentation.fin 2), .fixed (FinitePresentation.fin 3)]
+def alternatives : DomainExpression context :=
+  .sum [.fixed (FixedPresentation.fin 2), .fixed (FixedPresentation.fin 3)]
 
 example : alternatives.bitWidth assignment = 3 := by
-  simp [alternatives, FinitePresentation.bitWidth, FinitePresentation.fin]
+  simp [alternatives, FixedPresentation.bitWidth, FixedPresentation.fin]
   decide
 
 /-- First alternative has a one-bit payload, second a two-bit payload. -/
@@ -81,50 +81,50 @@ instance (i : Fin 2) : DecidableEq (carriers i) := by
   unfold carriers
   split <;> infer_instance
 
-def alternativeCodecs : (i : Fin 2) → RawCodec (carriers i) (widths i) := by
+def alternativeCodecs : (i : Fin 2) → BitCodec (carriers i) (widths i) := by
   intro i
   refine Fin.cases ?_ (fun j => ?_) i
-  · exact RawCodec.fin 2
+  · exact BitCodec.fin 2
   · refine Fin.cases ?_ (fun k => Fin.elim0 k) j
-    exact RawCodec.fin 3
+    exact BitCodec.fin 3
 
-def sumCodec : RawCodec (Sigma carriers) 3 :=
-  RawCodec.tagged carriers widths alternativeCodecs 2
+def sumCodec : BitCodec (Sigma carriers) 3 :=
+  BitCodec.tagged carriers widths alternativeCodecs 2
     (by intro i; fin_cases i <;> decide)
 
 /-- Tag 0, payload 1, zero high padding: bits [0,1,0]. -/
-example : sumCodec.toBitCodec.encode ⟨0, (1 : Fin 2)⟩ = BitVec.ofNat 3 2 := by decide
-example : sumCodec.toBitCodec.decode (BitVec.ofNat 3 2) = some ⟨0, (1 : Fin 2)⟩ := by decide
+example : sumCodec.encode ⟨0, (1 : Fin 2)⟩ = BitVec.ofNat 3 2 := by decide
+example : sumCodec.decode (BitVec.ofNat 3 2) = some ⟨0, (1 : Fin 2)⟩ := by decide
 
 /-- The same payload with nonzero padding must be rejected. -/
-example : sumCodec.toBitCodec.decode (BitVec.ofNat 3 6) = none := by decide
+example : sumCodec.decode (BitVec.ofNat 3 6) = none := by decide
 
 /-- Tag 1 with unused payload label 3 must be rejected. -/
-example : sumCodec.toBitCodec.decode (BitVec.ofNat 3 7) = none := by decide
+example : sumCodec.decode (BitVec.ofNat 3 7) = none := by decide
 
 /-- A three-alternative union leaves binary tag 3 unused. -/
-def threeAlternatives : RawCodec ((_i : Fin 3) × Fin 1) 2 :=
-  RawCodec.tagged (fun _ => Fin 1) (fun _ => 0) (fun _ => RawCodec.fin 1) 0
+def threeAlternatives : BitCodec ((_i : Fin 3) × Fin 1) 2 :=
+  BitCodec.tagged (fun _ => Fin 1) (fun _ => 0) (fun _ => BitCodec.fin 1) 0
     (by intro i; exact le_rfl)
 
-example : threeAlternatives.toBitCodec.decode (BitVec.ofNat 2 3) = none := by decide
+example : threeAlternatives.decode (BitVec.ofNat 2 3) = none := by decide
 
-example : (RawCodec.fin 3).toBitCodec.decode (BitVec.ofNat 2 3) = none := by decide
+example : (BitCodec.fin 3).decode (BitVec.ofNat 2 3) = none := by decide
 
 /-- Product fields occupy low bits first: label 1 then the two-bit label 2. -/
-example : ((RawCodec.fin 2).product (RawCodec.fin 3)).toBitCodec.encode (1, 2) =
+example : ((BitCodec.fin 2).product (BitCodec.fin 3)).encode (1, 2) =
     BitVec.ofNat 3 5 := by
   apply BitVec.toNat_injective
   decide
 
 /-- Power entries likewise occupy consecutive low-to-high blocks. -/
-example : ((RawCodec.fin 3).power 3).toBitCodec.encode ![0, 1, 2] =
+example : ((BitCodec.fin 3).power 3).encode ![0, 1, 2] =
     BitVec.ofNat 6 36 := by
   apply BitVec.toNat_injective
   decide
 
 /-- Arbitrary carrier universes are supported, including by encodings. -/
-def lifted : FinitePresentation.{1} where
+def lifted : FixedPresentation.{1} where
   Carrier := ULift.{1} (Fin 2)
   cardinality := 2
   enumeration := Equiv.ulift
@@ -132,9 +132,9 @@ def lifted : FinitePresentation.{1} where
 example (x : lifted.Carrier) : lifted.codec.decode (lifted.codec.encode x) = some x :=
   lifted.codec.decode_encode x
 
-def nested : DomainExpr Matrices.context :=
+def nested : DomainExpression Matrices.context :=
   .product [Matrices.domain Matrices.field5,
-    .power (.power (.fixed (FinitePresentation.fin 2))
+    .power (.power (.fixed (FixedPresentation.fin 2))
       (SizeExpression.parameter (ctx := Matrices.context) .K))
       (SizeExpression.parameter (ctx := Matrices.context) .L ^ 2)]
 
@@ -162,8 +162,8 @@ example : peerExponent.eval peerAssignment = 77 := by
   simp [peerExponent, SizeExpression.eval_parameter (ctx := peerContext), peerAssignment]
 
 example : ∃ p : SizeExpression peerContext, ∀ a,
-    (DomainExpr.power (.fixed (FinitePresentation.fin 2)) peerExponent).bitWidth a ≤ p.eval a :=
-  DomainExpr.polynomially_bounded _
+    (DomainExpression.power (.fixed (FixedPresentation.fin 2)) peerExponent).bitWidth a ≤ p.eval a :=
+  DomainExpression.polynomially_bounded _
 
 end DomainExamples
 end Polytime.Examples.Domains

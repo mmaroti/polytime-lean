@@ -30,37 +30,37 @@ namespace Polytime
 
 universe u
 
-structure FinitePresentation where
+structure FixedPresentation where
   Carrier : Type u
   cardinality : ℕ
   enumeration : Carrier ≃ Fin cardinality
 
-namespace FinitePresentation
+namespace FixedPresentation
 
-def bitWidth (p : FinitePresentation.{u}) : ℕ := Nat.clog 2 p.cardinality
+def bitWidth (p : FixedPresentation.{u}) : ℕ := Nat.clog 2 p.cardinality
 
-def codec (p : FinitePresentation.{u}) : RawCodec p.Carrier p.bitWidth :=
-  (RawCodec.fin p.cardinality).transport p.enumeration.symm
+def codec (p : FixedPresentation.{u}) : BitCodec p.Carrier p.bitWidth :=
+  (BitCodec.fin p.cardinality).transport p.enumeration.symm
 
-def fin (k : ℕ) : FinitePresentation where
+def fin (k : ℕ) : FixedPresentation where
   Carrier := Fin k
   cardinality := k
   enumeration := Equiv.refl _
 
-end FinitePresentation
+end FixedPresentation
 
-inductive DomainExpr (ctx : SizeContext) : Type (u + 1)
-  | fixed (presentation : FinitePresentation.{u})
-  | product (children : List (DomainExpr ctx))
-  | sum (alternatives : List (DomainExpr ctx))
-  | power (base : DomainExpr ctx) (exponent : SizeExpression ctx)
+inductive DomainExpression (ctx : SizeContext) : Type (u + 1)
+  | fixed (presentation : FixedPresentation.{u})
+  | product (children : List (DomainExpression ctx))
+  | sum (alternatives : List (DomainExpression ctx))
+  | power (base : DomainExpression ctx) (exponent : SizeExpression ctx)
 
-namespace DomainExpr
+namespace DomainExpression
 
 variable {ctx : SizeContext}
 
 /-- The mathematical values described by an expression at a size assignment. -/
-def Value (d : DomainExpr.{u} ctx) (a : SizeAssignment ctx) : Type u :=
+def Value (d : DomainExpression.{u} ctx) (a : SizeAssignment ctx) : Type u :=
   match d with
   | .fixed p => p.Carrier
   | .product [] => PUnit
@@ -76,27 +76,27 @@ decreasing_by
       simp only [List.get_eq_getElem] at h
       omega
 
-@[simp] theorem value_fixed (p : FinitePresentation.{u}) (a : SizeAssignment ctx) :
+@[simp] theorem value_fixed (p : FixedPresentation.{u}) (a : SizeAssignment ctx) :
     (fixed p).Value a = p.Carrier := by simp [Value]
 
-@[simp] theorem value_power (d : DomainExpr ctx) (e : SizeExpression ctx)
+@[simp] theorem value_power (d : DomainExpression ctx) (e : SizeExpression ctx)
     (a : SizeAssignment ctx) :
     (power d e).Value a = (Fin (e.eval a) → d.Value a) := by simp [Value]
 
 @[simp] theorem value_product_nil (a : SizeAssignment ctx) :
     (product []).Value a = PUnit.{u + 1} := by simp [Value]
 
-@[simp] theorem value_product_cons (d : DomainExpr ctx) (ds : List (DomainExpr ctx))
+@[simp] theorem value_product_cons (d : DomainExpression ctx) (ds : List (DomainExpression ctx))
     (a : SizeAssignment ctx) :
     (product (d :: ds)).Value a = (d.Value a × (product ds).Value a) := by simp [Value]
 
-@[simp] theorem value_sum (ds : List (DomainExpr ctx)) (a : SizeAssignment ctx) :
+@[simp] theorem value_sum (ds : List (DomainExpression ctx)) (a : SizeAssignment ctx) :
     (sum ds).Value a = ((i : Fin ds.length) × (ds.get i).Value a) := by simp [Value]
 
 noncomputable section DomainDefinitions
 
 /-- Exact encoded width; no polynomial witness needs to be constructed first. -/
-def bitWidth (d : DomainExpr ctx) (a : SizeAssignment ctx) : ℕ :=
+def bitWidth (d : DomainExpression ctx) (a : SizeAssignment ctx) : ℕ :=
   match d with
   | .fixed p => p.bitWidth
   | .product [] => 0
@@ -105,26 +105,26 @@ def bitWidth (d : DomainExpr ctx) (a : SizeAssignment ctx) : ℕ :=
   | .power d e => e.eval a * d.bitWidth a
 termination_by sizeOf d
 
-@[simp] theorem bitWidth_fixed (p : FinitePresentation) (a : SizeAssignment ctx) :
+@[simp] theorem bitWidth_fixed (p : FixedPresentation) (a : SizeAssignment ctx) :
     (fixed p).bitWidth a = p.bitWidth := by simp [bitWidth]
 
-@[simp] theorem bitWidth_power (d : DomainExpr ctx) (e : SizeExpression ctx)
+@[simp] theorem bitWidth_power (d : DomainExpression ctx) (e : SizeExpression ctx)
     (a : SizeAssignment ctx) :
     (power d e).bitWidth a = e.eval a * d.bitWidth a := by simp [bitWidth]
 
 @[simp] theorem bitWidth_product_nil (a : SizeAssignment ctx) :
     (product []).bitWidth a = 0 := by simp [bitWidth]
 
-@[simp] theorem bitWidth_product_cons (d : DomainExpr ctx) (ds : List (DomainExpr ctx))
+@[simp] theorem bitWidth_product_cons (d : DomainExpression ctx) (ds : List (DomainExpression ctx))
     (a : SizeAssignment ctx) :
     (product (d :: ds)).bitWidth a = d.bitWidth a + (product ds).bitWidth a := by
   simp [bitWidth]
 
-@[simp] theorem bitWidth_sum (ds : List (DomainExpr ctx)) (a : SizeAssignment ctx) :
+@[simp] theorem bitWidth_sum (ds : List (DomainExpression ctx)) (a : SizeAssignment ctx) :
     (sum ds).bitWidth a =
       Nat.clog 2 ds.length + (ds.map fun d => d.bitWidth a).foldr max 0 := by simp [bitWidth]
 
-private theorem width_le_maximum (ds : List (DomainExpr ctx)) (a : SizeAssignment ctx)
+private theorem width_le_maximum (ds : List (DomainExpression ctx)) (a : SizeAssignment ctx)
     (i : Fin ds.length) :
     (ds.get i).bitWidth a ≤ (ds.map fun d => d.bitWidth a).foldr max 0 := by
   apply List.le_max_of_le
@@ -132,21 +132,21 @@ private theorem width_le_maximum (ds : List (DomainExpr ctx)) (a : SizeAssignmen
   · exact le_rfl
 
 /-- Codecs are assembled directly by recursion over the domain expression. -/
-def rawCodec (d : DomainExpr.{u} ctx) (a : SizeAssignment ctx) :
-    RawCodec (d.Value a) (d.bitWidth a) :=
+def codec (d : DomainExpression.{u} ctx) (a : SizeAssignment ctx) :
+    BitCodec (d.Value a) (d.bitWidth a) :=
   match d with
   | .fixed p => by simpa only [value_fixed, bitWidth_fixed] using p.codec
-  | .product [] => by simpa only [value_product_nil, bitWidth_product_nil] using RawCodec.unit
+  | .product [] => by simpa only [value_product_nil, bitWidth_product_nil] using BitCodec.unit
   | .product (d :: ds) => by
       simpa only [value_product_cons, bitWidth_product_cons] using
-        (d.rawCodec a).product ((product ds).rawCodec a)
+        (d.codec a).product ((product ds).codec a)
   | .sum ds => by
       simpa only [value_sum, bitWidth_sum] using
-        RawCodec.tagged (fun i => (ds.get i).Value a) (fun i => (ds.get i).bitWidth a)
-          (fun i => (ds.get i).rawCodec a)
+        BitCodec.tagged (fun i => (ds.get i).Value a) (fun i => (ds.get i).bitWidth a)
+          (fun i => (ds.get i).codec a)
           ((ds.map fun d => d.bitWidth a).foldr max 0) (width_le_maximum ds a)
   | .power d e => by
-      simpa only [value_power, bitWidth_power] using (d.rawCodec a).power (e.eval a)
+      simpa only [value_power, bitWidth_power] using (d.codec a).power (e.eval a)
 termination_by sizeOf d
 decreasing_by
   all_goals simp_wf
@@ -156,30 +156,27 @@ decreasing_by
       simp only [List.get_eq_getElem] at h
       omega
 
-def codec (d : DomainExpr ctx) (a : SizeAssignment ctx) :
-    BitCodec (d.Value a) (d.bitWidth a) := (d.rawCodec a).toBitCodec
-
-def encode (d : DomainExpr ctx) (a : SizeAssignment ctx) :
+def encode (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     d.Value a → BitVec (d.bitWidth a) := (d.codec a).encode
 
-def decode (d : DomainExpr ctx) (a : SizeAssignment ctx) :
+def decode (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     BitVec (d.bitWidth a) → Option (d.Value a) := (d.codec a).decode
 
-@[simp] theorem decode_encode (d : DomainExpr ctx) (a : SizeAssignment ctx) (x : d.Value a) :
+@[simp] theorem decode_encode (d : DomainExpression ctx) (a : SizeAssignment ctx) (x : d.Value a) :
     d.decode a (d.encode a x) = some x := (d.codec a).decode_encode x
 
-theorem encode_decode (d : DomainExpr ctx) (a : SizeAssignment ctx)
+theorem encode_decode (d : DomainExpression ctx) (a : SizeAssignment ctx)
     (bits : BitVec (d.bitWidth a)) (x : d.Value a) (h : d.decode a bits = some x) :
     d.encode a x = bits := (d.codec a).encode_decode bits x h
 
-theorem encode_injective (d : DomainExpr ctx) (a : SizeAssignment ctx) :
+theorem encode_injective (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     Function.Injective (d.encode a) := by
   intro x y h
   have := congrArg (d.decode a) h
   simpa using this
 
 /-- An automatically composed polynomial upper bound on encoded width. -/
-def sizeBound (d : DomainExpr ctx) : SizeExpression ctx :=
+def sizeBound (d : DomainExpression ctx) : SizeExpression ctx :=
   match d with
   | .fixed p => SizeExpression.constant p.bitWidth
   | .product ds => (ds.map sizeBound).sum
@@ -187,7 +184,7 @@ def sizeBound (d : DomainExpr ctx) : SizeExpression ctx :=
   | .power d e => e * d.sizeBound
 termination_by sizeOf d
 
-private theorem maximum_le_bound (ds : List (DomainExpr ctx)) (a : SizeAssignment ctx)
+private theorem maximum_le_bound (ds : List (DomainExpression ctx)) (a : SizeAssignment ctx)
     (h : ∀ d ∈ ds, d.bitWidth a ≤ d.sizeBound.eval a) :
     (ds.map fun d => d.bitWidth a).foldr max 0 ≤ ((ds.map sizeBound).sum).eval a := by
   induction ds with
@@ -198,7 +195,7 @@ private theorem maximum_le_bound (ds : List (DomainExpr ctx)) (a : SizeAssignmen
         ((h d (List.mem_cons_self ..)).trans (Nat.le_add_right _ _))
         ((ih (fun d hd => h d (List.mem_cons_of_mem _ hd))).trans (Nat.le_add_left _ _))
 
-theorem bitWidth_le (d : DomainExpr ctx) (a : SizeAssignment ctx) :
+theorem bitWidth_le (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     d.bitWidth a ≤ d.sizeBound.eval a := by
   cases d with
   | fixed p => simp [sizeBound]
@@ -215,10 +212,10 @@ theorem bitWidth_le (d : DomainExpr ctx) (a : SizeAssignment ctx) :
       simpa [sizeBound] using Nat.mul_le_mul_left (e.eval a) (bitWidth_le d a)
 termination_by sizeOf d
 
-theorem polynomially_bounded (d : DomainExpr ctx) :
+theorem polynomially_bounded (d : DomainExpression ctx) :
     ∃ p : SizeExpression ctx, ∀ a, d.bitWidth a ≤ p.eval a :=
   ⟨d.sizeBound, d.bitWidth_le⟩
 
 end DomainDefinitions
-end DomainExpr
+end DomainExpression
 end Polytime
