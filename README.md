@@ -43,6 +43,11 @@ The library currently provides:
   including the field `ZMod 5`, with independent dimensions K and L.
 - `Polytime.Examples.Domains`: checked boundary cases and binary layouts.
 
+`DomainExpr` directly defines its mathematical values (`Value`), exact bit
+width (`bitWidth`), codecs (`encode` and `decode`), and polynomial upper bound
+(`sizeBound`) by recursion on the expression. The size-bound proof is separate
+from the width computation.
+
 For example:
 
 ```lean
@@ -53,14 +58,14 @@ open Polytime.Examples.Matrices
 example : (domain field5).bitWidth (assignment 2 3) = 18 := by
   simp
 
-example : ∃ p : Polytime.SizeExpr context, ∀ a,
+example : ∃ p : Polytime.SizeExpression context, ∀ a,
     (domain field5).bitWidth a ≤ p.eval a :=
   polynomial_size field5
 ```
 
 `SizeContext` contains the type of parameter names and a `Fintype` instance.
 `SizeAssignment ctx` is a map from those names to natural numbers.
-`SizeExpr ctx` is a multivariate polynomial over ℕ. All names have the same
+`SizeExpression ctx` is a multivariate polynomial over ℕ. All names have the same
 role: a context may name N, K, and L, with no distinguished N and no imposed
 bounds between their values. Power exponents may be any such polynomial,
 including constants.

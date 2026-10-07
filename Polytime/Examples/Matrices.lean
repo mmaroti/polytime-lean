@@ -39,27 +39,27 @@ def assignment (K L : ℕ) : SizeAssignment context
   | .K => K
   | .L => L
 
-noncomputable section
+noncomputable section MatrixExamples
 
 def domain (field : FinitePresentation.{u}) : DomainExpr context :=
-  .power (.power (.fixed field) (SizeExpr.parameter (ctx := context) .L))
-    (SizeExpr.parameter (ctx := context) .K)
+  .power (.power (.fixed field) (SizeExpression.parameter (ctx := context) .L))
+    (SizeExpression.parameter (ctx := context) .K)
 
 /-- In particular this works for a finite field equipped with an enumeration. -/
 def valueEquiv (field : FinitePresentation.{u}) (K L : ℕ) :
     (domain field).Value (assignment K L) ≃
       Matrix (Fin K) (Fin L) field.Carrier := by
   simp only [domain, DomainExpr.value_power, DomainExpr.value_fixed,
-    SizeExpr.eval_parameter (ctx := context), assignment]
+    SizeExpression.eval_parameter (ctx := context), assignment]
   exact Equiv.refl (Matrix (Fin K) (Fin L) field.Carrier)
 
 @[simp] theorem exact_width (field : FinitePresentation.{u}) (K L : ℕ) :
     (domain field).bitWidth (assignment K L) = K * L * field.bitWidth := by
-  simp [domain, SizeExpr.eval_parameter (ctx := context), assignment, Nat.mul_assoc]
+  simp [domain, SizeExpression.eval_parameter (ctx := context), assignment, Nat.mul_assoc]
 
 /-- The size certificate is uniform over all independent dimension assignments. -/
 theorem polynomial_size (field : FinitePresentation.{u}) :
-    ∃ p : SizeExpr context, ∀ a, (domain field).bitWidth a ≤ p.eval a :=
+    ∃ p : SizeExpression context, ∀ a, (domain field).bitWidth a ≤ p.eval a :=
   (domain field).polynomially_bounded
 
 def encode (field : FinitePresentation.{u}) (K L : ℕ)
@@ -98,24 +98,24 @@ example : (domain field5).bitWidth (assignment 7 2) = 42 := by simp
 example : (domain field5).bitWidth (assignment 2 7) = 42 := by simp
 
 def constantTuple (field : FinitePresentation.{u}) : DomainExpr context :=
-  .power (.fixed field) (SizeExpr.constant 3)
+  .power (.fixed field) (SizeExpression.constant 3)
 
 example (field : FinitePresentation.{u}) (a : SizeAssignment context) :
     (constantTuple field).bitWidth a = 3 * field.bitWidth := by simp [constantTuple]
 
 def compositeTuple (field : FinitePresentation.{u}) : DomainExpr context :=
   .power (.fixed field)
-    (SizeExpr.parameter (ctx := context) .K ^ 2 +
-      SizeExpr.parameter (ctx := context) .K * SizeExpr.parameter (ctx := context) .L)
+    (SizeExpression.parameter (ctx := context) .K ^ 2 +
+      SizeExpression.parameter (ctx := context) .K * SizeExpression.parameter (ctx := context) .L)
 
 example (field : FinitePresentation.{u}) :
-    ∃ p : SizeExpr context, ∀ a, (compositeTuple field).bitWidth a ≤ p.eval a :=
+    ∃ p : SizeExpression context, ∀ a, (compositeTuple field).bitWidth a ≤ p.eval a :=
   (compositeTuple field).polynomially_bounded
 
 example (field : FinitePresentation.{u}) (K L : ℕ) :
     (compositeTuple field).bitWidth (assignment K L) =
       (K ^ 2 + K * L) * field.bitWidth := by
-  simp [compositeTuple, SizeExpr.eval_parameter (ctx := context), assignment]
+  simp [compositeTuple, SizeExpression.eval_parameter (ctx := context), assignment]
 
-end
+end MatrixExamples
 end Polytime.Examples.Matrices

@@ -25,7 +25,7 @@ the generic round-trip and canonical-decoding proofs.
 
 namespace Polytime.Examples.Domains
 
-noncomputable section
+noncomputable section DomainExamples
 
 abbrev context : SizeContext := ⟨Empty, inferInstance⟩
 def assignment : SizeAssignment context := Empty.elim
@@ -52,17 +52,17 @@ example : (DomainExpr.sum []).bitWidth assignment = 0 := by simp
 
 example : RawCodec.unit.toBitCodec.decode (BitVec.ofNat 0 0) = some PUnit.unit := by decide
 
-def zeroPower : DomainExpr context := .power emptyFixed (SizeExpr.constant 0)
+def zeroPower : DomainExpr context := .power emptyFixed (SizeExpression.constant 0)
 
 example : zeroPower.bitWidth assignment = 0 := by simp [zeroPower]
 
 example : Unique (zeroPower.Value assignment) := by
-  simp only [zeroPower, DomainExpr.value_power, SizeExpr.eval_constant]
+  simp only [zeroPower, DomainExpr.value_power, SizeExpression.eval_constant]
   infer_instance
 
-example : IsEmpty ((DomainExpr.power emptyFixed (SizeExpr.constant 1)).Value
+example : IsEmpty ((DomainExpr.power emptyFixed (SizeExpression.constant 1)).Value
     assignment) := by
-  simp only [DomainExpr.value_power, SizeExpr.eval_constant, emptyFixed, DomainExpr.value_fixed,
+  simp only [DomainExpr.value_power, SizeExpression.eval_constant, emptyFixed, DomainExpr.value_fixed,
     FinitePresentation.fin]
   infer_instance
 
@@ -135,10 +135,10 @@ example (x : lifted.Carrier) : lifted.codec.decode (lifted.codec.encode x) = som
 def nested : DomainExpr Matrices.context :=
   .product [Matrices.domain Matrices.field5,
     .power (.power (.fixed (FinitePresentation.fin 2))
-      (SizeExpr.parameter (ctx := Matrices.context) .K))
-      (SizeExpr.parameter (ctx := Matrices.context) .L ^ 2)]
+      (SizeExpression.parameter (ctx := Matrices.context) .K))
+      (SizeExpression.parameter (ctx := Matrices.context) .L ^ 2)]
 
-example : ∃ p : SizeExpr Matrices.context, ∀ a, nested.bitWidth a ≤ p.eval a :=
+example : ∃ p : SizeExpression Matrices.context, ∀ a, nested.bitWidth a ≤ p.eval a :=
   nested.polynomially_bounded
 
 /-- Even a parameter named N is an ordinary name, without special bounds. -/
@@ -154,16 +154,16 @@ def peerAssignment : SizeAssignment peerContext
   | .K => 7
   | .L => 11
 
-def peerExponent : SizeExpr peerContext :=
-  SizeExpr.parameter (ctx := peerContext) .N ^ 2 +
-    SizeExpr.parameter (ctx := peerContext) .K * SizeExpr.parameter (ctx := peerContext) .L
+def peerExponent : SizeExpression peerContext :=
+  SizeExpression.parameter (ctx := peerContext) .N ^ 2 +
+    SizeExpression.parameter (ctx := peerContext) .K * SizeExpression.parameter (ctx := peerContext) .L
 
 example : peerExponent.eval peerAssignment = 77 := by
-  simp [peerExponent, SizeExpr.eval_parameter (ctx := peerContext), peerAssignment]
+  simp [peerExponent, SizeExpression.eval_parameter (ctx := peerContext), peerAssignment]
 
-example : ∃ p : SizeExpr peerContext, ∀ a,
+example : ∃ p : SizeExpression peerContext, ∀ a,
     (DomainExpr.power (.fixed (FinitePresentation.fin 2)) peerExponent).bitWidth a ≤ p.eval a :=
   DomainExpr.polynomially_bounded _
 
-end
+end DomainExamples
 end Polytime.Examples.Domains

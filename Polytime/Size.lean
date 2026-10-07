@@ -21,8 +21,7 @@ import Mathlib.Tactic
 /-! # Size parameters
 
 A context names finitely many parameters. Every name has the same role, and
-an assignment gives each name an arbitrary natural value. No parameter bounds
-or distinguished complexity parameter belong to this data layer.
+an assignment gives each name an arbitrary natural value.
 -/
 
 namespace Polytime
@@ -34,18 +33,18 @@ structure SizeContext where
 attribute [instance] SizeContext.finiteParameters
 
 abbrev SizeAssignment (ctx : SizeContext) := ctx.Parameter → ℕ
-abbrev SizeExpr (ctx : SizeContext) := MvPolynomial ctx.Parameter ℕ
+abbrev SizeExpression (ctx : SizeContext) := MvPolynomial ctx.Parameter ℕ
 
-namespace SizeExpr
+namespace SizeExpression
 
 variable {ctx : SizeContext}
 
-noncomputable section
+noncomputable section SizeExpressionDefinitions
 
-def parameter (k : ctx.Parameter) : SizeExpr ctx := MvPolynomial.X k
-def constant (n : ℕ) : SizeExpr ctx := MvPolynomial.C n
+def parameter (k : ctx.Parameter) : SizeExpression ctx := MvPolynomial.X k
+def constant (n : ℕ) : SizeExpression ctx := MvPolynomial.C n
 
-def eval (e : SizeExpr ctx) (a : SizeAssignment ctx) : ℕ :=
+def eval (e : SizeExpression ctx) (a : SizeAssignment ctx) : ℕ :=
   MvPolynomial.eval a e
 
 @[simp] theorem eval_parameter (k : ctx.Parameter) (a : SizeAssignment ctx) :
@@ -55,29 +54,29 @@ def eval (e : SizeExpr ctx) (a : SizeAssignment ctx) : ℕ :=
 @[simp] theorem eval_constant (n : ℕ) (a : SizeAssignment ctx) : eval (constant n) a = n := by
   simp [eval, constant]
 
-@[simp] theorem eval_zero (a : SizeAssignment ctx) : eval (0 : SizeExpr ctx) a = 0 := by
+@[simp] theorem eval_zero (a : SizeAssignment ctx) : eval (0 : SizeExpression ctx) a = 0 := by
   simp [eval]
 
-@[simp] theorem eval_one (a : SizeAssignment ctx) : eval (1 : SizeExpr ctx) a = 1 := by
+@[simp] theorem eval_one (a : SizeAssignment ctx) : eval (1 : SizeExpression ctx) a = 1 := by
   simp [eval]
 
-@[simp] theorem eval_add (e f : SizeExpr ctx) (a : SizeAssignment ctx) :
+@[simp] theorem eval_add (e f : SizeExpression ctx) (a : SizeAssignment ctx) :
     eval (e + f) a = eval e a + eval f a := by simp [eval]
 
-@[simp] theorem eval_mul (e f : SizeExpr ctx) (a : SizeAssignment ctx) :
+@[simp] theorem eval_mul (e f : SizeExpression ctx) (a : SizeAssignment ctx) :
     eval (e * f) a = eval e a * eval f a := by simp [eval]
 
-@[simp] theorem eval_pow (e : SizeExpr ctx) (n : ℕ) (a : SizeAssignment ctx) :
+@[simp] theorem eval_pow (e : SizeExpression ctx) (n : ℕ) (a : SizeAssignment ctx) :
     eval (e ^ n) a = eval e a ^ n := by simp [eval]
 
 /-- Natural-coefficient size expressions are monotone in every parameter. -/
-theorem eval_mono (e : SizeExpr ctx) (a b : SizeAssignment ctx) (h : ∀ k, a k ≤ b k) :
+theorem eval_mono (e : SizeExpression ctx) (a b : SizeAssignment ctx) (h : ∀ k, a k ≤ b k) :
     e.eval a ≤ e.eval b := by
   induction e using MvPolynomial.induction_on with
   | C n => simp [eval]
   | add e f he hf => simpa using Nat.add_le_add he hf
   | mul_X e k he => simpa [eval] using Nat.mul_le_mul he (h k)
 
-end
-end SizeExpr
+end SizeExpressionDefinitions
+end SizeExpression
 end Polytime
