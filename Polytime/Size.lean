@@ -78,5 +78,53 @@ theorem eval_mono (e : SizeExpression ctx) (a b : SizeAssignment ctx) (h : ∀ k
   | mul_X e k he => simpa [eval] using Nat.mul_le_mul he (h k)
 
 end SizeExpressionDefinitions
+
+/-- A finite executable presentation of a fixed size polynomial. -/
+inductive Code (ctx : SizeContext)
+  | constant (value : ℕ)
+  | parameter (name : ctx.Parameter)
+  | add (left right : Code ctx)
+  | mul (left right : Code ctx)
+
+namespace Code
+
+variable {ctx : SizeContext}
+
+def eval : Code ctx → SizeAssignment ctx → ℕ
+  | .constant value, _ => value
+  | .parameter name, assignment => assignment name
+  | .add left right, assignment => left.eval assignment + right.eval assignment
+  | .mul left right, assignment => left.eval assignment * right.eval assignment
+
+noncomputable section CodeMeaning
+
+def polynomial : Code ctx → SizeExpression ctx
+  | .constant value => SizeExpression.constant value
+  | .parameter name => SizeExpression.parameter name
+  | .add left right => left.polynomial + right.polynomial
+  | .mul left right => left.polynomial * right.polynomial
+
+/-- Execution agrees with the existing mathematical evaluation. -/
+theorem eval_eq (code : Code ctx) (assignment : SizeAssignment ctx) :
+    code.eval assignment = code.polynomial.eval assignment := by
+  induction code <;> simp [eval, polynomial, *]
+
+end CodeMeaning
+end Code
+
+/-- Every fixed polynomial admits a finite executable presentation.
+Choosing that presentation belongs to specialization, not runtime. -/
+theorem exists_code (expression : SizeExpression ctx) :
+    ∃ code : Code ctx, code.polynomial = expression := by
+  induction expression using MvPolynomial.induction_on with
+  | C value => exact ⟨.constant value, rfl⟩
+  | add left right leftHypothesis rightHypothesis =>
+    obtain ⟨leftCode, rfl⟩ := leftHypothesis
+    obtain ⟨rightCode, rfl⟩ := rightHypothesis
+    exact ⟨.add leftCode rightCode, rfl⟩
+  | mul_X expression name hypothesis =>
+    obtain ⟨code, rfl⟩ := hypothesis
+    exact ⟨.mul code (.parameter name), rfl⟩
+
 end SizeExpression
 end Polytime

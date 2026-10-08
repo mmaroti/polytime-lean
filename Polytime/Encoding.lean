@@ -87,6 +87,12 @@ def transport {B : Type v} (c : BitCodec A w) (e : A ≃ B) : BitCodec B w where
 
 def cast (c : BitCodec A w) (h : w = v) : BitCodec A v := h ▸ c
 
+@[simp] theorem cast_encode (c : BitCodec A w) {targetWidth : ℕ}
+    (equality : w = targetWidth) (value : A) :
+    (c.cast equality).encode value = (c.encode value).cast equality := by
+  cases equality
+  rfl
+
 def unit : BitCodec PUnit.{u + 1} 0 where
   encode _ := BitVec.ofNat 0 0
   decode _ := some PUnit.unit
@@ -167,6 +173,24 @@ def power (c : BitCodec A w) : (n : ℕ) → BitCodec (Fin n → A) (n * w)
         right_inv := fun f => by funext i; exact Fin.elim0 i }).cast (Nat.zero_mul w).symm
   | n + 1 => ((c.product (power c n)).transport (headTailEquiv A n).symm).cast
       (by simp [Nat.add_mul, Nat.add_comm])
+
+/-- Single-bit entries occur in tuple order from least to most significant. -/
+theorem power_encode_bit (c : BitCodec A 1) (length : ℕ)
+    (tuple : Fin length → A) (index : Fin length) :
+    ((c.power length).encode tuple).getLsbD index.val = (c.encode (tuple index)).getLsbD 0 := by
+  induction length with
+  | zero => exact Fin.elim0 index
+  | succ length hypothesis =>
+    rw [power]
+    simp only [cast_encode, BitVec.getLsbD_cast]
+    change (join (c.encode (tuple 0))
+      ((c.power length).encode (fun position => tuple position.succ))).getLsbD index.val = _
+    simp only [join, BitVec.getLsbD_cast, BitVec.getLsbD_append]
+    refine Fin.cases ?_ (fun position => ?_) index
+    · simp
+    · simpa only [Fin.val_succ, show ¬ position.val + 1 < 1 by omega,
+        ite_false, Nat.add_sub_cancel] using
+        hypothesis (fun position => tuple position.succ) position
 
 def tagged {r : ℕ} (A : Fin r → Type u) (width : Fin r → ℕ)
     (c : ∀ i, BitCodec (A i) (width i)) (W : ℕ) (hw : ∀ i, width i ≤ W) :

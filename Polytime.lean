@@ -22,3 +22,4 @@ import Polytime.EncodedDomain
 import Polytime.Algorithm
 import Polytime.Examples.Matrices
 import Polytime.Examples.Domains
+import Polytime.Examples.TupleLookup

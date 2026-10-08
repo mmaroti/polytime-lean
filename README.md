@@ -39,13 +39,18 @@ import Polytime
 The library currently provides:
 
 - `Polytime.Size`: finite contexts of named size parameters, arbitrary natural
-  assignments, and polynomial expressions in those parameters.
+  assignments, polynomial expressions, and executable size-expression codes
+  proved to agree with their mathematical evaluation.
 - `Polytime.Domain`: recursive Fixed, Product, Sum, and Power domains; their
   mathematical values, exact-width bit encodings, canonical decoders, and
   polynomial-size certificates.
 - `Polytime.Examples.Matrices`: K-by-L matrices over a fixed finite carrier,
   including the field `ZMod 5`, with independent dimensions K and L.
 - `Polytime.Examples.Domains`: checked boundary cases and binary layouts.
+- `Polytime.Tuple`: Boolean tuple lookup/update and bounded natural counters
+  with canonical padded binary representations.
+- `Polytime.Examples.TupleLookup`: a complete lookup/update tape example,
+  including frame preparation and a quadratic machine-runtime proof.
 
 `DomainExpression` directly defines its mathematical values (`Value`), exact bit
 width (`bitWidth`), codecs (`encode` and `decode`), and polynomial upper bound
@@ -81,18 +86,22 @@ including constants.
 A complete assignment determines the exact bit width. The library derives a
 polynomial upper bound in all declared parameters, valid for every assignment.
 For example, K-by-L matrices over `ZMod 5` need exactly `3*K*L` bits.
-Future algorithm certificates will measure runtime in all size parameters;
-using their sum or maximum as an aggregate is a decision for that layer.
+Algorithm certificates measure runtime in one plus the sum of size parameters.
 
 The size parameters are external indices, not fields encoded in each value.
 Encodings concatenate blocks in order from low to high bits; alternatives use
 a tag and zero padding.
 Unused labels and noncanonical padding are rejected.
 
-Mathlib polynomial construction uses noncomputable definitions. This layer
-proves representation and size properties; programs, execution costs, and
-machine realization remain future work. See [GOAL.md](GOAL.md) for the broader
-specification.
+Mathlib polynomials remain mathematical objects; `SizeExpression.Code` supplies
+executable evaluation, with every polynomial admitting such a finite code.
+The tuple example uses Mathlib's deterministic `TM0`, with 32 states and eight
+symbols independent of N. Its framed input has a unary size header, replacement
+bit, N-bit binary index, field separator, dense tuple bits, and end delimiter.
+It prepares its own cursor and returns the selected old bit followed by the
+updated tuple within `32 * (N + 1)^2` tape transitions. Zero length admits no
+valid index. A general program language and compiler remain future work.
+See [GOAL.md](GOAL.md) for the broader specification.
 
 The projects under `temp/` are reference material only. They are excluded from
 version control and are not dependencies of this library.
