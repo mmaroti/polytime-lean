@@ -240,9 +240,9 @@ complexity proof; the template and the chosen representation are fixed.
 
 ## Shapes, contracts, and errors
 
-A matrix domain over a fixed finite field contains dimensions K and L bounded
-by N and exactly K-by-L entries. Rectangularity and dimension bounds are
-structural validity conditions. Gauss–Jordan elimination should return a
+A matrix domain over a fixed finite field has independent size parameters K
+and L and exactly K-by-L entries. Rectangularity is a structural validity
+condition. Gauss–Jordan elimination should return a
 matrix with the same dimensions; a variant removing zero rows may preserve
 the column count and decrease the row count.
 
@@ -482,65 +482,52 @@ the specified output encoding. A prepared-frame assumption is appropriate
 for the bare interface, but the external runtime theorem must discharge it
 through an executable preparation procedure with polynomial time and storage.
 
-## Initial examples and acceptance goals
+## Target examples and acceptance goals
 
-The initial numerical core provides fixed finite-table arithmetic and natural
-counters whose numeric values are polynomially bounded in N. Signed integers
-with polynomially bounded bit length and their arithmetic helpers are later
-work. Library primitives must suffice for finite-table application, Boolean
-tests, counter operations, and stored-data construction, lookup, and update.
+The required targets, in order, are specified in [EXAMPLES.md](EXAMPLES.md):
 
-Three examples are required, in this order:
+1. **Gauss–Jordan elimination over a fixed finite field.** Use independent
+   row and column size parameters and compute the reduced row-echelon form
+   with unchanged dimensions and a proof of row equivalence.
+2. **Single-sorted SMP to a monolith-prepared catalogue instance.** For a
+   fixed finite algebra A, compute coordinate images, decompose them into
+   subdirectly irreducible factors from a fixed HS(A) catalogue, and recursively
+   add quotient coordinates so every monolith quotient is represented by a
+   bounded set of earlier coordinates. Prove subdirectness, the monolith graph
+   equations, linear coordinate expansion, and membership transport. Return an
+   explicit negative result when the target is outside a coordinate image.
+   Input-dependent sort counts are bounded runtime data; the catalogue and its
+   tables remain specialization constants.
+3. **Smith normal form of integer matrices.** For rectangular signed-binary
+   matrices, compute the Smith diagonal and unimodular row and column
+   transformations. Establish polynomial bit complexity and storage in matrix
+   dimensions and entry bit length. Use the result to decide integer systems,
+   recover coefficients, and transport finite-abelian quotient coordinates.
 
-1. **Gauss–Jordan elimination.** Fix a finite field and its arithmetic tables;
-   Z_p for any fixed prime p is a required instance. Inputs are K-by-L matrices
-   with K and L at most N. The output is a matrix of the same dimensions.
-   Proposed contract: reduced row-echelon form and row equivalence. Treat
-   empty rectangular matrices, zero matrices, missing pivots, and rank-deficient
-   matrices. Pivot inversions are justified by proved nonzero hypotheses.
-   Zero-row removal, if supplied, is a separate certified program.
-2. **Semilattice CSP.** Fix a finite relational structure with finite signature,
-   relation tables, and a semilattice operation table preserving every relation.
-   Semilattice identities and preservation are mathematical hypotheses on this
-   fixed structure, not tests repeated at runtime. Inputs are bounded finite
-   CSP instances in the dense domain above, on exactly N variables. The result
-   is a Boolean decision. Proposed implementation: generalized arc consistency by
-   repeated removal of unsupported values, with finite subsets of the fixed
-   carrier represented as fixed-size data. Successful pruning strictly reduces
-   the remaining variable/value pairs, supplying a polynomial progress bound.
-   Prove preservation of all solutions and completeness under the semilattice
-   hypothesis. A satisfying assignment may be constructed in the mathematical
-   completeness proof; it is not a required runtime output.
-3. **Affine CSP over Z_p.** Fix a prime p, the ternary relation `x + y = z`,
-   and unary singleton relations `x = c` for each constant c in Z_p. Compile
-   constraints into an augmented linear system, invoke certified elimination,
-   and derive the Boolean CSP decision. Repeated variables must accumulate their
-   coefficients. Prove the correspondence between CSP assignments and linear
-   system solutions and account for matrix construction and result extraction.
-   Its dense input consists of `N^3` ternary-application bits and one N-bit
-   unary-application vector for each c in Z_p. The compiled system may have
-   polynomially more than N rows; it has N variable columns and an augmented
-   column. Derive a fixed polynomial call-site parameter accommodating both
-   row count and augmented width from this signature, and invoke elimination
-   there. Do not assume that a call at `N + 1` accommodates every dense instance.
+EXAMPLES.md also specifies three additional targets: compressed layered-word
+exploration with counterexample words; central-direction saturation with shared
+witnesses; and compact-to-expanded Boolean clause encoding. These extend the suite without changing the
+priority of the first three examples.
 
-All three examples must use the common combinators and receive the proved
-machine-runtime guarantee. A false CSP result means mathematical
-unsatisfiability and is not an error. Empty instances, repeated variables in a
-scope, and isolated variables must be covered. Dense tables do not store
-duplicate applications. Handle zero variables and zero-arity relation symbols
-consistently with tuple cardinalities; a nullary constraint has one activation
-bit and may determine unsatisfiability without mentioning any variable.
+The initial finite-table arithmetic and polynomially bounded natural counters
+support the first two examples. The third requires signed integers of
+polynomially bounded bit length and certified bit-cost arithmetic; their
+numeric values need not be polynomially bounded. Integer arithmetic and the
+normal-form implementation are now required targets, rather than deferred
+outside the example suite.
 
-Product scans, compact term-DAG construction/evaluation, and structured
-encoding conversions from the reference projects remain further motivating
-applications rather than replacements for these three required examples.
+All three examples must use the common combinators, bounded representations,
+prepared-frame composition, and proved external machine-runtime guarantee.
+Mathematical existence of decompositions, coordinates, or normal forms is
+insufficient without the required executable construction. Shared term-DAG
+witnesses must stay compact when used; a correctness-only callback is not a
+certified solver. The example specifications include contracts, edge cases,
+and the boundaries left open by the reference projects.
 
-Success means these examples use the common infrastructure rather than
-requiring bespoke tape-level developments. Mathematical specifications may
-use ordinary Mathlib objects, with proved correspondence to stored values.
-Conditional algorithm theorems must expose any uncertified solver or
-preparation assumptions.
+The previously proposed semilattice and affine CSP examples remain motivating
+applications of the fixed-template domain design, but are no longer part of
+this three-example acceptance suite. Stronger resource goals such as logspace
+and randomized execution remain outside the initial scope.
 
 ## Decisions still being discussed
 
@@ -576,12 +563,14 @@ must preserve:
   may be mathematical specification objects without being runtime domain
   values. Polynomial-size witness existence alone does not establish a
   uniform polynomial-time constructor as N varies.
-- Signed integer solvers, randomized execution, and logspace guarantees are
-  not part of the initial finite-table deterministic polynomial-time core.
+- Signed integer solvers require extending the finite-table core with bounded
+  binary integer representations and bit-cost arithmetic; this is now required
+  by the Smith-normal-form target. Randomized execution and logspace guarantees
+  remain outside the initial scope.
 
 ## Reference motivations
 
-For the semilattice example, the proposed arc-consistency route is described
+For the further semilattice CSP application, the proposed arc-consistency route is described
 in Bodirsky, Macpherson, and Thapper, *Constraint Satisfaction Tractability
 from Semi-lattice Operations on Infinite Sets*, §2 (finite-domain preliminary
 results): <https://arxiv.org/pdf/1111.6616>. This is design provenance, not an

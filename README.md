@@ -3,6 +3,10 @@
 A Lean library for developing a reusable framework for polynomial-time
 algorithms and their complexity certificates.
 
+See [GOAL.md](GOAL.md) for the framework design and [EXAMPLES.md](EXAMPLES.md)
+for the initial three targets and five additional examples with their
+mathematical contracts.
+
 The Lake package is named `polytime`; its Lean library, root module, and
 namespace are named `Polytime`. The project lives at the repository root and
 provides a library without an executable.
