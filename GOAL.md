@@ -44,6 +44,13 @@ written `D_{P,S}(a)` for a complete size assignment a. Its Lean values may use
 ordinary mathematical types associated with S. S itself is fixed mathematical
 context, not runtime input and not something the machine must encode.
 
+The `SizeContext` itself may depend on both P and S. For example, specializing
+an SMP algorithm to a finite algebra A determines a fixed finite catalogue
+HS(A); the context may name one coordinate-count parameter per catalogue sort.
+Those counts vary with the input instance, while the catalogue and parameter
+names remain fixed throughout execution. Domain expressions likewise depend
+on P and S.
+
 For every admissible fixed S and every declared domain, there exists a
 multivariate polynomial size bound valid for all size assignments and members
 of that domain. Both
@@ -158,6 +165,17 @@ a proof of finiteness. A mathematical family `i ↦ value i` should be represent
 as stored finite data; it must not implicitly grant free evaluation of an
 arbitrary Lean function. Proof fields establish validity without becoming
 runtime data.
+
+`EncodedDomain` connects a mathematical carrier family to a domain expression
+through `represent` and partial `interpret`. Interpreting a represented object
+returns that object; every accepted representation is its object's unique
+representation. Expression values outside this image may be rejected, in
+addition to invalid bit patterns rejected by the expression's codec. Bit
+encoding and decoding are derived by composing these layers. When several
+generator lists have the same span, or several DAGs have the same meaning,
+the carrier may be the list or DAG itself, with span, expansion, and evaluation
+expressed separately in contracts. Unique representation does not require
+canonicalizing these mathematical meanings.
 
 Proposed interface: each algorithm has one structured input and one structured
 output. Records package multiple arguments and results. Dimensions determined
@@ -364,6 +382,105 @@ Representation handling, subprogram handoff, guard evaluation, and loop
 execution belong to this proof. Tape/control-state reasoning should remain
 inside the reusable library. No termination or result guarantee is required
 on malformed encodings or inputs failing the mathematical hypothesis.
+
+### Working frames and a universal tape alphabet
+
+A composite program may use one fixed domain expression as a working frame,
+with slots for loop counters, intermediate results, and subprogram arguments
+and results. Fixing P, S, and a complete size assignment determines exact slot
+widths and offsets. The frame expression is fixed across runs of `P_S`, while
+its physical dimensions vary with the assignment. Auxiliary navigation and
+scratch storage must also have polynomial bounds.
+
+Use one fixed finite tape alphabet for the framework, independent of P, S,
+and the size assignment. A possible symbol combines a data component
+(`blank`, `zero`, or `one`) with a fixed collection of marker flags. Flags
+may coexist on a cell and identify boundaries, source and destination cursors,
+or positions needed by counter routines. The exact alphabet and marker set
+remain open until the basic navigation routines establish what is needed.
+Do not introduce one alphabet symbol per slot or input position. Slot numbers,
+lengths, offsets, and saved navigation information can be ordinary tape data.
+
+The finite controller may depend on P and S, but not on the size assignment.
+Its states describe phases such as decrementing a counter, finding a cursor,
+advancing it, or returning to scratch. It knows the specialized domain
+expressions and constants; assignment-dependent widths and offsets are
+computed and stored on tape. Growing indices and whole tuples must not be
+stored in an input-size-dependent collection of controller states.
+
+An indexed lookup can preserve the index by copying it to a scratch counter,
+place a cursor at the array start, and repeatedly decrement the counter and
+advance the cursor by one element. A varying element width can itself be a
+tape-stored counter, or the routine can compute and follow a bit offset.
+Binary decrement uses a finite borrow-handling controller. Unary routing
+scratch is also permitted when the represented offset is polynomially
+bounded; short binary encodings alone would not justify this conversion for
+arbitrarily large numeric values. Index validity belongs to the lookup's
+mathematical hypothesis.
+
+Copying between disjoint slots can shuttle between source and destination
+cursors, remembering one bit in the controller, writing it, and advancing
+both cursors until the stored length is exhausted. Overlapping copies need a
+proved direction or scratch-buffer strategy. Navigation, copying, updating,
+scratch management, and marker restoration require reusable correctness and
+polynomial-cost proofs. Repeated scans need not give constant-time access;
+polynomial overhead in a polynomially bounded frame is sufficient.
+
+Canonical `BitVec` value encodings remain separate from the machine's working
+tape layout. Marker tracks, delimiters, frame metadata, and scratch space are
+initialized and managed by the realization layer, with their costs included
+in its proof. Program authors use mathematical lookup, update, and copying
+operations and supply shape invariants, without manipulating tape markers.
+
+### Prepared-frame algorithms and composition
+
+Separate a bare algorithm operating on an already prepared working frame from
+the external machine wrapper that prepares that frame. The bare algorithm's
+entry contract specifies valid boundaries and navigation metadata, its assigned
+region and scratch capacity, input slots containing valid representations,
+and an initial head position. Its exit contract specifies the output slots,
+preservation of caller-owned data and metadata outside its assigned region,
+and the final head position and marker configuration needed by subsequent
+routines. Navigation invariants identify the current region and support
+locating positions within it through reusable certified routines.
+
+A composite frame reserves regions for its subroutines. Calls copy arguments
+into the callee's designated slots, execute the callee within its assigned
+region, and copy results into the caller's destination slots. Region
+identifiers, offsets, and saved navigation information are ordinary metadata
+over the same universal alphabet. Loop iterations can reuse prepared regions.
+With the initial finite call structure and no recursive self-calls, capacities
+for the whole frame can be determined in advance from P, S, and the size
+assignment, including fixed polynomial reparameterizations at call sites.
+Capacity is reserved storage, not the amount of data actively used during a
+run. Composition proves entry/exit compatibility and preservation of frame
+invariants; navigation and copying costs remain included in the library's
+polynomial realization proofs.
+
+The external input supplies the complete size assignment alongside canonical
+input bits. For each fixed P and S, a self-delimiting header records parameter
+values in a fixed known ordering. The assignment is separate from the
+mathematical input value and its domain encoding, and is required even when
+that input is empty. A preparation algorithm parses this header, computes
+input width, slot offsets, and all working capacities, formats the frame with
+its required markers and metadata, and installs the input in its slots. A
+final extraction routine returns the canonical output encoding.
+
+Preparation needs its own bootstrap navigation and scratch before the full
+frame exists. One possible convention surrounds the finite external input
+with blank cells distinct from encoded zero and one; scanning to its end
+finds an initial scratch region without first computing the input width.
+The exact bootstrap layout remains an implementation choice. Reading the
+header, locating the input boundary, computing capacities, initializing
+storage and markers, and transporting input data all require polynomial-cost
+proofs.
+
+The complete realization theorem composes three certified stages:
+preparation establishes the bare algorithm's entry contract; bare execution
+computes the result and preserves the frame invariants; extraction produces
+the specified output encoding. A prepared-frame assumption is appropriate
+for the bare interface, but the external runtime theorem must discharge it
+through an executable preparation procedure with polynomial time and storage.
 
 ## Initial examples and acceptance goals
 
