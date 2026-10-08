@@ -7,9 +7,9 @@ repository's implementation scope.
 
 Size parameters now have equal roles. The data layer has no distinguished N
 and no admissibility bounds between parameters. Algorithms will be polynomial
-in all declared size parameters; choosing their sum or maximum as an aggregate
-belongs to the future algorithm layer. Generic algorithm discussions below
-using N should be read as shorthand for such an aggregate. In examples such
+in all declared size parameters, measured by one plus their sum. Generic
+algorithm discussions below using N mean this aggregate, not a parameter
+available for reparameterization. In examples such
 as CSP with N variables, N is an ordinary declared parameter.
 
 ## Intended mathematical interface
@@ -98,17 +98,18 @@ these assignments. Its description guarantees one multivariate polynomial
 encoding bound in all the parameters, uniformly over every assignment and
 every domain value. All inputs, outputs, and intermediate stored values
 belong to such bounded domains. Runtime certificates will separately establish
-polynomial bounds in all size parameters, possibly using their sum or maximum
-as an aggregate; the data layer does not select an aggregate.
+polynomial bounds in all size parameters; the data layer does not select an
+aggregate.
 
 For each domain description, its encoding certificate proves the existence of
 one multivariate polynomial p such that, for every a and every `x : D a`,
 `length (encode x) ≤ p.eval a`. This p may depend arbitrarily on the program
 schema P and fixed S, but cannot be selected separately for each assignment
 or each value.
-Polynomial witnesses are internal: formalization users should not
-calculate or carry explicit coefficients, degrees, total operation counts, or
-composed size bounds. The complete assignment determines the exact encoding
+Runtime and composed resource witnesses are internal: formalization users
+should not calculate their coefficients, degrees, or total operation counts.
+Implementations or library helpers supply explicit evaluable storage capacities
+and prove them sufficient. The complete assignment determines the exact encoding
 width. Size parameters need not
 be fields of domain values or included in their encodings. Their eventual
 machine interface is separate from this data-domain layer.
@@ -154,10 +155,12 @@ multivariate polynomial in the size parameters, including constants.
 
 These constructors give fixed-width codecs with round-trip and canonical
 decoding theorems, and automatically compose polynomial-size certificates.
-Matrix examples use external K,L indices and exact tuples; bounded lists and
-dependent records carrying dimensions remain later extensions. The present
-definitions establish no algorithmic runtime claim. Mathlib polynomial
-construction is noncomputable; an executable program layer is future work.
+The initial expression language remains limited to these four constructors.
+Bounded lists, buffers, and heterogeneous coordinates use derived presentations
+with active counts, tags, and contracts; dependent records remain deferred.
+The present definitions establish no algorithmic runtime claim. Mathlib polynomial
+construction is noncomputable; realization must provide a proved executable
+evaluator or compiled description of the fixed size expressions.
 
 Representations should provide encoding, decoding, a round-trip theorem, and
 encoded-size bounds. Finite indexing needs an explicit enumeration, not just
@@ -175,11 +178,13 @@ encoding and decoding are derived by composing these layers. When several
 generator lists have the same span, or several DAGs have the same meaning,
 the carrier may be the list or DAG itself, with span, expansion, and evaluation
 expressed separately in contracts. Unique representation does not require
-canonicalizing these mathematical meanings.
+canonicalizing these mathematical meanings. These presentation functions specify
+meaning, not executable operations or implicit runtime validators; conversions
+require certified programs.
 
 Proposed interface: each algorithm has one structured input and one structured
-output. Records package multiple arguments and results. Dimensions determined
-by earlier input fields require dependent records, not only fixed products.
+output. Records package multiple arguments and results. Input-dependent
+dimensions use fixed capacities and active counts related by contracts.
 
 All runtime data share this abstraction: an element of a bounded domain.
 Different domain descriptions still distinguish matrices, lists, scalars, and
@@ -276,37 +281,28 @@ not introduce an error alternative into the structured output domain.
 
 ## Programs and composition
 
-The intended uniformity in N is one finite algorithm description and one
-runtime polynomial Q satisfying the bound for every N and every valid input
-in `Input N` satisfying its theorem hypothesis. An independently chosen
-machine or polynomial for each N would not meet this requirement. Q is
-existential and hidden from users, like the
-domain's encoded-size bound. N is an explicit runtime parameter, encoded
-alongside the structured input and available to the program even when that
-input is empty. Encoding and reading N are included in the realization's
-costs.
+The intended uniformity is one finite algorithm description and one runtime
+polynomial Q valid for every size assignment a and every input satisfying its
+theorem hypothesis. An independently chosen machine or polynomial for each a
+would not meet this requirement. Q is existential and hidden from users.
+The complete assignment is encoded alongside the structured input and available
+to the program even when that input is empty. Reading it counts toward runtime.
 
-Subprograms may be invoked with another size parameter `M = p(N)`, where p is
-a fixed natural-coefficient polynomial expression specified at the call site.
-The expression does not depend on input values or evolving loop state. N here
-is the enclosing program invocation's parameter. The framework must provide a
-certified call/reparameterization
-rule: establish that the actual arguments belong to the callee's domain at M
-and satisfy its input hypothesis, invoke the callee at M, and expose its
-contract to the caller. Polynomial bounds in M compose with the polynomial
-bound on M in N, with composed runtime and storage witnesses hidden from
-users. Specifying p for a domain or subcall does not require users to calculate
-the runtime polynomial of the resulting program.
+At each call site, each callee size parameter is assigned a fixed
+natural-coefficient polynomial in the caller's size parameters. Together these
+expressions define a substitution p and callee assignment `p(a)`, independent
+of input values and evolving loop state. The certified call rule requires
+arguments in the callee's domain at `p(a)` satisfying its input hypothesis,
+and exposes its output contract. Polynomial runtime and storage bounds compose
+under substitution, with resulting witnesses hidden from users.
 
-Reparameterization must also account for computing M, transporting input and
-output representations, and storing the returned values. Dependent records
-can package M with data whose domain depends on M; their size certificate
-must bound the entire package in the enclosing N. Reindexing at p is a
-bounded-domain constructor with value family `D (p(N))`.
+Reparameterization accounts for computing `p(a)`, transporting representations,
+and storing returned values. Reindexing is an operation on existing domain
+expressions, giving the value family `D (p(a))`, not a new constructor.
 
 Within a loop, a call site's p is always evaluated at the enclosing program's
-unchanged N. It must not instead be applied to the parameter used by the
-previous iteration. Nested calls compose their fixed polynomial expressions;
+unchanged assignment a. It must not instead be applied to the assignment used
+by the previous iteration. Nested calls compose their fixed polynomial expressions;
 the initial core does not introduce recursive self-calls.
 
 Changing the parameter does not implicitly change a value's contents. For
@@ -317,10 +313,10 @@ but must not silently choose padding values.
 
 Algorithms are written using certified combinators with notation resembling
 mathematical pseudocode: `let`, `if`, `lookup`, `update`, and `while`.
-The language has mathematical semantics and operational cost semantics.
-Its ingredients include
-certified primitive operations, composition, projections, record and
-alternative construction, branching, and bounded while loops.
+The initial language is first-order, with mathematical semantics and one
+operational cost model. Its ingredients include certified primitive operations,
+composition, projections, record and alternative construction, branching,
+bounded while loops, and static calls using finite working storage.
 
 All user-defined algorithms are built from these existing certified primitives
 and combinators. The user extension interface does not accept independent
@@ -328,9 +324,8 @@ machine implementations as new primitive algorithms. Library primitives
 themselves require proved machine realization; no unverified oracle or bare
 function with an asserted cost may enter the certified core.
 
-DAG composition should retain shared intermediate results. A fixed finite DAG
-alone does not express input-dependent repetition; bounded while loops supply
-this capability. Traversal, mapping, folding, and bounded repetition can be
+Named intermediate values provide sharing without a separate program-DAG
+syntax. Traversal, mapping, folding, and bounded repetition can be
 derived from while loops, counters, and list/tuple lookup rather than separate
 core iteration constructs. A generated DAG is runtime data, whose construction
 and evaluation must both be accounted for. Shared term certificates should remain compact
@@ -344,8 +339,9 @@ Users should prove correctness by mathematical equalities, relations, and loop
 invariants. Runtime proofs should combine reusable bounds for primitives,
 composition, collection operations, and bounded iteration. Saturation/worklist
 algorithms additionally need an explicit progress or iteration-bound argument.
-Prepared tables or coordinate systems count as inputs unless their preparation
-has also been certified.
+Finite data determined solely by S may be precomputed. Input-dependent tables
+or coordinate systems not covered by these constants must be supplied as
+bounded input or constructed by certified programs.
 
 The intended proof interface combines qualitative facts: polynomially many
 iterations, polynomial work per iteration, and polynomially bounded stored
@@ -371,8 +367,8 @@ and need not be computed or stored by the program.
 The completed framework must prove that every certified program has a
 realization on a standard deterministic machine. The finite machine
 description may depend on P and S and is fixed independently of N.
-On the encoding of N and a valid
-input satisfying the theorem hypothesis, it halts with an encoded output
+On the encoded size assignment and a valid input satisfying the theorem
+hypothesis, it halts with an encoded output
 satisfying the contract, within a polynomial number of actual machine steps
 in N. Abstract source-level cost certificates alone do not complete this goal.
 
@@ -390,7 +386,10 @@ with slots for loop counters, intermediate results, and subprogram arguments
 and results. Fixing P, S, and a complete size assignment determines exact slot
 widths and offsets. The frame expression is fixed across runs of `P_S`, while
 its physical dimensions vary with the assignment. Auxiliary navigation and
-scratch storage must also have polynomial bounds.
+scratch storage must also have polynomial bounds. Bounded-value invariants hold
+at program-operation boundaries; physical scratch and partially written slots
+need not encode complete values. Vacant storage uses explicit tags or physical
+initialization invariants, without assuming default elements or adding errors.
 
 Use one fixed finite tape alphabet for the framework, independent of P, S,
 and the size assignment. A possible symbol combines a data component
@@ -465,6 +464,8 @@ that input is empty. A preparation algorithm parses this header, computes
 input width, slot offsets, and all working capacities, formats the frame with
 its required markers and metadata, and installs the input in its slots. A
 final extraction routine returns the canonical output encoding.
+Other external formats, including exact compact clause streams, require
+certified parsing and serialization adapters, not alternative constructor codecs.
 
 Preparation needs its own bootstrap navigation and scratch before the full
 frame exists. One possible convention surrounds the finite external input
@@ -518,6 +519,8 @@ outside the example suite.
 
 All three examples must use the common combinators, bounded representations,
 prepared-frame composition, and proved external machine-runtime guarantee.
+The building-block libraries are derived certified programs and proofs, except
+for the basic operations and execution machinery needed by the core.
 Mathematical existence of decompositions, coordinates, or normal forms is
 insufficient without the required executable construction. Shared term-DAG
 witnesses must stay compact when used; a correctness-only callback is not a
@@ -532,20 +535,17 @@ and randomized execution remain outside the initial scope.
 ## Decisions still being discussed
 
 1. How should partial semantics and proof refinements be exposed in Lean?
-2. What domain constructors and certified extensions should the first version
-   support, and which qualitative polynomial closure facts should automation
-   handle without user intervention?
+2. Which qualitative polynomial closure facts should automation handle without
+   user intervention?
 3. How should loop invariants, qualitative progress certificates, and exit
    contracts be packaged? Are the proposed example contracts and edge cases
    appropriate?
 
 ## Reference-review requirements
 
-The static expressiveness review is recorded in
-[REFERENCE_REVIEW.md](REFERENCE_REVIEW.md). It found no basic control-flow
-obstruction for the representative deterministic polynomial algorithms, but
-identified representation and certification boundaries that the interfaces
-must preserve:
+The reference review found no basic control-flow obstruction for the
+representative deterministic polynomial algorithms. The interfaces must
+preserve these representation and certification boundaries:
 
 - Fixed finite subgroups, congruences, quotients, or maps may have constant
   labels and precomputed operation tables. Growing mathematical objects may
