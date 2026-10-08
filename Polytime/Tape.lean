@@ -26,8 +26,8 @@ are proof notation for tapes, not atomic machine instructions.
 
 namespace Polytime.Tape
 
--- u: tape symbols; v: finite-controller states.
-universe u v
+-- u: tape symbols; v: source-controller states; w: target-controller states.
+universe u v w
 
 variable {Symbol : Type u} {State : Type v} [Inhabited Symbol] [Inhabited State]
 
@@ -59,6 +59,20 @@ theorem trans {firstCount secondCount : ℕ} {initial middle final : Configurati
     simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using next transition (hypothesis second)
 
 end Steps
+
+/-- Reuse a counted routine inside another controller without changing its cost. -/
+theorem Steps.map {TargetState : Type w} [Inhabited TargetState]
+    {machine : Turing.TM0.Machine Symbol State}
+    {targetMachine : Turing.TM0.Machine Symbol TargetState}
+    (embed : Configuration Symbol State → Configuration Symbol TargetState)
+    (simulation : ∀ initial middle, Turing.TM0.step machine initial = some middle →
+      Turing.TM0.step targetMachine (embed initial) = some (embed middle))
+    {ticks : ℕ} {initial final : Configuration Symbol State}
+    (trace : Steps machine ticks initial final) :
+    Steps targetMachine ticks (embed initial) (embed final) := by
+  induction trace with
+  | zero => exact .zero _
+  | next transition rest hypothesis => exact .next (simulation _ _ transition) hypothesis
 
 /-- A bounded executable observer of machine runs; fuel is not a stopping
 condition of the machine itself. -/

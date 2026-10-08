@@ -62,7 +62,7 @@ def valueEquiv (field : FixedPresentation.{u}) (K L : ℕ) :
 
 /-- The size certificate is uniform over all independent dimension assignments. -/
 theorem polynomial_size (field : FixedPresentation.{u}) :
-    ∃ p : SizeExpression context, ∀ a, (domain field).bitWidth a ≤ p.eval a :=
+    ∃ p : SizePolynomial context, ∀ a, (domain field).bitWidth a ≤ p.eval a :=
   (domain field).polynomially_bounded
 
 def encode (field : FixedPresentation.{u}) (K L : ℕ)
@@ -112,7 +112,7 @@ def compositeTuple (field : FixedPresentation.{u}) : DomainExpression context :=
       SizeExpression.parameter (ctx := context) .K * SizeExpression.parameter (ctx := context) .L)
 
 example (field : FixedPresentation.{u}) :
-    ∃ p : SizeExpression context, ∀ a, (compositeTuple field).bitWidth a ≤ p.eval a :=
+    ∃ p : SizePolynomial context, ∀ a, (compositeTuple field).bitWidth a ≤ p.eval a :=
   (compositeTuple field).polynomially_bounded
 
 example (field : FixedPresentation.{u}) (K L : ℕ) :

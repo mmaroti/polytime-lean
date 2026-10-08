@@ -30,26 +30,26 @@ abbrev context : SizeContext := ⟨Unit, inferInstance⟩
 
 def assignment (length : ℕ) : SizeAssignment context := fun _ => length
 
-def lengthCode : SizeExpression.Code context := .parameter ()
+def lengthCode : SizeExpression context := .parameter ()
 
 @[simp] theorem evaluate_length (length : ℕ) : lengthCode.eval (assignment length) = length := rfl
 
 noncomputable section DomainExamples
 
-def tupleDomain : DomainExpression context := BoolTuple.domain lengthCode.polynomial
+def tupleDomain : DomainExpression context := BoolTuple.domain lengthCode
 
-def indexDomain : EncodedDomain context := BoundedNat.domain lengthCode.polynomial
+def indexDomain : EncodedDomain context := BoundedNat.domain lengthCode
 
 @[simp] theorem tuple_width (length : ℕ) : tupleDomain.bitWidth (assignment length) = length := by
-  exact (BoolTuple.width_code lengthCode (assignment length)).symm
+  simp [tupleDomain, lengthCode, assignment]
 
 @[simp] theorem index_width (length : ℕ) :
     indexDomain.expression.bitWidth (assignment length) = length := by
-  simp [indexDomain, lengthCode, SizeExpression.Code.polynomial, assignment]
+  simp [indexDomain, lengthCode, assignment]
 
 /-- Zero capacity is an empty index domain, not a distinguished error value. -/
 example : IsEmpty (indexDomain.Carrier (assignment 0)) := by
-  simp [indexDomain, BoundedNat.domain, lengthCode, SizeExpression.Code.polynomial, assignment]
+  simp [indexDomain, BoundedNat.domain, lengthCode, assignment]
 
 example : tupleDomain.bitWidth (assignment 0) = 0 := by simp
 

@@ -33,18 +33,19 @@ structure SizeContext where
 attribute [instance] SizeContext.finiteParameters
 
 abbrev SizeAssignment (ctx : SizeContext) := ctx.Parameter → ℕ
-abbrev SizeExpression (ctx : SizeContext) := MvPolynomial ctx.Parameter ℕ
+/-- Mathematical polynomial witnesses, separate from executable capacities. -/
+abbrev SizePolynomial (ctx : SizeContext) := MvPolynomial ctx.Parameter ℕ
 
-namespace SizeExpression
+namespace SizePolynomial
 
 variable {ctx : SizeContext}
 
-noncomputable section SizeExpressionDefinitions
+noncomputable section SizePolynomialDefinitions
 
-def parameter (k : ctx.Parameter) : SizeExpression ctx := MvPolynomial.X k
-def constant (n : ℕ) : SizeExpression ctx := MvPolynomial.C n
+def parameter (k : ctx.Parameter) : SizePolynomial ctx := MvPolynomial.X k
+def constant (n : ℕ) : SizePolynomial ctx := MvPolynomial.C n
 
-def eval (e : SizeExpression ctx) (a : SizeAssignment ctx) : ℕ :=
+def eval (e : SizePolynomial ctx) (a : SizeAssignment ctx) : ℕ :=
   MvPolynomial.eval a e
 
 @[simp] theorem eval_parameter (k : ctx.Parameter) (a : SizeAssignment ctx) :
@@ -54,77 +55,87 @@ def eval (e : SizeExpression ctx) (a : SizeAssignment ctx) : ℕ :=
 @[simp] theorem eval_constant (n : ℕ) (a : SizeAssignment ctx) : eval (constant n) a = n := by
   simp [eval, constant]
 
-@[simp] theorem eval_zero (a : SizeAssignment ctx) : eval (0 : SizeExpression ctx) a = 0 := by
+@[simp] theorem eval_zero (a : SizeAssignment ctx) : eval (0 : SizePolynomial ctx) a = 0 := by
   simp [eval]
 
-@[simp] theorem eval_one (a : SizeAssignment ctx) : eval (1 : SizeExpression ctx) a = 1 := by
+@[simp] theorem eval_one (a : SizeAssignment ctx) : eval (1 : SizePolynomial ctx) a = 1 := by
   simp [eval]
 
-@[simp] theorem eval_add (e f : SizeExpression ctx) (a : SizeAssignment ctx) :
+@[simp] theorem eval_add (e f : SizePolynomial ctx) (a : SizeAssignment ctx) :
     eval (e + f) a = eval e a + eval f a := by simp [eval]
 
-@[simp] theorem eval_mul (e f : SizeExpression ctx) (a : SizeAssignment ctx) :
+@[simp] theorem eval_mul (e f : SizePolynomial ctx) (a : SizeAssignment ctx) :
     eval (e * f) a = eval e a * eval f a := by simp [eval]
 
-@[simp] theorem eval_pow (e : SizeExpression ctx) (n : ℕ) (a : SizeAssignment ctx) :
+@[simp] theorem eval_pow (e : SizePolynomial ctx) (n : ℕ) (a : SizeAssignment ctx) :
     eval (e ^ n) a = eval e a ^ n := by simp [eval]
 
+@[simp] theorem eval_sum (expressions : List (SizePolynomial ctx)) (assignment : SizeAssignment ctx) :
+    expressions.sum.eval assignment = (expressions.map fun expression => expression.eval assignment).sum := by
+  induction expressions with
+  | nil => simp
+  | cons expression expressions hypothesis => simp [hypothesis]
+
 /-- Natural-coefficient size expressions are monotone in every parameter. -/
-theorem eval_mono (e : SizeExpression ctx) (a b : SizeAssignment ctx) (h : ∀ k, a k ≤ b k) :
+theorem eval_mono (e : SizePolynomial ctx) (a b : SizeAssignment ctx) (h : ∀ k, a k ≤ b k) :
     e.eval a ≤ e.eval b := by
   induction e using MvPolynomial.induction_on with
   | C n => simp [eval]
   | add e f he hf => simpa using Nat.add_le_add he hf
   | mul_X e k he => simpa [eval] using Nat.mul_le_mul he (h k)
 
-end SizeExpressionDefinitions
+end SizePolynomialDefinitions
+end SizePolynomial
 
-/-- A finite executable presentation of a fixed size polynomial. -/
-inductive Code (ctx : SizeContext)
+/-- Executable natural-coefficient expressions used to declare capacities. -/
+inductive SizeExpression (ctx : SizeContext)
   | constant (value : ℕ)
   | parameter (name : ctx.Parameter)
-  | add (left right : Code ctx)
-  | mul (left right : Code ctx)
+  | add (left right : SizeExpression ctx)
+  | mul (left right : SizeExpression ctx)
+  | pow (base : SizeExpression ctx) (exponent : ℕ)
 
-namespace Code
+namespace SizeExpression
 
 variable {ctx : SizeContext}
 
-def eval : Code ctx → SizeAssignment ctx → ℕ
+instance : Add (SizeExpression ctx) := ⟨add⟩
+instance : Mul (SizeExpression ctx) := ⟨mul⟩
+instance : Pow (SizeExpression ctx) ℕ := ⟨pow⟩
+instance (value : ℕ) : OfNat (SizeExpression ctx) value := ⟨constant value⟩
+
+def eval : SizeExpression ctx → SizeAssignment ctx → ℕ
   | .constant value, _ => value
   | .parameter name, assignment => assignment name
   | .add left right, assignment => left.eval assignment + right.eval assignment
   | .mul left right, assignment => left.eval assignment * right.eval assignment
+  | .pow base exponent, assignment => base.eval assignment ^ exponent
 
-noncomputable section CodeMeaning
+@[simp] theorem eval_constant (value : ℕ) (assignment : SizeAssignment ctx) :
+    (constant value).eval assignment = value := rfl
+@[simp] theorem eval_parameter (name : ctx.Parameter) (assignment : SizeAssignment ctx) :
+    (parameter name).eval assignment = assignment name := rfl
+@[simp] theorem eval_add (left right : SizeExpression ctx) (assignment : SizeAssignment ctx) :
+    (left + right).eval assignment = left.eval assignment + right.eval assignment := rfl
+@[simp] theorem eval_mul (left right : SizeExpression ctx) (assignment : SizeAssignment ctx) :
+    (left * right).eval assignment = left.eval assignment * right.eval assignment := rfl
+@[simp] theorem eval_pow (base : SizeExpression ctx) (exponent : ℕ) (assignment : SizeAssignment ctx) :
+    (base ^ exponent).eval assignment = base.eval assignment ^ exponent := rfl
 
-def polynomial : Code ctx → SizeExpression ctx
-  | .constant value => SizeExpression.constant value
-  | .parameter name => SizeExpression.parameter name
+noncomputable section PolynomialMeaning
+
+def polynomial : SizeExpression ctx → SizePolynomial ctx
+  | .constant value => SizePolynomial.constant value
+  | .parameter name => SizePolynomial.parameter name
   | .add left right => left.polynomial + right.polynomial
   | .mul left right => left.polynomial * right.polynomial
+  | .pow base exponent => base.polynomial ^ exponent
 
-/-- Execution agrees with the existing mathematical evaluation. -/
-theorem eval_eq (code : Code ctx) (assignment : SizeAssignment ctx) :
-    code.eval assignment = code.polynomial.eval assignment := by
-  induction code <;> simp [eval, polynomial, *]
+/-- Executable evaluation agrees with the derived mathematical polynomial. -/
+theorem eval_eq (expression : SizeExpression ctx) (assignment : SizeAssignment ctx) :
+    expression.eval assignment = expression.polynomial.eval assignment := by
+  induction expression <;> simp [eval, polynomial, *]
 
-end CodeMeaning
-end Code
-
-/-- Every fixed polynomial admits a finite executable presentation.
-Choosing that presentation belongs to specialization, not runtime. -/
-theorem exists_code (expression : SizeExpression ctx) :
-    ∃ code : Code ctx, code.polynomial = expression := by
-  induction expression using MvPolynomial.induction_on with
-  | C value => exact ⟨.constant value, rfl⟩
-  | add left right leftHypothesis rightHypothesis =>
-    obtain ⟨leftCode, rfl⟩ := leftHypothesis
-    obtain ⟨rightCode, rfl⟩ := rightHypothesis
-    exact ⟨.add leftCode rightCode, rfl⟩
-  | mul_X expression name hypothesis =>
-    obtain ⟨code, rfl⟩ := hypothesis
-    exact ⟨.mul code (.parameter name), rfl⟩
-
+end PolynomialMeaning
 end SizeExpression
 end Polytime

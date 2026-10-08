@@ -33,6 +33,20 @@ structure EncodedDomain (ctx : SizeContext) where
 
 namespace EncodedDomain
 
+/-- A total mathematical presentation uses the existing equivalence structure. -/
+def ofEquiv {ctx : SizeContext} (expression : DomainExpression.{v} ctx)
+    (Carrier : SizeAssignment ctx → Type u)
+    (presentation : ∀ assignment, Carrier assignment ≃ expression.Value assignment) : EncodedDomain ctx where
+  Carrier := Carrier
+  expression := expression
+  represent := fun assignment => presentation assignment
+  interpret := fun assignment value => some ((presentation assignment).symm value)
+  interpret_represent := fun assignment value => by simp
+  represent_interpret := fun assignment representation value hypothesis => by
+    have equality := Option.some.inj hypothesis
+    subst value
+    simp
+
 /-- Compose the mathematical presentation with the expression's canonical bit codec. -/
 def codec (d : EncodedDomain ctx) (a : SizeAssignment ctx) :
     BitCodec (d.Carrier a) (d.expression.bitWidth a) where

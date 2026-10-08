@@ -38,27 +38,6 @@ end FixedPresentation
 
 namespace BoolTuple
 
-private theorem power_heq {Source Target : Type} {sourceWidth targetWidth length : ℕ}
-    (carrier : Source = Target) (width : sourceWidth = targetWidth)
-    {source : BitCodec Source sourceWidth} {target : BitCodec Target targetWidth}
-    (same : HEq source target) : HEq (source.power length) (target.power length) := by
-  cases carrier
-  cases width
-  cases same
-  rfl
-
-private theorem bit_heq {Source Target : Type} {sourceWidth targetWidth : ℕ}
-    (carrier : Source = Target) (width : sourceWidth = targetWidth)
-    {source : BitCodec Source sourceWidth} {target : BitCodec Target targetWidth}
-    (same : HEq source target) {sourceValue : Source} {targetValue : Target}
-    (values : HEq sourceValue targetValue) (offset : ℕ) :
-    (source.encode sourceValue).getLsbD offset = (target.encode targetValue).getLsbD offset := by
-  cases carrier
-  cases width
-  cases same
-  cases values
-  rfl
-
 def toBits {length : ℕ} (tuple : Fin length → Bool) : BitVec length :=
   (BitVec.ofBoolListLE (List.ofFn tuple)).cast (List.length_ofFn ..)
 
@@ -105,6 +84,14 @@ def valueEquiv {ctx : SizeContext} (length : SizeExpression ctx)
   Equiv.cast (by simp only [domain, DomainExpression.value_power, DomainExpression.value_fixed,
     FixedPresentation.boolean])
 
+/-- Complete Boolean tuples are equivalent to their exact-width bit vectors. -/
+def bitsEquiv {ctx : SizeContext} (length : SizeExpression ctx) (assignment : SizeAssignment ctx) :
+    BitVec (length.eval assignment) ≃ (domain length).Value assignment :=
+  ({ toFun := fromBits, invFun := toBits,
+     left_inv := toBits_fromBits, right_inv := fromBits_toBits } :
+    BitVec (length.eval assignment) ≃ (Fin (length.eval assignment) → Bool)).trans
+      (valueEquiv length assignment).symm
+
 @[simp] theorem domain_width {ctx : SizeContext} (length : SizeExpression ctx)
     (assignment : SizeAssignment ctx) : (domain length).bitWidth assignment = length.eval assignment := by
   simp [domain]
@@ -112,36 +99,14 @@ def valueEquiv {ctx : SizeContext} (length : SizeExpression ctx)
 theorem encode_bit {ctx : SizeContext} (length : SizeExpression ctx) (assignment : SizeAssignment ctx)
     (tuple : Fin (length.eval assignment) → Bool) (index : Fin (length.eval assignment)) :
     ((BoolTuple.domain length).encode assignment ((BoolTuple.valueEquiv length assignment).symm tuple)).getLsbD index.val = tuple index := by
-  have fixedCarrier : (DomainExpression.fixed FixedPresentation.boolean (ctx := ctx)).Value assignment = Bool := by
-    simp [FixedPresentation.boolean]
-  have fixedWidth : (DomainExpression.fixed FixedPresentation.boolean (ctx := ctx)).bitWidth assignment = 1 := by
-    simp
-  have fixedCodec : HEq ((DomainExpression.fixed FixedPresentation.boolean (ctx := ctx)).codec assignment)
-      FixedPresentation.boolean.codec := by
-    simp only [DomainExpression.codec]
-    exact cast_heq _ _
-  have powerCodec : HEq ((BoolTuple.domain length).codec assignment)
-      (FixedPresentation.boolean.codec.power (length.eval assignment)) := by
-    unfold BoolTuple.domain
-    simp only [DomainExpression.codec]
-    simp only [DomainExpression.codec] at fixedCodec
-    exact (cast_heq _ _).trans (power_heq fixedCarrier fixedWidth fixedCodec)
-  have values : HEq ((BoolTuple.valueEquiv length assignment).symm tuple) tuple := by
-    simp only [BoolTuple.valueEquiv, ← Equiv.cast_symm, Equiv.cast_apply]
-    exact cast_heq _ _
-  have equality := bit_heq (by simp [BoolTuple.domain, FixedPresentation.boolean])
-    (by simp [BoolTuple.domain]) powerCodec values index.val
-  dsimp only [DomainExpression.encode]
-  rw [equality]
-  have bit := BitCodec.power_encode_bit (A := Bool) FixedPresentation.boolean.codec
-    (length.eval assignment) tuple index
-  exact bit.trans (by cases tuple index <;> rfl)
-
-/-- Executable width evaluation for the tuple domain. -/
-theorem width_code {ctx : SizeContext} (code : SizeExpression.Code ctx)
-    (assignment : SizeAssignment ctx) :
-    code.eval assignment = (domain code.polynomial).bitWidth assignment := by
-  simpa using code.eval_eq assignment
+  have represented : (BoolTuple.valueEquiv length assignment).symm tuple =
+      DomainExpression.powerFixedValue FixedPresentation.boolean length assignment tuple := by
+    exact (DomainExpression.powerFixedValue_eq_cast FixedPresentation.boolean length assignment tuple).symm
+  rw [represented]
+  have encoding := DomainExpression.encode_power_fixed_bit
+    FixedPresentation.boolean length assignment tuple index.val
+  have bit := BitCodec.power_encode_bit FixedPresentation.boolean.codec (length.eval assignment) tuple index
+  exact encoding.trans (bit.trans (by cases tuple index <;> rfl))
 
 end TupleDomains
 end BoolTuple

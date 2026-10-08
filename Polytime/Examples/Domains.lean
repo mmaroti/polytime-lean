@@ -138,7 +138,7 @@ def nested : DomainExpression Matrices.context :=
       (SizeExpression.parameter (ctx := Matrices.context) .K))
       (SizeExpression.parameter (ctx := Matrices.context) .L ^ 2)]
 
-example : ∃ p : SizeExpression Matrices.context, ∀ a, nested.bitWidth a ≤ p.eval a :=
+example : ∃ p : SizePolynomial Matrices.context, ∀ a, nested.bitWidth a ≤ p.eval a :=
   nested.polynomially_bounded
 
 /-- Even a parameter named N is an ordinary name, without special bounds. -/
@@ -161,7 +161,7 @@ def peerExponent : SizeExpression peerContext :=
 example : peerExponent.eval peerAssignment = 77 := by
   simp [peerExponent, SizeExpression.eval_parameter (ctx := peerContext), peerAssignment]
 
-example : ∃ p : SizeExpression peerContext, ∀ a,
+example : ∃ p : SizePolynomial peerContext, ∀ a,
     (DomainExpression.power (.fixed (FixedPresentation.fin 2)) peerExponent).bitWidth a ≤ p.eval a :=
   DomainExpression.polynomially_bounded _
 

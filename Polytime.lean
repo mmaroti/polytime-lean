@@ -23,3 +23,5 @@ import Polytime.Algorithm
 import Polytime.Examples.Matrices
 import Polytime.Examples.Domains
 import Polytime.Examples.TupleLookup
+import Polytime.Examples.TupleComposition
+import Polytime.Examples.FramePreparation

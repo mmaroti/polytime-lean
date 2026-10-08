@@ -94,7 +94,7 @@ decreasing_by
 @[simp] theorem value_sum (ds : List (DomainExpression ctx)) (a : SizeAssignment ctx) :
     (sum ds).Value a = ((i : Fin ds.length) × (ds.get i).Value a) := by simp [Value]
 
-noncomputable section DomainDefinitions
+section DomainDefinitions
 
 /-- Exact encoded width; no polynomial witness needs to be constructed first. -/
 def bitWidth (d : DomainExpression ctx) (a : SizeAssignment ctx) : ℕ :=
@@ -132,6 +132,8 @@ private theorem width_le_maximum (ds : List (DomainExpression ctx)) (a : SizeAss
   · exact List.mem_map.mpr ⟨ds.get i, List.get_mem _ _, rfl⟩
   · exact le_rfl
 
+noncomputable section DomainCodecs
+
 /-- Codecs are assembled directly by recursion over the domain expression. -/
 def codec (d : DomainExpression.{u} ctx) (a : SizeAssignment ctx) :
     BitCodec (d.Value a) (d.bitWidth a) :=
@@ -160,6 +162,147 @@ decreasing_by
 def encode (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     d.Value a → BitVec (d.bitWidth a) := (d.codec a).encode
 
+/-- Constructor values hide the equalities induced by recursive carrier types. -/
+def fixedValue (p : FixedPresentation.{u}) (a : SizeAssignment ctx) (value : p.Carrier) :
+    (fixed p).Value a := cast (value_fixed p a).symm value
+
+def powerValue (d : DomainExpression.{u} ctx) (e : SizeExpression ctx) (a : SizeAssignment ctx)
+    (tuple : Fin (e.eval a) → d.Value a) : (power d e).Value a :=
+  cast (value_power d e a).symm tuple
+
+def productValue (d : DomainExpression.{u} ctx) (ds : List (DomainExpression ctx))
+    (a : SizeAssignment ctx) (value : d.Value a × (product ds).Value a) :
+    (product (d :: ds)).Value a := cast (value_product_cons d ds a).symm value
+
+def sumValue (ds : List (DomainExpression.{u} ctx)) (a : SizeAssignment ctx)
+    (value : (i : Fin ds.length) × (ds.get i).Value a) : (sum ds).Value a :=
+  cast (value_sum ds a).symm value
+
+private theorem encode_bit_transport {Source Target : Type u} {sourceWidth targetWidth : ℕ}
+    (carrier : Source = Target) (width : sourceWidth = targetWidth)
+    {source : BitCodec Source sourceWidth} {target : BitCodec Target targetWidth}
+    (same : HEq source target) {sourceValue : Source} {targetValue : Target}
+    (values : HEq sourceValue targetValue) (offset : ℕ) :
+    (source.encode sourceValue).getLsbD offset = (target.encode targetValue).getLsbD offset := by
+  cases carrier
+  cases width
+  cases same
+  cases values
+  rfl
+
+@[simp] theorem encode_fixed_bit (p : FixedPresentation.{u}) (a : SizeAssignment ctx)
+    (value : p.Carrier) (offset : ℕ) :
+    ((fixed p).encode a (fixedValue p a value)).getLsbD offset =
+      (p.codec.encode value).getLsbD offset := by
+  apply encode_bit_transport (value_fixed p a) (bitWidth_fixed p a)
+  · simp only [codec]; exact cast_heq _ _
+  · exact cast_heq _ _
+
+@[simp] theorem encode_power_bit (d : DomainExpression.{u} ctx) (e : SizeExpression ctx)
+    (a : SizeAssignment ctx) (tuple : Fin (e.eval a) → d.Value a) (offset : ℕ) :
+    ((power d e).encode a (powerValue d e a tuple)).getLsbD offset =
+      (((d.codec a).power (e.eval a)).encode tuple).getLsbD offset := by
+  apply encode_bit_transport (value_power d e a) (bitWidth_power d e a)
+  · simp only [codec]; exact cast_heq _ _
+  · exact cast_heq _ _
+
+@[simp] theorem encode_product_bit (d : DomainExpression.{u} ctx) (ds : List (DomainExpression ctx))
+    (a : SizeAssignment ctx) (value : d.Value a × (product ds).Value a) (offset : ℕ) :
+    ((product (d :: ds)).encode a (productValue d ds a value)).getLsbD offset =
+      (((d.codec a).product ((product ds).codec a)).encode value).getLsbD offset := by
+  apply encode_bit_transport (value_product_cons d ds a) (bitWidth_product_cons d ds a)
+  · simp only [codec]; exact cast_heq _ _
+  · exact cast_heq _ _
+
+@[simp] theorem encode_sum_bit (ds : List (DomainExpression.{u} ctx)) (a : SizeAssignment ctx)
+    (value : (i : Fin ds.length) × (ds.get i).Value a) (offset : ℕ) :
+    ((sum ds).encode a (sumValue ds a value)).getLsbD offset =
+      ((BitCodec.tagged (fun i => (ds.get i).Value a) (fun i => (ds.get i).bitWidth a)
+        (fun i => (ds.get i).codec a)
+        ((ds.map fun d => d.bitWidth a).foldr max 0) (width_le_maximum ds a)).encode value).getLsbD offset := by
+  apply encode_bit_transport (value_sum ds a) (bitWidth_sum ds a)
+  · simp only [codec]; exact cast_heq _ _
+  · exact cast_heq _ _
+
+/-- Constructor equations expose bit vectors at their ordinary component widths. -/
+@[simp] theorem encode_fixed (p : FixedPresentation.{u}) (a : SizeAssignment ctx) (value : p.Carrier) :
+    ((fixed p).encode a (fixedValue p a value)).cast (bitWidth_fixed p a) = p.codec.encode value := by
+  apply BitVec.eq_of_getLsbD_eq_iff.mpr
+  intro offset valid
+  simp only [BitVec.getLsbD_cast]
+  exact encode_fixed_bit p a value offset
+
+@[simp] theorem encode_power (d : DomainExpression.{u} ctx) (e : SizeExpression ctx)
+    (a : SizeAssignment ctx) (tuple : Fin (e.eval a) → d.Value a) :
+    ((power d e).encode a (powerValue d e a tuple)).cast (bitWidth_power d e a) =
+      ((d.codec a).power (e.eval a)).encode tuple := by
+  apply BitVec.eq_of_getLsbD_eq_iff.mpr
+  intro offset valid
+  simp only [BitVec.getLsbD_cast]
+  exact encode_power_bit d e a tuple offset
+
+@[simp] theorem encode_product (d : DomainExpression.{u} ctx) (ds : List (DomainExpression ctx))
+    (a : SizeAssignment ctx) (value : d.Value a × (product ds).Value a) :
+    ((product (d :: ds)).encode a (productValue d ds a value)).cast (bitWidth_product_cons d ds a) =
+      ((d.codec a).product ((product ds).codec a)).encode value := by
+  apply BitVec.eq_of_getLsbD_eq_iff.mpr
+  intro offset valid
+  simp only [BitVec.getLsbD_cast]
+  exact encode_product_bit d ds a value offset
+
+@[simp] theorem encode_sum (ds : List (DomainExpression.{u} ctx)) (a : SizeAssignment ctx)
+    (value : (i : Fin ds.length) × (ds.get i).Value a) :
+    ((sum ds).encode a (sumValue ds a value)).cast (bitWidth_sum ds a) =
+      (BitCodec.tagged (fun i => (ds.get i).Value a) (fun i => (ds.get i).bitWidth a)
+        (fun i => (ds.get i).codec a)
+        ((ds.map fun d => d.bitWidth a).foldr max 0) (width_le_maximum ds a)).encode value := by
+  apply BitVec.eq_of_getLsbD_eq_iff.mpr
+  intro offset valid
+  simp only [BitVec.getLsbD_cast]
+  exact encode_sum_bit ds a value offset
+
+/-- Fixed-carrier powers expose ordinary mathematical tuples directly. -/
+def powerFixedValue (p : FixedPresentation.{u}) (e : SizeExpression ctx)
+    (a : SizeAssignment ctx) (tuple : Fin (e.eval a) → p.Carrier) :
+    (power (fixed p) e).Value a :=
+  powerValue (fixed p) e a (fun index => fixedValue p a (tuple index))
+
+private theorem power_codec_transport {Source Target : Type u} {sourceWidth targetWidth length : ℕ}
+    (carrier : Source = Target) (width : sourceWidth = targetWidth)
+    {source : BitCodec Source sourceWidth} {target : BitCodec Target targetWidth}
+    (same : HEq source target) : HEq (source.power length) (target.power length) := by
+  cases carrier
+  cases width
+  cases same
+  rfl
+
+private theorem tuple_cast_heq {Source Target : Type u} {length : ℕ}
+    (carrier : Source = Target) (tuple : Fin length → Source) :
+    HEq (fun index => cast carrier (tuple index)) tuple := by
+  cases carrier
+  rfl
+
+/-- The constructor agrees with the direct mathematical carrier identification. -/
+theorem powerFixedValue_eq_cast (p : FixedPresentation.{u}) (e : SizeExpression ctx)
+    (a : SizeAssignment ctx) (tuple : Fin (e.eval a) → p.Carrier) :
+    powerFixedValue p e a tuple =
+      cast (by simp only [value_power, value_fixed] :
+        (power (fixed p) e).Value a = (Fin (e.eval a) → p.Carrier)).symm tuple := by
+  apply eq_of_heq
+  exact ((cast_heq _ _).trans (tuple_cast_heq (value_fixed p a).symm tuple)).trans
+    (cast_heq _ _).symm
+
+@[simp] theorem encode_power_fixed_bit (p : FixedPresentation.{u}) (e : SizeExpression ctx)
+    (a : SizeAssignment ctx) (tuple : Fin (e.eval a) → p.Carrier) (offset : ℕ) :
+    ((power (fixed p) e).encode a (powerFixedValue p e a tuple)).getLsbD offset =
+      ((p.codec.power (e.eval a)).encode tuple).getLsbD offset := by
+  rw [powerFixedValue, encode_power_bit]
+  have same : HEq ((fixed p : DomainExpression ctx).codec a) p.codec := by
+    simp only [codec]; exact cast_heq _ _
+  have powers := power_codec_transport (length := e.eval a) (value_fixed p a) (bitWidth_fixed p a) same
+  exact encode_bit_transport (by rw [value_fixed]) (by rw [bitWidth_fixed]) powers
+    (tuple_cast_heq (value_fixed p a).symm tuple) offset
+
 def decode (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     BitVec (d.bitWidth a) → Option (d.Value a) := (d.codec a).decode
 
@@ -176,13 +319,17 @@ theorem encode_injective (d : DomainExpression ctx) (a : SizeAssignment ctx) :
   have := congrArg (d.decode a) h
   simpa using this
 
+end DomainCodecs
+
+noncomputable section DomainBounds
+
 /-- An automatically composed polynomial upper bound on encoded width. -/
-def sizeBound (d : DomainExpression ctx) : SizeExpression ctx :=
+def sizeBound (d : DomainExpression ctx) : SizePolynomial ctx :=
   match d with
-  | .fixed p => SizeExpression.constant p.bitWidth
+  | .fixed p => SizePolynomial.constant p.bitWidth
   | .product ds => (ds.map sizeBound).sum
-  | .sum ds => SizeExpression.constant (Nat.clog 2 ds.length) + (ds.map sizeBound).sum
-  | .power d e => e * d.sizeBound
+  | .sum ds => SizePolynomial.constant (Nat.clog 2 ds.length) + (ds.map sizeBound).sum
+  | .power d e => e.polynomial * d.sizeBound
 termination_by sizeOf d
 
 private theorem maximum_le_bound (ds : List (DomainExpression ctx)) (a : SizeAssignment ctx)
@@ -191,7 +338,7 @@ private theorem maximum_le_bound (ds : List (DomainExpression ctx)) (a : SizeAss
   induction ds with
   | nil => simp
   | cons d ds ih =>
-      simp only [List.map_cons, List.foldr_cons, List.sum_cons, SizeExpression.eval_add]
+      simp only [List.map_cons, List.foldr_cons, List.sum_cons, SizePolynomial.eval_add]
       exact max_le
         ((h d (List.mem_cons_self ..)).trans (Nat.le_add_right _ _))
         ((ih (fun d hd => h d (List.mem_cons_of_mem _ hd))).trans (Nat.le_add_left _ _))
@@ -207,16 +354,17 @@ theorem bitWidth_le (d : DomainExpression ctx) (a : SizeAssignment ctx) :
           simpa [sizeBound] using
             Nat.add_le_add (bitWidth_le d a) (bitWidth_le (product ds) a)
   | sum ds =>
-      simp only [bitWidth_sum, sizeBound, SizeExpression.eval_add, SizeExpression.eval_constant]
+      simp only [bitWidth_sum, sizeBound, SizePolynomial.eval_add, SizePolynomial.eval_constant]
       exact Nat.add_le_add_left (maximum_le_bound ds a (fun d hd => bitWidth_le d a)) _
   | power d e =>
-      simpa [sizeBound] using Nat.mul_le_mul_left (e.eval a) (bitWidth_le d a)
+      simpa [sizeBound, ← SizeExpression.eval_eq] using Nat.mul_le_mul_left (e.polynomial.eval a) (bitWidth_le d a)
 termination_by sizeOf d
 
 theorem polynomially_bounded (d : DomainExpression ctx) :
-    ∃ p : SizeExpression ctx, ∀ a, d.bitWidth a ≤ p.eval a :=
+    ∃ p : SizePolynomial ctx, ∀ a, d.bitWidth a ≤ p.eval a :=
   ⟨d.sizeBound, d.bitWidth_le⟩
 
+end DomainBounds
 end DomainDefinitions
 end DomainExpression
 end Polytime

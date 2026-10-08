@@ -369,6 +369,29 @@ theorem prepare (counter suffix : List Bool) (old replacement : Bool)
   simpa [configuration, marked, List.append_assoc, Nat.two_mul, Nat.add_assoc,
     Nat.add_comm, Nat.add_left_comm] using trace
 
+/-- A reusable exchange contract on one prepared region. Both surrounding tape
+contexts are preserved. Only the binary index scratch and this region change. -/
+theorem exchange (counter bits : List Bool) (replacement : Bool)
+    (left right : List Symbol) (valid : Binary.value counter < bits.length) :
+    ∃ ticks, ticks ≤ 32 * (counter.length + bits.length + 1) ^ 2 ∧
+      Steps ticks
+        (configuration false 1 left
+          (data replacement :: (word counter ++ 4 :: (word bits ++ right))))
+        (configuration (bits.getD (Binary.value counter) false) 15
+          (List.replicate counter.length (data true) ++ 3 :: left)
+          (data (bits.getD (Binary.value counter) false) ::
+            (word (bits.set (Binary.value counter) replacement) ++ right))) := by
+  cases bits with
+  | nil => simp at valid
+  | cons old suffix =>
+    have preparation := prepare counter suffix old replacement left right
+    obtain ⟨ticks, bound, execution⟩ := loop counter [] (old :: suffix) replacement left right valid
+    refine ⟨2 * counter.length + 7 + ticks, ?_, ?_⟩
+    · simp only [List.length_nil, Nat.add_zero] at bound
+      have indexBound := valid
+      nlinarith [sq_nonneg (counter.length + (old :: suffix).length + 1)]
+    · simpa [marked, word, List.append_assoc, configuration] using preparation.trans execution
+
 /-- Self-delimiting unary size header, replacement bit, padded binary index,
 a field separator, dense tuple bits, and end delimiter. This is an explicit
 framed external serialization; no start/cursor metadata is present initially. -/

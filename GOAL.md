@@ -158,9 +158,14 @@ decoding theorems, and automatically compose polynomial-size certificates.
 The initial expression language remains limited to these four constructors.
 Bounded lists, buffers, and heterogeneous coordinates use derived presentations
 with active counts, tags, and contracts; dependent records remain deferred.
-The present definitions establish no algorithmic runtime claim. Mathlib polynomial
-construction is noncomputable; realization must provide a proved executable
-evaluator or compiled description of the fixed size expressions.
+Domain certificates alone establish no algorithmic runtime claim. Declared
+capacities use executable arithmetic expressions with derived mathematical
+polynomials and a proved agreement theorem.
+The current executable evaluator has such an agreement theorem; its general tape
+realization remains to be proved. Exact widths may also use operations such as
+`max` and need not themselves be polynomial expressions, only polynomially bounded.
+Constructor encoding equations hide representation casts and transports
+behind reusable rewriting lemmas.
 
 Representations should provide encoding, decoding, a round-trip theorem, and
 encoded-size bounds. Finite indexing needs an explicit enumeration, not just
@@ -443,6 +448,13 @@ and the final head position and marker configuration needed by subsequent
 routines. Navigation invariants identify the current region and support
 locating positions within it through reusable certified routines.
 
+Mathematical lookup preserves its arguments; physical routines may consume
+scratch copies or overwrite slots. The realization must preserve source values
+needed afterward, with copying and preservation justified by concrete subroutine
+contracts. No ownership type system is required initially. Tape navigation and
+step-count proofs should be reused through these contracts, with polynomial
+bounds in the enclosing frame size and explicit runtime polynomials kept internal.
+
 A composite frame reserves regions for its subroutines. Calls copy arguments
 into the callee's designated slots, execute the callee within its assigned
 region, and copy results into the caller's destination slots. Region
@@ -466,6 +478,8 @@ its required markers and metadata, and installs the input in its slots. A
 final extraction routine returns the canonical output encoding.
 Other external formats, including exact compact clause streams, require
 certified parsing and serialization adapters, not alternative constructor codecs.
+Unary size headers are permitted because complexity is measured in parameter
+values, rather than their binary encoding lengths.
 
 Preparation needs its own bootstrap navigation and scratch before the full
 frame exists. One possible convention surrounds the finite external input
@@ -482,6 +496,19 @@ computes the result and preserves the frame invariants; extraction produces
 the specified output encoding. A prepared-frame assumption is appropriate
 for the bare interface, but the external runtime theorem must discharge it
 through an executable preparation procedure with polynomial time and storage.
+
+The current Boolean tuple example proves a quadratic bound for a standalone
+machine returning the selected bit and updated tuple. It consumes its index
+counter and prepares working markers from a particular framed input containing
+a unary size header, separator, and end delimiter. Its exchange contract is
+reused in a second example composing two indexed operations in adjacent regions
+of one prepared frame. The first selected bit supplies the second replacement;
+the first updated tuple and surrounding storage are preserved. Correctness and
+a quadratic step bound follow by composing exchange and handoff contracts.
+A general Lean-executable preparer now parses the size header, retains it,
+installs canonical input bits, and reserves exact-width blank scratch slots,
+with input preservation and polynomial storage proofs. Its tape-runtime
+realization and a general program compiler remain to be implemented.
 
 ## Target examples and acceptance goals
 
@@ -516,6 +543,10 @@ polynomially bounded bit length and certified bit-cost arithmetic; their
 numeric values need not be polynomially bounded. Integer arithmetic and the
 normal-form implementation are now required targets, rather than deferred
 outside the example suite.
+Padding a counter below N to N binary bits is acceptable; this convention must
+not allocate storage proportional to the numeric magnitude of general integers.
+Binary integer presentations and exact bounded arithmetic now have correctness
+and output-capacity proofs; their tape-runtime certificates remain to be proved.
 
 All three examples must use the common combinators, bounded representations,
 prepared-frame composition, and proved external machine-runtime guarantee.
