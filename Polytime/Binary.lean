@@ -34,6 +34,69 @@ def decrement : List Bool → List Bool
   | false :: rest => true :: decrement rest
   | true :: rest => false :: rest
 
+/-- Fixed-width carry propagation; overflow is excluded by counter contracts. -/
+def increment : List Bool → List Bool
+  | [] => []
+  | false :: rest => true :: rest
+  | true :: rest => false :: increment rest
+
+@[simp] theorem increment_length (bits : List Bool) : (increment bits).length = bits.length := by
+  induction bits with
+  | nil => rfl
+  | cons bit rest hypothesis => cases bit <;> simp [increment, hypothesis]
+
+theorem increment_value (bits : List Bool) (fits : value bits + 1 < 2 ^ bits.length) :
+    value (increment bits) = value bits + 1 := by
+  induction bits with
+  | nil => simp [value] at fits
+  | cons bit rest hypothesis =>
+    cases bit with
+    | false => simp [increment, value, Nat.add_comm]
+    | true =>
+      have restFits : value rest + 1 < 2 ^ rest.length := by
+        simp only [value, Bool.toNat_true, List.length_cons, Nat.pow_succ] at fits
+        omega
+      have result := hypothesis restFits
+      simp only [increment, value, Bool.toNat_false, Bool.toNat_true, zero_add, result]
+      omega
+
+theorem increment_split (ones : ℕ) (rest : List Bool) :
+    increment (List.replicate ones true ++ false :: rest) =
+      List.replicate ones false ++ true :: rest := by
+  induction ones with
+  | zero => rfl
+  | succ ones hypothesis => simp [List.replicate_succ, increment, hypothesis]
+
+theorem carry_split (bits : List Bool) (fits : value bits + 1 < 2 ^ bits.length) :
+    ∃ ones rest, bits = List.replicate ones true ++ false :: rest := by
+  induction bits with
+  | nil => simp [value] at fits
+  | cons bit rest hypothesis =>
+    cases bit with
+    | false => exact ⟨0, rest, rfl⟩
+    | true =>
+      have restFits : value rest + 1 < 2 ^ rest.length := by
+        simp only [value, Bool.toNat_true, List.length_cons, Nat.pow_succ] at fits
+        omega
+      obtain ⟨ones, tail, equality⟩ := hypothesis restFits
+      exact ⟨ones + 1, tail, by simp [List.replicate_succ, equality]⟩
+
+/-- Width and numeric value determine a stored binary counter uniquely. -/
+theorem value_length_injective (first second : List Bool) (width : first.length = second.length)
+    (same : value first = value second) : first = second := by
+  induction first generalizing second with
+  | nil => simpa using width.symm
+  | cons bit rest hypothesis =>
+    cases second with
+    | nil => simp at width
+    | cons other tail =>
+      have lengths : rest.length = tail.length := by simpa using width
+      cases bit <;> cases other <;> simp only [value, Bool.toNat_true, Bool.toNat_false] at same
+      all_goals first
+        | omega
+        | have values : value rest = value tail := by omega
+          simpa using hypothesis tail lengths values
+
 @[simp] theorem decrement_length (bits : List Bool) : (decrement bits).length = bits.length := by
   induction bits with
   | nil => rfl

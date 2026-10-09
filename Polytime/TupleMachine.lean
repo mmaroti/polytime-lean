@@ -279,6 +279,56 @@ def marked : List Bool → List Symbol
   | [] => []
   | bit :: rest => cursor bit :: word rest
 
+/-- Route to the indexed bit without changing any tuple entry. Only the
+binary scratch counter and the cursor position change. -/
+theorem route (counter past bits : List Bool) (flag : Bool)
+    (left right : List Symbol) (valid : Binary.value counter < bits.length) :
+    ∃ ticks before old after,
+      bits = before ++ old :: after ∧ before.length = Binary.value counter ∧
+      ticks ≤ Binary.value counter * (6 * (counter.length + past.length + bits.length + 1)) ∧
+      Steps ticks
+        (configuration flag 6 (3 :: left)
+          (word counter ++ 4 :: (word past ++ marked bits ++ right)))
+        (configuration flag 6 (3 :: left)
+          (List.replicate counter.length (data false) ++ 4 ::
+            (word (past ++ before) ++ cursor old :: (word after ++ right)))) := by
+  induction bits generalizing counter past with
+  | nil => simp at valid
+  | cons old remaining hypothesis =>
+    by_cases zero : Binary.value counter = 0
+    · refine ⟨0, [], old, remaining, by simp, by simp [zero], by simp [zero], ?_⟩
+      have packed : word counter = List.replicate counter.length (data false) := by
+        simpa using congrArg word (Binary.zero_bits counter zero)
+      simpa [marked, packed] using (Tape.Steps.zero (machine := machine)
+        (configuration flag 6 (3 :: left)
+          (word counter ++ 4 :: (word past ++ marked (old :: remaining) ++ right))))
+    · have positive : 0 < Binary.value counter := by omega
+      have decrease := Binary.decrement_value counter positive
+      have nextValid : Binary.value (Binary.decrement counter) < remaining.length := by
+        simp only [List.length_cons] at valid
+        omega
+      cases remaining with
+      | nil => simp at nextValid
+      | cons next suffix =>
+        obtain ⟨firstTicks, firstBound, firstTrace⟩ :=
+          iteration counter past suffix old next flag left right positive
+        obtain ⟨restTicks, before, selected, after, decomposition, lengthEq, restBound, restTrace⟩ :=
+          hypothesis (Binary.decrement counter) (past ++ [old]) nextValid
+        refine ⟨firstTicks + restTicks, old :: before, selected, after, ?_, ?_, ?_, ?_⟩
+        · simp [decomposition]
+        · simp only [List.length_cons, lengthEq]
+          omega
+        · have firstBound' : firstTicks ≤
+              6 * (counter.length + past.length + (old :: next :: suffix).length + 1) := by
+            simpa [List.length_cons, Nat.add_assoc] using firstBound
+          have restBound' : restTicks ≤ Binary.value (Binary.decrement counter) *
+              (6 * (counter.length + past.length + (old :: next :: suffix).length + 1)) := by
+            simpa [List.length_append, List.length_cons, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using restBound
+          nlinarith
+        · simp only [marked, List.cons_append, List.append_assoc] at restTrace
+          simpa [marked, word, List.append_assoc, List.cons_append] using firstTrace.trans restTrace
+
 /-- Polynomial routing, with the selected old bit and exactly one updated entry.
 The bound is in the numeric index and physical frame length; valid tuple indices
 make both polynomial in the declared tuple length. -/
@@ -335,18 +385,14 @@ theorem loop (counter past bits : List Bool) (replacement : Bool)
         · simpa [marked, valueEq, List.getD_cons_succ, List.set_cons_succ,
             List.append_assoc, word, configuration] using trace
 
-/-- Preparation creates the start boundary and first-entry cursor from an
-unmarked tuple. It does not assume that routing metadata has been supplied. -/
-theorem prepare (counter suffix : List Bool) (old replacement : Bool)
+/-- Install the first-entry cursor when the counter start marker already exists. -/
+theorem prepare_cursor (counter suffix : List Bool) (old replacement : Bool)
     (left right : List Symbol) :
-    Steps (2 * counter.length + 7)
-      (configuration false 1 left
-        (data replacement :: (word counter ++ 4 :: data old :: (word suffix ++ right))))
+    Steps (2 * counter.length + 6)
+      (configuration replacement 2 left
+        (3 :: (word counter ++ 4 :: data old :: (word suffix ++ right))))
       (configuration replacement 6 (3 :: left)
         (word counter ++ 4 :: (marked (old :: suffix) ++ right))) := by
-  have save := Tape.write (machine := machine) (state := (false, 1)) (nextState := (replacement, 2))
-    left (word counter ++ 4 :: data old :: (word suffix ++ right)) (data replacement) 3
-    (by cases replacement <;> rfl)
   have enter := Tape.move_right (machine := machine) (state := (replacement, 2))
     (nextState := (replacement, 3)) left
     (word counter ++ 4 :: data old :: (word suffix ++ right)) 3 (by rfl)
@@ -364,10 +410,25 @@ theorem prepare (counter suffix : List Bool) (old replacement : Bool)
       intro symbol member equality
       subst symbol
       cases old <;> simp [word_not_start, cursor] at member)
-  have trace := Tape.Steps.next save (Tape.Steps.next enter
-    (scan.trans (Tape.Steps.next delimiter (Tape.Steps.next mark back))))
+  have trace := Tape.Steps.next enter
+    (scan.trans (Tape.Steps.next delimiter (Tape.Steps.next mark back)))
   simpa [configuration, marked, List.append_assoc, Nat.two_mul, Nat.add_assoc,
     Nat.add_comm, Nat.add_left_comm] using trace
+
+/-- Preparation creates the start boundary and first-entry cursor from an
+unmarked tuple. It does not assume that routing metadata has been supplied. -/
+theorem prepare (counter suffix : List Bool) (old replacement : Bool)
+    (left right : List Symbol) :
+    Steps (2 * counter.length + 7)
+      (configuration false 1 left
+        (data replacement :: (word counter ++ 4 :: data old :: (word suffix ++ right))))
+      (configuration replacement 6 (3 :: left)
+        (word counter ++ 4 :: (marked (old :: suffix) ++ right))) := by
+  have save := Tape.write (machine := machine) (state := (false, 1)) (nextState := (replacement, 2))
+    left (word counter ++ 4 :: data old :: (word suffix ++ right)) (data replacement) 3
+    (by cases replacement <;> rfl)
+  simpa [configuration, Nat.add_assoc] using
+    Tape.Steps.next save (prepare_cursor counter suffix old replacement left right)
 
 /-- A reusable exchange contract on one prepared region. Both surrounding tape
 contexts are preserved. Only the binary index scratch and this region change. -/

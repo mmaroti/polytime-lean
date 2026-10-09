@@ -161,8 +161,8 @@ with active counts, tags, and contracts; dependent records remain deferred.
 Domain certificates alone establish no algorithmic runtime claim. Declared
 capacities use executable arithmetic expressions with derived mathematical
 polynomials and a proved agreement theorem.
-The current executable evaluator has such an agreement theorem; its general tape
-realization remains to be proved. Exact widths may also use operations such as
+The executable evaluator has an agreement theorem and a polynomial-time tape
+realization. Exact widths may also use operations such as
 `max` and need not themselves be polynomial expressions, only polynomially bounded.
 Constructor encoding equations hide representation casts and transports
 behind reusable rewriting lemmas.
@@ -507,8 +507,80 @@ the first updated tuple and surrounding storage are preserved. Correctness and
 a quadratic step bound follow by composing exchange and handoff contracts.
 A general Lean-executable preparer now parses the size header, retains it,
 installs canonical input bits, and reserves exact-width blank scratch slots,
-with input preservation and polynomial storage proofs. Its tape-runtime
-realization and a general program compiler remain to be implemented.
+with input preservation and polynomial storage proofs. Executable size expressions
+now have finite-controller tape realizations with polynomial transition bounds,
+preserving the original size header and input. The rest of frame preparation
+and a general program compiler remain to be realized on tape. Gauss–Jordan
+elimination now has an executable mathematical implementation with proofs of
+reduced row-echelon form and invertible row equivalence. Fixed scalar tables
+have tape realizations, and a guarded-loop rule composes concrete guard and
+body traces with invariant and iteration-bound proofs. Indexed scalar-entry lookup
+and writes now have canonical-encoding contracts and polynomial tape bounds;
+their basic contracts take binary addresses as scratch input. Lookup also composes blank
+scratch initialization and conversion of a supplied bounded unary address, with
+a canonical matrix-entry contract. Row-major address arithmetic also has a
+finite-controller tape proof with a polynomial bound in matrix dimensions;
+lookup now accepts the evaluator's unary result layout and preserves retained
+fields across address conversion. Arithmetic and lookup now compose into a
+canonical matrix-entry read with a polynomial bound in the dimensions. Counter
+initialization accepts consumed all-one windows as well as blanks. Matrix-entry
+reads now also erase evaluator scratch and return to the original counter header,
+preserving the scalar result and matrix suffix. Their contracts accept the previous
+scalar output and consumed counter windows, and two complete reads now compose in
+one restored frame with a polynomial tape bound. Runtime matrix-entry writes now
+also compute their addresses, preserve the replacement scalar, update the canonical
+matrix encoding, and clear scratch before returning to the header. Scratch
+slots support in-place fixed-table operations, including multiplication of two
+runtime scalars; matrix-entry reads, unary operations, and writes now compose in
+one restored frame with a polynomial tape bound. Unary header increments preserve
+following storage, and an entry transformation now composes with advancing its
+column counter. Restoring tape guards now control a complete traversal applying
+a fixed unary operation to one row, preserving other rows and clearing the final
+guard bit, with a polynomial bound. A fixed finite dispatcher now reads a leading
+scalar slot and scales a row by that runtime coefficient, with a uniform polynomial
+bound. Column reset now composes with scaling to restore its zero-index header.
+Pivot normalization now composes address evaluation, inverse lookup, scalar
+copying, and row scaling, with a polynomial bound and row-equivalence contract.
+Scratch reservation remains required.
+Runtime header-field relocation now has a quadratic tape bound and exchanges
+source/target row counters while preserving the shared column and frame suffix.
+Paired indexed reads and writes now retain both row counters; a binary operation
+on source and target entries updates the target and restores the original
+header, with a polynomial tape bound. Guarded column traversal now composes
+these updates into full row addition with a runtime coefficient, resetting the
+column counter and preserving row equivalence for distinct source and target
+rows, with a uniform polynomial tape bound. Three such row traversals now
+swap distinct runtime rows, restoring the counters and preserving row equivalence.
+A restoring guard also handles identical rows when the runtime indices are
+ordered, as they are in pivot search. Row elimination now reads and negates
+the target entry, then performs runtime row addition, clearing that entry when
+the source pivot is normalized and preserving row equivalence for distinct rows.
+A short-circuiting pivot guard now tests the candidate against the row count
+before reading its entry; it stops at a nonzero entry or the row-count sentinel.
+The guarded pivot-search loop now returns the first eligible nonzero row or
+the row-count sentinel, agrees with the mathematical `findPivot`, and has a
+polynomial tape bound. Indexed reads, writes, binary entry operations, and
+complete two-row traversals now preserve additional bounded header counters,
+including a separate runtime pivot-column counter. The original paired APIs
+are special cases of these proofs. Runtime row addition now retains these
+counters too. Row clearing exchanges the saved and traversal column fields,
+reads its coefficient, and restores both fields, retaining the pivot column
+for the next target row. Fixed header-relocation sequences now have a reusable
+finite-controller realization theorem. One target-row step retains the loop
+limit, clears the row, restores the guard layout, and increments the target,
+with a polynomial tape bound. Two guarded row intervals now compose into
+complete column clearing, preserving the pivot row and agreeing with the
+mathematical operation, with a polynomial tape bound. Ordered row swapping
+and normalization now retain caller counters and compose with column clearing
+into the mathematical pivot step, with a polynomial tape bound. Pivot search
+now composes with a found-pivot or sentinel branch, agrees with mathematical
+`columnStep`, and restores the four-counter frame with a polynomial tape bound.
+The guarded outer column traversal now computes complete elimination in a
+prepared frame, with reduced row-echelon form, an invertible row transformation,
+and a polynomial tape bound, including empty dimensions. The complete external
+Gauss–Jordan theorem now constructs that frame from the dimension header and
+canonical input, executes elimination, and extracts canonical output bits,
+clearing working storage. Its polynomial bound includes all three stages.
 
 ## Target examples and acceptance goals
 

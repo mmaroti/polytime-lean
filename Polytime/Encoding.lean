@@ -174,23 +174,37 @@ def power (c : BitCodec A w) : (n : ℕ) → BitCodec (Fin n → A) (n * w)
   | n + 1 => ((c.product (power c n)).transport (headTailEquiv A n).symm).cast
       (by simp [Nat.add_mul, Nat.add_comm])
 
-/-- Single-bit entries occur in tuple order from least to most significant. -/
-theorem power_encode_bit (c : BitCodec A 1) (length : ℕ)
-    (tuple : Fin length → A) (index : Fin length) :
-    ((c.power length).encode tuple).getLsbD index.val = (c.encode (tuple index)).getLsbD 0 := by
+/-- An entry occupies its fixed-width block in tuple order. -/
+theorem power_encode_entry_bit (c : BitCodec A w) (length : ℕ)
+    (tuple : Fin length → A) (index : Fin length) (offset : Fin w) :
+    ((c.power length).encode tuple).getLsbD (index.val * w + offset.val) =
+      (c.encode (tuple index)).getLsbD offset.val := by
   induction length with
   | zero => exact Fin.elim0 index
   | succ length hypothesis =>
     rw [power]
     simp only [cast_encode, BitVec.getLsbD_cast]
     change (join (c.encode (tuple 0))
-      ((c.power length).encode (fun position => tuple position.succ))).getLsbD index.val = _
+      ((c.power length).encode (fun position => tuple position.succ))).getLsbD
+        (index.val * w + offset.val) = _
     simp only [join, BitVec.getLsbD_cast, BitVec.getLsbD_append]
     refine Fin.cases ?_ (fun position => ?_) index
-    · simp
-    · simpa only [Fin.val_succ, show ¬ position.val + 1 < 1 by omega,
-        ite_false, Nat.add_sub_cancel] using
+    · simp [offset.isLt]
+    · have outside : ¬ (position.val + 1) * w + offset.val < w := by
+        rw [Nat.add_mul, Nat.one_mul]
+        omega
+      have address : (position.val + 1) * w + offset.val - w =
+          position.val * w + offset.val := by
+        rw [Nat.add_mul, Nat.one_mul]
+        omega
+      simpa only [Fin.val_succ, outside, ite_false, address] using
         hypothesis (fun position => tuple position.succ) position
+
+/-- Single-bit entries occur in tuple order from least to most significant. -/
+theorem power_encode_bit (c : BitCodec A 1) (length : ℕ)
+    (tuple : Fin length → A) (index : Fin length) :
+    ((c.power length).encode tuple).getLsbD index.val = (c.encode (tuple index)).getLsbD 0 := by
+  simpa using c.power_encode_entry_bit length tuple index (0 : Fin 1)
 
 def tagged {r : ℕ} (A : Fin r → Type u) (width : Fin r → ℕ)
     (c : ∀ i, BitCodec (A i) (width i)) (W : ℕ) (hw : ∀ i, width i ≤ W) :

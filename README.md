@@ -28,6 +28,11 @@ compiled artifacts to avoid rebuilding Mathlib from source.
 For an existing checkout with its manifest, `lake exe cache get` followed by
 `lake build` is sufficient; `lake update` resolves dependencies again.
 
+Run `python3 scripts/check_lean.py --build` to check project headers, named scopes,
+and proof placeholders before building. For a targeted build, add
+`--target Polytime.Examples.MatrixAccess`. These lightweight source checks complement
+Lean's verification; omit `--build` to run only the source checks.
+
 ## Using the library
 
 Within this project, or another Lake project that depends on `polytime`, use:
@@ -43,13 +48,120 @@ The library currently provides:
 - `Polytime.Domain`: recursive Fixed, Product, Sum, and Power domains; their
   mathematical values, exact-width bit encodings, canonical decoders, and
   polynomial-size certificates.
+- `Polytime.GaussJordan`: executable rectangular elimination, with proved reduced
+  row-echelon form and an invertible row-transformation witness.
+- `Polytime.WhileMachine`: guarded tape loops with invariant, termination, and
+  transition-bound proofs, exercised by a finite-controller counter loop.
+- `Polytime.FiniteTableMachine`: fixed operation tables with constant tape-transition
+  bounds and canonical-codec correctness.
+- `Polytime.InPlaceTableMachine`: scalar-slot operations preserving neighboring
+  regions, including multiplication by an adjacent runtime coefficient.
 - `Polytime.Examples.Matrices`: K-by-L matrices over a fixed finite carrier,
   including the field `ZMod 5`, with independent dimensions K and L.
+- `Polytime.Examples.MatrixAccess`: indexed scalar-entry lookup and writes
+  with canonical encoding correctness and polynomial tape-transition bounds;
+  reads can compute addresses from runtime row and column counters; reserved
+  scratch is required.
+- `Polytime.Examples.MatrixWrite`: runtime row and column counters select a
+  canonical entry update, preserving the replacement and restoring the header
+  after clearing evaluator scratch, with a polynomial tape bound; reads, fixed
+  scalar operations, and writes compose in one frame.
+- `Polytime.Examples.AddressPreparation`: binary increment and blank-window
+  initialization, composed with unary address conversion and scalar lookup;
+  retained evaluator fields survive the conversion and lookup. A bounded unary
+  address and reserved scratch remain entry requirements. Initialization accepts
+  consumed all-one counters as well as fresh blank windows.
+- `Polytime.HeaderReturnMachine`: restores a fixed counter header after lookup,
+  erases evaluator scratch, and preserves the scalar result and matrix suffix;
+  composed with runtime matrix-entry reads.
+- `Polytime.HeaderIncrementMachine`: increments a selected unary counter using
+  a free cell on the left, preserving following storage; entry updates compose
+  with column-counter advancement and a polynomial tape bound.
+- `Polytime.HeaderResetMachine`: resets a selected unary counter, preserving
+  preceding fields and following storage, with a polynomial tape bound.
+- `Polytime.HeaderMoveMachine`: relocates a runtime header field to the front,
+  preserving the frame suffix, with a quadratic tape bound; moving the second
+  field exchanges source and target row indices.
+- `Polytime.Examples.MatrixRowMap`: a complete guarded row traversal applies a
+  fixed unary scalar operation, preserves other rows, and restores the header,
+  with a polynomial tape bound; zero-column matrices are included.
+- `Polytime.Examples.MatrixRowScale`: one finite machine scales a row by a
+  coefficient read from a leading scalar slot, with a polynomial bound uniform
+  over runtime coefficients; the consumed slot is cleared and the column counter
+  is reset to zero.
+- `Polytime.Examples.MatrixNormalizeRow`: reads and inverts a runtime pivot,
+  copies its inverse to the coefficient input, and scales the row, with a
+  polynomial tape bound; nonzero pivots become one and preserve row equivalence.
+- `Polytime.Examples.MatrixNormalizeRowSaved`: normalizes a runtime target pivot
+  while retaining both row indices, the pivot column, and caller counters.
+- `Polytime.Examples.MatrixEntryCombine`: combines source and target entries in
+  one column, updates the target, and restores both runtime row counters, with
+  a polynomial tape bound. Paired read/write contracts retain both counters.
+- `Polytime.Examples.MatrixRowCombine`: a guarded traversal combines two
+  runtime-selected rows entry by entry, preserving all other rows.
+- `Polytime.Examples.MatrixRowAdd`: adds a runtime multiple of the source row
+  to the target, resets the column counter, and preserves row equivalence for
+  distinct rows, with a polynomial tape bound uniform over coefficients.
+- `Polytime.Examples.MatrixRowSwap`: swaps distinct runtime-selected rows
+  through three row traversals, restoring the counters and preserving row
+  equivalence, with a polynomial tape bound; a guarded version includes identical
+  rows for ordered runtime indices; both variants preserve extra caller counters.
+- `Polytime.Examples.MatrixClearRow`: reads and negates the target entry,
+  then adds that runtime multiple of the source row. A normalized source pivot
+  clears the target entry; distinct rows preserve row equivalence.
+- `Polytime.Examples.MatrixClearRowSaved`: clears a target row while preserving
+  a separate runtime pivot-column counter. `HeaderColumnSwapMachine` exchanges
+  the saved and traversal columns with a quadratic tape bound.
+- `Polytime.HeaderMoves`: compiles fixed header relocations with a quadratic
+  tape bound, including the guard and row-update layouts for column elimination.
+- `Polytime.Examples.MatrixClearTargetStep`: clears one target row, retains the
+  loop limit and pivot column, restores the guard layout, and advances the target.
+- `Polytime.Examples.MatrixClearRange` and `MatrixClearColumn`: guarded row
+  intervals compose into complete column clearing, agreeing with the mathematical
+  operation and preserving row equivalence, with a polynomial tape bound.
+- `Polytime.Examples.MatrixPivotStep`: composes ordered row swapping, pivot
+  normalization, and complete column clearing, agrees with the mathematical
+  pivot step, and proves row equivalence and a polynomial tape bound. Its restoring
+  variant returns the four-counter frame and advances the next pivot row.
+- `Polytime.Examples.MatrixEntryTest` and `MatrixPivotGuard`: return a scalar
+  predicate before the restored header and short-circuit pivot testing at the
+  row-count sentinel, with polynomial tape bounds.
+- `Polytime.Examples.MatrixPivotSearch`: a guarded row traversal returns the
+  first eligible nonzero entry or the row-count sentinel, agrees with the
+  mathematical `findPivot`, and preserves the matrix and additional caller
+  counters with a polynomial tape bound.
+- `Polytime.Examples.MatrixPivotDispatch` and `MatrixColumnStep`: pivot search
+  composes with elimination or a no-pivot branch, agrees with mathematical
+  `columnStep`, and restores the four-counter frame with a polynomial tape bound,
+  including zero-row matrices and exhausted pivot rows.
+- `Polytime.Examples.MatrixEliminate`: a guarded column traversal computes
+  complete Gauss–Jordan elimination in a prepared frame, with reduced row-echelon
+  form, an invertible row-transformation witness, and a polynomial tape bound.
+  Zero-row and zero-column matrices are included.
+- `Polytime.Examples.MatrixPrepareFrame`: constructs the complete elimination
+  frame from the runtime dimension header and input bits, with a polynomial tape
+  bound and no supplied scratch. `HeaderInsertMachine` formats its scalar slot
+  and counter delimiter; `FrameExtractMachine` erases the working storage.
+- `Polytime.Examples.GaussJordan.realizes`: the complete external theorem
+  composes preparation, elimination, and extraction into one finite controller.
+  It returns canonical matrix bits, preserves a trailing caller suffix, and
+  proves reduced row-echelon form, row equivalence, and a polynomial transition
+  bound in both dimensions.
+- `MatrixFrameAccess`, `MatrixFrameWrite`, `MatrixFrameCombine`, and
+  `MatrixFrameRowCombine` retain additional polynomially bounded header counters.
+  A complete two-row traversal now preserves a separate runtime pivot-column
+  counter; the original paired APIs use the same proofs with no extra counters.
+- Complete runtime matrix-entry reads accept the previous output and counter
+  windows; two consecutive reads have a composed polynomial tape bound.
+- `Polytime.Examples.MatrixAddress`: runtime row-major address calculation,
+  with a finite controller and a polynomial bound in matrix dimensions.
 - `Polytime.Examples.Domains`: checked boundary cases and binary layouts.
 - `Polytime.Tuple`: Boolean tuple lookup/update and bounded natural counters
   with canonical padded binary representations.
 - `Polytime.Integer`: unsigned and signed binary presentations and exact bounded
   arithmetic with proved output capacities and a Euclidean division contract.
+- `Polytime.SizeEvaluation`: finite-controller tape realization of every size expression,
+  with polynomial transition bounds and preservation of the size header and input.
 - `Polytime.Frame`: executable size-header parsing and frame preparation, with
   input preservation and polynomial storage proofs.
 - `Polytime.Examples.TupleLookup`: a complete lookup/update tape example,
