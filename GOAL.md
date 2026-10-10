@@ -635,6 +635,85 @@ applications of the fixed-template domain design, but are no longer part of
 this three-example acceptance suite. Stronger resource goals such as logspace
 and randomized execution remain outside the initial scope.
 
+## Reorganization and immediate goals
+
+The complete Gauss–Jordan realization validates the approach, including actual
+tape costs for preparation and extraction. Retain fixed specialization,
+canonical domain encodings, mathematical contracts, and guard-driven loops.
+The remaining obstacle is reuse: algorithm proofs still expose tape layouts,
+controller composition, and explicit runtime polynomials. Extract the shared
+interface from these proofs before implementing another large example.
+
+- **Shared realization interface.** Generalize the pattern of
+  `SizeEvaluation.Realizes` to mathematical preconditions and postconditions,
+  with composition hiding controller packaging and polynomial witnesses.
+  Start with a predicate and reusable lemmas; add structures only when needed.
+- **Frame calling convention.** Specify reserved workspace, boundaries,
+  entry/exit head positions, and preservation of surrounding caller data.
+  Existing blank-left, preserved-right-suffix contracts do not alone establish
+  calls inside arbitrary reserved regions; prove adapters where necessary.
+- **Named layouts.** Derive numerical header positions and relocation sequences
+  from named fields, keeping positional bookkeeping inside the library.
+- **Representation invariants.** Relate mathematical states to physical frames,
+  allowing irrelevant scratch contents to remain existential. Avoid choosing
+  scratch results as components of mathematical loop transitions. Preserve
+  partial computation under preconditions without requiring behavior outside them.
+- **Derived loop rules.** Provide bounded traversal, search, and fold rules
+  from the existing while realization. Users supply mathematical invariants and
+  progress arguments; the library handles counter evolution, control handoff,
+  guard costs, and polynomial closure.
+- **Mathematical access interface.** Prove constructor lookup/update and encoding
+  compatibility once, hiding casts and heterogeneous equalities from algorithms.
+  Consolidate ordinary and saved-counter routines around general contracts,
+  retaining thin convenience wrappers.
+- **Binary arithmetic.** Keep bounded unary counters separate from general
+  binary integers. Smith reduction needs certified bit-cost arithmetic and an
+  algorithm-specific polynomial bound on intermediate coefficient growth.
+
+The immediate milestone is to express the existing Gauss–Jordan column
+traversal through shared contracts and derived loop rules, without tape
+configurations, controller sums, header positions, or explicit runtime
+polynomials in its algorithm-level proof. Retain its complete external
+realization as the acceptance check. Then test the interface on a small SMP
+catalogue operation with active counts and on binary addition or division with
+variable-width storage. These tests guide further abstractions; they do not
+require a general compiler or a wholesale rewrite first.
+
+## Alternative implementations and comparison
+
+Keep alternatives in one Lake package with the same pinned Lean and Mathlib
+dependencies. Each has a separate library, root module, source directory, and
+namespace: `Polytime`, `Polytime2`, and similarly for later alternatives.
+Build separately with `lake build Polytime` or `lake build Polytime2`;
+the default build checks both. `Polytime2` initially contains no definitions.
+
+- Implementations must not import one another. Copying proofs is allowed with
+  their origin recorded. Keep `Polytime` as the working reference implementation.
+- GOAL.md and EXAMPLES.md specify common mathematical goals, contracts, and edge
+  cases. Each alternative's README records its approach, coverage, and limits.
+  Different internal designs are allowed; departures from the common goals
+  must be explicit.
+- Share mathematical specifications only when useful duplication arises;
+  do not extract shared implementation infrastructure in advance.
+- Compare equivalent completed milestones. Mathematical correctness alone
+  is not equivalent to a complete external tape-runtime realization.
+
+Record comparisons at agreed milestones using these metrics:
+
+| Metric | What it measures |
+| --- | --- |
+| Algorithm and correctness proof lines | Effort required from algorithm authors |
+| Reusable infrastructure lines | Initial framework investment |
+| Total Lean lines excluding comments and headers | Overall implementation size |
+| Representation and tape details exposed in algorithm proofs | Distance from mathematical reasoning |
+| Build time with matching cache conditions and scope | Practical verification cost |
+| Assumptions and missing realization obligations | Completeness of the result |
+
+Separate algorithm and infrastructure costs consistently, including any shared
+code, and record qualitative difficulties alongside line counts. The initial
+comparison targets are indexed lookup/update and bounded traversal, followed
+by Gauss–Jordan with the same external correctness and runtime obligations.
+
 ## Decisions still being discussed
 
 1. How should partial semantics and proof refinements be exposed in Lean?

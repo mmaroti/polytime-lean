@@ -1,7 +1,7 @@
 name = "polytime"
 version = "0.1.0"
 license = "Apache-2.0"
-defaultTargets = ["Polytime"]
+defaultTargets = ["Polytime", "Polytime2"]
 
 [[require]]
 name = "mathlib"
@@ -11,3 +11,6 @@ rev = "v4.34.0"
 
 [[lean_lib]]
 name = "Polytime"
+
+[[lean_lib]]
+name = "Polytime2"
