@@ -685,7 +685,7 @@ Keep alternatives in one Lake package with the same pinned Lean and Mathlib
 dependencies. Each has a separate library, root module, source directory, and
 namespace: `Polytime`, `Polytime2`, and similarly for later alternatives.
 Build separately with `lake build Polytime` or `lake build Polytime2`;
-the default build checks both. `Polytime2` initially contains no definitions.
+the default build checks both. See each alternative's README for its current status.
 
 - Implementations must not import one another. Copying proofs is allowed with
   their origin recorded. Keep `Polytime` as the working reference implementation.
@@ -713,6 +713,51 @@ Separate algorithm and infrastructure costs consistently, including any shared
 code, and record qualitative difficulties alongside line counts. The initial
 comparison targets are indexed lookup/update and bounded traversal, followed
 by Gauss–Jordan with the same external correctness and runtime obligations.
+
+### Polytime2: multi-tape realization
+
+Base `Polytime2` on a deterministic multi-tape Turing machine. The finite tape
+set, finite controller, and finite alphabet with a blank symbol for each tape
+are fixed by the program and specialization, independently of runtime sizes.
+Each tape extends in both directions and has its own head. A transition reads
+the symbols under all heads and selects a new state, symbols to write, and
+left, right, or stationary movements. Machine execution counts these transitions.
+
+Subroutines specify named tape roles, entry and exit states, valid encodings,
+boundaries, head positions, scratch requirements, and preservation contracts.
+Sequential composition uses the disjoint union of controller states; a
+handover transition enters the next routine without changing tapes or heads.
+Additional coordination work requires explicit transitions and cost proofs.
+
+Disjoint union of tape sets supplies independent storage, but explicit wiring
+also permits sharing. Embed each component's tape names injectively into an
+enclosing finite tape set, with matching alphabets and blank symbols. Components
+preserve every tape outside their image. Different components may share tapes;
+injectivity prevents aliasing within a component. Wiring is static, and the
+first component's contract must establish the next component's precondition.
+The composite tape count is the sum for disjoint wiring; shared tapes are
+counted only once. Only the active component controls its wired tapes.
+Reserve private scratch tapes as needed and reuse them only under compatible
+contracts. Alphabet translations are deferred until an example needs them.
+
+The first library target is lookup/update with three named tapes: a binary
+index, densely encoded array data, and one element, plus temporary tapes.
+Initially element bit width is a specialization constant; array length varies
+at runtime. Under the index-bound hypothesis, lookup preserves the index and
+array and returns the selected element; update preserves the index and supplied
+element and changes only the selected array entry. Both restore agreed head
+positions and scratch conditions. No implicit error result is introduced.
+Runtime-dependent reserved element widths, needed for integer matrices, require
+an explicit metadata convention in a later extension.
+
+First prove embedding with preservation, sequencing with additive transition
+bounds and handover cost, and lookup followed by update on a shared array and
+element tape. The composite copies one selected entry to another without copying
+the whole array. Then develop branching and guarded while composition. Keep
+polynomial storage and runtime certificates internal. A proved polynomial-cost
+simulation by a standard single-tape machine, such as Mathlib's TM0, remains
+required for comparison with the complete external realization of `Polytime`;
+multi-tape correctness alone does not discharge that obligation.
 
 ## Decisions still being discussed
 

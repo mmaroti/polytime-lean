@@ -15,11 +15,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Machine
+import Polytime2.Complexity
+import Polytime2.Wiring
+import Polytime2.While
+import Polytime2.Copy
+import Polytime2.Branch
+import Polytime2.Storage
+import Polytime2.Binary
+import Polytime2.TerminatedCopy
+import Polytime2.BinaryGuard
+import Polytime2.Head
+import Polytime2.Array
+import Polytime2.IndexedCopy
+import Polytime2.SingleTape
+import Polytime2.Sweep
+import Polytime2.Tracks
+import Polytime2.MoveMarker
+import Polytime2.Extend
+import Polytime2.MoveHead
+import Polytime2.MoveAll
+import Polytime2.Act
+import Polytime2.Simulation
+import Polytime2.Encoding
+import Polytime2.TM0Input
+import Polytime2.ArrayTM0
+
 /-! # Polytime2
 
-Root module for the second implementation alternative, currently empty.
+Root module for the second implementation alternative.
 -/
-
-namespace Polytime2
-
-end Polytime2
