@@ -174,6 +174,63 @@ theorem steps (names : List TapeName) (unique : names.Nodup) (complete : ∀ nam
       refine ⟨finalRows, firstTicks + secondTicks, by nlinarith, ?_, correct, firstTrace.trans secondTrace⟩
       nlinarith
 
+/-- Counted one-tape simulation, available for composition with output adapters.
+Inputs and outputs use the marked-track encoding, with blank tape outside its
+boundary markers. Both runtime and final row capacity have polynomial bounds. -/
+theorem realizes_steps {Parameter : Type parameterLevel} [Fintype Parameter]
+    [Fintype TapeName] [∀ name, Fintype (Alphabet name)] [Fintype State]
+    (names : List TapeName) (unique : names.Nodup) (complete : ∀ name, name ∈ names)
+    {source : Machine Alphabet State} {sourceEntry sourceExit : State}
+    {precondition : (Parameter → ℕ) → Tapes Alphabet → Prop}
+    {postcondition : (Parameter → ℕ) → Tapes Alphabet → Tapes Alphabet → Prop}
+    (certificate : Realizes source sourceEntry sourceExit precondition postcondition)
+    (rowCapacity : MvPolynomial Parameter ℕ) :
+    ∃ timeBound rowBound : MvPolynomial Parameter ℕ,
+      ∀ assignment initial, precondition assignment initial →
+        ∀ rows : List (Tracks.Row Alphabet), Tracks.Represents rows initial →
+          rows.length ≤ MvPolynomial.eval assignment rowCapacity →
+          ∃ ticks finalRows final, ticks ≤ MvPolynomial.eval assignment timeBound ∧
+            finalRows.length ≤ MvPolynomial.eval assignment rowBound ∧
+            postcondition assignment initial final ∧ Tracks.Represents finalRows final ∧
+            Steps (machine names source) ticks
+              (entry names sourceEntry, Sweep.tape [Sweep.leftMarker]
+                (rows.map Sweep.row ++ [Sweep.rightMarker]))
+              (.inr (.inr ()), Sweep.tape [Sweep.leftMarker]
+                (finalRows.map Sweep.row ++ [Sweep.rightMarker])) := by
+  obtain ⟨sourceHalt, sourceBound, runs⟩ := certificate
+  let rowBound := rowCapacity + MvPolynomial.C (2 * names.length) * sourceBound
+  let timeBound := (sourceBound + 1) *
+    (4 * rowBound + 13 + MvPolynomial.C names.length * (4 * rowBound + MvPolynomial.C (8 * names.length + 19)))
+  refine ⟨timeBound, rowBound, ?_⟩
+  intro assignment initial valid rows represented bounded
+  obtain ⟨sourceTicks, final, sourceCost, sourceTrace, correct⟩ := runs assignment initial valid
+  obtain ⟨finalRows, ticks, length, cost, finalCorrect, simulation⟩ :=
+    steps names unique complete source sourceTrace represented
+  have growth : rows.length + 2 * names.length * sourceTicks ≤ MvPolynomial.eval assignment rowBound := by
+    have multiplied := Nat.mul_le_mul_left (2 * names.length) sourceCost
+    simp only [rowBound, map_add, map_mul, MvPolynomial.eval_C]
+    omega
+  have finalCapacity := length.trans growth
+  let allowance := cycleCost names.length (MvPolynomial.eval assignment rowBound)
+  have workCost : ticks ≤ MvPolynomial.eval assignment sourceBound * allowance := by
+    exact cost.trans (Nat.mul_le_mul sourceCost (cycleCost_mono names.length growth))
+  have stopCost : 2 * finalRows.length + 4 ≤ allowance + 4 := by
+    dsimp [allowance, cycleCost]
+    omega
+  have totalCost : ticks + (2 * finalRows.length + 4) ≤
+      (MvPolynomial.eval assignment sourceBound + 1) * (allowance + 4) := by
+    have combined : ticks + (2 * finalRows.length + 4) ≤
+        MvPolynomial.eval assignment sourceBound * allowance + (allowance + 4) := by omega
+    nlinarith
+  have stopped := terminal names source sourceExit finalCorrect (sourceHalt _)
+  have trace := simulation.trans stopped
+  refine ⟨ticks + (2 * finalRows.length + 4), finalRows, final, ?_, finalCapacity,
+    correct, finalCorrect, trace⟩
+  convert totalCost using 1
+  simp only [timeBound, map_mul, map_add, map_ofNat, map_one, MvPolynomial.eval_C]
+  dsimp [allowance, cycleCost]
+  ring
+
 /-- A multi-tape polynomial certificate transfers to a finite TM0 simulator.
 Inputs and outputs use the marked-track encoding, with blank tape outside its
 boundary markers. Both runtime and final row capacity have polynomial bounds. -/
@@ -200,40 +257,14 @@ theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter]
             Turing.TM0.step (SingleTape.compile (machine names source))
               (SingleTape.configuration (.inr (.inr ()), Sweep.tape [Sweep.leftMarker]
                 (finalRows.map Sweep.row ++ [Sweep.rightMarker]))) = none := by
-  obtain ⟨sourceHalt, sourceBound, runs⟩ := certificate
-  let rowBound := rowCapacity + MvPolynomial.C (2 * names.length) * sourceBound
-  let timeBound := 2 * (sourceBound + 1) *
-    (4 * rowBound + 13 + MvPolynomial.C names.length * (4 * rowBound + MvPolynomial.C (8 * names.length + 19)))
-  refine ⟨timeBound, rowBound, ?_⟩
+  obtain ⟨timeBound, rowBound, runs⟩ := realizes_steps names unique complete certificate rowCapacity
+  refine ⟨2 * timeBound, rowBound, ?_⟩
   intro assignment initial valid rows represented bounded
-  obtain ⟨sourceTicks, final, sourceCost, sourceTrace, correct⟩ := runs assignment initial valid
-  obtain ⟨finalRows, ticks, length, cost, finalCorrect, simulation⟩ :=
-    steps names unique complete source sourceTrace represented
-  have growth : rows.length + 2 * names.length * sourceTicks ≤ MvPolynomial.eval assignment rowBound := by
-    have multiplied := Nat.mul_le_mul_left (2 * names.length) sourceCost
-    simp only [rowBound, map_add, map_mul, MvPolynomial.eval_C]
-    omega
-  have finalCapacity := length.trans growth
-  let allowance := cycleCost names.length (MvPolynomial.eval assignment rowBound)
-  have workCost : ticks ≤ MvPolynomial.eval assignment sourceBound * allowance := by
-    exact cost.trans (Nat.mul_le_mul sourceCost (cycleCost_mono names.length growth))
-  have stopCost : 2 * finalRows.length + 4 ≤ allowance + 4 := by
-    dsimp [allowance, cycleCost]
-    omega
-  have totalCost : ticks + (2 * finalRows.length + 4) ≤
-      (MvPolynomial.eval assignment sourceBound + 1) * (allowance + 4) := by
-    have combined : ticks + (2 * finalRows.length + 4) ≤
-        MvPolynomial.eval assignment sourceBound * allowance + (allowance + 4) := by omega
-    nlinarith
-  have stopped := terminal names source sourceExit finalCorrect (sourceHalt _)
-  have trace := simulation.trans stopped
-  refine ⟨2 * (ticks + (2 * finalRows.length + 4)), finalRows, final, ?_, finalCapacity,
-    correct, finalCorrect, SingleTape.steps (machine names source) trace, ?_⟩
-  · have doubled := Nat.mul_le_mul_left 2 totalCost
-    convert doubled using 1
-    simp only [timeBound, map_mul, map_add, map_ofNat, map_one, MvPolynomial.eval_C]
-    dsimp [allowance, cycleCost]
-    ring
+  obtain ⟨ticks, finalRows, final, cost, storage, correct, finalCorrect, trace⟩ :=
+    runs assignment initial valid rows represented bounded
+  refine ⟨2 * ticks, finalRows, final, ?_, storage, correct, finalCorrect,
+    SingleTape.steps (machine names source) trace, ?_⟩
+  · simpa only [map_mul, map_ofNat] using Nat.mul_le_mul_left 2 cost
   · exact SingleTape.halt (machine names source) _ (by rfl)
 
 end Polytime2.Simulation

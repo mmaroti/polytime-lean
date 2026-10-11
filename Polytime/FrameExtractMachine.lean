@@ -19,7 +19,7 @@ import Polytime.TupleMachine
 
 /-! # Extracting the dense output after the matrix frame delimiter
 
-Erase the working working and delimiter, then halt at the untouched output.
+Erase the working frame and delimiter, then halt at the untouched output.
 Encoded bits and all counter markers preceding the delimiter differ from four.
 -/
 

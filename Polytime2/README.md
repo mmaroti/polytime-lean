@@ -44,14 +44,57 @@ Implemented and proved:
   with lookup/update TM0 certificates proving the exact array and element outputs.
 - Standard `TM0.init` entry, including its default start state and head position,
   with one charged startup transition before the simulator runs.
+- Independent mathematical Gauss–Jordan correctness: reduced row-echelon form
+  and an invertible row transformation, including empty rectangular dimensions.
+- Finite-table vector traversal with runtime coefficients, restored heads, and
+  preserved surrounding cells, including regions inside a dense matrix. Row
+  scaling, normalization, addition, and swapping instantiate this traversal.
+- Unary-indexed finite-scalar lookup/update, row-major matrix access, scalar
+  head tables, and unary counter increment/reset/decrement, with polynomial
+  certificates and a constant-cost counter guard.
+- Runtime row-major address construction and complete matrix-entry lookup/update,
+  including address clearing, restored heads, and a polynomial TM0 certificate.
+- Preserving unary counter comparison and guarded pivot search, returning the
+  first eligible nonzero row or the row-count sentinel, with polynomial runtime
+  and agreement with mathematical Gauss–Jordan pivot search.
+- Shared complete matrix-row traversal for scaling, normalization, addition,
+  and swapping, with runtime coefficients, restored heads, cleared traversal
+  counters, and a polynomial TM0 certificate. Fixed scalar tables load
+  coefficients without changing the matrix or indices.
+- Preserving unary counter copies, including destination clearing and head
+  restoration, for initializing pivot searches from the current pivot row.
+- Reading self-delimiting unary size fields into initially blank counter tapes,
+  preserving input data and restoring the counter head, with exact transition costs.
+- Fixed-width conversion between canonical binary labels and scalar symbols,
+  with finite controller memory and exact transition costs. Streaming preparation
+  and serialization handle empty arrays, preserve surrounding data, and restore
+  the required heads without preallocated output storage.
+- Complete Gauss–Jordan elimination in a shared workspace: pivot search, swap,
+  normalization, column clearing, and outer traversal agree with the mathematical
+  algorithm. The finite TM0 program has polynomial runtime and storage, returning
+  reduced row-echelon form with an invertible row transformation, including empty
+  rectangular matrices.
+- An external Gauss–Jordan wrapper parses the complete unary dimension header,
+  initializes blank working tapes, decodes the canonical binary matrix, runs
+  elimination, and serializes the result. Its polynomial certificate includes
+  every preparation, serialization, and handover transition.
+- A TM0 certificate for that wrapper starts with only the external input in a
+  fixed track and all other tracks blank. The encoding adds constant framing,
+  with no size-dependent padding or prepared working markers. Chosen finite-field
+  enumerations use canonical binary labels, and the output track contains the
+  serialized reduced row-echelon matrix.
+- Complete external TM0 realization with physical output extraction: the machine
+  erases every working track and boundary marker, leaving only canonical binary
+  output letters with the head at the beginning. The polynomial bound includes
+  extraction, and the empty output leaves a blank tape.
 
 Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
 There are no imports from `Polytime`.
 
-TM0 inputs use the canonical marked-track encoding; outputs retain track frames
-with a proved relation to the source output tapes. External binary serialization
-adapters and higher-level algorithm notation remain future work.
+Intermediate TM0 certificates retain track frames; the complete Gauss–Jordan
+certificate `GaussJordanExternal.realizes_output_tm0` extracts a standalone
+binary word. Higher-level algorithm notation remains future work.
 
 Build with `lake build Polytime2`. See [GOAL.md](../GOAL.md) for the common
 goals, independence rules, and comparison metrics.

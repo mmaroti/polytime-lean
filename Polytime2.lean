@@ -40,6 +40,40 @@ import Polytime2.Simulation
 import Polytime2.Encoding
 import Polytime2.TM0Input
 import Polytime2.ArrayTM0
+import Polytime2.Matrix
+import Polytime2.GaussJordan
+import Polytime2.TableTraversal
+import Polytime2.FieldRow
+import Polytime2.ScalarAccess
+import Polytime2.MatrixAccess
+import Polytime2.HeadTable
+import Polytime2.Unary
+import Polytime2.UnaryAppend
+import Polytime2.MatrixAddress
+import Polytime2.Alphabet
+import Polytime2.MatrixEntry
+import Polytime2.MatrixEntryTM0
+import Polytime2.UnaryCompare
+import Polytime2.PivotSearch
+import Polytime2.MatrixRows
+import Polytime2.MatrixRowField
+import Polytime2.MatrixRowsTM0
+import Polytime2.UnaryCopy
+import Polytime2.UnaryRead
+import Polytime2.ReturnToMarker
+import Polytime2.ScalarCodec
+import Polytime2.ScalarStreams
+import Polytime2.GaussJordanWorkspace
+import Polytime2.GaussJordanClear
+import Polytime2.GaussJordanPivot
+import Polytime2.GaussJordanColumn
+import Polytime2.GaussJordanMachine
+import Polytime2.GaussJordanTM0
+import Polytime2.SparseInput
+import Polytime2.GaussJordanInput
+import Polytime2.GaussJordanExternal
+import Polytime2.GaussJordanExternalTM0
+import Polytime2.GaussJordanOutput
 
 /-! # Polytime2
 

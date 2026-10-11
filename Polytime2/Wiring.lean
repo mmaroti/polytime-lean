@@ -184,6 +184,25 @@ theorem wire_steps (wiring : Source ↪ Target)
       rw [restored] at remainder
       exact .next stepped remainder
 
+/-- Use named enclosing frames directly, with preservation outside the wiring. -/
+theorem wire_steps_of_eq (wiring : Source ↪ Target)
+    (machine : Machine (fun name => Alphabet (wiring name)) State)
+    {ticks : ℕ} {entry exit : State}
+    {initial final : Tapes (fun name => Alphabet (wiring name))}
+    (trace : Steps machine ticks (entry, initial) (exit, final))
+    (enclosing result : Tapes Alphabet)
+    (input : ∀ name, enclosing (wiring name) = initial name)
+    (output : ∀ name, result (wiring name) = final name)
+    (preserved : ∀ name, name ∉ Set.range wiring → result name = enclosing name) :
+    Steps (wire wiring machine) ticks (entry, enclosing) (exit, result) := by
+  have installed : install wiring final enclosing = result := by
+    funext name
+    by_cases located : name ∈ Set.range wiring
+    · obtain ⟨source, rfl⟩ := located
+      exact (install_at wiring final enclosing source).trans (output source).symm
+    · exact (install_outside wiring final enclosing name located).trans (preserved name located).symm
+  simpa only [installed] using wire_steps wiring machine trace enclosing input
+
 namespace Realizes
 
 -- parameterLevel: names of runtime size parameters.
