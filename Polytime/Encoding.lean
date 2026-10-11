@@ -66,6 +66,55 @@ structure BitCodec (A : Type u) (width : ℕ) where
 
 namespace BitCodec
 
+/-- Pointwise agreement with a stored block gives its complete encoded slice. -/
+theorem slice_of_bits {width blockWidth : ℕ} (payload : BitVec width)
+    (block : BitVec blockWidth) (start : ℕ) (fits : start + blockWidth ≤ width)
+    (agrees : ∀ offset : Fin blockWidth,
+      payload.getLsbD (start + offset.val) = block.getLsbD offset.val) :
+    ((List.ofFn (fun index : Fin width => payload.getLsbD index.val)).drop start).take blockWidth =
+      List.ofFn (fun offset : Fin blockWidth => block.getLsbD offset.val) := by
+  apply List.ext_getElem
+  · simp only [List.length_take, List.length_drop, List.length_ofFn]
+    omega
+  · intro index firstValid secondValid
+    simp only [List.length_ofFn] at secondValid
+    simp only [List.getElem_take, List.getElem_drop, List.getElem_ofFn]
+    exact agrees ⟨index, secondValid⟩
+
+/-- Updating a reserved block preserves precisely the prefix and suffix.
+Clients supply bit-level encoding compatibility, not list-index arithmetic. -/
+theorem replace_of_bits {width blockWidth : ℕ} (payload updated : BitVec width)
+    (block : BitVec blockWidth) (start : ℕ) (fits : start + blockWidth ≤ width)
+    (inside : ∀ offset : Fin blockWidth,
+      updated.getLsbD (start + offset.val) = block.getLsbD offset.val)
+    (outside : ∀ index : Fin width, index.val < start ∨ start + blockWidth ≤ index.val →
+      updated.getLsbD index.val = payload.getLsbD index.val) :
+    List.ofFn (fun index : Fin width => updated.getLsbD index.val) =
+      (List.ofFn (fun index : Fin width => payload.getLsbD index.val)).take start ++
+        (List.ofFn (fun offset : Fin blockWidth => block.getLsbD offset.val) ++
+          (List.ofFn (fun index : Fin width => payload.getLsbD index.val)).drop (start + blockWidth)) := by
+  have startFits : start ≤ width := by omega
+  have prefixLength : ((List.ofFn (fun index : Fin width => payload.getLsbD index.val)).take start).length = start := by
+    simp only [List.length_take, List.length_ofFn]
+    omega
+  apply List.ext_getElem
+  · simp only [List.length_ofFn, List.length_append, prefixLength, List.length_drop]
+    omega
+  · intro index firstValid secondValid
+    simp only [List.length_ofFn] at firstValid
+    by_cases before : index < start
+    · simpa [List.getElem_append, prefixLength, Nat.min_eq_left startFits, ← BitVec.getLsbD_eq_getElem, before, List.getElem_take] using
+        outside ⟨index, firstValid⟩ (Or.inl before)
+    · by_cases within : index - start < blockWidth
+      · have address : start + (index - start) = index := by omega
+        have bit := inside ⟨index - start, within⟩
+        rw [address] at bit
+        simpa [List.getElem_append, prefixLength, Nat.min_eq_left startFits, ← BitVec.getLsbD_eq_getElem, before, within] using bit
+      · have after : start + blockWidth ≤ index := by omega
+        have address : start + blockWidth + (index - start - blockWidth) = index := by omega
+        simpa [List.getElem_append, prefixLength, Nat.min_eq_left startFits, ← BitVec.getLsbD_eq_getElem, before, within, List.getElem_drop, address] using
+          outside ⟨index, firstValid⟩ (Or.inr after)
+
 variable {A B : Type u} {w m n : ℕ}
 
 theorem injective (c : BitCodec A w) : Function.Injective c.encode := by

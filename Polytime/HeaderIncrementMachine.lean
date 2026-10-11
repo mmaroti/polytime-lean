@@ -47,24 +47,28 @@ def machine (position : ℕ) : Turing.TM0.Machine Symbol (State position) := fun
 
 variable {position : ℕ}
 
-private theorem shift (prior : List Symbol) (carried : Symbol) (tail : List Symbol)
+private theorem shift_reserved (prior : List Symbol) (caller : List Symbol)
+    (carried : Symbol) (tail : List Symbol)
     (valid : ∀ symbol ∈ prior, symbol ≠ 0) :
     Tape.Steps (machine position) (2 * prior.length + 1)
-      (Tape.configuration (.inr (carried, 0)) prior.tail (prior.headD 0 :: tail))
-      (Tape.configuration (.inr (0, 2)) [] (prior.reverse ++ carried :: tail)) := by
+      (Tape.configuration (.inr (carried, 0)) ((prior ++ [0]).tail ++ caller)
+        ((prior ++ [0]).headD 0 :: tail))
+      (Tape.configuration (.inr (0, 2)) caller (prior.reverse ++ carried :: tail)) := by
   induction prior generalizing carried tail with
   | nil =>
     exact Tape.Steps.next (Tape.write (machine := machine position)
-      (state := .inr (carried, 0)) (nextState := .inr (0, 2)) [] tail 0 carried (by rfl)) (.zero _)
+      (state := .inr (carried, 0)) (nextState := .inr (0, 2)) caller tail 0 carried (by rfl)) (.zero _)
   | cons symbol prior hypothesis =>
     have distinct := valid symbol (by simp)
     have write := Tape.write (machine := machine position) (state := .inr (carried, 0))
-      (nextState := .inr (symbol, 1)) prior tail symbol carried (by simp [machine, distinct])
+      (nextState := .inr (symbol, 1)) (prior ++ [0] ++ caller) tail symbol carried
+      (by simp [machine, distinct])
     have move : Turing.TM0.step (machine position)
-        (Tape.configuration (.inr (symbol, 1)) prior (carried :: tail)) =
-        some (Tape.configuration (.inr (symbol, 0)) prior.tail (prior.headD 0 :: carried :: tail)) := by
+        (Tape.configuration (.inr (symbol, 1)) (prior ++ [0] ++ caller) (carried :: tail)) =
+        some (Tape.configuration (.inr (symbol, 0)) ((prior ++ [0]).tail ++ caller)
+          ((prior ++ [0]).headD 0 :: carried :: tail)) := by
       cases prior with
-      | nil => exact Tape.move_left_empty _ (by intro current; rfl)
+      | nil => exact Tape.move_left_list _ _ 0 (by intro current; rfl)
       | cons first rest => exact Tape.move_left_list _ _ first (by intro current; rfl)
     have rest := hypothesis symbol (carried :: tail) (by
       intro current member; exact valid current (by simp [member]))
@@ -99,24 +103,28 @@ private theorem skip (values : List ℕ) (remaining : Fin (position + 1))
     have trace := scan.trans (Tape.Steps.next advance rest)
     simpa [UnaryMachine.fields_cons, List.reverse_append, List.append_assoc] using trace
 
-/-- Increment the field after `prior`, with an exact linear transition count.
-Blank left storage is the explicit entry requirement. All following values,
-including scalar windows, counters, and matrix bits, are preserved. -/
-theorem realizes (prior : List ℕ) (value : ℕ) (tail : List Symbol) :
+/-- Consume one reserved blank cell to the left of the header, preserving all
+caller cells beyond it and the entire following frame. The exit head is on the
+expanded header's first cell, one cell left of its entry position. -/
+theorem realizes_reserved (prior : List ℕ) (value : ℕ) (caller tail : List Symbol) :
     Tape.Steps (machine prior.length) (3 * (fields prior).length + 2)
-      (Tape.configuration (.inl (Fin.last prior.length)) [] (fields (prior ++ [value]) ++ tail))
-      (Tape.configuration (.inr (0, 2)) [] (fields (prior ++ [value + 1]) ++ tail)) := by
+      (Tape.configuration (.inl (Fin.last prior.length)) (0 :: caller) (fields (prior ++ [value]) ++ tail))
+      (Tape.configuration (.inr (0, 2)) caller (fields (prior ++ [value + 1]) ++ tail)) := by
   let suffix := units value ++ 1 :: tail
-  have skipped := skip prior (Fin.last prior.length) (by simp) [] suffix
-  simp only [List.append_nil] at skipped
+  have skipped := skip prior (Fin.last prior.length) (by simp) (0 :: caller) suffix
   have enter : Turing.TM0.step (machine prior.length)
-      (Tape.configuration (.inl 0) (fields prior).reverse suffix) =
-      some (Tape.configuration (.inr (2, 0)) (fields prior).reverse.tail
-        ((fields prior).reverse.headD 0 :: suffix)) := by
+      (Tape.configuration (.inl 0) ((fields prior).reverse ++ 0 :: caller) suffix) =
+      some (Tape.configuration (.inr (2, 0)) (((fields prior).reverse ++ [0]).tail ++ caller)
+        (((fields prior).reverse ++ [0]).headD 0 :: suffix)) := by
     cases equation : (fields prior).reverse with
-    | nil => exact Tape.move_left_empty _ (by intro symbol; simp [machine])
-    | cons symbol rest => exact Tape.move_left_list _ _ symbol (by intro current; simp [machine])
-  have shifted := shift (position := prior.length) (fields prior).reverse 2 suffix (by
+    | nil => exact Tape.move_left_list _ _ 0 (by intro current; simp [machine])
+    | cons symbol rest =>
+      simpa only [List.cons_append, List.tail_cons, List.headD_cons, List.append_assoc,
+        List.singleton_append, List.nil_append] using
+        (Tape.move_left_list (machine := machine prior.length) (state := .inl 0)
+          (nextState := .inr (2, 0)) (rest ++ 0 :: caller) suffix symbol
+          (by intro current; simp [machine]))
+  have shifted := shift_reserved (position := prior.length) (fields prior).reverse caller 2 suffix (by
     intro symbol member
     rcases UnaryMachine.fields_symbols prior symbol (List.mem_reverse.mp member) with equality | equality <;>
       subst symbol <;> decide)
@@ -124,6 +132,26 @@ theorem realizes (prior : List ℕ) (value : ℕ) (tail : List Symbol) :
   convert trace using 1 <;>
     simp [suffix, fields, units, List.flatMap_append, List.append_assoc, List.replicate_succ]
   omega
+
+/-- Increment the field after `prior`, with an exact linear transition count.
+Blank left storage is the explicit entry requirement. All following values,
+including scalar windows, counters, and matrix bits, are preserved. -/
+theorem realizes (prior : List ℕ) (value : ℕ) (tail : List Symbol) :
+    Tape.Steps (machine prior.length) (3 * (fields prior).length + 2)
+      (Tape.configuration (.inl (Fin.last prior.length)) [] (fields (prior ++ [value]) ++ tail))
+      (Tape.configuration (.inr (0, 2)) [] (fields (prior ++ [value + 1]) ++ tail)) := by
+  simpa only [show (0 :: ([] : List Symbol)) = [] ++ [default] from rfl,
+    Tape.configuration_append_blank] using realizes_reserved prior value [] tail
+
+/-- A named-layout position may replace the syntactic prefix length without
+exposing dependent controller casts at call sites. -/
+theorem realizes_at (position : ℕ) (prior : List ℕ) (prefixLength : prior.length = position)
+    (value : ℕ) (tail : List Symbol) :
+    Tape.Steps (machine position) (3 * (fields prior).length + 2)
+      (Tape.configuration (.inl (Fin.last position)) [] (fields (prior ++ [value]) ++ tail))
+      (Tape.configuration (.inr (0, 2)) [] (fields (prior ++ [value + 1]) ++ tail)) := by
+  subst position
+  exact realizes prior value tail
 
 @[simp] theorem halt (symbol : Symbol) : machine position (.inr (0, 2)) symbol = none := rfl
 

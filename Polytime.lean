@@ -16,6 +16,12 @@ limitations under the License.
 -/
 
 import Polytime.Size
+import Polytime.Realization
+import Polytime.SizeFrame
+import Polytime.NamedHeader
+import Polytime.RealizationLoop
+import Polytime.MatrixStorage
+import Polytime.BinaryAddition
 import Polytime.Encoding
 import Polytime.Domain
 import Polytime.EncodedDomain
@@ -52,4 +58,5 @@ import Polytime.Examples.FramePreparation
 import Polytime.Examples.SizeEvaluation
 import Polytime.Examples.GaussJordan
 import Polytime.Examples.FiniteTables
+import Polytime.Examples.CatalogueMap
 import Polytime.Examples.While

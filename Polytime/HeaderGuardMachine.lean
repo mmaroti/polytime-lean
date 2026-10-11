@@ -184,32 +184,32 @@ private theorem restore_first (count : ℕ) (result : Bool) (prior right : List 
     convert trace using 1 <;> simp [cells, units, List.replicate_succ]
     simp only [← repeat_rotate]
 
-private theorem retreat (prior : List Symbol) (result : Bool) (right : List Symbol)
+private theorem retreat (prior : List Symbol) (result : Bool) (right caller : List Symbol)
     (valid : ∀ symbol ∈ prior, symbol ≠ 3 ∧ symbol ≠ 5) :
-    let cells := prior ++ [5]
+    let cells := prior ++ 5 :: caller
     Tape.Steps (machine position) (prior.length + 1)
       (Tape.configuration (0, result, 12) cells.tail (cells.headD 0 :: right))
-      (Tape.configuration (0, false, 14) [] (data result :: (prior.reverse ++ right))) := by
+      (Tape.configuration (0, false, 14) caller (data result :: (prior.reverse ++ right))) := by
   dsimp only
   induction prior generalizing right with
-  | nil => exact .next (Tape.write [] right 5 (data result) (by rfl)) (.zero _)
+  | nil => exact .next (Tape.write caller right 5 (data result) (by rfl)) (.zero _)
   | cons symbol prior hypothesis =>
     have safe := valid symbol (by simp)
-    let cells := prior ++ [5]
+    let cells := prior ++ 5 :: caller
     have move : Turing.TM0.step (machine position) (Tape.configuration (0, result, 12) cells (symbol :: right)) =
         some (Tape.configuration (0, result, 12) cells.tail (cells.headD 0 :: symbol :: right)) := by
       exact Tape.move_left_headD cells right symbol (by simp [machine, safe])
     have rest := hypothesis (symbol :: right) (by intro current member; exact valid current (by simp [member]))
     simpa [cells, List.reverse_cons, List.append_assoc, Nat.add_assoc] using Tape.Steps.next move rest
 
-private theorem finish (prior : List Symbol) (count extra : ℕ) (tail : List Symbol)
+private theorem finish (prior : List Symbol) (count extra : ℕ) (tail caller : List Symbol)
     (valid : ∀ symbol ∈ prior, symbol ≠ 3 ∧ symbol ≠ 5) :
     Tape.Steps (machine position) (5 * count + prior.length + 4)
-      (Tape.configuration (0, false, 4) (List.replicate count 3 ++ (prior.reverse ++ [5]))
+      (Tape.configuration (0, false, 4) (List.replicate count 3 ++ (prior.reverse ++ 5 :: caller))
         (1 :: (List.replicate count 4 ++ units extra ++ 1 :: tail)))
-      (Tape.configuration (0, false, 14) []
+      (Tape.configuration (0, false, 14) caller
         (data (decide (0 < extra)) :: (prior ++ fields [count, count + extra] ++ tail))) := by
-  let retained := prior.reverse ++ [5]
+  let retained := prior.reverse ++ 5 :: caller
   let right := units extra ++ 1 :: tail
   let cells := List.replicate count (4 : Symbol) ++ 1 :: (List.replicate count 3 ++ retained)
   have cross := Tape.move_right (machine := machine position) (state := (0, false, 4))
@@ -233,7 +233,7 @@ private theorem finish (prior : List Symbol) (count extra : ℕ) (tail : List Sy
   have first := restore_first (position := position) count (decide (0 < extra)) retained
     (1 :: (units count ++ right))
   have back := retreat (position := position) prior.reverse (decide (0 < extra))
-    (units count ++ 1 :: (units count ++ right)) (by
+    (units count ++ 1 :: (units count ++ right)) caller (by
       intro symbol member; exact valid symbol (List.mem_reverse.mp member))
   simp only [List.reverse_replicate] at scan
   have trace := Tape.Steps.next cross (scan.trans (Tape.Steps.next decision
@@ -269,28 +269,28 @@ private theorem skip (values : List ℕ) (remaining : Fin (position + 1))
     have trace := scan.trans (Tape.Steps.next advance rest)
     simpa [UnaryMachine.fields_cons, List.reverse_append, List.append_assoc] using trace
 
-/-- An actual restoring comparison under the loop invariant `index ≤ limit`.
-The finite controller is independent of both runtime counters. The extra cell
-is the Boolean guard result consumed by the loop body. -/
-theorem realizes (prior : List ℕ) (index limit : ℕ) (tail : List Symbol) (bounded : index ≤ limit) :
+/-- A restoring comparison uses one reserved cell before the header for its
+Boolean result. Caller storage on both sides is preserved; the exit head is on
+the result cell, one cell left of its entry position. -/
+theorem realizes_reserved (prior : List ℕ) (index limit : ℕ) (caller tail : List Symbol) (bounded : index ≤ limit) :
     Tape.Steps (machine prior.length) (2 * index ^ 2 + 10 * index + 2 * (fields prior).length + 8)
-      (Tape.configuration (Fin.last prior.length, false, 0) [] (fields (prior ++ [index, limit]) ++ tail))
-      (Tape.configuration (0, false, 14) []
+      (Tape.configuration (Fin.last prior.length, false, 0) (0 :: caller) (fields (prior ++ [index, limit]) ++ tail))
+      (Tape.configuration (0, false, 14) caller
         (data (decide (index < limit)) :: (fields (prior ++ [index, limit]) ++ tail))) := by
   let remaining := Fin.last prior.length
   let suffix := fields [index, limit] ++ tail
-  have enter := Tape.move_left_empty (machine := machine prior.length) (state := (remaining, false, 0))
-    (nextState := (remaining, false, 1)) (fields prior ++ suffix) (by intro symbol; rfl)
+  have enter := Tape.move_left_list (machine := machine prior.length) (state := (remaining, false, 0))
+    (nextState := (remaining, false, 1)) caller (fields prior ++ suffix) 0 (by intro symbol; rfl)
   have mark := Tape.write (machine := machine prior.length) (state := (remaining, false, 1))
-    (nextState := (remaining, false, 2)) [] (fields prior ++ suffix) 0 5 (by rfl)
+    (nextState := (remaining, false, 2)) caller (fields prior ++ suffix) 0 5 (by rfl)
   have advance := Tape.move_right (machine := machine prior.length) (state := (remaining, false, 2))
-    (nextState := (remaining, false, 3)) [] (fields prior ++ suffix) 5 (by rfl)
-  have skipped := skip prior remaining (by simp [remaining]) [5] suffix
+    (nextState := (remaining, false, 3)) caller (fields prior ++ suffix) 5 (by rfl)
+  have skipped := skip prior remaining (by simp [remaining]) (5 :: caller) suffix
   have start := Tape.stay (machine := machine prior.length) (state := (0, false, 3))
-    (nextState := (0, false, 4)) ((fields prior).reverse ++ [5]) suffix
+    (nextState := (0, false, 4)) ((fields prior).reverse ++ 5 :: caller) suffix
     (by intro symbol; simp [machine])
-  have paired := pairs (position := prior.length) index 0 (limit - index) ((fields prior).reverse ++ [5]) tail
-  have finished := finish (position := prior.length) (fields prior) index (limit - index) tail (by
+  have paired := pairs (position := prior.length) index 0 (limit - index) ((fields prior).reverse ++ 5 :: caller) tail
+  have finished := finish (position := prior.length) (fields prior) index (limit - index) tail caller (by
     intro symbol member
     rcases UnaryMachine.fields_symbols prior symbol member with equality | equality <;> subst symbol <;> decide)
   have sum : index + (limit - index) = limit := by omega
@@ -299,8 +299,8 @@ theorem realizes (prior : List ℕ) (index limit : ℕ) (tail : List Symbol) (bo
   simp only [Nat.zero_add, List.replicate_zero, List.nil_append, sum] at paired
   rw [sum, condition] at finished
   have paired' : Tape.Steps (machine prior.length) (index * (2 * index + 5))
-      (Tape.configuration (0, false, 4) ((fields prior).reverse ++ [5]) suffix)
-      (Tape.configuration (0, false, 4) (List.replicate index 3 ++ ((fields prior).reverse ++ [5]))
+      (Tape.configuration (0, false, 4) ((fields prior).reverse ++ 5 :: caller) suffix)
+      (Tape.configuration (0, false, 4) (List.replicate index 3 ++ ((fields prior).reverse ++ 5 :: caller))
         (1 :: (List.replicate index 4 ++ units (limit - index) ++ 1 :: tail))) := by
     simpa [suffix, fields, List.append_assoc] using paired
   have trace := Tape.Steps.next enter (Tape.Steps.next mark (Tape.Steps.next advance
@@ -308,25 +308,49 @@ theorem realizes (prior : List ℕ) (index limit : ℕ) (tail : List Symbol) (bo
   convert trace using 1 <;> simp [suffix, remaining, UnaryMachine.fields_append, List.append_assoc]
   ring
 
+/-- The blank-left calling convention is the empty-caller case. -/
+theorem realizes (prior : List ℕ) (index limit : ℕ) (tail : List Symbol) (bounded : index ≤ limit) :
+    Tape.Steps (machine prior.length) (2 * index ^ 2 + 10 * index + 2 * (fields prior).length + 8)
+      (Tape.configuration (Fin.last prior.length, false, 0) [] (fields (prior ++ [index, limit]) ++ tail))
+      (Tape.configuration (0, false, 14) []
+        (data (decide (index < limit)) :: (fields (prior ++ [index, limit]) ++ tail))) := by
+  simpa only [show (0 :: ([] : List Symbol)) = [] ++ [default] from rfl,
+    Tape.configuration_append_blank] using realizes_reserved prior index limit [] tail bounded
+
+/-- Use a declared field position, such as one derived from a named layout.
+The prefix-length certificate keeps controller casts inside the library. -/
+theorem realizes_at (position : ℕ) (prior : List ℕ) (prefixLength : prior.length = position)
+    (index limit : ℕ) (tail : List Symbol) (bounded : index ≤ limit) :
+    Tape.Steps (machine position) (2 * index ^ 2 + 10 * index + 2 * (fields prior).length + 8)
+      (Tape.configuration (Fin.last position, false, 0) [] (fields (prior ++ [index, limit]) ++ tail))
+      (Tape.configuration (0, false, 14) [] (data (decide (index < limit)) :: (fields (prior ++ [index, limit]) ++ tail))) := by
+  subst position
+  exact realizes prior index limit tail bounded
+
 @[simp] theorem halt (symbol : Symbol) : machine position (0, false, 14) symbol = none := rfl
 
-/-- Erase a guard result and enter the original header with blank left storage. -/
+/-- Erase a guard result and enter the original header, restoring its reserved cell. -/
 def consume : Turing.TM0.Machine Symbol (Fin 3) := fun phase _ =>
   match phase.val with
   | 0 => some (1, .write 0)
   | 1 => some (2, .move .right)
   | _ => none
 
+/-- Erasing the result restores the reserved blank cell, without entering
+or changing the caller's protected left region. -/
+theorem consumes_reserved (result : Bool) (caller tail : List Symbol) :
+    Tape.Steps consume 2 (Tape.configuration 0 caller (data result :: tail))
+      (Tape.configuration 2 (0 :: caller) tail) := by
+  have write := Tape.write (machine := consume) (state := 0) (nextState := 1)
+    caller tail (data result) 0 (by rfl)
+  have move := Tape.move_right (machine := consume) (state := 1) (nextState := 2) caller tail 0 (by rfl)
+  exact .next write (.next move (.zero _))
+
 theorem consumes (result : Bool) (tail : List Symbol) :
     Tape.Steps consume 2 (Tape.configuration 0 [] (data result :: tail))
       (Tape.configuration 2 [] tail) := by
-  have write := Tape.write (machine := consume) (state := 0) (nextState := 1)
-    [] tail (data result) 0 (by rfl)
-  have move := Tape.move_right (machine := consume) (state := 1) (nextState := 2) [] tail 0 (by rfl)
-  have padding : Tape.configuration (2 : Fin 3) [0] tail = Tape.configuration 2 [] tail := by
-    simpa [TupleMachine.instInhabitedSymbol] using Tape.configuration_append_blank (2 : Fin 3) [] tail
-  rw [padding] at move
-  exact .next write (.next move (.zero _))
+  simpa only [show (0 :: ([] : List Symbol)) = [] ++ [default] from rfl,
+    Tape.configuration_append_blank] using consumes_reserved result [] tail
 
 @[simp] theorem consume_halt (symbol : Symbol) : consume 2 symbol = none := rfl
 

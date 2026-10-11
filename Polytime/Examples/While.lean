@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime.WhileMachine
+import Polytime.RealizationLoop
 import Polytime.UnaryMachine
 
 /-! # A guarded unary-counter loop
@@ -66,31 +66,73 @@ private theorem body_run (counter : ℕ) (tail : List Symbol) (positive : condit
     rw [padding] at trace
     simpa [tape, Tape.configuration, units, List.replicate_succ] using trace
 
-private theorem iterate_decrement (counter iterations : ℕ) :
-    (fun value : ℕ => value - 1)^[iterations] counter = counter - iterations := by
-  induction iterations generalizing counter with
-  | zero => simp
-  | succ iterations hypothesis =>
-    rw [Function.iterate_succ_apply, hypothesis]
-    omega
-
-/-- The generic while rule gives an actual finite-machine runtime bound. -/
+/-- The relational rule hides the intermediate tape and needs no exact
+iteration formula or chosen scratch result. -/
 theorem realizes (counter : ℕ) (tail : List Symbol) :
     ∃ ticks, ticks ≤ (counter + 1) * 4 ∧ Tape.Steps machine ticks
       ⟨.inl (), tape counter tail⟩ ⟨.inl (), tape 0 tail⟩ ∧
       Turing.TM0.step machine ⟨.inl (), tape 0 tail⟩ = none := by
-  have result := WhileMachine.realizes guard body () () 0 2
-    (fun value => tape value tail) (fun value => tape value tail) condition
-    (fun value => value - 1) (fun _ => True) 0 2
-    (by intro symbol; rfl) (by intro symbol; rfl)
-    (by intro value _; exact counter_bit value tail)
-    (by intro value _ _; trivial)
-    (by intro value _; exact ⟨0, le_rfl, .zero _⟩)
-    (by intro value _ positive; exact ⟨2, le_rfl, body_run value tail positive⟩)
-    counter trivial counter
-    (by intro index earlier; simp [iterate_decrement, condition, earlier])
-    (by simp [iterate_decrement, condition])
-  simpa [machine, iterate_decrement] using result
+  let represented (value : ℕ) (actual : Turing.Tape Symbol) := actual = tape value tail
+  obtain ⟨final, finalTape, ticks, cost, _, _, stopped, encoded, trace, halt⟩ :=
+    WhileMachine.realizes_relation guard body () () 0 2 represented represented condition
+      (fun _ => True) id (fun initial final => final = initial - 1) 0 2 (by intro symbol; rfl) (by intro symbol; rfl)
+      (by intro value actual equal; rw [equal]; exact counter_bit value tail)
+      (by intro value actual _ equal; exact ⟨0, actual, le_rfl, .zero _, equal⟩)
+      (by
+        intro value actual _ active equal
+        subst actual
+        refine ⟨value - 1, tape (value - 1) tail, 2, le_rfl, body_run value tail active, rfl, trivial, ?_, rfl⟩
+        simp only [condition, decide_eq_true_eq] at active
+        simp only [id_eq]
+        omega)
+      counter (tape counter tail) trivial rfl
+  have zero : final = 0 := by simpa [condition] using stopped
+  subst final
+  change finalTape = tape 0 tail at encoded
+  subst finalTape
+  exact ⟨ticks, cost, trace, halt⟩
+
+abbrev context : SizeContext := ⟨Unit, inferInstance⟩
+
+/-- An arbitrary caller suffix is preserved independently of the logical counter. -/
+def representation (_assignment : SizeAssignment context) (tail : List Symbol)
+    (value : ℕ) (actual : Turing.Tape Symbol) : Prop := actual = tape value tail
+
+noncomputable section CounterContract
+
+/-- The same counter loop through the shared contract interface. Its author
+supplies only the invariant and decreasing measure, not the runtime polynomial. -/
+theorem contract : Realization.Realizes representation representation
+    (fun assignment value => value ≤ assignment ()) (fun _ _ final => final = 0) := by
+  have guardContract : Realization.Realizes representation representation
+      (fun assignment value => value ≤ assignment ()) (fun _ initial final => final = initial) := by
+    refine ⟨Unit, inferInstance, inferInstance, (), (), guard, 0, by intros; rfl, ?_⟩
+    intro assignment tail value actual _ represented
+    exact ⟨value, actual, 0, by simp, .zero _, rfl, represented⟩
+  have bodyContract : Realization.Realizes representation representation
+      (fun assignment value => value ≤ assignment () ∧ condition value = true)
+      (fun _ initial final => final = initial - 1) := by
+    refine ⟨Fin 3, inferInstance, inferInstance, 0, 2, body, SizePolynomial.constant 2, by intros; rfl, ?_⟩
+    intro assignment tail value actual valid represented
+    change actual = tape value tail at represented
+    subst actual
+    exact ⟨value - 1, tape (value - 1) tail, 2, by simp, body_run value tail valid.2, rfl, rfl⟩
+  have loop := Realization.Realizes.whileLoop representation representation (fun _ => condition)
+    (fun assignment value => value ≤ assignment ()) (fun _ initial final => final = initial - 1)
+    (fun _ => id) guardContract bodyContract
+    (by intro assignment tail value actual represented; rw [represented]; exact counter_bit value tail)
+    (by intro assignment initial final bounded _ equal; omega)
+    (by
+      intro assignment initial final _ active equal
+      simp only [condition, decide_eq_true_eq] at active
+      simp only [id_eq]
+      omega)
+    ⟨SizePolynomial.parameter (), by intros; simpa⟩
+  exact loop.consequence (by intros; assumption) (by
+    intro assignment initial final _ correct
+    simpa [condition] using correct.2.2)
+
+end CounterContract
 
 def execute (counter : ℕ) (tail : List Symbol) : Option (List Symbol) :=
   (Tape.run machine ((counter + 1) * 4) ⟨.inl (), tape counter tail⟩).map fun final =>

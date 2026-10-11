@@ -46,6 +46,23 @@ omit [Inhabited State] in
     exact Or.inr ⟨1, by simp⟩
   simp only [configuration, equality]
 
+omit [Inhabited State] in
+/-- A finite trailing blank margin does not change a half-tape. -/
+@[simp] theorem configuration_append_blanks (state : State) (left : List Symbol)
+    (length : ℕ) (right : List Symbol) :
+    configuration state (left ++ List.replicate length default) right = configuration state left right := by
+  induction length with
+  | zero => simp only [List.replicate_zero, List.append_nil]
+  | succ length hypothesis =>
+    rw [List.replicate_succ', ← List.append_assoc, configuration_append_blank]
+    exact hypothesis
+
+omit [Inhabited State] in
+/-- A finite blank margin is invisible only when no caller data follows it. -/
+@[simp] theorem configuration_replicate_blank (state : State) (length : ℕ) (right : List Symbol) :
+    configuration state (List.replicate length default) right = configuration state [] right := by
+  simpa only [List.nil_append] using configuration_append_blanks state [] length right
+
 /-- Exactly this many actual tape transitions, without an abstract cost oracle. -/
 inductive Steps (machine : Turing.TM0.Machine Symbol State) :
     ℕ → Configuration Symbol State → Configuration Symbol State → Prop

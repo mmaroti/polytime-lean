@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime.Examples.MatrixPivotSearch
 import Polytime.Examples.MatrixPivotDispatch
+import Polytime.NamedHeader
 
 /-! # A complete Gauss–Jordan column step on tape
 
@@ -31,6 +32,18 @@ open Matrices TupleMachine
 
 -- scalarLevel: the mathematical carrier of the fixed finite field.
 universe scalarLevel
+
+/-- Compile-time identities of the counters used during pivot search. -/
+inductive HeaderField
+  | candidate | savedRow | rowCount | column | columnCount
+  deriving DecidableEq
+
+def searchLayout : List HeaderField := [.candidate, .savedRow, .rowCount, .column, .columnCount]
+
+def preparedLayout : List HeaderField := [.candidate, .rowCount, .column, .columnCount, .savedRow]
+
+/-- Moving the desired fields to the front in reverse order builds the target layout. -/
+def prepareMoves : List HeaderField := preparedLayout.reverse
 
 noncomputable section ColumnStep
 
@@ -74,7 +87,7 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
   let dispatchControllerFinite : Fintype DispatchState := dispatchFinite
   let dispatchControllerInhabited : Inhabited DispatchState := dispatchInhabited
   obtain ⟨PrepareState, prepareFinite, prepareInhabited, prepareEntry, prepareExit, prepare,
-    prepareHalt, prepareRuns⟩ := HeaderMoves.realizes [1, 4, 4, 4, 4]
+    prepareHalt, prepareRuns⟩ := NamedHeader.realizes searchLayout prepareMoves (by decide)
   let prepareControllerFinite : Fintype PrepareState := prepareFinite
   let prepareControllerInhabited : Inhabited PrepareState := prepareInhabited
   let copier := SizeMachine.Copy.machine 0
@@ -110,14 +123,20 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
         (Tape.configuration copyExit []
           (UnaryMachine.fields [start, start, rows, column.val, columns] ++ suffix matrix initialScalar)) := by
       simpa only [copier, copyEntry, copyExit, List.length_nil, List.nil_append, List.cons_append] using copied
-    obtain ⟨prepareTicks, prepareCost, prepared⟩ := prepareRuns
-      [start, start, rows, column.val, columns] (by simp) (suffix matrix initialScalar)
+    let headerValues : HeaderField → ℕ
+      | .candidate | .savedRow => start
+      | .rowCount => rows
+      | .column => column.val
+      | .columnCount => columns
+    obtain ⟨prepareTicks, prepareCost, prepared⟩ := prepareRuns headerValues (suffix matrix initialScalar)
+    change prepareTicks ≤ 5 * (128 * ((UnaryMachine.fields [start, start, rows, column.val, columns]).length + 1) ^ 2 + 1)
+      at prepareCost
     have prepared' : Tape.Steps prepare prepareTicks
         (Tape.configuration prepareEntry []
           (UnaryMachine.fields [start, start, rows, column.val, columns] ++ suffix matrix initialScalar))
         (Tape.configuration prepareExit []
           (UnaryMachine.fields [start, rows, column.val, columns, start] ++ suffix matrix initialScalar)) := by
-      simpa [HeaderMoves.applyMoves, HeaderMoves.moveToFront, List.getD] using prepared
+      simpa [searchLayout, preparedLayout, prepareMoves, headerValues, NamedHeader.result, NamedHeader.move] using prepared
     have copyHalt (symbol : Symbol) : copier copyExit symbol = none := by
       simp [copier, copyExit, SizeMachine.Copy.machine, UnaryMachine.machine]
     have firstTrace := Tape.sequence_steps prepareEntry copied' copyHalt prepared'
@@ -159,7 +178,7 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
     have prepareBounded : prepareTicks ≤ prepareBound.eval (assignment rows columns) := by
       apply prepareCost.trans
       have columnBound := column.isLt
-      simp only [List.length_cons, List.length_nil, prepareBound, SizePolynomial.eval_mul,
+      simp only [prepareBound, SizePolynomial.eval_mul,
         SizePolynomial.eval_constant, SizePolynomial.eval_add, SizePolynomial.eval_pow, SizePolynomial.eval_one,
         SizePolynomial.eval_parameter, assignment]
       apply Nat.mul_le_mul_left 5

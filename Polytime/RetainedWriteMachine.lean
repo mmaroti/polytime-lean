@@ -198,7 +198,54 @@ theorem realizes_from_uniform (replacement original : Fin width → Bool) (befor
   · simpa only [Tape.configuration] using result
 
 /-- Accept the evaluator's unary address and retained fields, prepare navigation,
-initialize scratch, and write the runtime replacement into the selected field. -/
+initialize scratch, and write the runtime replacement into the selected field.
+One reserved blank becomes the boundary marker; both caller regions survive. -/
+theorem realizes_evaluated_address_reserved (replacement original : Fin width → Bool) (before after : List Bool)
+    (inputSymbol : Symbol) (retained caller right : List Symbol)
+    (inputValid : inputSymbol ≠ 4)
+    (retainedValid : ∀ symbol ∈ retained, symbol ≠ 3 ∧ symbol ≠ 6)
+    (positive : 0 < width) :
+    let length := before.length + width + after.length
+    ∃ ticks, ticks ≤ 1024 * (length + retained.length + 1) ^ 2 ∧
+      Tape.Steps (Tape.sequence RetainedLookupMachine.Entry.machine
+        (Tape.sequence AddressMachine.ZeroWindow.machine (machine (width := width)) (.inl (.inl 3))) (.inl 0)) ticks
+        (Tape.configuration (.inl 0) (0 :: caller)
+          (UnaryMachine.units before.length ++ 1 :: (retained ++ word (List.ofFn replacement) ++ 3 ::
+            (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right)))))
+        (Tape.configuration (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr .halt)))))))))
+          (retained.reverse ++ 6 :: (List.replicate before.length 0 ++ 7 :: caller))
+          (word (List.ofFn replacement) ++ 3 :: (List.replicate length (data true) ++
+            4 :: (word before ++ word (List.ofFn replacement) ++ word after ++ right)))) := by
+  dsimp only
+  let length := before.length + width + after.length
+  let gap := retained ++ word (List.ofFn replacement)
+  have gapValid : ∀ symbol ∈ gap, symbol ≠ 3 := by
+    intro symbol member
+    simp only [gap, List.mem_append] at member
+    rcases member with member | member
+    · exact (retainedValid symbol member).1
+    · obtain ⟨bit, _, equality⟩ := List.mem_map.mp member
+      subst symbol; cases bit <;> decide
+  have positioned := RetainedLookupMachine.Entry.realizes_reserved before.length gap caller
+    (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right)) gapValid
+  obtain ⟨ticks, bound, write⟩ := realizes_from_uniform replacement original before after inputSymbol
+    retained caller right inputValid retainedValid positive
+  have positioned' : Tape.Steps RetainedLookupMachine.Entry.machine (before.length + retained.length + width + 6)
+      (Tape.configuration 0 (0 :: caller)
+        (UnaryMachine.units before.length ++ 1 :: (retained ++ word (List.ofFn replacement) ++ 3 ::
+          (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right)))))
+      (Tape.configuration 5
+        (3 :: ((word (List.ofFn replacement)).reverse ++ retained.reverse ++ 6 :: (UnaryMachine.units before.length ++ 7 :: caller)))
+        (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right))) := by
+    simpa [gap, List.reverse_append, List.append_assoc, Nat.add_assoc] using positioned
+  have result := Tape.sequence_steps (.inl 0 : Sum (Fin 4) (State width)) positioned'
+    (by intro symbol; exact RetainedLookupMachine.Entry.halt symbol) write
+  refine ⟨before.length + retained.length + width + 6 + (ticks + 1), ?_, ?_⟩
+  · ring_nf at bound ⊢
+    nlinarith
+  · simpa only [Tape.configuration] using result
+
+/-- Specialize the reserved-entry adapter to blank left storage. -/
 theorem realizes_evaluated_address (replacement original : Fin width → Bool) (before after : List Bool)
     (inputSymbol : Symbol) (retained right : List Symbol)
     (inputValid : inputSymbol ≠ 4)
@@ -215,33 +262,155 @@ theorem realizes_evaluated_address (replacement original : Fin width → Bool) (
           (retained.reverse ++ 6 :: (List.replicate before.length 0 ++ [7]))
           (word (List.ofFn replacement) ++ 3 :: (List.replicate length (data true) ++
             4 :: (word before ++ word (List.ofFn replacement) ++ word after ++ right)))) := by
-  dsimp only
-  let length := before.length + width + after.length
-  let gap := retained ++ word (List.ofFn replacement)
-  have gapValid : ∀ symbol ∈ gap, symbol ≠ 3 := by
-    intro symbol member
-    simp only [gap, List.mem_append] at member
-    rcases member with member | member
-    · exact (retainedValid symbol member).1
-    · obtain ⟨bit, _, equality⟩ := List.mem_map.mp member
-      subst symbol; cases bit <;> decide
-  have positioned := RetainedLookupMachine.Entry.realizes before.length gap
-    (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right)) gapValid
-  obtain ⟨ticks, bound, write⟩ := realizes_from_uniform replacement original before after inputSymbol
-    retained [] right inputValid retainedValid positive
-  have positioned' : Tape.Steps RetainedLookupMachine.Entry.machine (before.length + retained.length + width + 6)
-      (Tape.configuration 0 []
-        (UnaryMachine.units before.length ++ 1 :: (retained ++ word (List.ofFn replacement) ++ 3 ::
-          (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right)))))
-      (Tape.configuration 5
-        (3 :: ((word (List.ofFn replacement)).reverse ++ retained.reverse ++ 6 :: (UnaryMachine.units before.length ++ [7])))
-        (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right))) := by
-    simpa [gap, List.reverse_append, List.append_assoc, Nat.add_assoc] using positioned
-  have result := Tape.sequence_steps (.inl 0 : Sum (Fin 4) (State width)) positioned'
-    (by intro symbol; exact RetainedLookupMachine.Entry.halt symbol) write
-  refine ⟨before.length + retained.length + width + 6 + (ticks + 1), ?_, ?_⟩
-  · ring_nf at bound ⊢
-    nlinarith
-  · simpa only [Tape.configuration] using result
+  simpa only [show (0 :: ([] : List Symbol)) = [] ++ [default] from rfl,
+    Tape.configuration_append_blank] using
+    realizes_evaluated_address_reserved replacement original before after inputSymbol retained [] right
+      inputValid retainedValid positive
+
+noncomputable section ComputedAddress
+
+/-- Evaluate an address and write a block in the same reserved frame. Both
+caller regions survive; the certificate chooses all capacity and controller data. -/
+theorem realizes_computed_address_reserved {ctx : SizeContext}
+    (input retained : List (SizeExpression ctx)) (address : SizeExpression ctx)
+    (evaluation : SizeFrame.Realizes input (address :: retained)) (positive : 0 < width) :
+    ∃ (reserve : SizePolynomial ctx) (Controller : Type) (_finite : Fintype Controller)
+      (inhabited : Inhabited Controller),
+      let _controllerInhabited : Inhabited Controller := inhabited
+      ∃ (entry exit : Controller) (program : Turing.TM0.Machine Symbol Controller)
+        (cost : SizePolynomial ctx),
+        (∀ symbol, program exit symbol = none) ∧
+        (∀ assignment, (SizeFrame.headerWidth input).eval assignment ≤ reserve.eval assignment ∧
+          (SizeFrame.headerWidth (address :: retained)).eval assignment + 1 ≤ reserve.eval assignment) ∧
+        ∀ (assignment : SizeAssignment ctx) (replacement original : Fin width → Bool) (before after : List Bool)
+          (extra : List ℕ) (caller right : List Symbol) (inputSymbol : Symbol)
+          (_addressCorrect : before.length = address.eval assignment)
+          (_inputValid : inputSymbol ≠ 4),
+          let length := before.length + width + after.length
+          let saved := UnaryMachine.fields (retained.map (·.eval assignment) ++ extra)
+          ∃ ticks, ticks ≤ cost.eval assignment + 1024 * (length + saved.length + 1) ^ 2 + 1 ∧
+            Tape.Steps program ticks
+              (Tape.configuration entry
+                (List.replicate (reserve.eval assignment - (SizeFrame.headerWidth input).eval assignment) 0 ++ caller)
+                (UnaryMachine.fields (input.map (·.eval assignment) ++ extra) ++ word (List.ofFn replacement) ++ 3 ::
+                  (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right))))
+              (Tape.configuration exit
+                (saved.reverse ++ 6 :: (List.replicate before.length 0 ++ 7 ::
+                  (List.replicate (reserve.eval assignment -
+                    (SizeFrame.headerWidth (address :: retained)).eval assignment - 1) 0 ++ caller)))
+                (word (List.ofFn replacement) ++ 3 :: (List.replicate length (data true) ++
+                  4 :: (word before ++ word (List.ofFn replacement) ++ word after ++ right)))) := by
+  obtain ⟨capacity, fits, ArithmeticState, finite, inhabited, arithmeticEntry, arithmeticExit,
+    arithmetic, cost, arithmeticHalt, runs⟩ := evaluation
+  let _arithmeticFinite : Fintype ArithmeticState := finite
+  let _arithmeticInhabited : Inhabited ArithmeticState := inhabited
+  let WriterState := Sum (Fin 6) (Sum (Fin 4) (State width))
+  let writer : Turing.TM0.Machine Symbol WriterState := Tape.sequence RetainedLookupMachine.Entry.machine
+    (Tape.sequence AddressMachine.ZeroWindow.machine (machine (width := width)) (.inl (.inl 3))) (.inl 0)
+  let writerEntry : WriterState := .inl 0
+  let writerExit : WriterState := .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr .halt))))))))
+  refine ⟨capacity + 1, Sum ArithmeticState WriterState, inferInstance, inferInstance,
+    .inl arithmeticEntry, .inr writerExit, Tape.sequence arithmetic writer writerEntry, cost, ?_, ?_, ?_⟩
+  · intro symbol
+    simp [Tape.sequence, writer, writerExit, halt]
+  · intro assignment
+    simp only [SizePolynomial.eval_add, SizePolynomial.eval_one]
+    exact ⟨(fits assignment).1.trans (Nat.le_succ _), Nat.add_le_add_right (fits assignment).2 1⟩
+  · intro assignment replacement original before after extra caller right inputSymbol addressCorrect inputValid
+    dsimp only
+    let length := before.length + width + after.length
+    let saved := UnaryMachine.fields (retained.map (·.eval assignment) ++ extra)
+    let margin := capacity.eval assignment + 1 - (SizeFrame.headerWidth (address :: retained)).eval assignment - 1
+    let tail := UnaryMachine.fields extra ++ word (List.ofFn replacement) ++ 3 :: (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right))
+    let environment : SizeFrame.Caller capacity assignment :=
+      (⟨capacity.eval assignment + 1, Nat.le_succ _⟩, caller, tail)
+    obtain ⟨result, final, arithmeticTicks, arithmeticCost, evaluated, _, represented⟩ :=
+      runs assignment environment () _ trivial rfl
+    change final = (Tape.configuration ()
+      (List.replicate (capacity.eval assignment + 1 - (SizeFrame.headerWidth (address :: retained)).eval assignment) 0 ++ caller)
+      (UnaryMachine.fields ((address :: retained).map (·.eval assignment)) ++ tail)).Tape at represented
+    rw [represented] at evaluated
+    have marginEq : capacity.eval assignment + 1 - (SizeFrame.headerWidth (address :: retained)).eval assignment = margin + 1 := by
+      have enough := (fits assignment).2
+      dsimp only [margin]
+      omega
+    have marginCells : List.replicate (capacity.eval assignment + 1 - (SizeFrame.headerWidth (address :: retained)).eval assignment) (0 : Symbol) ++ caller =
+        0 :: (List.replicate margin 0 ++ caller) := by
+      rw [marginEq, List.replicate_succ]; rfl
+    have savedValid : ∀ symbol ∈ saved, symbol ≠ 3 ∧ symbol ≠ 6 := by
+      intro symbol member
+      simp only [saved, UnaryMachine.fields, List.mem_flatMap, List.mem_append,
+        List.mem_cons, List.mem_nil_iff, or_false, UnaryMachine.units, List.mem_replicate] at member
+      obtain ⟨value, _, member⟩ := member
+      rcases member with ⟨_, equality⟩ | equality <;> subst symbol <;> decide
+    obtain ⟨writeTicks, writeCost, written⟩ := realizes_evaluated_address_reserved replacement original before after inputSymbol
+      saved (List.replicate margin 0 ++ caller) right inputValid savedValid positive
+    have evaluated' : Tape.Steps arithmetic arithmeticTicks
+        (Tape.configuration arithmeticEntry
+          (List.replicate ((capacity + 1).eval assignment - (SizeFrame.headerWidth input).eval assignment) 0 ++ caller)
+          (UnaryMachine.fields (input.map (·.eval assignment)) ++ tail))
+        (Tape.configuration arithmeticExit (0 :: (List.replicate margin 0 ++ caller))
+          (UnaryMachine.units before.length ++ 1 :: (saved ++ word (List.ofFn replacement) ++ 3 ::
+            (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right))))) := by
+      simpa only [SizePolynomial.eval_add, SizePolynomial.eval_one, SizeFrame.representation,
+        environment, UnaryMachine.fields_cons, List.map_cons, marginCells, addressCorrect,
+        saved, tail, UnaryMachine.fields_append, List.append_assoc, List.cons_append, Tape.configuration] using evaluated
+    simp only [tail, List.append_assoc] at evaluated' written
+    have trace := Tape.sequence_steps writerEntry evaluated' arithmeticHalt written
+    dsimp only [saved] at writeCost
+    refine ⟨arithmeticTicks + (writeTicks + 1), by omega, ?_⟩
+    simpa only [writer, writerEntry, writerExit, tail, margin, saved,
+      SizePolynomial.eval_add, SizePolynomial.eval_one, Tape.configuration, length, UnaryMachine.fields_append, List.append_assoc] using trace
+
+/-- The computed-address adapter also supplies the original blank-left convention. -/
+theorem realizes_computed_address {ctx : SizeContext}
+    (input retained : List (SizeExpression ctx)) (address : SizeExpression ctx)
+    (evaluation : SizeFrame.Realizes input (address :: retained)) (positive : 0 < width) :
+    ∃ (Controller : Type) (_finite : Fintype Controller)
+      (inhabited : Inhabited Controller),
+      let _controllerInhabited : Inhabited Controller := inhabited
+      ∃ (entry exit : Controller) (program : Turing.TM0.Machine Symbol Controller)
+        (cost : SizePolynomial ctx),
+        (∀ symbol, program exit symbol = none) ∧
+        ∀ (assignment : SizeAssignment ctx) (replacement original : Fin width → Bool) (before after : List Bool)
+          (extra : List ℕ) (right : List Symbol) (inputSymbol : Symbol)
+          (_addressCorrect : before.length = address.eval assignment)
+          (_inputValid : inputSymbol ≠ 4),
+          let length := before.length + width + after.length
+          let saved := UnaryMachine.fields (retained.map (·.eval assignment) ++ extra)
+          ∃ ticks, ticks ≤ cost.eval assignment + 1024 * (length + saved.length + 1) ^ 2 + 1 ∧
+            Tape.Steps program ticks
+              (Tape.configuration entry
+                []
+                (UnaryMachine.fields (input.map (·.eval assignment) ++ extra) ++ word (List.ofFn replacement) ++ 3 ::
+                  (List.replicate length inputSymbol ++ 4 :: (word (before ++ List.ofFn original ++ after) ++ right))))
+              (Tape.configuration exit
+                (saved.reverse ++ 6 :: (List.replicate before.length 0 ++ [7]))
+                (word (List.ofFn replacement) ++ 3 :: (List.replicate length (data true) ++
+                  4 :: (word before ++ word (List.ofFn replacement) ++ word after ++ right)))) := by
+  obtain ⟨reserve, Controller, finite, inhabited, entry, exit, program, cost, halt, _fits, runs⟩ :=
+    realizes_computed_address_reserved input retained address evaluation positive
+  refine ⟨Controller, finite, inhabited, entry, exit, program, cost, halt, ?_⟩
+  intro assignment replacement original before after extra right inputSymbol addressCorrect inputValid
+  obtain ⟨ticks, bound, trace⟩ := runs assignment replacement original before after extra [] right inputSymbol
+    addressCorrect inputValid
+  refine ⟨ticks, bound, ?_⟩
+  simp only [List.append_nil] at trace
+  have finalCells :
+      (UnaryMachine.fields (retained.map (·.eval assignment) ++ extra)).reverse ++ 6 ::
+        (List.replicate before.length (0 : Symbol) ++ 7 ::
+          List.replicate (reserve.eval assignment -
+            (SizeFrame.headerWidth (address :: retained)).eval assignment - 1) 0) =
+      ((UnaryMachine.fields (retained.map (·.eval assignment) ++ extra)).reverse ++ 6 ::
+        (List.replicate before.length 0 ++ [7])) ++
+          List.replicate (reserve.eval assignment -
+            (SizeFrame.headerWidth (address :: retained)).eval assignment - 1) default := by
+    simp only [List.append_assoc, List.cons_append, List.nil_append]
+    rfl
+  rw [finalCells] at trace
+  simpa only [show (0 : Symbol) = default from rfl,
+    Tape.configuration_append_blanks, Tape.configuration_replicate_blank] using trace
+
+end ComputedAddress
 
 end Polytime.RetainedWriteMachine

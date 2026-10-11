@@ -46,6 +46,15 @@ def assignment (row column columns : ℕ) : SizeAssignment context
 def expression (scalarWidth : ℕ) : SizeExpression context :=
   (.parameter .rowIndex * .parameter .columnCount + .parameter .columnIndex) * .constant scalarWidth
 
+/-- Row-major address evaluation can run inside reserved caller workspace. -/
+theorem frame_realization (scalarWidth : ℕ) :
+    ∃ scratch, SizeFrame.Realizes
+      [SizeExpression.parameter (ctx := context) .rowIndex, .parameter .columnIndex, .parameter .columnCount]
+      (expression scalarWidth :: scratch ++ [.parameter .rowIndex, .parameter .columnIndex, .parameter .columnCount]) := by
+  apply SizeFrame.evaluates (expression scalarWidth)
+  intro name
+  cases name <;> simp
+
 /-- A single controller computes every valid matrix-entry address. Its polynomial
 witness involves only the dimensions, not independently varying runtime indices.
 The returned scratch fields are fixed by the expression and retain the input fields. -/
@@ -63,10 +72,9 @@ theorem realizes (scalarWidth : ℕ) :
               (Tape.configuration exit [] (units ((row.val * columns + column.val) * scalarWidth) ++ 1 ::
                 (fields (scratch.map (·.eval (assignment row.val column.val columns))) ++
                   fields [row.val, column.val, columns] ++ tail))) := by
-  obtain ⟨scratch, Controller, finite, inhabited, entry, exit, machine, cost, halt, runs⟩ :=
-    Polytime.SizeEvaluation.realizes_header (expression scalarWidth)
-      [.rowIndex, .columnIndex, .columnCount]
-      (by intro name; cases name <;> simp)
+  obtain ⟨scratch, certificate⟩ := frame_realization scalarWidth
+  obtain ⟨Controller, finite, inhabited, entry, exit, machine, cost, halt, runs⟩ :=
+    Polytime.SizeEvaluation.Realizes.of_frame certificate
   let dimensions : context.Parameter → Matrices.context.Parameter
     | .rowIndex => .K
     | .columnIndex => .L

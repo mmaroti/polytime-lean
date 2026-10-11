@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime.NamedHeader
 import Polytime.Examples.MatrixClearRange
 
 /-! # Complete runtime column clearing
@@ -29,6 +30,17 @@ open Matrices TupleMachine
 
 -- scalarLevel: the mathematical carrier of the fixed finite field.
 universe scalarLevel
+
+/-- Names distinguish header roles even when their counter values coincide. -/
+inductive HeaderField
+  | pivotRow | targetRow | rowLimit | zeroColumn | columnCount | pivotColumn | savedRowCount
+  deriving DecidableEq
+
+def sourceLayout : List HeaderField := [.pivotRow, .targetRow, .rowLimit, .zeroColumn, .columnCount, .pivotColumn, .savedRowCount]
+
+def targetLayout : List HeaderField := [.pivotRow, .targetRow, .savedRowCount, .zeroColumn, .columnCount, .pivotColumn, .rowLimit]
+
+def relocation : List HeaderField := targetLayout.reverse
 
 noncomputable section ColumnClearing
 
@@ -67,7 +79,7 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
   let rangeControllerFinite : Fintype RangeState := rangeFinite
   let rangeControllerInhabited : Inhabited RangeState := rangeInhabited
   obtain ⟨MoveState, moveFinite, moveInhabited, moveEntry, moveExit, mover,
-    moveHalt, moveRuns⟩ := HeaderMoves.realizes [2, 5, 5, 5, 6, 6, 6]
+    moveHalt, moveRuns⟩ := NamedHeader.realizes sourceLayout relocation (by decide)
   let moveControllerFinite : Fintype MoveState := moveFinite
   let moveControllerInhabited : Inhabited MoveState := moveInhabited
   let incrementer := HeaderIncrementMachine.machine 1
@@ -123,14 +135,22 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
         (Tape.configuration rangeExit []
           (UnaryMachine.fields [source.val, source.val, source.val, 0, columns, column.val, rows] ++ suffix lower lowerScalar)) := by
       simpa only [lower, suffix, matrixWidth, List.cons_append, List.nil_append, List.append_assoc] using lowerTrace
-    obtain ⟨moveTicks, moveCost, moved⟩ := moveRuns
-      [source.val, source.val, source.val, 0, columns, column.val, rows] (by simp) (suffix lower lowerScalar)
+    let headerValues : HeaderField → ℕ
+      | .pivotRow => source.val
+      | .targetRow => source.val
+      | .rowLimit => source.val
+      | .zeroColumn => 0
+      | .columnCount => columns
+      | .pivotColumn => column.val
+      | .savedRowCount => rows
+    obtain ⟨moveTicks, moveCost, moved⟩ := moveRuns headerValues (suffix lower lowerScalar)
+    change moveTicks ≤ 7 * (128 * ((UnaryMachine.fields [source.val, source.val, source.val, 0, columns, column.val, rows]).length + 1) ^ 2 + 1) at moveCost
     have moved' : Tape.Steps mover moveTicks
         (Tape.configuration moveEntry []
           (UnaryMachine.fields [source.val, source.val, source.val, 0, columns, column.val, rows] ++ suffix lower lowerScalar))
         (Tape.configuration moveExit []
           (UnaryMachine.fields [source.val, source.val, rows, 0, columns, column.val, source.val] ++ suffix lower lowerScalar)) := by
-      simpa [HeaderMoves.applyMoves, HeaderMoves.moveToFront, List.getD] using moved
+      simpa [sourceLayout, targetLayout, relocation, headerValues, NamedHeader.result, NamedHeader.move] using moved
     have incremented := HeaderIncrementMachine.realizes [source.val] source.val
       (UnaryMachine.fields [rows, 0, columns, column.val, source.val] ++ suffix lower lowerScalar)
     have incremented' : Tape.Steps incrementer (3 * (source.val + 1) + 2)

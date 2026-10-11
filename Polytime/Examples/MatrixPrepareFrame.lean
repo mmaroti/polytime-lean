@@ -17,7 +17,7 @@ limitations under the License.
 
 import Polytime.Examples.Matrices
 import Polytime.SizeEvaluation
-import Polytime.HeaderMoves
+import Polytime.NamedHeader
 import Polytime.HeaderInsertMachine
 
 /-! # Preparing the complete matrix elimination frame
@@ -33,6 +33,17 @@ open Matrices TupleMachine
 
 -- scalarLevel: the mathematical carrier of the fixed finite domain.
 universe scalarLevel
+
+/-- Names distinguish header roles even when their counter values coincide. -/
+inductive HeaderField
+  | zeroRow | zeroColumn | payloadWidth | scalarWidth | entryCount | rowCount | columnCount
+  deriving DecidableEq
+
+def sourceLayout : List HeaderField := [.zeroRow, .zeroColumn, .payloadWidth, .scalarWidth, .entryCount, .rowCount, .columnCount]
+
+def targetLayout : List HeaderField := [.scalarWidth, .entryCount, .zeroRow, .rowCount, .zeroColumn, .columnCount, .payloadWidth]
+
+def relocation : List HeaderField := targetLayout.reverse
 
 noncomputable section Preparation
 
@@ -69,7 +80,7 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) (initialScalar : fiel
   let arithmeticControllerFinite : Fintype ArithmeticState := arithmeticFinite
   let arithmeticControllerInhabited : Inhabited ArithmeticState := arithmeticInhabited
   obtain ⟨MoveState, moveFinite, moveInhabited, moveEntry, moveExit, mover,
-    moveHalt, moveRuns⟩ := HeaderMoves.realizes [2, 6, 3, 6, 4, 6, 6]
+    moveHalt, moveRuns⟩ := NamedHeader.realizes sourceLayout relocation (by decide)
   let moveControllerFinite : Fintype MoveState := moveFinite
   let moveControllerInhabited : Inhabited MoveState := moveInhabited
   obtain ⟨RemoveState, removeFinite, removeInhabited, removeEntry, removeExit, remover,
@@ -111,14 +122,22 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) (initialScalar : fiel
           (UnaryMachine.fields [0, 0, matrixWidth, field.bitWidth, rows * columns, rows, columns] ++ tail)) := by
       simpa [row, column, area, width, SizeExpression.eval, assignment, matrixWidth,
         Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc] using calculated
-    obtain ⟨moveTicks, moveCost, moved⟩ := moveRuns
-      [0, 0, matrixWidth, field.bitWidth, rows * columns, rows, columns] (by simp) tail
+    let headerValues : HeaderField → ℕ
+      | .zeroRow => 0
+      | .zeroColumn => 0
+      | .payloadWidth => matrixWidth
+      | .scalarWidth => field.bitWidth
+      | .entryCount => rows * columns
+      | .rowCount => rows
+      | .columnCount => columns
+    obtain ⟨moveTicks, moveCost, moved⟩ := moveRuns headerValues tail
+    change moveTicks ≤ 7 * (128 * ((UnaryMachine.fields [0, 0, matrixWidth, field.bitWidth, rows * columns, rows, columns]).length + 1) ^ 2 + 1) at moveCost
     have moved' : Tape.Steps mover moveTicks
         (Tape.configuration moveEntry []
           (UnaryMachine.fields [0, 0, matrixWidth, field.bitWidth, rows * columns, rows, columns] ++ tail))
         (Tape.configuration moveExit []
           (UnaryMachine.fields [field.bitWidth, rows * columns, 0, rows, 0, columns, matrixWidth] ++ tail)) := by
-      simpa [HeaderMoves.applyMoves, HeaderMoves.moveToFront, List.getD] using moved
+      simpa [sourceLayout, targetLayout, relocation, headerValues, NamedHeader.result, NamedHeader.move] using moved
     obtain ⟨removeTicks, removeCost, removed⟩ := removeRuns
       [field.bitWidth, rows * columns, 0, rows, 0, columns, matrixWidth] (by simp) tail
     have removed' : Tape.Steps remover removeTicks

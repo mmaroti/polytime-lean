@@ -67,33 +67,26 @@ theorem realizes_runtime_entry (field : FixedPresentation.{scalarLevel}) [Nontri
             (Tape.configuration exit
               (retained.reverse ++ 6 :: (List.replicate ((row.val * columns + column.val) * field.bitWidth) 0 ++ [7]))
               (word scalar ++ 3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right)))) := by
-  obtain ⟨scratch, ArithmeticState, finite, inhabited, arithmeticEntry, arithmeticExit,
-    arithmetic, arithmeticBound, arithmeticHalt, arithmeticRuns⟩ := MatrixPairAddress.realizes field.bitWidth
-  let arithmeticFinite : Fintype ArithmeticState := finite
-  let arithmeticInhabited : Inhabited ArithmeticState := inhabited
-  let ReaderState := Sum (Fin 6) (Sum (Fin 4) (RetainedLookupMachine.State field.bitWidth))
-  let reader : Turing.TM0.Machine Symbol ReaderState := Tape.sequence RetainedLookupMachine.Entry.machine
-    (Tape.sequence AddressMachine.ZeroWindow.machine
-      (RetainedLookupMachine.machine (width := field.bitWidth)) (.inl (.inl 3))) (.inl 0)
-  let readerEntry : ReaderState := .inl 0
-  let readerExit : ReaderState := .inr (.inr (.inr (.inr (.inr .halt))))
+  obtain ⟨scratch, certificate⟩ := MatrixPairAddress.frame_realization field.bitWidth
+  let input : List (SizeExpression MatrixPairAddress.context) :=
+    [.parameter .rowIndex, .parameter .otherRowIndex, .parameter .columnIndex, .parameter .columnCount]
+  let parameters := scratch ++ input
+  obtain ⟨Controller, finite, inhabited, entry, exit, program, arithmeticCost, halt, runs⟩ :=
+    RetainedLookupMachine.realizes_computed_address input parameters (MatrixPairAddress.expression field.bitWidth)
+      certificate (MatrixAccess.scalar_width_positive field)
   let dimensions : MatrixPairAddress.context.Parameter → Matrices.context.Parameter
     | .rowIndex => .K
     | .otherRowIndex => .K
     | .columnIndex => .L
     | .columnCount => .L
-  let parameters := scratch ++ [SizeExpression.parameter (ctx := MatrixPairAddress.context) .rowIndex,
-    .parameter .otherRowIndex, .parameter .columnIndex, .parameter .columnCount]
   let storage : SizePolynomial Matrices.context :=
     MvPolynomial.rename dimensions ((parameters.map SizeExpression.polynomial).sum) +
       SizePolynomial.constant parameters.length + extraBound
   let capacity : SizePolynomial Matrices.context := SizePolynomial.parameter (ctx := Matrices.context) .K *
     SizePolynomial.parameter (ctx := Matrices.context) .L * SizePolynomial.constant field.bitWidth
-  refine ⟨scratch, Sum ArithmeticState ReaderState, inferInstance, inferInstance,
-    .inl arithmeticEntry, .inr readerExit, Tape.sequence arithmetic reader readerEntry,
-    arithmeticBound + SizePolynomial.constant 1280 * (capacity + storage + 1) ^ 2 + 1, ?_, ?_⟩
-  · intro symbol
-    simp [Tape.sequence, reader, readerExit, RetainedLookupMachine.halt]
+  refine ⟨scratch, Controller, finite, inhabited, entry, exit, program,
+    MvPolynomial.rename dimensions arithmeticCost + SizePolynomial.constant 1280 * (capacity + storage + 1) ^ 2 + 1,
+    halt, ?_⟩
   · intro rows columns matrix row otherRow column extra extraBounded window inputSymbol right windowWidth windowValid inputValid
     dsimp only
     let matrixWidth := (domain field).bitWidth (assignment rows columns)
@@ -102,38 +95,15 @@ theorem realizes_runtime_entry (field : FixedPresentation.{scalarLevel}) [Nontri
     let start := (row.val * columns + column.val) * field.bitWidth
     let retained := UnaryMachine.fields (scratch.map (·.eval (MatrixPairAddress.assignment row.val otherRow.val column.val columns))) ++
       UnaryMachine.fields ([row.val, otherRow.val, column.val, columns] ++ extra)
-    have entryBound : row.val * columns + column.val + 1 ≤ rows * columns := by
-      calc
-        _ ≤ row.val * columns + columns := by omega
-        _ = (row.val + 1) * columns := by ring
-        _ ≤ rows * columns := Nat.mul_le_mul_right columns row.isLt
-    have blockFits : start + field.bitWidth ≤ matrixWidth := by
-      dsimp only [start, matrixWidth]
-      rw [exact_width]
-      simpa only [Nat.add_mul, Nat.one_mul] using Nat.mul_le_mul_right field.bitWidth entryBound
-    have payloadLength : payload.length = matrixWidth := List.length_ofFn
-    have slice : (payload.drop start).take field.bitWidth = List.ofFn scalar :=
-      encode_entry_slice field rows columns matrix row column
-    have decomposition : payload.take start ++ List.ofFn scalar ++ payload.drop (start + field.bitWidth) = payload := by
-      have split := List.take_append_drop (start + field.bitWidth) payload
-      rw [List.take_add, slice] at split
-      exact split
-    have beforeLength : (payload.take start).length = start := by
-      simp only [List.length_take, payloadLength, Nat.min_eq_left (by omega : start ≤ matrixWidth)]
-    have physicalWidth : (payload.take start).length + field.bitWidth +
-        (payload.drop (start + field.bitWidth)).length = matrixWidth := by
-      have lengths := congrArg List.length decomposition
-      simpa only [List.length_append, List.length_ofFn, payloadLength] using lengths
+    have blockFits : start + field.bitWidth ≤ matrixWidth := entry_block_fits field rows columns row column
+    have partition : payload.take start ++ List.ofFn scalar ++ payload.drop (start + field.bitWidth) = payload ∧
+        (payload.take start).length = start ∧
+        (payload.take start).length + field.bitWidth + (payload.drop (start + field.bitWidth)).length = matrixWidth :=
+      encode_entry_partition field rows columns matrix row column
+    obtain ⟨decomposition, beforeLength, physicalWidth⟩ := partition
     have retainedEquality : retained = UnaryMachine.fields
         (parameters.map (·.eval (MatrixPairAddress.assignment row.val otherRow.val column.val columns)) ++ extra) := by
-      simp [retained, parameters, MatrixPairAddress.assignment, UnaryMachine.fields_append, List.append_assoc]
-    have retainedValid : ∀ symbol ∈ retained, symbol ≠ 3 ∧ symbol ≠ 6 := by
-      rw [retainedEquality]
-      intro symbol member
-      simp only [UnaryMachine.fields, List.mem_flatMap, List.mem_append, List.mem_cons, List.mem_nil_iff,
-        or_false, UnaryMachine.units, List.mem_replicate] at member
-      obtain ⟨value, _, member⟩ := member
-      rcases member with ⟨_, equality⟩ | equality <;> subst symbol <;> decide
+      simp [retained, parameters, input, MatrixPairAddress.assignment, UnaryMachine.fields_append, List.append_assoc]
     have retainedCost : retained.length ≤ storage.eval (assignment rows columns) := by
       have monotone := SizePolynomial.eval_mono ((parameters.map SizeExpression.polynomial).sum)
         (MatrixPairAddress.assignment row.val otherRow.val column.val columns)
@@ -154,41 +124,47 @@ theorem realizes_runtime_entry (field : FixedPresentation.{scalarLevel}) [Nontri
         simp [storage, SizePolynomial.eval, SizePolynomial.constant, MvPolynomial.eval_rename, Function.comp_def]
       rw [retainedLength, storageValue]
       omega
-    obtain ⟨addressTicks, addressCost, evaluated⟩ := arithmeticRuns rows columns row otherRow column
-      (UnaryMachine.fields extra ++ window ++ 3 :: (List.replicate matrixWidth inputSymbol ++ 4 :: (word payload ++ right)))
-    obtain ⟨readTicks, readCost, read⟩ := RetainedLookupMachine.realizes_evaluated_address scalar
-      (payload.take start) (payload.drop (start + field.bitWidth)) inputSymbol window retained right
-      inputValid windowWidth windowValid retainedValid (MatrixAccess.scalar_width_positive field)
-    rw [physicalWidth] at readCost read
-    rw [beforeLength] at read
+    obtain ⟨ticks, cost, trace⟩ := runs (MatrixPairAddress.assignment row.val otherRow.val column.val columns) scalar
+      (payload.take start) (payload.drop (start + field.bitWidth)) extra window right inputSymbol
+      (by simpa only [start, MatrixPairAddress.expression, SizeExpression.eval_mul,
+        SizeExpression.eval_add, SizeExpression.eval_constant, SizeExpression.eval_parameter,
+        MatrixPairAddress.assignment] using beforeLength)
+      windowWidth windowValid inputValid
+    rw [physicalWidth] at cost trace
+    simp only [beforeLength] at trace
     have packed : word (payload.take start) ++ word (List.ofFn scalar) ++
         word (payload.drop (start + field.bitWidth)) = word payload := by
       rw [← word_append, ← word_append, decomposition]
-    have evaluated' : Tape.Steps arithmetic addressTicks
-        (Tape.configuration arithmeticEntry []
-          (UnaryMachine.fields ([row.val, otherRow.val, column.val, columns] ++ extra) ++ window ++
-            3 :: (List.replicate matrixWidth inputSymbol ++ 4 :: (word payload ++ right))))
-        (Tape.configuration arithmeticExit []
-          (UnaryMachine.units start ++ 1 :: (retained ++ window ++
-            3 :: (List.replicate matrixWidth inputSymbol ++ 4 :: (word payload ++ right))))) := by
-      simpa only [retained, start, UnaryMachine.fields_append, List.append_assoc] using evaluated
-    have read' : Tape.Steps reader readTicks
-        (Tape.configuration readerEntry []
-          (UnaryMachine.units start ++ 1 :: (retained ++ window ++
-            3 :: (List.replicate matrixWidth inputSymbol ++ 4 :: (word payload ++ right)))))
-        (Tape.configuration readerExit (retained.reverse ++ 6 :: (List.replicate start 0 ++ [7]))
-          (word (List.ofFn scalar) ++ 3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right)))) := by
-      simpa only [reader, readerEntry, readerExit, decomposition, packed] using read
-    have result := Tape.sequence_steps readerEntry evaluated' arithmeticHalt read'
-    refine ⟨addressTicks + (readTicks + 1), ?_, ?_⟩
+    have arithmeticBound : arithmeticCost.eval (MatrixPairAddress.assignment row.val otherRow.val column.val columns) ≤
+        (MvPolynomial.rename dimensions arithmeticCost).eval (assignment rows columns) := by
+      calc
+        _ ≤ arithmeticCost.eval (fun name => assignment rows columns (dimensions name)) :=
+          SizePolynomial.eval_mono arithmeticCost _ _ (by
+            intro name; cases name <;> simp only [MatrixPairAddress.assignment, dimensions, assignment]
+            · exact Nat.le_of_lt row.isLt
+            · exact Nat.le_of_lt_succ otherRow.isLt
+            · exact Nat.le_of_lt column.isLt
+            · exact le_rfl)
+        _ = _ := by
+          simp only [SizePolynomial.eval, MvPolynomial.eval_rename, Function.comp_def]
+    refine ⟨ticks, ?_, ?_⟩
     · have capacityValue : capacity.eval (assignment rows columns) = matrixWidth := by
         simp [capacity, matrixWidth, exact_width, assignment]
-      have readerCost : readTicks ≤ 1280 * (matrixWidth + storage.eval (assignment rows columns) + 1) ^ 2 :=
-        readCost.trans (Nat.mul_le_mul_left 1280 (Nat.pow_le_pow_left (by omega) 2))
-      simp only [SizePolynomial.eval_add, SizePolynomial.eval_mul, SizePolynomial.eval_constant,
-        SizePolynomial.eval_pow, SizePolynomial.eval_one, capacityValue]
+      have storageBound : 1280 * (matrixWidth + retained.length + 1) ^ 2 ≤
+          1280 * (matrixWidth + storage.eval (assignment rows columns) + 1) ^ 2 :=
+        Nat.mul_le_mul_left 1280 (Nat.pow_le_pow_left (by omega) 2)
+      rw [← retainedEquality] at cost
+      simp only [SizePolynomial.eval, map_add, map_mul, map_pow, map_one,
+        SizePolynomial.constant, MvPolynomial.eval_C]
+      change ticks ≤ (MvPolynomial.rename dimensions arithmeticCost).eval (assignment rows columns) +
+        1280 * (capacity.eval (assignment rows columns) + storage.eval (assignment rows columns) + 1) ^ 2 + 1
+      rw [capacityValue]
       omega
-    · simpa only [Tape.configuration, readerExit, retained, scalar, payload, matrixWidth, start] using result
+    · rw [← retainedEquality] at trace
+      simpa only [input, List.map_cons, List.map_nil, SizeExpression.eval_parameter,
+        MatrixPairAddress.assignment, UnaryMachine.fields_cons, UnaryMachine.fields_append,
+        retained, List.append_assoc, List.cons_append, decomposition, packed,
+        scalar, payload, matrixWidth, start] using trace
 
 /-- Read from runtime counters, optionally apply a fixed scalar operation in
 place, and clear evaluator scratch before returning to the header. The matrix
@@ -253,28 +229,13 @@ theorem realizes_runtime_entry_restored (field : FixedPresentation.{scalarLevel}
     let values := scratch.map (·.eval (MatrixPairAddress.assignment row.val otherRow.val column.val columns))
     let start := (row.val * columns + column.val) * field.bitWidth
     obtain ⟨readTicks, readCost, read⟩ := readRuns rows columns matrix row otherRow column extra extraBounded window inputSymbol right windowWidth windowValid inputValid
-    have returned := HeaderReturnMachine.realizes ([row.val, otherRow.val, column.val, columns] ++ extra) values start
-      (word scalar ++ 3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right))) (by simp)
-    have headerLength : ([row.val, otherRow.val, column.val, columns] ++ extra).length = 4 + extraCount := by
-      simp [extraLength]; omega
-    rw [headerLength] at returned
-    have returned' : Tape.Steps (HeaderReturnMachine.machine (4 + extraCount))
-        ((UnaryMachine.fields ([row.val, otherRow.val, column.val, columns] ++ extra)).length + 3 * ((UnaryMachine.fields values).length + start) + 8)
-        (Tape.configuration (Fin.last (4 + extraCount), 0)
-          ((UnaryMachine.fields values ++ UnaryMachine.fields ([row.val, otherRow.val, column.val, columns] ++ extra)).reverse ++
-            6 :: (List.replicate start 0 ++ [7]))
-          (word scalar ++ 3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right))))
-        (Tape.configuration (0, 5) []
-          (UnaryMachine.fields ([row.val, otherRow.val, column.val, columns] ++ extra) ++ word scalar ++
-            3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right)))) := by
-      simpa only [List.reverse_append, List.append_assoc, List.length_cons, List.length_nil,
-        Nat.reduceAdd, List.length_append, extraLength] using returned
     have transformed := InPlaceTableMachine.realizes_operation field.codec operation (matrix row column)
       ((UnaryMachine.fields values ++ UnaryMachine.fields ([row.val, otherRow.val, column.val, columns] ++ extra)).reverse ++
         6 :: (List.replicate start 0 ++ [7]))
       (3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right)))
-    have finished := Tape.sequence_steps (Fin.last (4 + extraCount), 0) transformed
-      (InPlaceTableMachine.halt _) returned'
+    have finished := HeaderReturnMachine.restore_blank (count := 4 + extraCount) ([row.val, otherRow.val, column.val, columns] ++ extra) values start
+      (word scalar ++ 3 :: (List.replicate matrixWidth (data true) ++ 4 :: (word payload ++ right)))
+      (by simp [extraLength]; omega) (by simp) (InPlaceTableMachine.halt _) transformed
     have result := Tape.sequence_steps
       (Sum.inl (FiniteTableMachine.State.read 0 (fun _ => false)) :
         Sum (FiniteTableMachine.State field.bitWidth field.bitWidth) (HeaderReturnMachine.State (4 + extraCount)))
@@ -317,7 +278,7 @@ theorem realizes_runtime_entry_restored (field : FixedPresentation.{scalarLevel}
         3 * ((UnaryMachine.fields values).length + start) + 8 + 1) + 1), ?_, ?_⟩
     · simp only [SizePolynomial.eval_add, SizePolynomial.eval_mul, SizePolynomial.eval_constant]
       omega
-    · simpa only [Tape.configuration, values, start, scalar, payload, matrixWidth] using result
+    · simpa only [Tape.configuration, values, start, scalar, payload, matrixWidth, List.append_assoc] using result
 
 end RetainedHeaderAccess
 

@@ -77,45 +77,46 @@ theorem skip (index : ℕ) (before : List ℕ) (remaining : Fin (index + 1))
     simpa [fields, List.reverse_append, List.append_assoc, Nat.add_assoc,
       Nat.add_comm, Nat.add_left_comm] using trace
 
-/-- Copy a statically selected header field, restoring every source field. -/
-theorem realizes (before suffix : List ℕ) (value : ℕ) (tail : List Symbol) :
+/-- Copy a selected field inside finite reserved workspace. `value + 2`
+blank cells suffice; one remains before the copied field, and both callers survive. -/
+theorem realizes_reserved (before suffix : List ℕ) (value : ℕ) (caller tail : List Symbol) :
     ∃ ticks, ticks ≤ 64 * ((fields (before ++ value :: suffix)).length + 1) ^ 2 ∧
       Tape.Steps (machine before.length) ticks
-        (Tape.configuration (Fin.last before.length, 0) []
+        (Tape.configuration (Fin.last before.length, 0) (List.replicate (value + 2) 0 ++ caller)
           (fields (before ++ value :: suffix) ++ tail))
-        (Tape.configuration ((0 : Fin (before.length + 1)), 19) []
+        (Tape.configuration ((0 : Fin (before.length + 1)), 19) (0 :: caller)
           (fields (value :: before ++ value :: suffix) ++ tail)) := by
   let right := fields (before ++ value :: suffix) ++ tail
-  have move := Tape.move_left_empty (machine := machine before.length)
-    (state := (Fin.last before.length, 0)) (nextState := (Fin.last before.length, 1)) right
+  have move := Tape.move_left_list (machine := machine before.length)
+    (state := (Fin.last before.length, 0)) (nextState := (Fin.last before.length, 1)) (List.replicate (value + 1) 0 ++ caller) right 0
     (by intro symbol; simp [machine, UnaryMachine.machine])
   have mark := Tape.write (machine := machine before.length)
     (state := (Fin.last before.length, 1)) (nextState := (Fin.last before.length, 2))
-    [] right 0 5 (by simp [machine, UnaryMachine.machine])
+    (List.replicate (value + 1) 0 ++ caller) right 0 5 (by simp [machine, UnaryMachine.machine])
   have enter := Tape.move_right (machine := machine before.length)
     (state := (Fin.last before.length, 2)) (nextState := (Fin.last before.length, 3))
-    [] right 5 (by simp [machine, UnaryMachine.machine])
-  have scan := skip before.length before (Fin.last before.length) rfl [5]
+    (List.replicate (value + 1) 0 ++ caller) right 5 (by simp [machine, UnaryMachine.machine])
+  have scan := skip before.length before (Fin.last before.length) rfl (5 :: (List.replicate (value + 1) 0 ++ caller))
     (units value ++ 1 :: (fields suffix ++ tail))
   have switch := Tape.write (machine := machine before.length)
     (state := ((0 : Fin (before.length + 1)), 3)) (nextState := (0, 6))
-    ((fields before).reverse ++ [5]) (units value ++ 1 :: (fields suffix ++ tail)).tail
+    ((fields before).reverse ++ 5 :: (List.replicate (value + 1) 0 ++ caller)) (units value ++ 1 :: (fields suffix ++ tail)).tail
     (units value ++ 1 :: (fields suffix ++ tail)).head!
     (units value ++ 1 :: (fields suffix ++ tail)).head!
     (by simp [machine, UnaryMachine.machine])
   have switch' : Tape.Steps (machine before.length) 1
       (Tape.configuration ((0 : Fin (before.length + 1)), 3)
-        ((fields before).reverse ++ [5]) (units value ++ 1 :: (fields suffix ++ tail)))
+        ((fields before).reverse ++ 5 :: (List.replicate (value + 1) 0 ++ caller)) (units value ++ 1 :: (fields suffix ++ tail)))
       (Tape.configuration ((0 : Fin (before.length + 1)), 6)
-        ((fields before).reverse ++ [5]) (units value ++ 1 :: (fields suffix ++ tail))) := by
+        ((fields before).reverse ++ 5 :: (List.replicate (value + 1) 0 ++ caller)) (units value ++ 1 :: (fields suffix ++ tail))) := by
     cases value <;> simpa [units, List.replicate_succ] using Tape.Steps.next switch (.zero _)
-  have copy := lift before.length (UnaryMachine.copy_loop false value 0 (fields before)
-    (fields suffix ++ tail)
+  have copy := lift before.length (UnaryMachine.copy_loop_reserved false value 0 (fields before)
+    (fields suffix ++ tail) (0 :: caller)
     (by intro symbol member
         rcases UnaryMachine.fields_symbols before symbol member with rfl | rfl <;> decide)
     (copyMode := true))
-  have finish := lift before.length (UnaryMachine.finish_copy (fields before ++ units value)
-    (fields suffix ++ tail) value
+  have finish := lift before.length (UnaryMachine.finish_copy_reserved (fields before ++ units value)
+    (fields suffix ++ tail) caller value
     (by intro symbol member
         rcases List.mem_append.mp member with member | member
         · rcases UnaryMachine.fields_symbols before symbol member with rfl | rfl <;> decide
@@ -126,7 +127,14 @@ theorem realizes (before suffix : List ℕ) (value : ℕ) (tail : List Symbol) :
   have bootstrap := Tape.Steps.next move (Tape.Steps.next mark (Tape.Steps.next enter (.zero _)))
   simp only [right, UnaryMachine.fields_append, UnaryMachine.fields_cons, List.append_assoc,
     List.cons_append] at bootstrap
+  simp only [List.replicate_succ', List.append_assoc, List.singleton_append] at bootstrap scan switch'
   have trace := bootstrap.trans (scan.trans (switch'.trans (copy.trans finish)))
+  have margin : 0 :: (List.replicate value (0 : Symbol) ++ 0 :: caller) =
+      List.replicate (value + 2) 0 ++ caller := by
+    rw [← List.cons_append, ← List.replicate_succ]
+    rw [← (show ([0] : List Symbol) ++ caller = 0 :: caller from rfl),
+      ← List.append_assoc, ← List.replicate_succ']
+  rw [margin] at trace
   refine ⟨3 + ((fields before).length + (1 + (UnaryMachine.copyTicks (fields before).length 0 value +
     ((fields before ++ units value).length + value + 5)))), ?_, ?_⟩
   · have localBound : 3 + ((fields before).length +
@@ -145,6 +153,24 @@ theorem realizes (before suffix : List ℕ) (value : ℕ) (tail : List Symbol) :
       List.append_assoc, List.cons_append, UnaryMachine.configuration, Tape.configuration,
       Nat.zero_add, Nat.add_zero, Nat.zero_add] using trace
 
+/-- The original blank-left convention is the empty-caller case. -/
+theorem realizes (before suffix : List ℕ) (value : ℕ) (tail : List Symbol) :
+    ∃ ticks, ticks ≤ 64 * ((fields (before ++ value :: suffix)).length + 1) ^ 2 ∧
+      Tape.Steps (machine before.length) ticks
+        (Tape.configuration (Fin.last before.length, 0) []
+          (fields (before ++ value :: suffix) ++ tail))
+        (Tape.configuration ((0 : Fin (before.length + 1)), 19) []
+          (fields (value :: before ++ value :: suffix) ++ tail)) := by
+  obtain ⟨ticks, cost, trace⟩ := realizes_reserved before suffix value [] tail
+  refine ⟨ticks, cost, ?_⟩
+  simp only [List.append_nil] at trace
+  change Tape.Steps (machine before.length) ticks
+    (Tape.configuration (Fin.last before.length, 0) (List.replicate (value + 2) default)
+      (fields (before ++ value :: suffix) ++ tail))
+    (Tape.configuration ((0 : Fin (before.length + 1)), 19) (List.replicate 1 default)
+      (fields (value :: before ++ value :: suffix) ++ tail)) at trace
+  simpa only [Tape.configuration_replicate_blank] using trace
+
 end Copy
 
 namespace Constant
@@ -161,18 +187,18 @@ def machine (value : ℕ) : Turing.TM0.Machine Symbol (State value) := fun (rema
   | 3 => some ((⟨remaining.val - 1, by omega⟩, 2), .write 2)
   | _ => none
 
-theorem loop (value : ℕ) (remaining : Fin (value + 1)) (right : List Symbol) :
+theorem loop_reserved (value : ℕ) (remaining : Fin (value + 1)) (caller right : List Symbol) :
     Tape.Steps (machine value) (2 * remaining.val + 1)
-      (Tape.configuration (remaining, 2) [] right)
-      (Tape.configuration ((0 : Fin (value + 1)), 4) [] (units remaining.val ++ right)) := by
+      (Tape.configuration (remaining, 2) (List.replicate remaining.val 0 ++ caller) right)
+      (Tape.configuration ((0 : Fin (value + 1)), 4) caller (units remaining.val ++ right)) := by
   generalize equality : remaining.val = count
   induction count generalizing remaining right with
   | zero =>
     have same : remaining = 0 := Fin.ext equality
     subst remaining
     have stay : Turing.TM0.step (machine value)
-        (Tape.configuration ((0 : Fin (value + 1)), 2) [] right) =
-        some (Tape.configuration ((0 : Fin (value + 1)), 4) [] right) := by
+        (Tape.configuration ((0 : Fin (value + 1)), 2) caller right) =
+        some (Tape.configuration ((0 : Fin (value + 1)), 4) caller right) := by
       have command : ∀ symbol, machine value ((0 : Fin (value + 1)), 2) symbol =
           some ((0, 4), .write symbol) := by intro symbol; simp [machine]
       simp only [Turing.TM0.step, Tape.configuration, command, Option.map_some,
@@ -180,28 +206,49 @@ theorem loop (value : ℕ) (remaining : Fin (value + 1)) (right : List Symbol) :
     simpa [units] using Tape.Steps.next stay (.zero _)
   | succ count hypothesis =>
     let next : Fin (value + 1) := ⟨count, by omega⟩
-    have move := Tape.move_left_empty (machine := machine value)
-      (state := (remaining, 2)) (nextState := (remaining, 3)) right
-      (by intro symbol; simp [machine, equality])
+    have move := Tape.move_left_list (machine := machine value)
+      (state := (remaining, 2)) (nextState := (remaining, 3)) (List.replicate count 0 ++ caller) right
+      0 (by intro symbol; simp [machine, equality])
     have write := Tape.write (machine := machine value)
-      (state := (remaining, 3)) (nextState := (next, 2)) [] right 0 2
+      (state := (remaining, 3)) (nextState := (next, 2)) (List.replicate count 0 ++ caller) right 0 2
       (by simp [machine, next, equality])
     have rest := hypothesis next (2 :: right) rfl
     have trace := Tape.Steps.next move (Tape.Steps.next write rest)
     convert trace using 1
     all_goals first | omega | simp [units, List.replicate_succ', List.append_assoc]
+    have rotate := congrArg (fun cells : List Symbol => cells ++ caller)
+      ((List.replicate_succ' (n := count) (a := (0 : Symbol))).symm.trans
+        (List.replicate_succ (n := count) (a := (0 : Symbol))))
+    exact congrArg (fun cells => Tape.configuration (remaining, 2) cells right)
+      (by simpa only [List.append_assoc, List.singleton_append, List.cons_append, List.nil_append] using rotate)
+
+/-- Allocate a constant field in exactly `value + 1` reserved blank cells.
+The exit head is on its first cell; both caller regions are preserved. -/
+theorem realizes_reserved (value : ℕ) (caller right : List Symbol) :
+    Tape.Steps (machine value) (2 * value + 3)
+      (Tape.configuration (Fin.last value, 0) (List.replicate (value + 1) 0 ++ caller) right)
+      (Tape.configuration ((0 : Fin (value + 1)), 4) caller (units value ++ 1 :: right)) := by
+  have move := Tape.move_left_list (machine := machine value)
+    (state := (Fin.last value, 0)) (nextState := (Fin.last value, 1)) (List.replicate value 0 ++ caller) right 0
+    (by intro symbol; rfl)
+  have write := Tape.write (machine := machine value)
+    (state := (Fin.last value, 1)) (nextState := (Fin.last value, 2)) (List.replicate value 0 ++ caller) right 0 1 (by rfl)
+  simpa [Nat.add_assoc, List.replicate_succ] using Tape.Steps.next move
+    (Tape.Steps.next write (loop_reserved value (Fin.last value) caller (1 :: right)))
+
+theorem loop (value : ℕ) (remaining : Fin (value + 1)) (right : List Symbol) :
+    Tape.Steps (machine value) (2 * remaining.val + 1)
+      (Tape.configuration (remaining, 2) [] right)
+      (Tape.configuration ((0 : Fin (value + 1)), 4) [] (units remaining.val ++ right)) := by
+  simpa only [List.append_nil, show (0 : Symbol) = default from rfl,
+    Tape.configuration_replicate_blank] using loop_reserved value remaining [] right
 
 theorem realizes (value : ℕ) (right : List Symbol) :
     Tape.Steps (machine value) (2 * value + 3)
       (Tape.configuration (Fin.last value, 0) [] right)
       (Tape.configuration ((0 : Fin (value + 1)), 4) [] (units value ++ 1 :: right)) := by
-  have move := Tape.move_left_empty (machine := machine value)
-    (state := (Fin.last value, 0)) (nextState := (Fin.last value, 1)) right
-    (by intro symbol; rfl)
-  have write := Tape.write (machine := machine value)
-    (state := (Fin.last value, 1)) (nextState := (Fin.last value, 2)) [] right 0 1 (by rfl)
-  simpa [Nat.add_assoc] using Tape.Steps.next move
-    (Tape.Steps.next write (loop value (Fin.last value) (1 :: right)))
+  simpa only [List.append_nil, show (0 : Symbol) = default from rfl,
+    Tape.configuration_replicate_blank] using realizes_reserved value [] right
 
 end Constant
 namespace Addition
@@ -221,27 +268,28 @@ def machine : Turing.TM0.Machine Symbol State := fun phase symbol =>
   | 7 => some (8, .move .right)
   | _ => none
 
-/-- Join two unary fields, consuming their first separator. -/
-theorem realizes (left right : ℕ) (tail : List Symbol) :
+/-- Join two unary fields using one reserved blank before them. The exit
+head advances one cell; two cleared cells separate it from the unchanged caller. -/
+theorem realizes_reserved (left right : ℕ) (caller tail : List Symbol) :
     Tape.Steps machine (2 * left + 9)
-      (Tape.configuration 0 [] (units left ++ 1 :: (units right ++ 1 :: tail)))
-      (Tape.configuration 8 [] (units (left + right) ++ 1 :: tail)) := by
+      (Tape.configuration 0 (0 :: caller) (units left ++ 1 :: (units right ++ 1 :: tail)))
+      (Tape.configuration 8 (0 :: 0 :: caller) (units (left + right) ++ 1 :: tail)) := by
   let input := units left ++ 1 :: (units right ++ 1 :: tail)
-  have move := Tape.move_left_empty (machine := machine) (state := 0) (nextState := 1)
-    input (by intro symbol; rfl)
+  have move := Tape.move_left_list (machine := machine) (state := 0) (nextState := 1)
+    caller input 0 (by intro symbol; rfl)
   have mark := Tape.write (machine := machine) (state := 1) (nextState := 2)
-    [] input 0 5 (by rfl)
+    caller input 0 5 (by rfl)
   have enter := Tape.move_right (machine := machine) (state := 2) (nextState := 3)
-    [] input 5 (by rfl)
-  have scan := Tape.scan_right (machine := machine) (state := 3) (units left) [5]
+    caller input 5 (by rfl)
+  have scan := Tape.scan_right (machine := machine) (state := 3) (units left) (5 :: caller)
     (1 :: (units right ++ 1 :: tail))
     (by intro symbol member
         have equality : symbol = 2 := List.eq_of_mem_replicate member
         subst symbol; rfl)
   simp only [UnaryMachine.units_reverse] at scan
   have join := Tape.write (machine := machine) (state := 3) (nextState := 4)
-    (units left ++ [5]) (units right ++ 1 :: tail) 1 2 (by rfl)
-  have back := Tape.scan_left (machine := machine) (state := 4) (units left) []
+    (units left ++ 5 :: caller) (units right ++ 1 :: tail) 1 2 (by rfl)
+  have back := Tape.scan_left (machine := machine) (state := 4) (units left) caller
     (units right ++ 1 :: tail) 5 2
     (by intro symbol member
         rcases List.mem_cons.mp member with rfl | member
@@ -249,9 +297,9 @@ theorem realizes (left right : ℕ) (tail : List Symbol) :
         · have equality : symbol = 2 := List.eq_of_mem_replicate member
           subst symbol; rfl)
   simp only [UnaryMachine.units_length, UnaryMachine.units_reverse] at back
-  have clear := Tape.write (machine := machine) (state := 4) (nextState := 5) []
+  have clear := Tape.write (machine := machine) (state := 4) (nextState := 5) caller
     (units left ++ 2 :: (units right ++ 1 :: tail)) 5 0 (by rfl)
-  have advance := Tape.move_right (machine := machine) (state := 5) (nextState := 6) []
+  have advance := Tape.move_right (machine := machine) (state := 5) (nextState := 6) caller
     (units left ++ 2 :: (units right ++ 1 :: tail)) 0 (by rfl)
   have split : units left ++ 2 :: (units right ++ 1 :: tail) =
       2 :: (units (left + right) ++ 1 :: tail) := by
@@ -261,22 +309,26 @@ theorem realizes (left right : ℕ) (tail : List Symbol) :
     simpa only [UnaryMachine.units_add, List.append_assoc, List.cons_append,
       List.singleton_append, List.nil_append] using congrArg (fun part => part ++ (units right ++ 1 :: tail)) equality
   rw [split] at back clear advance
-  have erase := Tape.write (machine := machine) (state := 6) (nextState := 7) [0]
+  have erase := Tape.write (machine := machine) (state := 6) (nextState := 7) (0 :: caller)
     (units (left + right) ++ 1 :: tail) 2 0 (by rfl)
-  have finish := Tape.move_right (machine := machine) (state := 7) (nextState := 8) [0]
+  have finish := Tape.move_right (machine := machine) (state := 7) (nextState := 8) (0 :: caller)
     (units (left + right) ++ 1 :: tail) 0 (by rfl)
   have trace := Tape.Steps.next move (Tape.Steps.next mark (Tape.Steps.next enter
     (scan.trans (Tape.Steps.next join (back.trans (Tape.Steps.next clear
       (Tape.Steps.next advance (Tape.Steps.next erase (Tape.Steps.next finish (.zero _))))))))))
-  have padding := Tape.configuration_append_blank (8 : State) [0]
-    (units (left + right) ++ 1 :: tail)
-  have padding' := Tape.configuration_append_blank (8 : State) []
-    (units (left + right) ++ 1 :: tail)
-  change Tape.configuration (8 : State) [0, 0] _ = _ at padding
-  change Tape.configuration (8 : State) [0] _ = _ at padding'
-  rw [padding, padding'] at trace
   convert trace using 1
   · simp [UnaryMachine.units_length]; omega
+
+/-- The empty caller recovers the original blank-left convention. -/
+theorem realizes (left right : ℕ) (tail : List Symbol) :
+    Tape.Steps machine (2 * left + 9)
+      (Tape.configuration 0 [] (units left ++ 1 :: (units right ++ 1 :: tail)))
+      (Tape.configuration 8 [] (units (left + right) ++ 1 :: tail)) := by
+  have trace := realizes_reserved left right [] tail
+  change Tape.Steps machine (2 * left + 9)
+    (Tape.configuration 0 (List.replicate 1 default) (units left ++ 1 :: (units right ++ 1 :: tail)))
+    (Tape.configuration 8 (List.replicate 2 default) (units (left + right) ++ 1 :: tail)) at trace
+  simpa only [Tape.configuration_replicate_blank] using trace
 
 end Addition
 end Polytime.SizeMachine

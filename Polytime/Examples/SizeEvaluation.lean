@@ -29,13 +29,23 @@ def capacity : SizeExpression context := .add (.mul (.parameter 0) (.parameter 1
 def assignment (rows columns : ℕ) : SizeAssignment context := fun name =>
   if name = 0 then rows else columns
 
-/-- The generic constructor proof applies to the matrix capacity expression. -/
+/-- Matrix capacity evaluation composes inside one reserved frame, preserving
+both caller regions without exposing workspace or runtime polynomials. -/
+theorem capacity_frame_realization :
+    ∃ scratch, SizeFrame.Realizes
+      [SizeExpression.parameter (ctx := context) 0, .parameter 1]
+      (capacity :: scratch ++ [.parameter 0, .parameter 1]) := by
+  apply SizeFrame.evaluates capacity
+  intro name
+  fin_cases name <;> simp
+
+/-- The reserved-frame proof also supplies the original caller interface. -/
 theorem capacity_realization :
     ∃ scratch, Polytime.SizeEvaluation.Realizes
       [SizeExpression.parameter (ctx := context) 0, .parameter 1]
       (capacity :: scratch ++ [.parameter 0, .parameter 1]) := by
-  exact Polytime.SizeEvaluation.realizes_header capacity [0, 1]
-    (by intro name; fin_cases name <;> simp)
+  obtain ⟨scratch, certificate⟩ := capacity_frame_realization
+  exact ⟨scratch, Polytime.SizeEvaluation.Realizes.of_frame certificate⟩
 
 /-- A small specialized machine realizes the same capacity directly, preserving
 both header fields and all following input. -/

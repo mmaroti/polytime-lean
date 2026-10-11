@@ -47,13 +47,24 @@ The library currently provides:
   assignments and executable capacity expressions with derived polynomial witnesses.
 - `Polytime.Domain`: recursive Fixed, Product, Sum, and Power domains; their
   mathematical values, exact-width bit encodings, canonical decoders, and
-  polynomial-size certificates.
+  polynomial-size certificates. Fixed and Power views hide carrier casts;
+  shared encoded-block lemmas handle lookup and replacement.
 - `Polytime.GaussJordan`: executable rectangular elimination, with proved reduced
   row-echelon form and an invertible row-transformation witness.
+- `Polytime.Realization` and `RealizationLoop`: composable mathematical contracts
+  with relational representations, preserved caller context, existential scratch,
+  and guarded loops, traversals, searches, and folds that hide controllers
+  and runtime polynomial witnesses.
 - `Polytime.WhileMachine`: guarded tape loops with invariant, termination, and
   transition-bound proofs, exercised by a finite-controller counter loop.
 - `Polytime.FiniteTableMachine`: fixed operation tables with constant tape-transition
   bounds and canonical-codec correctness.
+- `Polytime.MatrixStorage`: indexed table operations with mathematical updates,
+  existential scalar scratch, and a preserved caller suffix.
+- `Polytime.Examples.CatalogueMap`: fixed catalogue maps on active coordinates,
+  including two calls sharing a frame, preserving active counts and inactive slots.
+- `Polytime.BinaryAddition`: exact addition in a runtime-width bit-pair buffer,
+  with a final carry, linear tape cost, and preservation of both caller regions.
 - `Polytime.InPlaceTableMachine`: scalar-slot operations preserving neighboring
   regions, including multiplication by an adjacent runtime coefficient.
 - `Polytime.Examples.Matrices`: K-by-L matrices over a fixed finite carrier,
@@ -71,12 +82,18 @@ The library currently provides:
   retained evaluator fields survive the conversion and lookup. A bounded unary
   address and reserved scratch remain entry requirements. Initialization accepts
   consumed all-one counters as well as fresh blank windows.
-- `Polytime.HeaderReturnMachine`: restores a fixed counter header after lookup,
-  erases evaluator scratch, and preserves the scalar result and matrix suffix;
-  composed with runtime matrix-entry reads.
+- `Polytime.RetainedLookupMachine` and `RetainedWriteMachine`: shared calls that
+  compute addresses in reserved frames, preserving both caller regions and extra
+  runtime counters.
+- `Polytime.HeaderReturnMachine`: restores a fixed counter header after access,
+  erases evaluator scratch into an explicit blank margin, and preserves both
+  caller regions, the scalar result, and the matrix suffix;
+  one composition rule serves ordinary and saved-counter reads and writes.
 - `Polytime.HeaderIncrementMachine`: increments a selected unary counter using
-  a free cell on the left, preserving following storage; entry updates compose
+  a reserved blank cell, preserving caller storage on both sides; entry updates compose
   with column-counter advancement and a polynomial tape bound.
+- `Polytime.HeaderGuardMachine`: compares bounded counters using one reserved
+  result cell; consuming the result restores that cell and preserves caller storage.
 - `Polytime.HeaderResetMachine`: resets a selected unary counter, preserving
   preceding fields and following storage, with a polynomial tape bound.
 - `Polytime.HeaderMoveMachine`: relocates a runtime header field to the front,
@@ -112,6 +129,7 @@ The library currently provides:
 - `Polytime.Examples.MatrixClearRowSaved`: clears a target row while preserving
   a separate runtime pivot-column counter. `HeaderColumnSwapMachine` exchanges
   the saved and traversal columns with a quadratic tape bound.
+- `Polytime.NamedHeader`: derives Gauss–Jordan header relocations from named layouts.
 - `Polytime.HeaderMoves`: compiles fixed header relocations with a quadratic
   tape bound, including the guard and row-update layouts for column elimination.
 - `Polytime.Examples.MatrixClearTargetStep`: clears one target row, retains the
@@ -129,7 +147,8 @@ The library currently provides:
 - `Polytime.Examples.MatrixPivotSearch`: a guarded row traversal returns the
   first eligible nonzero entry or the row-count sentinel, agrees with the
   mathematical `findPivot`, and preserves the matrix and additional caller
-  counters with a polynomial tape bound.
+  counters with a polynomial tape bound. `MatrixSearch` supplies its mathematical
+  contract through the shared search rule, with existential scalar scratch.
 - `Polytime.Examples.MatrixPivotDispatch` and `MatrixColumnStep`: pivot search
   composes with elimination or a no-pivot branch, agrees with mathematical
   `columnStep`, and restores the four-counter frame with a polynomial tape bound,
@@ -137,7 +156,8 @@ The library currently provides:
 - `Polytime.Examples.MatrixEliminate`: a guarded column traversal computes
   complete Gauss–Jordan elimination in a prepared frame, with reduced row-echelon
   form, an invertible row-transformation witness, and a polynomial tape bound.
-  Zero-row and zero-column matrices are included.
+  Its algorithm-level contract uses a mathematical fold; `MatrixTraversal`
+  hides tape layouts and scalar scratch. Zero-row and zero-column matrices are included.
 - `Polytime.Examples.MatrixPrepareFrame`: constructs the complete elimination
   frame from the runtime dimension header and input bits, with a polynomial tape
   bound and no supplied scratch. `HeaderInsertMachine` formats its scalar slot
@@ -160,8 +180,15 @@ The library currently provides:
   with canonical padded binary representations.
 - `Polytime.Integer`: unsigned and signed binary presentations and exact bounded
   arithmetic with proved output capacities and a Euclidean division contract.
-- `Polytime.SizeEvaluation`: finite-controller tape realization of every size expression,
-  with polynomial transition bounds and preservation of the size header and input.
+- `Polytime.SizeMachine`: constant allocation, field copying, and unary addition
+  with explicit reserved blank cells and preservation of both caller regions.
+- `Polytime.UnaryMachine`: unary multiplication, optionally plus one, with
+  finite reserved workspace and preservation of both caller regions.
+- `Polytime.SizeFrame`: reserved-frame evaluation of every size expression;
+  composition hides workspace bounds and preserves both caller regions.
+- `Polytime.SizeEvaluation`: finite-controller tape realization of every size
+  expression, with polynomial transition bounds and preservation of the size
+  header and input.
 - `Polytime.Frame`: executable size-header parsing and frame preparation, with
   input preservation and polynomial storage proofs.
 - `Polytime.Examples.TupleLookup`: a complete lookup/update tape example,

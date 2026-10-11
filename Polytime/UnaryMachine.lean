@@ -80,36 +80,33 @@ abbrev CopySteps (increment copyMode : Bool) := Tape.Steps (machine increment co
 
 
 /-- Copy one unary unit into free storage, restoring the source cursor. -/
-theorem copy_one (increment : Bool) (gap right : List Symbol) (output : ℕ)
+theorem copy_one_reserved (increment : Bool) (gap right caller : List Symbol) (output : ℕ)
     (safe : ∀ symbol ∈ gap, symbol ≠ 4 ∧ symbol ≠ 5) (copyMode : Bool := false) :
     CopySteps increment copyMode (2 * gap.length + 2 * output + 9)
-      (configuration 6 (gap.reverse ++ 5 :: units output) (2 :: right))
-      (configuration 6 (2 :: gap.reverse ++ 5 :: units (output + 1)) right) := by
+      (configuration 6 (gap.reverse ++ 5 :: (units output ++ 0 :: caller)) (2 :: right))
+      (configuration 6 (2 :: gap.reverse ++ 5 :: (units (output + 1) ++ caller)) right) := by
   have mark := Tape.write (machine := machine increment copyMode) (state := 6) (nextState := 7)
-    (gap.reverse ++ 5 :: units output) right 2 4 (by rfl)
+    (gap.reverse ++ 5 :: (units output ++ 0 :: caller)) right 2 4 (by rfl)
   have seek := Tape.scan_left (machine := machine increment copyMode) (state := 7)
-    gap.reverse (units output) right 5 4
+    gap.reverse (units output ++ 0 :: caller) right 5 4
     (by intro symbol member; rcases List.mem_cons.mp member with rfl | member
         · rfl
         · simp [machine, (safe symbol (List.mem_reverse.mp member)).2])
   have enter := Tape.write (machine := machine increment copyMode) (state := 7) (nextState := 8)
-    (units output) (gap ++ 4 :: right) 5 5 (by rfl)
+    (units output ++ 0 :: caller) (gap ++ 4 :: right) 5 5 (by rfl)
   have reserve := Tape.scan_left (machine := machine increment copyMode) (state := 8)
-    (units output) [] (gap ++ 4 :: right) 0 5
+    (units output) caller (gap ++ 4 :: right) 0 5
     (by intro symbol member; rcases List.mem_cons.mp member with rfl | member
         · rfl
         · have equality := List.eq_of_mem_replicate member; subst symbol; rfl)
   have reserve' : CopySteps increment copyMode (output + 1)
-      (configuration 8 (units output) (5 :: (gap ++ 4 :: right)))
-      (configuration 8 [] (0 :: (units output ++ 5 :: (gap ++ 4 :: right)))) := by
-    have padding := left_blank (8 : State) (units output) (5 :: (gap ++ 4 :: right))
-    change Tape.configuration (8 : State) _ _ = _ at padding
-    rw [padding] at reserve
-    simpa only [configuration, units_length, units_reverse, List.nil_append] using reserve
+      (configuration 8 (units output ++ 0 :: caller) (5 :: (gap ++ 4 :: right)))
+      (configuration 8 caller (0 :: (units output ++ 5 :: (gap ++ 4 :: right)))) := by
+    simpa only [configuration, units_length, units_reverse] using reserve
   have append := Tape.write (machine := machine increment copyMode) (state := 8) (nextState := 9)
-    [] (units output ++ 5 :: (gap ++ 4 :: right)) 0 2 (by rfl)
+    caller (units output ++ 5 :: (gap ++ 4 :: right)) 0 2 (by rfl)
   have back := Tape.scan_right (machine := machine increment copyMode) (state := 9)
-    (2 :: (units output ++ [5] ++ gap)) [] (4 :: right)
+    (2 :: (units output ++ [5] ++ gap)) caller (4 :: right)
     (by
       intro symbol member
       have distinct : symbol ≠ (4 : Symbol) := by
@@ -123,17 +120,32 @@ theorem copy_one (increment : Bool) (gap right : List Symbol) (output : ℕ)
           · exact (safe symbol member).1
       simp [machine, distinct])
   have restore := Tape.write (machine := machine increment copyMode) (state := 9) (nextState := 10)
-    ((2 :: (units output ++ [5] ++ gap)).reverse) right 4 2 (by rfl)
+    ((2 :: (units output ++ [5] ++ gap)).reverse ++ caller) right 4 2 (by rfl)
   have advance := Tape.move_right (machine := machine increment copyMode) (state := 10) (nextState := 6)
-    ((2 :: (units output ++ [5] ++ gap)).reverse) right 2 (by rfl)
+    ((2 :: (units output ++ [5] ++ gap)).reverse ++ caller) right 2 (by rfl)
   simp only [List.reverse_reverse] at seek
-  simp only [List.append_nil, List.append_assoc, List.cons_append] at back restore advance
+  simp only [List.append_assoc, List.cons_append] at back restore advance
   have trace := Tape.Steps.next mark (seek.trans (Tape.Steps.next enter
     (reserve'.trans (Tape.Steps.next append (back.trans
       (Tape.Steps.next restore (Tape.Steps.next advance (.zero _))))))))
   convert trace using 1 <;>
     simp [configuration, units, List.reverse_append, List.reverse_cons, List.reverse_replicate,
       List.append_assoc, List.replicate_succ', Nat.two_mul]; omega
+
+/-- Copy one unary unit into free storage, restoring the source cursor. -/
+theorem copy_one (increment : Bool) (gap right : List Symbol) (output : ℕ)
+    (safe : ∀ symbol ∈ gap, symbol ≠ 4 ∧ symbol ≠ 5) (copyMode : Bool := false) :
+    CopySteps increment copyMode (2 * gap.length + 2 * output + 9)
+      (configuration 6 (gap.reverse ++ 5 :: units output) (2 :: right))
+      (configuration 6 (2 :: gap.reverse ++ 5 :: units (output + 1)) right) := by
+  have trace := copy_one_reserved increment gap right [] output safe copyMode
+  have padding : configuration 6 (gap.reverse ++ 5 :: (units output ++ [0])) (2 :: right) =
+      configuration 6 (gap.reverse ++ 5 :: units output) (2 :: right) := by
+    simpa only [configuration, List.append_assoc, List.cons_append, show (default : Symbol) = 0 from rfl] using
+      Tape.configuration_append_blank (Symbol := Symbol) (6 : State)
+        (gap.reverse ++ 5 :: units output) (2 :: right)
+  rw [padding] at trace
+  simpa only [List.append_nil] using trace
 
 private theorem replicate_cons (count : ℕ) (rest : List Symbol) :
     List.replicate count (2 : Symbol) ++ 2 :: rest = 2 :: (List.replicate count 2 ++ rest) := by
@@ -145,16 +157,17 @@ private theorem replicate_cons (count : ℕ) (rest : List Symbol) :
 /-- Copy an entire unary field while leaving its source and surrounding input intact. -/
 def copyTicks (gap output count : ℕ) : ℕ := 2 * count ^ 2 + (2 * gap + 2 * output + 7) * count
 
-theorem copy_loop (increment : Bool) (count output : ℕ) (gap right : List Symbol)
+/-- Copy a field using exactly one reserved blank per copied unit. -/
+theorem copy_loop_reserved (increment : Bool) (count output : ℕ) (gap right caller : List Symbol)
     (safe : ∀ symbol ∈ gap, symbol ≠ 4 ∧ symbol ≠ 5) (copyMode : Bool := false) :
     CopySteps increment copyMode (copyTicks gap.length output count)
-      (configuration 6 (gap.reverse ++ 5 :: units output) (units count ++ 1 :: right))
-      (configuration 6 (units count ++ gap.reverse ++ 5 :: units (output + count)) (1 :: right)) := by
+      (configuration 6 (gap.reverse ++ 5 :: (units output ++ List.replicate count 0 ++ caller)) (units count ++ 1 :: right))
+      (configuration 6 (units count ++ gap.reverse ++ 5 :: (units (output + count) ++ caller)) (1 :: right)) := by
   induction count generalizing gap output with
   | zero => simpa [copyTicks, units] using (Tape.Steps.zero
-      (configuration 6 (gap.reverse ++ 5 :: units output) (1 :: right)))
+      (configuration 6 (gap.reverse ++ 5 :: (units output ++ caller)) (1 :: right)))
   | succ count hypothesis =>
-    have first := copy_one increment gap (units count ++ 1 :: right) output safe (copyMode := copyMode)
+    have first := copy_one_reserved increment gap (units count ++ 1 :: right) (List.replicate count 0 ++ caller) output safe (copyMode := copyMode)
     have rest := hypothesis (output + 1) (gap ++ [2])
       (by intro symbol member; rcases List.mem_append.mp member with member | member
           · exact safe symbol member
@@ -167,6 +180,80 @@ theorem copy_loop (increment : Bool) (count output : ℕ) (gap right : List Symb
     simpa [configuration, units, List.replicate_succ, List.reverse_append, List.append_assoc,
       Nat.add_assoc, Nat.add_comm, Nat.add_left_comm, replicate_cons] using trace
 
+theorem copy_loop (increment : Bool) (count output : ℕ) (gap right : List Symbol)
+    (safe : ∀ symbol ∈ gap, symbol ≠ 4 ∧ symbol ≠ 5) (copyMode : Bool := false) :
+    CopySteps increment copyMode (copyTicks gap.length output count)
+      (configuration 6 (gap.reverse ++ 5 :: units output) (units count ++ 1 :: right))
+      (configuration 6 (units count ++ gap.reverse ++ 5 :: units (output + count)) (1 :: right)) := by
+  have trace := copy_loop_reserved increment count output gap right [] safe copyMode
+  simp only [List.append_nil] at trace
+  have padding : configuration 6 (gap.reverse ++ 5 :: (units output ++ List.replicate count 0))
+      (units count ++ 1 :: right) =
+      configuration 6 (gap.reverse ++ 5 :: units output) (units count ++ 1 :: right) := by
+    simpa only [configuration, List.append_assoc, List.cons_append, show (default : Symbol) = 0 from rfl] using
+      Tape.configuration_append_blanks (Symbol := Symbol) (6 : State)
+        (gap.reverse ++ 5 :: units output) count (units count ++ 1 :: right)
+  rw [padding] at trace
+  exact trace
+
+/-- One outer multiplication iteration copies the second operand once. -/
+theorem outer_unit_reserved (increment : Bool) (past remaining multiplier output : ℕ)
+    (right caller : List Symbol) :
+    Steps increment
+      (copyTicks (past + remaining + 2) output multiplier + 2 * remaining + multiplier + 8)
+      (configuration 3 (units past ++ 5 :: (units output ++ List.replicate multiplier 0 ++ caller))
+        (2 :: (units remaining ++ 1 :: (units multiplier ++ 1 :: right))))
+      (configuration 3 (units (past + 1) ++ 5 :: (units (output + multiplier) ++ caller))
+        (units remaining ++ 1 :: (units multiplier ++ 1 :: right))) := by
+  let gap := units past ++ 3 :: (units remaining ++ [1])
+  have mark := Tape.write (machine := machine increment) (state := 3) (nextState := 4)
+    (units past ++ 5 :: (units output ++ List.replicate multiplier 0 ++ caller)) (units remaining ++ 1 :: (units multiplier ++ 1 :: right))
+    2 3 (by rfl)
+  have advance := Tape.move_right (machine := machine increment) (state := 4) (nextState := 5)
+    (units past ++ 5 :: (units output ++ List.replicate multiplier 0 ++ caller)) (units remaining ++ 1 :: (units multiplier ++ 1 :: right))
+    3 (by rfl)
+  have scan := Tape.scan_right (machine := machine increment) (state := 5)
+    (units remaining) (3 :: (units past ++ 5 :: (units output ++ List.replicate multiplier 0 ++ caller)))
+    (1 :: (units multiplier ++ 1 :: right))
+    (by intro symbol member; have equality := List.eq_of_mem_replicate member; subst symbol; rfl)
+  have enter := Tape.move_right (machine := machine increment) (state := 5) (nextState := 6)
+    (units remaining ++ 3 :: (units past ++ 5 :: (units output ++ List.replicate multiplier 0 ++ caller))) (units multiplier ++ 1 :: right) 1 (by rfl)
+  have copies := copy_loop_reserved increment multiplier output gap right caller
+    (by
+      intro symbol member
+      have options : symbol = 2 ∨ symbol = 3 ∨ symbol = 1 := by
+        simp [gap, units] at member
+        aesop
+      rcases options with rfl | rfl | rfl <;> decide)
+  have enterBack := Tape.write (machine := machine increment) (state := 6) (nextState := 12)
+    (units multiplier ++ 1 :: (units remaining ++ 3 :: (units past ++ 5 :: (units (output + multiplier) ++ caller))))
+    right 1 1 (by rfl)
+  have back := Tape.scan_left (machine := machine increment) (state := 12)
+    (units multiplier ++ 1 :: units remaining) (units past ++ 5 :: (units (output + multiplier) ++ caller))
+    right 3 1
+    (by
+      intro symbol member
+      have distinct : symbol ≠ (3 : Symbol) := by
+        simp [units] at member
+        aesop
+      simp [machine, distinct])
+  have restore := Tape.write (machine := machine increment) (state := 12) (nextState := 13)
+    (units past ++ 5 :: (units (output + multiplier) ++ caller))
+    (units remaining ++ 1 :: (units multiplier ++ 1 :: right)) 3 2 (by rfl)
+  have next := Tape.move_right (machine := machine increment) (state := 13) (nextState := 3)
+    (units past ++ 5 :: (units (output + multiplier) ++ caller))
+    (units remaining ++ 1 :: (units multiplier ++ 1 :: right)) 2 (by rfl)
+  simp only [units_reverse] at scan
+  simp only [gap, List.reverse_append, List.reverse_cons,
+    units_reverse, List.append_assoc, List.cons_append, List.nil_append] at copies back
+  simp only [List.append_assoc] at mark advance scan enter enterBack restore next
+  have forward := Tape.Steps.next mark (Tape.Steps.next advance
+    (scan.trans (Tape.Steps.next enter copies)))
+  have returning := Tape.Steps.next enterBack
+    (back.trans (Tape.Steps.next restore (Tape.Steps.next next (.zero _))))
+  have trace := forward.trans returning
+  convert trace using 1 <;> simp [configuration, units, List.replicate_succ, copyTicks, List.append_assoc]; ring
+
 /-- One outer multiplication iteration copies the second operand once. -/
 theorem outer_unit (increment : Bool) (past remaining multiplier output : ℕ)
     (right : List Symbol) :
@@ -176,53 +263,51 @@ theorem outer_unit (increment : Bool) (past remaining multiplier output : ℕ)
         (2 :: (units remaining ++ 1 :: (units multiplier ++ 1 :: right))))
       (configuration 3 (units (past + 1) ++ 5 :: units (output + multiplier))
         (units remaining ++ 1 :: (units multiplier ++ 1 :: right))) := by
-  let gap := units past ++ 3 :: (units remaining ++ [1])
-  have mark := Tape.write (machine := machine increment) (state := 3) (nextState := 4)
-    (units past ++ 5 :: units output) (units remaining ++ 1 :: (units multiplier ++ 1 :: right))
-    2 3 (by rfl)
-  have advance := Tape.move_right (machine := machine increment) (state := 4) (nextState := 5)
-    (units past ++ 5 :: units output) (units remaining ++ 1 :: (units multiplier ++ 1 :: right))
-    3 (by rfl)
-  have scan := Tape.scan_right (machine := machine increment) (state := 5)
-    (units remaining) (3 :: (units past ++ 5 :: units output))
-    (1 :: (units multiplier ++ 1 :: right))
-    (by intro symbol member; have equality := List.eq_of_mem_replicate member; subst symbol; rfl)
-  have enter := Tape.move_right (machine := machine increment) (state := 5) (nextState := 6)
-    (units remaining ++ 3 :: (units past ++ 5 :: units output)) (units multiplier ++ 1 :: right) 1 (by rfl)
-  have copies := copy_loop increment multiplier output gap right
-    (by
-      intro symbol member
-      have options : symbol = 2 ∨ symbol = 3 ∨ symbol = 1 := by
-        simp [gap, units] at member
-        aesop
-      rcases options with rfl | rfl | rfl <;> decide)
-  have enterBack := Tape.write (machine := machine increment) (state := 6) (nextState := 12)
-    (units multiplier ++ 1 :: (units remaining ++ 3 :: (units past ++ 5 :: units (output + multiplier))))
-    right 1 1 (by rfl)
-  have back := Tape.scan_left (machine := machine increment) (state := 12)
-    (units multiplier ++ 1 :: units remaining) (units past ++ 5 :: units (output + multiplier))
-    right 3 1
-    (by
-      intro symbol member
-      have distinct : symbol ≠ (3 : Symbol) := by
-        simp [units] at member
-        aesop
-      simp [machine, distinct])
-  have restore := Tape.write (machine := machine increment) (state := 12) (nextState := 13)
-    (units past ++ 5 :: units (output + multiplier))
-    (units remaining ++ 1 :: (units multiplier ++ 1 :: right)) 3 2 (by rfl)
-  have next := Tape.move_right (machine := machine increment) (state := 13) (nextState := 3)
-    (units past ++ 5 :: units (output + multiplier))
-    (units remaining ++ 1 :: (units multiplier ++ 1 :: right)) 2 (by rfl)
-  simp only [units_reverse] at scan
-  simp only [gap, List.reverse_append, List.reverse_cons,
-    units_reverse, List.append_assoc, List.cons_append, List.nil_append] at copies back
-  have forward := Tape.Steps.next mark (Tape.Steps.next advance
-    (scan.trans (Tape.Steps.next enter copies)))
-  have returning := Tape.Steps.next enterBack
-    (back.trans (Tape.Steps.next restore (Tape.Steps.next next (.zero _))))
-  have trace := forward.trans returning
-  convert trace using 1 <;> simp [configuration, units, List.replicate_succ, copyTicks]; ring
+  have trace := outer_unit_reserved increment past remaining multiplier output right []
+  simp only [List.append_nil] at trace
+  have padding : configuration 3 (units past ++ 5 :: (units output ++ List.replicate (multiplier) 0))
+      (2 :: (units remaining ++ 1 :: (units multiplier ++ 1 :: right))) = configuration 3 (units past ++ 5 :: units output) (2 :: (units remaining ++ 1 :: (units multiplier ++ 1 :: right))) := by
+    simpa only [configuration, List.append_assoc, List.cons_append, show (default : Symbol) = 0 from rfl] using
+      Tape.configuration_append_blanks (Symbol := Symbol) (3 : State)
+        (units past ++ 5 :: units output) (multiplier) (2 :: (units remaining ++ 1 :: (units multiplier ++ 1 :: right)))
+  rw [padding] at trace
+  exact trace
+
+/-- Repeated multiplication iterations have a polynomial bound in operand and
+output values, while preserving the complete unary header and trailing data. -/
+theorem outer_loop_reserved (increment : Bool) (remaining past multiplier output : ℕ)
+    (right caller : List Symbol) :
+    ∃ ticks, ticks ≤ remaining * 32 *
+      (past + remaining + multiplier + output + remaining * multiplier + 1) ^ 2 ∧
+      Steps increment ticks
+        (configuration 3 (units past ++ 5 :: (units output ++ List.replicate (remaining * multiplier) 0 ++ caller))
+          (units remaining ++ 1 :: (units multiplier ++ 1 :: right)))
+        (configuration 3 (units (past + remaining) ++ 5 :: (units (output + remaining * multiplier) ++ caller))
+          (1 :: (units multiplier ++ 1 :: right))) := by
+  induction remaining generalizing past output with
+  | zero => refine ⟨0, by simp, ?_⟩; simp only [Nat.zero_mul, Nat.add_zero, units, List.replicate_zero, List.nil_append, List.append_assoc]; exact .zero _
+  | succ remaining hypothesis =>
+    have first := outer_unit_reserved increment past remaining multiplier output right (List.replicate (remaining * multiplier) 0 ++ caller)
+    obtain ⟨ticks, bound, rest⟩ := hypothesis (past + 1) (output + multiplier)
+    simp only [List.append_assoc] at first rest
+    have trace := first.trans rest
+    refine ⟨copyTicks (past + remaining + 2) output multiplier + 2 * remaining + multiplier + 8 + ticks, ?_, ?_⟩
+    · have frameEquality : past + 1 + remaining + multiplier + (output + multiplier) + remaining * multiplier + 1 =
+          past + (remaining + 1) + multiplier + output + (remaining + 1) * multiplier + 1 := by ring
+      rw [frameEquality] at bound
+      have unitBound : copyTicks (past + remaining + 2) output multiplier + 2 * remaining + multiplier + 8 ≤
+          32 * (past + (remaining + 1) + multiplier + output + (remaining + 1) * multiplier + 1) ^ 2 := by
+        simp only [copyTicks]
+        nlinarith [sq_nonneg (past + remaining + output), sq_nonneg multiplier,
+          Nat.zero_le (remaining * multiplier)]
+      nlinarith
+    · have capacity : List.replicate ((remaining + 1) * multiplier) (0 : Symbol) =
+          List.replicate multiplier 0 ++ List.replicate (remaining * multiplier) 0 := by
+        rw [Nat.add_mul, Nat.one_mul, Nat.add_comm]
+        exact List.replicate_add _ _ _
+      simp only [capacity, List.append_assoc]
+      simpa [configuration, units, List.replicate_succ, Nat.add_mul, Nat.mul_add,
+        Nat.add_assoc, Nat.add_comm, Nat.add_left_comm, List.append_assoc] using trace
 
 /-- Repeated multiplication iterations have a polynomial bound in operand and
 output values, while preserving the complete unary header and trailing data. -/
@@ -235,46 +320,71 @@ theorem outer_loop (increment : Bool) (remaining past multiplier output : ℕ)
           (units remaining ++ 1 :: (units multiplier ++ 1 :: right)))
         (configuration 3 (units (past + remaining) ++ 5 :: units (output + remaining * multiplier))
           (1 :: (units multiplier ++ 1 :: right))) := by
-  induction remaining generalizing past output with
-  | zero => refine ⟨0, by simp, ?_⟩; simp only [Nat.zero_mul, Nat.add_zero, units, List.replicate_zero, List.nil_append]; exact .zero _
-  | succ remaining hypothesis =>
-    have first := outer_unit increment past remaining multiplier output right
-    obtain ⟨ticks, bound, rest⟩ := hypothesis (past + 1) (output + multiplier)
-    have trace := first.trans rest
-    refine ⟨copyTicks (past + remaining + 2) output multiplier + 2 * remaining + multiplier + 8 + ticks, ?_, ?_⟩
-    · have frameEquality : past + 1 + remaining + multiplier + (output + multiplier) + remaining * multiplier + 1 =
-          past + (remaining + 1) + multiplier + output + (remaining + 1) * multiplier + 1 := by ring
-      rw [frameEquality] at bound
-      have unitBound : copyTicks (past + remaining + 2) output multiplier + 2 * remaining + multiplier + 8 ≤
-          32 * (past + (remaining + 1) + multiplier + output + (remaining + 1) * multiplier + 1) ^ 2 := by
-        simp only [copyTicks]
-        nlinarith [sq_nonneg (past + remaining + output), sq_nonneg multiplier,
-          Nat.zero_le (remaining * multiplier)]
-      nlinarith
-    · simpa [configuration, units, List.replicate_succ, Nat.add_mul, Nat.mul_add,
-        Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using trace
+  obtain ⟨ticks, cost, trace⟩ := outer_loop_reserved increment remaining past multiplier output right []
+  refine ⟨ticks, cost, ?_⟩
+  simp only [List.append_nil] at trace
+  have padding : configuration 3 (units past ++ 5 :: (units output ++ List.replicate (remaining * multiplier) 0))
+      (units remaining ++ 1 :: (units multiplier ++ 1 :: right)) = configuration 3 (units past ++ 5 :: units output) (units remaining ++ 1 :: (units multiplier ++ 1 :: right)) := by
+    simpa only [configuration, List.append_assoc, List.cons_append, show (default : Symbol) = 0 from rfl] using
+      Tape.configuration_append_blanks (Symbol := Symbol) (3 : State)
+        (units past ++ 5 :: units output) (remaining * multiplier) (units remaining ++ 1 :: (units multiplier ++ 1 :: right))
+  rw [padding] at trace
+  exact trace
 
 /-- Return to the first output cell, including when the output field is empty. -/
+theorem return_output_reserved (increment : Bool) (output : ℕ) (caller right : List Symbol) (copyMode : Bool := false) :
+    CopySteps increment copyMode (output + 2)
+      (configuration 18 (units output ++ 0 :: caller) (1 :: right))
+      (configuration 19 (0 :: caller) (units output ++ 1 :: right)) := by
+  have scan := Tape.scan_left (machine := machine increment copyMode) (state := 18)
+    (units output) caller right 0 1
+    (by intro symbol member; rcases List.mem_cons.mp member with rfl | member
+        · rfl
+        · have equality := List.eq_of_mem_replicate member; subst symbol; rfl)
+  simp only [units_length, units_reverse] at scan
+  have move := Tape.move_right (machine := machine increment copyMode) (state := 18) (nextState := 19)
+    caller (units output ++ 1 :: right) 0 (by rfl)
+  have trace := scan.trans (Tape.Steps.next move (.zero _))
+  simpa [configuration, Nat.add_assoc] using trace
+
+/-- Specialize the reserved boundary to blank left storage. -/
 theorem return_output (increment : Bool) (output : ℕ) (right : List Symbol) (copyMode : Bool := false) :
     CopySteps increment copyMode (output + 2)
       (configuration 18 (units output) (1 :: right))
       (configuration 19 [] (units output ++ 1 :: right)) := by
-  have scan := Tape.scan_left (machine := machine increment copyMode) (state := 18)
-    (units output) [] right 0 1
+  have trace := return_output_reserved increment output [] right copyMode
+  have initial := left_blank (18 : State) (units output) (1 :: right)
+  have final := left_blank (19 : State) [] (units output ++ 1 :: right)
+  simp only [List.nil_append] at final
+  rw [initial, final] at trace
+  exact trace
+
+/-- Increment the computed product and replace its temporary boundary by an
+ordinary unary terminator. Only the newly allocated output region changes. -/
+theorem increment_output_reserved (output : ℕ) (caller right : List Symbol) :
+    Steps true (2 * output + 5)
+      (configuration 14 (units output ++ 0 :: caller) (5 :: right))
+      (configuration 18 (units (output + 1) ++ caller) (1 :: right)) := by
+  have enter := Tape.write (machine := machine true) (state := 14) (nextState := 15)
+    (units output ++ 0 :: caller) right 5 5 (by rfl)
+  have reserve := Tape.scan_left (machine := machine true) (state := 15)
+    (units output) caller right 0 5
     (by intro symbol member; rcases List.mem_cons.mp member with rfl | member
         · rfl
         · have equality := List.eq_of_mem_replicate member; subst symbol; rfl)
-  have padding := left_blank (18 : State) (units output) (1 :: right)
-  change Tape.configuration (18 : State) _ _ = _ at padding
-  rw [padding] at scan
-  simp only [units_length, units_reverse] at scan
-  have move := Tape.move_right (machine := machine increment copyMode) (state := 18) (nextState := 19)
-    [] (units output ++ 1 :: right) 0 (by rfl)
-  have trace := scan.trans (Tape.Steps.next move (.zero _))
-  have finalPadding := left_blank (19 : State) [] (units output ++ 1 :: right)
-  change Tape.configuration (19 : State) [0] _ = _ at finalPadding
-  rw [finalPadding] at trace
-  simpa [configuration, Nat.add_assoc] using trace
+  simp only [units_length, units_reverse] at reserve
+  have append := Tape.write (machine := machine true) (state := 15) (nextState := 16)
+    caller (units output ++ 5 :: right) 0 2 (by rfl)
+  have scan := Tape.scan_right (machine := machine true) (state := 16)
+    (2 :: units output) caller (5 :: right)
+    (by intro symbol member; have equality : symbol = 2 := by simp [units] at member; aesop
+        subst symbol; rfl)
+  simp only [List.reverse_cons, units_reverse] at scan
+  have restore := Tape.write (machine := machine true) (state := 16) (nextState := 18)
+    ((units output ++ [2]) ++ caller) right 5 1 (by rfl)
+  have trace := Tape.Steps.next enter (reserve.trans
+    (Tape.Steps.next append (scan.trans (Tape.Steps.next restore (.zero _)))))
+  convert trace using 1 <;> simp [configuration, units, List.replicate_succ', Nat.two_mul]; omega
 
 /-- Increment the computed product and replace its temporary boundary by an
 ordinary unary terminator. Only the newly allocated output region changes. -/
@@ -282,29 +392,47 @@ theorem increment_output (output : ℕ) (right : List Symbol) :
     Steps true (2 * output + 5)
       (configuration 14 (units output) (5 :: right))
       (configuration 18 (units (output + 1)) (1 :: right)) := by
-  have enter := Tape.write (machine := machine true) (state := 14) (nextState := 15)
-    (units output) right 5 5 (by rfl)
-  have reserve := Tape.scan_left (machine := machine true) (state := 15)
-    (units output) [] right 0 5
-    (by intro symbol member; rcases List.mem_cons.mp member with rfl | member
-        · rfl
-        · have equality := List.eq_of_mem_replicate member; subst symbol; rfl)
-  have padding := left_blank (15 : State) (units output) (5 :: right)
-  change Tape.configuration (15 : State) _ _ = _ at padding
-  rw [padding] at reserve
-  simp only [units_length, units_reverse] at reserve
-  have append := Tape.write (machine := machine true) (state := 15) (nextState := 16)
-    [] (units output ++ 5 :: right) 0 2 (by rfl)
-  have scan := Tape.scan_right (machine := machine true) (state := 16)
-    (2 :: units output) [] (5 :: right)
-    (by intro symbol member; have equality : symbol = 2 := by simp [units] at member; aesop
-        subst symbol; rfl)
-  simp only [List.append_nil, List.reverse_cons, units_reverse] at scan
-  have restore := Tape.write (machine := machine true) (state := 16) (nextState := 18)
-    (units output ++ [2]) right 5 1 (by rfl)
-  have trace := Tape.Steps.next enter (reserve.trans
-    (Tape.Steps.next append (scan.trans (Tape.Steps.next restore (.zero _)))))
-  convert trace using 1 <;> simp [configuration, units, List.replicate_succ', Nat.two_mul]; omega
+  have trace := increment_output_reserved output [] right
+  rw [left_blank] at trace
+  simpa only [List.append_nil] using trace
+
+/-- Finish multiplication with the header restored and the head on the result. -/
+theorem finish_reserved (increment : Bool) (multiplicand multiplier output : ℕ) (caller right : List Symbol) :
+    ∃ ticks, ticks ≤ 8 * (multiplicand + output + 1) + 20 ∧
+      Steps increment ticks
+        (configuration 3 (units multiplicand ++ 5 :: (units output ++ List.replicate (increment.toNat + 1) 0 ++ caller))
+          (1 :: (units multiplier ++ 1 :: right)))
+        (configuration 19 (0 :: caller)
+          (units (output + increment.toNat) ++ 1 ::
+            (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))) := by
+  have enter := Tape.write (machine := machine increment) (state := 3) (nextState := 14)
+    (units multiplicand ++ 5 :: (units output ++ List.replicate (increment.toNat + 1) 0 ++ caller)) (units multiplier ++ 1 :: right) 1 1 (by rfl)
+  have scan := Tape.scan_left (machine := machine increment) (state := 14)
+    (units multiplicand) (units output ++ List.replicate (increment.toNat + 1) 0 ++ caller) (units multiplier ++ 1 :: right) 5 1
+    (by intro symbol member; have equality : symbol = 1 ∨ symbol = 2 := by simp [units] at member; aesop
+        rcases equality with rfl | rfl <;> rfl)
+  simp only [units_length, units_reverse] at scan
+  have entryTrace := Tape.Steps.next enter scan
+  cases increment with
+  | false =>
+    simp only [Bool.toNat_false, Nat.reduceAdd, List.replicate_succ, List.replicate_zero,
+      List.cons_append, List.nil_append, List.append_assoc] at entryTrace
+    have boundary := Tape.write (machine := machine false) (state := 14) (nextState := 18)
+      (units output ++ 0 :: caller) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)) 5 1 (by rfl)
+    have tail := return_output_reserved false output caller (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))
+    have trace := entryTrace.trans (Tape.Steps.next boundary tail)
+    refine ⟨multiplicand + output + 5, by omega, ?_⟩
+    convert trace using 1
+    all_goals first | omega | simp [configuration, List.append_assoc]
+  | true =>
+    simp only [Bool.toNat_true, Nat.reduceAdd, List.replicate_succ, List.replicate_zero,
+      List.cons_append, List.nil_append, List.append_assoc] at entryTrace
+    have incrementTrace := increment_output_reserved output (0 :: caller) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))
+    have tail := return_output_reserved true (output + 1) caller (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))
+    have trace := entryTrace.trans (incrementTrace.trans tail)
+    refine ⟨multiplicand + 3 * output + 10, by omega, ?_⟩
+    convert trace using 1
+    all_goals first | omega | simp [configuration, List.append_assoc]
 
 /-- Finish multiplication with the header restored and the head on the result. -/
 theorem finish (increment : Bool) (multiplicand multiplier output : ℕ) (right : List Symbol) :
@@ -315,50 +443,58 @@ theorem finish (increment : Bool) (multiplicand multiplier output : ℕ) (right 
         (configuration 19 []
           (units (output + increment.toNat) ++ 1 ::
             (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))) := by
-  have enter := Tape.write (machine := machine increment) (state := 3) (nextState := 14)
-    (units multiplicand ++ 5 :: units output) (units multiplier ++ 1 :: right) 1 1 (by rfl)
-  have scan := Tape.scan_left (machine := machine increment) (state := 14)
-    (units multiplicand) (units output) (units multiplier ++ 1 :: right) 5 1
-    (by intro symbol member; have equality : symbol = 1 ∨ symbol = 2 := by simp [units] at member; aesop
-        rcases equality with rfl | rfl <;> rfl)
-  simp only [units_length, units_reverse] at scan
-  have entryTrace := Tape.Steps.next enter scan
-  cases increment with
-  | false =>
-    have boundary := Tape.write (machine := machine false) (state := 14) (nextState := 18)
-      (units output) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)) 5 1 (by rfl)
-    have tail := return_output false output (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))
-    have trace := entryTrace.trans (Tape.Steps.next boundary tail)
-    refine ⟨multiplicand + output + 5, by omega, ?_⟩
-    convert trace using 1
-    all_goals first | omega | rfl
-  | true =>
-    have incrementTrace := increment_output output (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))
-    have tail := return_output true (output + 1) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))
-    have trace := entryTrace.trans (incrementTrace.trans tail)
-    refine ⟨multiplicand + 3 * output + 10, by omega, ?_⟩
-    convert trace using 1
-    all_goals first | omega | rfl
+  obtain ⟨ticks, cost, trace⟩ := finish_reserved increment multiplicand multiplier output [] right
+  refine ⟨ticks, cost, ?_⟩
+  simp only [List.append_nil] at trace
+  have padding : configuration 3
+      (units multiplicand ++ 5 :: (units output ++ List.replicate (increment.toNat + 1) 0))
+      (1 :: (units multiplier ++ 1 :: right)) =
+      configuration 3 (units multiplicand ++ 5 :: units output) (1 :: (units multiplier ++ 1 :: right)) := by
+    simpa only [configuration, List.append_assoc, List.cons_append, show (default : Symbol) = 0 from rfl] using
+      Tape.configuration_append_blanks (Symbol := Symbol) (3 : State)
+        (units multiplicand ++ 5 :: units output) (increment.toNat + 1) (1 :: (units multiplier ++ 1 :: right))
+  have final := left_blank (19 : State) []
+    (units (output + increment.toNat) ++ 1 :: (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
+  simp only [List.nil_append] at final
+  rw [padding, final] at trace
+  exact trace
 
 /-- In copy mode, restore the source prefix and close the newly copied field. -/
-theorem finish_copy (gap right : List Symbol) (output : ℕ)
+theorem finish_copy_reserved (gap right caller : List Symbol) (output : ℕ)
     (safe : ∀ symbol ∈ gap, symbol ≠ 5) :
     CopySteps false true (gap.length + output + 5)
-      (configuration 6 (gap.reverse ++ 5 :: units output) (1 :: right))
-      (configuration 19 [] (units output ++ 1 :: (gap ++ 1 :: right))) := by
+      (configuration 6 (gap.reverse ++ 5 :: (units output ++ 0 :: caller)) (1 :: right))
+      (configuration 19 (0 :: caller) (units output ++ 1 :: (gap ++ 1 :: right))) := by
   have enter := Tape.write (machine := machine false true) (state := 6) (nextState := 14)
-    (gap.reverse ++ 5 :: units output) right 1 1 (by rfl)
+    (gap.reverse ++ 5 :: (units output ++ 0 :: caller)) right 1 1 (by rfl)
   have scan := Tape.scan_left (machine := machine false true) (state := 14)
-    gap.reverse (units output) right 5 1
+    gap.reverse (units output ++ 0 :: caller) right 5 1
     (by intro symbol member; rcases List.mem_cons.mp member with rfl | member
         · rfl
         · simp [machine, safe symbol (List.mem_reverse.mp member)])
   simp only [List.length_reverse, List.reverse_reverse] at scan
   have boundary := Tape.write (machine := machine false true) (state := 14) (nextState := 18)
-    (units output) (gap ++ 1 :: right) 5 1 (by rfl)
-  have tail := return_output false output (gap ++ 1 :: right) (copyMode := true)
+    (units output ++ 0 :: caller) (gap ++ 1 :: right) 5 1 (by rfl)
+  have tail := return_output_reserved false output caller (gap ++ 1 :: right) (copyMode := true)
   have trace := Tape.Steps.next enter (scan.trans (Tape.Steps.next boundary tail))
   convert trace using 1 <;> first | rfl | omega
+
+/-- Specialize the reserved boundary to blank left storage. -/
+theorem finish_copy (gap right : List Symbol) (output : ℕ)
+    (safe : ∀ symbol ∈ gap, symbol ≠ 5) :
+    CopySteps false true (gap.length + output + 5)
+      (configuration 6 (gap.reverse ++ 5 :: units output) (1 :: right))
+      (configuration 19 [] (units output ++ 1 :: (gap ++ 1 :: right))) := by
+  have trace := finish_copy_reserved gap right [] output safe
+  have padding : configuration 6 (gap.reverse ++ 5 :: (units output ++ [0])) (1 :: right) =
+      configuration 6 (gap.reverse ++ 5 :: units output) (1 :: right) := by
+    simpa only [configuration, List.append_assoc, List.cons_append, show (default : Symbol) = 0 from rfl] using
+      Tape.configuration_append_blank (Symbol := Symbol) (6 : State)
+        (gap.reverse ++ 5 :: units output) (1 :: right)
+  have final := left_blank (19 : State) [] (units output ++ 1 :: (gap ++ 1 :: right))
+  simp only [List.nil_append] at final
+  rw [padding, final] at trace
+  exact trace
 
 @[simp] theorem fields_cons (value : ℕ) (values : List ℕ) :
     fields (value :: values) = units value ++ 1 :: fields values := by simp [fields]
@@ -377,28 +513,37 @@ theorem fields_symbols (values : List ℕ) (symbol : Symbol) (member : symbol �
   simp [units] at member
   aesop
 
-/-- Complete unary multiplication (optionally plus one) from an ordinary size
-header. All operands and arbitrary trailing input are preserved. -/
-theorem realizes (increment : Bool) (multiplicand multiplier : ℕ) (right : List Symbol) :
+/-- Multiply within `multiplicand * multiplier + increment.toNat + 2` reserved
+blank cells. One blank remains before the result; both caller regions and all
+operands are preserved. The exit head is on the result's first cell. -/
+theorem realizes_reserved (increment : Bool) (multiplicand multiplier : ℕ) (caller right : List Symbol) :
     ∃ ticks, ticks ≤ 256 * (multiplicand + multiplier + 1) ^ 5 ∧
       Steps increment ticks
-        (configuration 0 [] (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
-        (configuration 19 [] (units (multiplicand * multiplier + increment.toNat) ++ 1 ::
+        (configuration 0 (List.replicate (multiplicand * multiplier + increment.toNat + 2) 0 ++ caller) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
+        (configuration 19 (0 :: caller) (units (multiplicand * multiplier + increment.toNat) ++ 1 ::
           (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))) := by
   have bootstrap : Steps increment 3
-      (configuration 0 [] (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
-      (configuration 3 [5] (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))) := by
+      (configuration 0 (List.replicate (multiplicand * multiplier + increment.toNat + 2) 0 ++ caller) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
+      (configuration 3 (5 :: (List.replicate (multiplicand * multiplier + increment.toNat + 1) 0 ++ caller)) (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right))) := by
     let input := units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)
-    have move := Tape.move_left_empty (machine := machine increment) (state := 0) (nextState := 1)
-      input (by intro symbol; rfl)
+    have move := Tape.move_left_list (machine := machine increment) (state := 0) (nextState := 1)
+      (List.replicate (multiplicand * multiplier + increment.toNat + 1) 0 ++ caller) input 0 (by intro symbol; rfl)
     have mark := Tape.write (machine := machine increment) (state := 1) (nextState := 2)
-      [] input 0 5 (by rfl)
+      (List.replicate (multiplicand * multiplier + increment.toNat + 1) 0 ++ caller) input 0 5 (by rfl)
     have enter := Tape.move_right (machine := machine increment) (state := 2) (nextState := 3)
-      [] input 5 (by rfl)
-    exact Tape.Steps.next move (Tape.Steps.next mark (Tape.Steps.next enter (.zero _)))
-  obtain ⟨loopTicks, loopBound, loopTrace⟩ := outer_loop increment multiplicand 0 multiplier 0 right
-  obtain ⟨finishTicks, finishBound, finishTrace⟩ := finish increment multiplicand multiplier (multiplicand * multiplier) right
+      (List.replicate (multiplicand * multiplier + increment.toNat + 1) 0 ++ caller) input 5 (by rfl)
+    simpa only [configuration, input, List.replicate_succ, List.cons_append] using
+      Tape.Steps.next move (Tape.Steps.next mark (Tape.Steps.next enter (.zero _)))
+  obtain ⟨loopTicks, loopBound, loopTrace⟩ := outer_loop_reserved increment multiplicand 0 multiplier 0 right
+    (List.replicate (increment.toNat + 1) 0 ++ caller)
+  obtain ⟨finishTicks, finishBound, finishTrace⟩ := finish_reserved increment multiplicand multiplier (multiplicand * multiplier) caller right
   simp only [Nat.zero_add, units, List.replicate_zero, List.nil_append] at loopTrace
+  have partition : List.replicate (multiplicand * multiplier + increment.toNat + 1) (0 : Symbol) =
+      List.replicate (multiplicand * multiplier) 0 ++ List.replicate (increment.toNat + 1) 0 := by
+    rw [Nat.add_assoc]
+    exact List.replicate_add _ _ _
+  simp only [partition, List.append_assoc] at bootstrap
+  simp only [List.append_assoc] at loopTrace finishTrace
   have trace := bootstrap.trans (loopTrace.trans finishTrace)
   refine ⟨3 + (loopTicks + finishTicks), ?_, trace⟩
   have productBound : multiplicand * multiplier ≤ (multiplicand + multiplier + 1) ^ 2 := by nlinarith
@@ -423,6 +568,25 @@ theorem realizes (increment : Bool) (multiplicand multiplier : ℕ) (right : Lis
       finishTicks ≤ 36 * (multiplicand + multiplier + 1) ^ 2 := by nlinarith
       _ ≤ _ := Nat.mul_le_mul_left 36 degree
   omega
+
+/-- Complete unary multiplication (optionally plus one) from an ordinary size
+header. All operands and arbitrary trailing input are preserved. -/
+theorem realizes (increment : Bool) (multiplicand multiplier : ℕ) (right : List Symbol) :
+    ∃ ticks, ticks ≤ 256 * (multiplicand + multiplier + 1) ^ 5 ∧
+      Steps increment ticks
+        (configuration 0 [] (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
+        (configuration 19 [] (units (multiplicand * multiplier + increment.toNat) ++ 1 ::
+          (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))) := by
+  obtain ⟨ticks, cost, trace⟩ := realizes_reserved increment multiplicand multiplier [] right
+  refine ⟨ticks, cost, ?_⟩
+  simp only [List.append_nil] at trace
+  change Steps increment ticks
+    (configuration 0 (List.replicate (multiplicand * multiplier + increment.toNat + 2) default)
+      (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))
+    (configuration 19 (List.replicate 1 default)
+      (units (multiplicand * multiplier + increment.toNat) ++ 1 ::
+        (units multiplicand ++ 1 :: (units multiplier ++ 1 :: right)))) at trace
+  simpa only [configuration, Tape.configuration_replicate_blank] using trace
 
 @[simp] theorem halt (increment : Bool) (left right : List Symbol) :
     Turing.TM0.step (machine increment) (configuration 19 left right) = none := by

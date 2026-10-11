@@ -15,8 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime.Examples.MatrixColumnStep
-import Polytime.WhileMachine
+import Polytime.Examples.MatrixTraversal
 
 /-! # Complete elimination in a prepared matrix frame
 
@@ -33,6 +32,55 @@ open Matrices TupleMachine
 universe scalarLevel
 
 noncomputable section Elimination
+
+open MatrixTraversal (Value)
+
+variable (field : FixedPresentation.{scalarLevel}) [Field field.Carrier] [DecidableEq field.Carrier]
+
+private def remaining (sizes : SizeAssignment Matrices.context) (value : Value field sizes) :=
+  GaussJordan.eliminateColumns value.2.1 value.2.2 ((List.finRange (sizes .L)).drop value.1)
+
+private theorem remaining_advance (sizes : SizeAssignment Matrices.context) (value : Value field sizes) :
+    remaining field sizes (MatrixTraversal.advance field sizes value) = remaining field sizes value := by
+  by_cases active : value.1 < sizes .L
+  · have columns : (List.finRange (sizes .L)).drop value.1 =
+        ⟨value.1, active⟩ :: (List.finRange (sizes .L)).drop (value.1 + 1) := by
+      rw [List.drop_eq_getElem_cons (l := List.finRange (sizes .L)) (i := value.1) (by simpa using active)]
+      congr 1
+      apply Fin.ext
+      simp
+    simp only [remaining, MatrixTraversal.advance, dite_eq_left active, columns, GaussJordan.eliminateColumns]
+  · simp only [MatrixTraversal.advance, dite_eq_right active]
+
+/-- The elimination proof uses mathematical states and a fold only;
+frame layout, scratch values, finite controllers, and runtime bounds are hidden. -/
+theorem contract : Realization.Realizes (MatrixTraversal.representation field) (MatrixTraversal.representation field)
+    (fun sizes value => MatrixTraversal.valid field sizes value ∧ value.1 = 0 ∧ value.2.2 = 0)
+    (fun sizes initial final => final.1 = sizes .L ∧ final.2.1 = GaussJordan.eliminate initial.2.1 ∧ final.2.2 ≤ sizes .K) := by
+  apply (MatrixTraversal.traverse_contract field).consequence (by intro sizes value valid; exact valid.1)
+  intro sizes initial final started finished
+  obtain ⟨folded, valid, stopped⟩ := finished
+  have preservesRemaining : ∀ count (value : Value field sizes),
+      remaining field sizes ((MatrixTraversal.advance field sizes)^[count] value) = remaining field sizes value := by
+    intro count
+    induction count with
+    | zero => intro value; rfl
+    | succ count hypothesis =>
+      intro value
+      rw [Function.iterate_succ_apply', remaining_advance]
+      exact hypothesis value
+  have preserved : remaining field sizes final = remaining field sizes initial := by
+    rw [folded]
+    exact preservesRemaining _ _
+  have finalColumn : final.1 = sizes .L := by
+    have exited : ¬ final.1 < sizes .L := by simpa only [MatrixTraversal.condition, decide_eq_false_iff_not] using stopped
+    have upper := valid.1
+    omega
+  refine ⟨finalColumn, ?_, valid.2⟩
+  have matrices := congrArg Prod.fst preserved
+  have empty : (List.finRange (sizes .L)).drop (sizes .L) = [] := List.drop_eq_nil_of_le (by simp)
+  simpa only [remaining, finalColumn, empty, started.2.1, started.2.2, List.drop_zero,
+    GaussJordan.eliminateColumns, GaussJordan.eliminate] using matrices
 
 /-- One finite controller realizes complete Gauss–Jordan elimination in a
 prepared frame, with a polynomial bound in both matrix dimensions. -/
@@ -63,161 +111,23 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
             finalRow ≤ rows ∧ (GaussJordan.eliminate matrix).IsReducedRowEchelon ∧
             ∃ transformation : Matrix.GeneralLinearGroup (Fin rows) field.Carrier,
               (transformation : Matrix (Fin rows) (Fin rows) field.Carrier) * matrix = GaussJordan.eliminate matrix := by
-  classical
-  obtain ⟨StepState, finite, inhabited, stepEntry, stepExit, stepMachine, stepBound,
-    stepHalt, stepRuns⟩ := MatrixColumnStep.realizes field
-  let stepControllerFinite : Fintype StepState := finite
-  let stepControllerInhabited : Inhabited StepState := inhabited
-  let guard := HeaderGuardMachine.machine 2
-  let guardEntry : HeaderGuardMachine.State 2 := (Fin.last 2, false, 0)
-  let guardExit : HeaderGuardMachine.State 2 := (0, false, 14)
-  let incrementer := HeaderIncrementMachine.machine 2
-  let incrementEntry : HeaderIncrementMachine.State 2 := .inl (Fin.last 2)
-  let firstBody := Tape.sequence HeaderGuardMachine.consume stepMachine stepEntry
-  let body := Tape.sequence firstBody incrementer incrementEntry
-  let bodyEntry : Sum (Sum (Fin 3) StepState) (HeaderIncrementMachine.State 2) := .inl (.inl 0)
-  let bodyExit : Sum (Sum (Fin 3) StepState) (HeaderIncrementMachine.State 2) := .inr (.inr (0, 2))
-  let loop := WhileMachine.machine guard body guardEntry bodyEntry
-  let guardBound : SizePolynomial Matrices.context :=
-    SizePolynomial.constant 2 * SizePolynomial.parameter (ctx := Matrices.context) .L ^ 2 +
-      SizePolynomial.constant 10 * SizePolynomial.parameter (ctx := Matrices.context) .L +
-      SizePolynomial.constant 4 * SizePolynomial.parameter (ctx := Matrices.context) .K + SizePolynomial.constant 12
-  let bodyBound := stepBound + SizePolynomial.constant 6 * SizePolynomial.parameter (ctx := Matrices.context) .K + SizePolynomial.constant 12
-  let loopBound : SizePolynomial Matrices.context :=
-    (SizePolynomial.parameter (ctx := Matrices.context) .L + 1) * (guardBound + bodyBound + SizePolynomial.constant 2)
-  refine ⟨Sum (Sum (HeaderGuardMachine.State 2) (Sum (Sum (Fin 3) StepState) (HeaderIncrementMachine.State 2))) (Fin 3),
-    inferInstance, inferInstance, .inl (.inl guardEntry), .inr 2,
-    Tape.sequence loop HeaderGuardMachine.consume 0, loopBound + SizePolynomial.constant 3, ?_, ?_⟩
-  · intro symbol; simp [Tape.sequence, HeaderGuardMachine.consume_halt]
-  · intro rows columns matrix initialScalar right
-    dsimp only
-    let matrixWidth := (domain field).bitWidth (assignment rows columns)
-    let Value := ℕ × (Matrix (Fin rows) (Fin columns) field.Carrier × ℕ) × field.Carrier
-    let suffix (value : Value) := word (List.ofFn (BoolTuple.fromBits (field.codec.encode value.2.2))) ++
-      3 :: (List.replicate matrixWidth (data true) ++ 4 ::
-        (word (List.ofFn (fun index : Fin matrixWidth =>
-          (encode field rows columns value.2.1.1).getLsbD index.val)) ++ right))
-    let frame (value : Value) := UnaryMachine.fields [value.2.1.2, rows, value.1, columns] ++ suffix value
-    let execution (value : Value) (active : value.1 < columns) (bounded : value.2.1.2 ≤ rows) :=
-      stepRuns rows columns value.2.1.1 value.2.1.2 bounded ⟨value.1, active⟩ value.2.2 right
-    let advance (value : Value) : Value := if active : value.1 < columns then
-      if bounded : value.2.1.2 ≤ rows then
-        (value.1 + 1, GaussJordan.columnStep value.2.1.1 value.2.1.2 ⟨value.1, active⟩,
-          Classical.choose (execution value active bounded)) else value else value
-    let condition (value : Value) := decide (value.1 < columns)
-    let entryTape (value : Value) := (Tape.configuration () [] (frame value)).Tape
-    let resultTape (value : Value) := (Tape.configuration () [] (data (condition value) :: frame value)).Tape
-    let invariant (value : Value) := value.1 ≤ columns ∧ value.2.1.2 ≤ rows ∧
-      GaussJordan.eliminateColumns value.2.1.1 value.2.1.2 ((List.finRange columns).drop value.1) =
-        GaussJordan.eliminateColumns matrix 0 (List.finRange columns)
-    let initial : Value := (0, (matrix, 0), initialScalar)
-    have initialValid : invariant initial := by simp [initial, invariant]
-    have preserves : ∀ value, invariant value → condition value = true → invariant (advance value) := by
-      intro value valid positive
-      have active : value.1 < columns := by simpa only [condition, decide_eq_true_eq] using positive
-      have remaining : (List.finRange columns).drop value.1 =
-          ⟨value.1, active⟩ :: (List.finRange columns).drop (value.1 + 1) := by
-        rw [List.drop_eq_getElem_cons (l := List.finRange columns) (i := value.1) (by simpa using active)]
-        congr 1
-        apply Fin.ext
-        simp
-      refine ⟨?_, ?_, ?_⟩
-      · simp only [advance, dite_eq_left active, dite_eq_left valid.2.1]; omega
-      · simpa only [advance, dite_eq_left active, dite_eq_left valid.2.1] using
-          (GaussJordan.columnStep_row_bound value.2.1.1 value.2.1.2 ⟨value.1, active⟩ valid.2.1).2
-      · have equality := valid.2.2
-        rw [remaining, GaussJordan.eliminateColumns] at equality
-        simpa only [advance, dite_eq_left active, dite_eq_left valid.2.1] using equality
-    have nextIndex (value : Value) (active : value.1 < columns) (bounded : value.2.1.2 ≤ rows) :
-        (advance value).1 = value.1 + 1 := by
-      simp only [advance, dite_eq_left active, dite_eq_left bounded]
-    have iterates : ∀ count ≤ columns,
-        (advance^[count] initial).1 = count ∧ invariant (advance^[count] initial) := by
-      intro count
-      induction count with
-      | zero => intro _; exact ⟨rfl, initialValid⟩
-      | succ count hypothesis =>
-        intro bounded
-        obtain ⟨index, valid⟩ := hypothesis (by omega)
-        have active : (advance^[count] initial).1 < columns := by omega
-        refine ⟨?_, ?_⟩
-        · rw [Function.iterate_succ_apply', nextIndex _ active valid.2.1, index]
-        · simpa only [Function.iterate_succ_apply'] using preserves _ valid (by simp [condition, active])
-    have guards : ∀ value, invariant value → ∃ ticks,
-        ticks ≤ guardBound.eval (assignment rows columns) ∧
-          Tape.Steps guard ticks ⟨guardEntry, entryTape value⟩ ⟨guardExit, resultTape value⟩ := by
-      intro value valid
-      have trace := HeaderGuardMachine.realizes [value.2.1.2, rows] value.1 columns (suffix value) valid.1
-      refine ⟨2 * value.1 ^ 2 + 10 * value.1 + 2 * (UnaryMachine.fields [value.2.1.2, rows]).length + 8, ?_, ?_⟩
-      · have square := Nat.pow_le_pow_left valid.1 2
-        have rowBound := valid.2.1
-        simp [guardBound, assignment]; nlinarith
-      · simpa [guard, guardEntry, guardExit, entryTape, resultTape, frame, condition,
-          UnaryMachine.fields, Tape.configuration, List.append_assoc] using trace
-    have bodies : ∀ value, invariant value → condition value = true → ∃ ticks,
-        ticks ≤ bodyBound.eval (assignment rows columns) ∧
-          Tape.Steps body ticks ⟨bodyEntry, resultTape value⟩ ⟨bodyExit, entryTape (advance value)⟩ := by
-      intro value valid positive
-      have active : value.1 < columns := by simpa only [condition, decide_eq_true_eq] using positive
-      obtain ⟨ticks, cost, trace, _, _, nextBound⟩ := Classical.choose_spec (execution value active valid.2.1)
-      let next : Value := (value.1, GaussJordan.columnStep value.2.1.1 value.2.1.2 ⟨value.1, active⟩,
-        Classical.choose (execution value active valid.2.1))
-      have trace' : Tape.Steps stepMachine ticks
-          ⟨stepEntry, entryTape value⟩ ⟨stepExit, entryTape next⟩ := by
-        simpa only [execution, entryTape, frame, suffix, next, matrixWidth, Tape.configuration,
-          List.append_assoc] using trace
-      have consumed := HeaderGuardMachine.consumes true (frame value)
-      have firstTrace := Tape.sequence_steps stepEntry consumed HeaderGuardMachine.consume_halt trace'
-      have incremented := HeaderIncrementMachine.realizes [next.2.1.2, rows] value.1
-        (UnaryMachine.fields [columns] ++ suffix next)
-      have incremented' : Tape.Steps incrementer (3 * (next.2.1.2 + rows + 2) + 2)
-          ⟨incrementEntry, entryTape next⟩ ⟨.inr (0, 2), entryTape (advance value)⟩ := by
-        simpa [incrementer, incrementEntry, entryTape, frame, next, advance, active, valid.2.1,
-          suffix, UnaryMachine.fields, Tape.configuration, List.append_assoc, Nat.add_assoc] using incremented
-      have firstHalt (symbol : Symbol) : firstBody (.inr stepExit) symbol = none := by
-        simp [firstBody, Tape.sequence, stepHalt]
-      have computation := Tape.sequence_steps incrementEntry firstTrace firstHalt incremented'
-      refine ⟨2 + (ticks + 1) + (3 * (next.2.1.2 + rows + 2) + 2 + 1), ?_, ?_⟩
-      · change (GaussJordan.columnStep value.2.1.1 value.2.1.2 ⟨value.1, active⟩).2 ≤ rows at nextBound
-        simp only [next]
-        simp only [bodyBound, SizePolynomial.eval_add, SizePolynomial.eval_mul,
-          SizePolynomial.eval_constant, SizePolynomial.eval_parameter, assignment]
-        omega
-      · simpa [body, bodyEntry, bodyExit, firstBody, resultTape, entryTape, condition, active,
-          Tape.configuration, List.append_assoc] using computation
-    have loopResult := WhileMachine.realizes guard body guardEntry guardExit bodyEntry bodyExit
-      entryTape resultTape condition advance invariant (guardBound.eval (assignment rows columns))
-      (bodyBound.eval (assignment rows columns)) (by intro symbol; exact HeaderGuardMachine.halt symbol)
-      (by intro symbol; simp [body, bodyExit, incrementer, Tape.sequence, HeaderIncrementMachine.halt])
-      (by intro value _; simp [resultTape, Tape.configuration, Turing.Tape.mk', Turing.ListBlank.head_mk])
-      preserves guards bodies initial initialValid columns
-      (by intro count earlier; simp [condition, (iterates count (by omega)).1, earlier])
-      (by simp [condition, (iterates columns le_rfl).1])
-    obtain ⟨loopTicks, loopCost, loopTrace, loopHalt⟩ := loopResult
-    let final := advance^[columns] initial
-    have finalIndex : final.1 = columns := (iterates columns le_rfl).1
-    have finalValid : invariant final := (iterates columns le_rfl).2
-    have finalResult : final.2.1 = GaussJordan.eliminateColumns matrix 0 (List.finRange columns) := by
-      have equality := finalValid.2.2
-      have empty : (List.finRange columns).drop columns = [] := List.drop_eq_nil_of_le (by simp)
-      rw [finalIndex, empty, GaussJordan.eliminateColumns] at equality
-      exact equality
-    have finalMatrix : final.2.1.1 = GaussJordan.eliminate matrix := by
-      exact congrArg Prod.fst finalResult
-    have consumed := HeaderGuardMachine.consumes false (frame final)
-    have consumed' : Tape.Steps HeaderGuardMachine.consume 2
-        ⟨0, resultTape final⟩ ⟨2, entryTape final⟩ := by
-      simpa [resultTape, entryTape, condition, finalIndex, Tape.configuration] using consumed
-    have computation := Tape.sequence_steps_of_halt 0 loopTrace loopHalt consumed'
-    refine ⟨final.2.1.2, final.2.2, loopTicks + (2 + 1), ?_, ?_, finalValid.2.1, ?_⟩
-    · have boundValue : loopBound.eval (assignment rows columns) = (columns + 1) *
-          (guardBound.eval (assignment rows columns) + bodyBound.eval (assignment rows columns) + 2) := by
-        simp [loopBound, assignment]
-      simp only [SizePolynomial.eval_add, SizePolynomial.eval_constant, boundValue]
-      omega
-    · simpa only [loop, initial, entryTape, frame, suffix, finalIndex, finalMatrix, matrixWidth,
-        Tape.configuration, List.append_assoc] using computation
-    · exact GaussJordan.correct matrix
+  obtain ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, runs⟩ := contract field
+  refine ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, ?_⟩
+  intro rows columns matrix initialScalar right
+  let sizes := assignment rows columns
+  let initial : Value field sizes := (0, matrix, 0)
+  obtain ⟨final, finalTape, ticks, cost, trace, correct, represented⟩ :=
+    runs sizes right initial _ ⟨⟨by simp [initial], by simp [initial]⟩, rfl, rfl⟩
+      ⟨initialScalar, rfl⟩
+  obtain ⟨finalScalar, equal⟩ := represented
+  rw [equal] at trace
+  refine ⟨final.2.2, finalScalar, ticks, cost, ?_, correct.2.2, GaussJordan.correct matrix⟩
+  have finalColumn : final.1 = columns := correct.1
+  have finalMatrix : final.2.1 = GaussJordan.eliminate matrix := correct.2.1
+  simp only [MatrixTraversal.frame, MatrixTraversal.layout_values] at trace
+  dsimp only [MatrixTraversal.suffix, initial, sizes, assignment, Tape.configuration] at trace
+  rw [finalColumn, finalMatrix] at trace
+  simpa only [Tape.configuration, List.append_assoc] using trace
 
 end Elimination
 

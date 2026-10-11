@@ -16,6 +16,8 @@ limitations under the License.
 -/
 
 import Polytime.SizeMachine
+import Polytime.Realization
+import Polytime.SizeFrame
 
 /-! # Uniform polynomial-time tape evaluation of size expressions -/
 
@@ -42,25 +44,65 @@ noncomputable section Certificates
 
 variable {input middle output : List (SizeExpression ctx)}
 
+/-- A finite reserved frame also runs with the original blank-left convention. -/
+theorem of_frame (certificate : SizeFrame.Realizes input output) : Realizes input output := by
+  obtain ⟨reserve, _fits, Controller, finite, inhabited, entry, exit, machine, bound, halt, runs⟩ := certificate
+  refine ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, ?_⟩
+  intro assignment tail
+  let caller : SizeFrame.Caller reserve assignment := (⟨reserve.eval assignment, le_rfl⟩, [], tail)
+  obtain ⟨result, final, ticks, cost, trace, _, represented⟩ :=
+    runs assignment caller () _ trivial rfl
+  change final = (Tape.configuration ()
+    (List.replicate (caller.1.val - (SizeFrame.headerWidth output).eval assignment) 0 ++ caller.2.1)
+    (fields (output.map (·.eval assignment)) ++ caller.2.2)).Tape at represented
+  rw [represented] at trace
+  dsimp only [caller] at trace
+  simp only [List.append_nil] at trace
+  change Tape.Steps machine ticks
+    (Tape.configuration entry
+      (List.replicate (reserve.eval assignment - (SizeFrame.headerWidth input).eval assignment) default)
+      (fields (input.map (·.eval assignment)) ++ tail))
+    (Tape.configuration exit
+      (List.replicate (reserve.eval assignment - (SizeFrame.headerWidth output).eval assignment) default)
+      (fields (output.map (·.eval assignment)) ++ tail)) at trace
+  exact ⟨ticks, cost, by simpa only [Tape.configuration_replicate_blank] using trace⟩
+
+/-- Size-expression routines retain their caller suffix as shared context. -/
+def representation (expressions : List (SizeExpression ctx)) (assignment : SizeAssignment ctx)
+    (tail : List Symbol) (_value : Unit) (tape : Turing.Tape Symbol) : Prop :=
+  tape = (Tape.configuration () [] (fields (expressions.map (·.eval assignment)) ++ tail)).Tape
+
+/-- The original certificate is exactly a mathematical contract with no
+logical result beyond the statically declared expression list. -/
+theorem contract_iff (input output : List (SizeExpression ctx)) :
+    Realizes input output ↔ Realization.Realizes (representation input) (representation output)
+      (fun _ _ => True) (fun _ _ _ => True) := by
+  constructor
+  · intro certificate
+    obtain ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, runs⟩ := certificate
+    refine ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, ?_⟩
+    intro assignment tail value initial _ represented
+    obtain ⟨ticks, cost, trace⟩ := runs assignment tail
+    refine ⟨(), _, ticks, cost, ?_, trivial, rfl⟩
+    change initial = _ at represented
+    subst initial
+    exact trace
+  · intro certificate
+    obtain ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, runs⟩ := certificate
+    refine ⟨Controller, finite, inhabited, entry, exit, machine, bound, halt, ?_⟩
+    intro assignment tail
+    obtain ⟨outputValue, final, ticks, cost, trace, _, represented⟩ :=
+      runs assignment tail () _ trivial rfl
+    refine ⟨ticks, cost, ?_⟩
+    change final = _ at represented
+    rw [represented] at trace
+    exact trace
+
 theorem trans (first : Realizes input middle) (second : Realizes middle output) :
     Realizes input output := by
-  obtain ⟨First, finiteFirst, inhabitedFirst, firstEntry, firstExit,
-    firstMachine, firstBound, firstHalt, firstRun⟩ := first
-  obtain ⟨Second, finiteSecond, inhabitedSecond, secondEntry, secondExit,
-    secondMachine, secondBound, secondHalt, secondRun⟩ := second
-  let firstFinite : Fintype First := finiteFirst
-  let secondFinite : Fintype Second := finiteSecond
-  let firstInhabited : Inhabited First := inhabitedFirst
-  let secondInhabited : Inhabited Second := inhabitedSecond
-  refine ⟨Sum First Second, inferInstance, inferInstance, .inl firstEntry, .inr secondExit,
-    Tape.sequence firstMachine secondMachine secondEntry, firstBound + secondBound + 1, ?_, ?_⟩
-  · intro symbol; simp [Tape.sequence, secondHalt]
-  · intro assignment tail
-    obtain ⟨firstTicks, firstCost, firstTrace⟩ := firstRun assignment tail
-    obtain ⟨secondTicks, secondCost, secondTrace⟩ := secondRun assignment tail
-    refine ⟨firstTicks + (secondTicks + 1), ?_, ?_⟩
-    · simp; omega
-    · exact Tape.sequence_steps secondEntry firstTrace firstHalt secondTrace
+  apply (contract_iff input output).mpr
+  exact ((contract_iff input middle).mp first |>.sequence ((contract_iff middle output).mp second)
+    (by intros; trivial)).consequence (by intros; trivial) (by intros; trivial)
 
 theorem output_congr (trace : Realizes input output) (other : List (SizeExpression ctx))
     (equality : ∀ assignment, output.map (·.eval assignment) = other.map (·.eval assignment)) :
@@ -71,60 +113,20 @@ theorem output_congr (trace : Realizes input output) (other : List (SizeExpressi
   simpa only [← equality assignment] using runs assignment tail
 
 theorem constant (value : ℕ) (input : List (SizeExpression ctx)) :
-    Realizes input (.constant value :: input) := by
-  refine ⟨SizeMachine.Constant.State value, inferInstance, 
-    SizeMachine.Constant.instInhabitedState value, (Fin.last value, 0), (0, 4),
-    SizeMachine.Constant.machine value, SizePolynomial.constant (2 * value + 3), ?_, ?_⟩
-  · intro symbol; rfl
-  · intro assignment tail
-    exact ⟨2 * value + 3, by simp, by
-      simpa [fields] using SizeMachine.Constant.realizes value
-        (fields (input.map (·.eval assignment)) ++ tail)⟩
+    Realizes input (.constant value :: input) :=
+  of_frame (SizeFrame.Realizes.constant value input)
 
 theorem copy (before after : List (SizeExpression ctx)) (expression : SizeExpression ctx) :
-    Realizes (before ++ expression :: after) (expression :: before ++ expression :: after) := by
-  refine ⟨SizeMachine.Copy.State before.length, inferInstance, 
-    SizeMachine.Copy.instInhabitedState before.length, (Fin.last before.length, 0), (0, 19),
-    SizeMachine.Copy.machine before.length,
-    SizePolynomial.constant 64 *
-      (((before ++ expression :: after).map SizeExpression.polynomial).sum +
-        SizePolynomial.constant (before.length + after.length + 2)) ^ 2, ?_, ?_⟩
-  · intro symbol; simp [SizeMachine.Copy.machine, UnaryMachine.machine]
-  · intro assignment tail
-    obtain ⟨ticks, cost, trace⟩ := SizeMachine.Copy.realizes
-      (before.map (·.eval assignment)) (after.map (·.eval assignment)) (expression.eval assignment) tail
-    rw [List.length_map] at trace
-    refine ⟨ticks, ?_, ?_⟩
-    · convert cost using 1
-      simp [UnaryMachine.fields_length, SizeExpression.eval_eq, List.map_map, Function.comp_def]
-      ring
-    · simpa only [List.map_append, List.map_cons, List.length_map] using trace
+    Realizes (before ++ expression :: after) (expression :: before ++ expression :: after) :=
+  of_frame (SizeFrame.Realizes.copy before after expression)
 
 theorem add (left right : SizeExpression ctx) (rest : List (SizeExpression ctx)) :
-    Realizes (left :: right :: rest) ((left + right) :: rest) := by
-  refine ⟨SizeMachine.Addition.State, inferInstance, SizeMachine.Addition.instInhabitedState, 0, 8,
-    SizeMachine.Addition.machine, SizePolynomial.constant 2 * left.polynomial +
-      SizePolynomial.constant 9, ?_, ?_⟩
-  · intro symbol; rfl
-  · intro assignment tail
-    refine ⟨2 * left.eval assignment + 9, by simp [← SizeExpression.eval_eq], ?_⟩
-    simpa only [List.map_cons, UnaryMachine.fields_cons, List.append_assoc, List.cons_append,
-      SizeExpression.eval_add] using
-      SizeMachine.Addition.realizes (left.eval assignment) (right.eval assignment)
-        (fields (rest.map (·.eval assignment)) ++ tail)
+    Realizes (left :: right :: rest) ((left + right) :: rest) :=
+  of_frame (SizeFrame.Realizes.add left right rest)
 
 theorem mul (left right : SizeExpression ctx) (rest : List (SizeExpression ctx)) :
-    Realizes (left :: right :: rest) ((left * right) :: left :: right :: rest) := by
-  refine ⟨UnaryMachine.State, inferInstance, UnaryMachine.instInhabitedState, 0, 19, UnaryMachine.machine false,
-    SizePolynomial.constant 256 * (left.polynomial + right.polynomial + 1) ^ 5, ?_, ?_⟩
-  · intro symbol; rfl
-  · intro assignment tail
-    obtain ⟨ticks, cost, trace⟩ := UnaryMachine.realizes false
-      (left.eval assignment) (right.eval assignment) (fields (rest.map (·.eval assignment)) ++ tail)
-    refine ⟨ticks, by simpa [← SizeExpression.eval_eq] using cost, ?_⟩
-    simpa only [List.map_cons, UnaryMachine.fields_cons, List.append_assoc, List.cons_append,
-      SizeExpression.eval_mul, Bool.toNat_false, Nat.add_zero, UnaryMachine.Steps,
-      UnaryMachine.configuration] using trace
+    Realizes (left :: right :: rest) ((left * right) :: left :: right :: rest) :=
+  of_frame (SizeFrame.Realizes.mul left right rest)
 
 end Certificates
 end Realizes
@@ -138,52 +140,11 @@ def Evaluates (expression : SizeExpression ctx) : Prop :=
 
 noncomputable section ExpressionRealization
 
-private theorem binary (left right result : SizeExpression ctx)
-    (saved : List (SizeExpression ctx)) (leftEval : Evaluates left) (rightEval : Evaluates right)
-    (operation : ∀ rest, Realizes (left :: right :: rest) (result :: saved ++ rest)) :
-    Evaluates result := by
-  intro stack contains
-  obtain ⟨leftScratch, first⟩ := leftEval stack contains
-  obtain ⟨rightScratch, second⟩ := rightEval (left :: leftScratch ++ stack)
-    (by intro name; simp [contains name])
-  have copy := Realizes.copy (right :: rightScratch) (leftScratch ++ stack) left
-  have arithmetic := operation (rightScratch ++ left :: leftScratch ++ stack)
-  refine ⟨saved ++ rightScratch ++ left :: leftScratch, ?_⟩
-  simp only [List.cons_append, List.append_assoc] at first second copy arithmetic
-  have trace := first.trans (second.trans (copy.trans arithmetic))
-  simpa only [List.cons_append, List.append_assoc] using trace
-
-/-- Every executable size expression has a fixed finite tape controller with
-polynomially many actual transitions, uniformly over all size assignments. -/
+/-- The reserved-frame evaluator also realizes the original blank-left interface. -/
 theorem evaluates (expression : SizeExpression ctx) : Evaluates expression := by
-  induction expression with
-  | constant value =>
-    intro stack _
-    exact ⟨[], Realizes.constant value stack⟩
-  | parameter name =>
-    intro stack contains
-    obtain ⟨before, after, equality⟩ := List.mem_iff_append.mp (contains name)
-    refine ⟨[], ?_⟩
-    simpa [equality] using Realizes.copy before after (.parameter name)
-  | add left right leftEval rightEval =>
-    exact binary left right (left + right) [] leftEval rightEval (Realizes.add left right)
-  | mul left right leftEval rightEval =>
-    exact binary left right (left * right) [left, right] leftEval rightEval (Realizes.mul left right)
-  | pow base exponent baseEval =>
-    induction exponent with
-    | zero =>
-      intro stack _
-      refine ⟨[], (Realizes.constant 1 stack).output_congr (.pow base 0 :: stack) ?_⟩
-      intro assignment
-      simp [SizeExpression.eval]
-    | succ exponent powerEval =>
-      have combined := binary base (SizeExpression.pow base exponent) (SizeExpression.mul base (SizeExpression.pow base exponent))
-        [base, SizeExpression.pow base exponent] baseEval powerEval (Realizes.mul (ctx := ctx) base (SizeExpression.pow base exponent))
-      intro stack contains
-      obtain ⟨scratch, trace⟩ := combined stack contains
-      refine ⟨scratch, trace.output_congr (.pow base (exponent + 1) :: scratch ++ stack) ?_⟩
-      intro assignment
-      simp [SizeExpression.eval, pow_succ, Nat.mul_comm]
+  intro stack contains
+  obtain ⟨scratch, certificate⟩ := SizeFrame.evaluates expression stack contains
+  exact ⟨scratch, Realizes.of_frame certificate⟩
 
 /-- The runtime header lists parameters in an explicitly chosen finite order.
 The original header and arbitrary canonical input remain after the scratch. -/

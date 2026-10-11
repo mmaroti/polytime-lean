@@ -128,16 +128,17 @@ private theorem erase (cells left right : List Symbol) (current : Symbol)
     rw [changed] at rest
     simpa [Nat.mul_add, Nat.add_assoc] using Tape.Steps.next write (Tape.Steps.next back rest)
 
-/-- Erase evaluation scratch and restore the original counter header. The scalar
-output and the complete matrix suffix remain untouched. The number of header
-fields is fixed in the controller, while all field values and scratch lengths vary. -/
-theorem realizes (values scratch : List ℕ) (address : ℕ) (right : List Symbol)
+/-- Restore the original header, clearing scratch through its boundary marker.
+Both caller regions survive. The exit head returns to the header, with the
+cleared scratch cells retained as an explicit blank margin before it. -/
+theorem realizes_framed (values scratch : List ℕ) (address : ℕ) (caller right : List Symbol)
     (nonempty : values ≠ []) :
     Tape.Steps (machine values.length)
       ((fields values).length + 3 * ((fields scratch).length + address) + 8)
       (Tape.configuration (Fin.last values.length, 0)
-        ((fields values).reverse ++ (fields scratch).reverse ++ 6 :: (List.replicate address 0 ++ [7])) right)
-      (Tape.configuration (0, 5) [] (fields values ++ right)) := by
+        ((fields values).reverse ++ (fields scratch).reverse ++ 6 :: (List.replicate address 0 ++ 7 :: caller)) right)
+      (Tape.configuration (0, 5)
+        (List.replicate ((fields scratch).length + address + 2) 0 ++ caller) (fields values ++ right)) := by
   let trash := (fields scratch).reverse ++ [6]
   have trashNonempty : trash ≠ [] := by simp [trash]
   have trashSplit : trash.headD 6 :: trash.tail = trash := by
@@ -149,7 +150,7 @@ theorem realizes (values scratch : List ℕ) (address : ℕ) (right : List Symbo
     | nil => decide
     | append_singleton before value =>
       simp [trash, fields, List.reverse_append, List.append_assoc]
-  let garbage := trash.tail ++ List.replicate address 0 ++ [7]
+  let garbage := trash.tail ++ List.replicate address 0 ++ 7 :: caller
   let cells := (fields values).reverse ++ trash.headD 6 :: garbage
   have cellsNonempty : cells ≠ [] := by simp [cells]
   have enter : Turing.TM0.step (machine values.length)
@@ -177,17 +178,17 @@ theorem realizes (values scratch : List ℕ) (address : ℕ) (right : List Symbo
     · rcases UnaryMachine.fields_symbols scratch symbol member with equality | equality <;> subst symbol <;> decide
     · subst symbol; decide
     · subst symbol; decide
-  have erased := erase (count := values.length) (trash.tail ++ List.replicate address 0) []
+  have erased := erase (count := values.length) (trash.tail ++ List.replicate address 0) caller
     (fields values ++ right) (trash.headD 6) safe
   let width := (trash.tail ++ List.replicate address 0).length + 2
   have returnHead := Tape.scan_right (machine := machine values.length) (state := (0, 4))
-    (List.replicate width 0) [] (fields values ++ right) (by
+    (List.replicate width 0) caller (fields values ++ right) (by
       intro symbol member
       have equality : symbol = 0 := List.eq_of_mem_replicate member
       subst symbol; rfl)
   have returned : Tape.Steps (machine values.length) 1
-      (Tape.configuration (0, 4) (List.replicate width 0) (fields values ++ right))
-      (Tape.configuration (0, 5) (List.replicate width 0) (fields values ++ right)) := by
+      (Tape.configuration (0, 4) (List.replicate width 0 ++ caller) (fields values ++ right))
+      (Tape.configuration (0, 5) (List.replicate width 0 ++ caller) (fields values ++ right)) := by
     have fieldsNonempty : fields values ≠ [] := by
       cases values with
       | nil => exact False.elim (nonempty rfl)
@@ -199,19 +200,9 @@ theorem realizes (values scratch : List ℕ) (address : ℕ) (right : List Symbo
       have nonzero : symbol ≠ 0 := by
         rcases UnaryMachine.fields_symbols values symbol member with equality | equality <;> subst symbol <;> decide
       exact Tape.Steps.next (Tape.write (machine := machine values.length) (state := (0, 4))
-        (nextState := (0, 5)) (List.replicate width 0) (tail ++ right) symbol symbol
+        (nextState := (0, 5)) (List.replicate width 0 ++ caller) (tail ++ right) symbol symbol
         (by simp [machine, nonzero])) (.zero _)
-  have blankLeft (length : ℕ) : Tape.configuration ((0, 5) : State values.length)
-      (List.replicate length (0 : Symbol)) (fields values ++ right) =
-      Tape.configuration ((0, 5) : State values.length) [] (fields values ++ right) := by
-    induction length with
-    | zero => rfl
-    | succ length hypothesis =>
-      rw [List.replicate_succ']
-      exact (Tape.configuration_append_blank ((0, 5) : State values.length)
-        (List.replicate length (0 : Symbol)) (fields values ++ right)).trans hypothesis
-  simp only [List.reverse_replicate, List.append_nil] at returnHead
-  rw [blankLeft] at returned
+  simp only [List.reverse_replicate] at returnHead
   dsimp only [cells, garbage] at enter preserved switch
   simp only [List.append_assoc] at enter preserved erased switch
   have result := Tape.Steps.next enter (preserved.trans (Tape.Steps.next switch
@@ -228,6 +219,64 @@ theorem realizes (values scratch : List ℕ) (address : ℕ) (right : List Symbo
   · simp only [List.length_replicate]
     omega
   · simp only [List.append_assoc, ← List.cons_append, trashSplit, trash, List.singleton_append]
+  · rw [returnWidth]
+
+/-- Finish a call by clearing its evaluator scratch and restoring the retained
+header. A finite blank margin separates the call from protected caller data. -/
+theorem restore {Controller : Type} [Inhabited Controller]
+    {program : Turing.TM0.Machine Symbol Controller} {entry exit : Controller} {ticks : ℕ}
+    {initial : Turing.Tape Symbol} (values scratch : List ℕ) (address margin : ℕ)
+    (caller right : List Symbol) (countCorrect : values.length = count) (nonempty : values ≠ [])
+    (halt : ∀ symbol, program exit symbol = none)
+    (called : Tape.Steps program ticks ⟨entry, initial⟩
+      (Tape.configuration exit ((fields scratch ++ fields values).reverse ++ 6 ::
+        (List.replicate address 0 ++ 7 :: (List.replicate margin 0 ++ caller))) right)) :
+    Tape.Steps (Tape.sequence program (machine count) (Fin.last count, 0))
+      (ticks + ((fields values).length + 3 * ((fields scratch).length + address) + 8 + 1))
+      ⟨.inl entry, initial⟩
+      (Tape.configuration (.inr (0, 5))
+        (List.replicate ((fields scratch).length + address + 2 + margin) 0 ++ caller)
+        (fields values ++ right)) := by
+  have returned := realizes_framed values scratch address (List.replicate margin 0 ++ caller) right nonempty
+  rw [countCorrect] at returned
+  have returned' : Tape.Steps (machine count)
+      ((fields values).length + 3 * ((fields scratch).length + address) + 8)
+      (Tape.configuration (Fin.last count, 0) ((fields scratch ++ fields values).reverse ++ 6 ::
+        (List.replicate address 0 ++ 7 :: (List.replicate margin 0 ++ caller))) right)
+      (Tape.configuration (0, 5)
+        (List.replicate ((fields scratch).length + address + 2 + margin) 0 ++ caller)
+        (fields values ++ right)) := by
+    simpa only [List.reverse_append, List.append_assoc, List.replicate_add] using returned
+  exact Tape.sequence_steps (Fin.last count, 0) called halt returned'
+
+/-- The same restoration rule supplies the original blank-left calling convention. -/
+theorem restore_blank {Controller : Type} [Inhabited Controller]
+    {program : Turing.TM0.Machine Symbol Controller} {entry exit : Controller} {ticks : ℕ}
+    {initial : Turing.Tape Symbol} (values scratch : List ℕ) (address : ℕ)
+    (right : List Symbol) (countCorrect : values.length = count) (nonempty : values ≠ [])
+    (halt : ∀ symbol, program exit symbol = none)
+    (called : Tape.Steps program ticks ⟨entry, initial⟩
+      (Tape.configuration exit ((fields scratch ++ fields values).reverse ++ 6 ::
+        (List.replicate address 0 ++ [7])) right)) :
+    Tape.Steps (Tape.sequence program (machine count) (Fin.last count, 0))
+      (ticks + ((fields values).length + 3 * ((fields scratch).length + address) + 8 + 1))
+      ⟨.inl entry, initial⟩
+      (Tape.configuration (.inr (0, 5)) [] (fields values ++ right)) := by
+  have result := restore values scratch address 0 [] right countCorrect nonempty halt called
+  simpa only [Nat.add_zero, List.replicate_zero, List.append_nil,
+    show (0 : Symbol) = default from rfl, Tape.configuration_replicate_blank] using result
+
+/-- The original blank-left convention follows by taking an empty caller. -/
+theorem realizes (values scratch : List ℕ) (address : ℕ) (right : List Symbol)
+    (nonempty : values ≠ []) :
+    Tape.Steps (machine values.length)
+      ((fields values).length + 3 * ((fields scratch).length + address) + 8)
+      (Tape.configuration (Fin.last values.length, 0)
+        ((fields values).reverse ++ (fields scratch).reverse ++ 6 :: (List.replicate address 0 ++ [7])) right)
+      (Tape.configuration (0, 5) [] (fields values ++ right)) := by
+  simpa only [List.append_nil, show (0 : Symbol) = default from rfl,
+    Tape.configuration_replicate_blank] using
+    realizes_framed values scratch address [] right nonempty
 
 @[simp] theorem halt (symbol : Symbol) : machine count (0, 5) symbol = none := rfl
 

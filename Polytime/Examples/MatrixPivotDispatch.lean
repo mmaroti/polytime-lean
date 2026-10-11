@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime.NamedHeader
 import Polytime.Examples.MatrixPivotStep
 import Polytime.FiniteDispatchMachine
 
@@ -30,6 +31,19 @@ open Matrices TupleMachine
 
 -- scalarLevel: the mathematical carrier of the fixed finite field.
 universe scalarLevel
+
+/-- Candidate and saved starting row remain distinct header roles. -/
+inductive HeaderField
+  | zeroColumn | candidate | rowCount | column | columnCount | start
+  deriving DecidableEq
+
+def prepareSource : List HeaderField := [.zeroColumn, .candidate, .rowCount, .column, .columnCount, .start]
+def prepareTarget : List HeaderField := [.start, .candidate, .zeroColumn, .columnCount, .column, .rowCount]
+def prepareMoves : List HeaderField := prepareTarget.reverse
+
+def skipSource : List HeaderField := [.candidate, .rowCount, .column, .columnCount, .start]
+def skipTarget : List HeaderField := [.candidate, .start, .rowCount, .column, .columnCount]
+def skipMoves : List HeaderField := skipTarget.reverse
 
 noncomputable section SearchDispatch
 
@@ -69,11 +83,11 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
   let pivotControllerFinite : Fintype PivotState := pivotFinite
   let pivotControllerInhabited : Inhabited PivotState := pivotInhabited
   obtain ⟨PrepareState, prepareFinite, prepareInhabited, prepareEntry, prepareExit, prepare,
-    prepareHalt, prepareRuns⟩ := HeaderMoves.realizes [2, 3, 4, 3, 4, 5]
+    prepareHalt, prepareRuns⟩ := NamedHeader.realizes prepareSource prepareMoves (by decide)
   let prepareControllerFinite : Fintype PrepareState := prepareFinite
   let prepareControllerInhabited : Inhabited PrepareState := prepareInhabited
   obtain ⟨SkipState, skipFinite, skipInhabited, skipEntry, skipExit, skip,
-    skipHalt, skipRuns⟩ := HeaderMoves.realizes [3, 3, 3, 4, 4]
+    skipHalt, skipRuns⟩ := NamedHeader.realizes skipSource skipMoves (by decide)
   let skipControllerFinite : Fintype SkipState := skipFinite
   let skipControllerInhabited : Inhabited SkipState := skipInhabited
   obtain ⟨RemoveState, removeFinite, removeInhabited, removeEntry, removeExit, remover,
@@ -118,6 +132,13 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
   · intro rows columns matrix start candidate ordered bounded column nonzero initialScalar right
     dsimp only
     let matrixWidth := (domain field).bitWidth (assignment rows columns)
+    let headerValues : HeaderField → ℕ
+      | .zeroColumn => 0
+      | .candidate => candidate
+      | .rowCount => rows
+      | .column => column.val
+      | .columnCount => columns
+      | .start => start
     let suffix (value : Matrix (Fin rows) (Fin columns) field.Carrier) (scalar : field.Carrier) :=
       word (List.ofFn (BoolTuple.fromBits (field.codec.encode scalar))) ++ 3 ::
         (List.replicate matrixWidth (data true) ++ 4 ::
@@ -155,14 +176,15 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
       by_cases active : candidate < rows
       · have zeroed := SizeMachine.Constant.realizes 0
           (UnaryMachine.fields [candidate, rows, column.val, columns, start] ++ suffix matrix initialScalar)
-        obtain ⟨prepareTicks, prepareCost, prepared⟩ := prepareRuns
-          [0, candidate, rows, column.val, columns, start] (by simp) (suffix matrix initialScalar)
+        obtain ⟨prepareTicks, prepareCost, prepared⟩ := prepareRuns headerValues (suffix matrix initialScalar)
+        change prepareTicks ≤ 6 * (128 * ((UnaryMachine.fields
+          [0, candidate, rows, column.val, columns, start]).length + 1) ^ 2 + 1) at prepareCost
         have prepared' : Tape.Steps prepare prepareTicks
             (Tape.configuration prepareEntry []
               (UnaryMachine.fields [0, candidate, rows, column.val, columns, start] ++ suffix matrix initialScalar))
             (Tape.configuration prepareExit []
               (UnaryMachine.fields [start, candidate, 0, columns, column.val, rows] ++ suffix matrix initialScalar)) := by
-          simpa [HeaderMoves.applyMoves, HeaderMoves.moveToFront, List.getD] using prepared
+          simpa [prepareSource, prepareTarget, prepareMoves, headerValues, NamedHeader.result, NamedHeader.move] using prepared
         have zeroed' : Tape.Steps zeroer 3
             (Tape.configuration zeroEntry []
               (UnaryMachine.fields [candidate, rows, column.val, columns, start] ++ suffix matrix initialScalar))
@@ -189,14 +211,15 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
         refine ⟨finalScalar, 3 + (prepareTicks + 1) + (pivotTicks + 1), by omega, ?_⟩
         simpa [entries, exits, selector, trueMachine, preparedMachine, zeroer, zeroEntry,
           nextRow, updated, active, suffix, matrixWidth, Tape.configuration, List.append_assoc] using renamed
-      · obtain ⟨skipTicks, skipCost, skipped⟩ := skipRuns
-          [candidate, rows, column.val, columns, start] (by simp) (suffix matrix initialScalar)
+      · obtain ⟨skipTicks, skipCost, skipped⟩ := skipRuns headerValues (suffix matrix initialScalar)
+        change skipTicks ≤ 5 * (128 * ((UnaryMachine.fields
+          [candidate, rows, column.val, columns, start]).length + 1) ^ 2 + 1) at skipCost
         have skipped' : Tape.Steps skip skipTicks
             (Tape.configuration skipEntry []
               (UnaryMachine.fields [candidate, rows, column.val, columns, start] ++ suffix matrix initialScalar))
             (Tape.configuration skipExit []
               (UnaryMachine.fields [candidate, start, rows, column.val, columns] ++ suffix matrix initialScalar)) := by
-          simpa [HeaderMoves.applyMoves, HeaderMoves.moveToFront, List.getD] using skipped
+          simpa [skipSource, skipTarget, skipMoves, headerValues, NamedHeader.result, NamedHeader.move] using skipped
         obtain ⟨removeTicks, removeCost, removed⟩ := removeRuns
           [candidate, start, rows, column.val, columns] (by simp) (suffix matrix initialScalar)
         have removed' : Tape.Steps remover removeTicks
@@ -212,7 +235,6 @@ theorem realizes (field : FixedPresentation.{scalarLevel}) [Field field.Carrier]
             change falseMachine state symbol = some (next, action) at transition
             simp only [branches, transition, Option.map_some])
         have skipBounded : skipTicks ≤ relocationBound.eval (assignment rows columns) := by
-          simp only [List.length_cons, List.length_nil] at skipCost
           have lengthBound : (UnaryMachine.fields [candidate, rows, column.val, columns, start]).length + 1 ≤
               (UnaryMachine.fields [0, candidate, rows, column.val, columns, start]).length + 1 := by
             simp [UnaryMachine.fields]

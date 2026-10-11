@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime.NamedHeader
 import Polytime.Examples.MatrixRowSwap
 import Polytime.Examples.MatrixNormalizeRowSaved
 import Polytime.Examples.MatrixClearColumn
@@ -31,6 +32,17 @@ open Matrices TupleMachine
 
 -- scalarLevel: the mathematical carrier of the fixed finite field.
 universe scalarLevel
+
+/-- Names distinguish header roles even when their counter values coincide. -/
+inductive HeaderField
+  | savedPivotRow | targetRow | rowLimit | zeroColumn | columnCount | pivotColumn | pivotRow
+  deriving DecidableEq
+
+def sourceLayout : List HeaderField := [.savedPivotRow, .targetRow, .rowLimit, .zeroColumn, .columnCount, .pivotColumn, .pivotRow]
+
+def targetLayout : List HeaderField := [.rowLimit, .zeroColumn, .savedPivotRow, .pivotRow, .targetRow, .pivotColumn, .columnCount]
+
+def relocation : List HeaderField := targetLayout.reverse
 
 noncomputable section PivotStep
 
@@ -228,7 +240,7 @@ theorem realizes_restored (field : FixedPresentation.{scalarLevel}) [Field field
   let pivotControllerFinite : Fintype PivotState := pivotFinite
   let pivotControllerInhabited : Inhabited PivotState := pivotInhabited
   obtain ⟨MoveState, moveFinite, moveInhabited, moveEntry, moveExit, mover,
-    moveHalt, moveRuns⟩ := HeaderMoves.realizes [4, 5, 3, 3, 6, 6, 6]
+    moveHalt, moveRuns⟩ := NamedHeader.realizes sourceLayout relocation (by decide)
   let moveControllerFinite : Fintype MoveState := moveFinite
   let moveControllerInhabited : Inhabited MoveState := moveInhabited
   obtain ⟨RemoveState, removeFinite, removeInhabited, removeEntry, removeExit, remover,
@@ -259,14 +271,22 @@ theorem realizes_restored (field : FixedPresentation.{scalarLevel}) [Field field
       3 :: (List.replicate matrixWidth (data true) ++ 4 ::
         (word (List.ofFn (fun index : Fin matrixWidth =>
           (encode field rows columns updated).getLsbD index.val)) ++ right))
-    obtain ⟨moveTicks, moveCost, moved⟩ := moveRuns
-      [target.val, rows, rows, 0, columns, column.val, target.val] (by simp) outputSuffix
+    let headerValues : HeaderField → ℕ
+      | .savedPivotRow => target.val
+      | .targetRow => rows
+      | .rowLimit => rows
+      | .zeroColumn => 0
+      | .columnCount => columns
+      | .pivotColumn => column.val
+      | .pivotRow => target.val
+    obtain ⟨moveTicks, moveCost, moved⟩ := moveRuns headerValues outputSuffix
+    change moveTicks ≤ 7 * (128 * ((UnaryMachine.fields [target.val, rows, rows, 0, columns, column.val, target.val]).length + 1) ^ 2 + 1) at moveCost
     have moved' : Tape.Steps mover moveTicks
         (Tape.configuration moveEntry []
           (UnaryMachine.fields [target.val, rows, rows, 0, columns, column.val, target.val] ++ outputSuffix))
         (Tape.configuration moveExit []
           (UnaryMachine.fields [rows, 0, target.val, target.val, rows, column.val, columns] ++ outputSuffix)) := by
-      simpa [HeaderMoves.applyMoves, HeaderMoves.moveToFront, List.getD] using moved
+      simpa [sourceLayout, targetLayout, relocation, headerValues, NamedHeader.result, NamedHeader.move] using moved
     obtain ⟨removeTicks, removeCost, removed⟩ := removeRuns
       [rows, 0, target.val, target.val, rows, column.val, columns] (by simp) outputSuffix
     have removed' : Tape.Steps remover removeTicks

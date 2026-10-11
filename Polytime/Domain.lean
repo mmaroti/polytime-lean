@@ -162,6 +162,21 @@ decreasing_by
 def encode (d : DomainExpression ctx) (a : SizeAssignment ctx) :
     d.Value a → BitVec (d.bitWidth a) := (d.codec a).encode
 
+/-- View a fixed constructor through its mathematical carrier. -/
+def fixedEquiv (presentation : FixedPresentation.{u}) (assignment : SizeAssignment ctx) :
+    (fixed presentation).Value assignment ≃ presentation.Carrier :=
+  Equiv.cast (value_fixed presentation assignment)
+
+/-- View a power constructor as an ordinary fixed-size tuple. -/
+def powerEquiv (base : DomainExpression.{u} ctx) (length : SizeExpression ctx) (assignment : SizeAssignment ctx) :
+    (power base length).Value assignment ≃ (Fin (length.eval assignment) → base.Value assignment) :=
+  Equiv.cast (value_power base length assignment)
+
+/-- Mathematical indexing hides recursive-carrier casts. -/
+def powerLookup (base : DomainExpression.{u} ctx) (length : SizeExpression ctx) (assignment : SizeAssignment ctx)
+    (value : (power base length).Value assignment) (index : Fin (length.eval assignment)) : base.Value assignment :=
+  powerEquiv base length assignment value index
+
 /-- Constructor values hide the equalities induced by recursive carrier types. -/
 def fixedValue (p : FixedPresentation.{u}) (a : SizeAssignment ctx) (value : p.Carrier) :
     (fixed p).Value a := cast (value_fixed p a).symm value
@@ -205,6 +220,43 @@ private theorem encode_bit_transport {Source Target : Type u} {sourceWidth targe
   apply encode_bit_transport (value_power d e a) (bitWidth_power d e a)
   · simp only [codec]; exact cast_heq _ _
   · exact cast_heq _ _
+
+/-- Read a component's bits directly from an arbitrary power value. -/
+theorem encode_power_lookup_bit (base : DomainExpression.{u} ctx) (length : SizeExpression ctx)
+    (assignment : SizeAssignment ctx) (value : (power base length).Value assignment)
+    (index : Fin (length.eval assignment)) (offset : Fin (base.bitWidth assignment)) :
+    ((power base length).encode assignment value).getLsbD (index.val * base.bitWidth assignment + offset.val) =
+      (base.encode assignment (powerLookup base length assignment value index)).getLsbD offset.val := by
+  let tuple := powerEquiv base length assignment value
+  have represented : value = powerValue base length assignment tuple := by
+    change value = (powerEquiv base length assignment).symm tuple
+    exact ((powerEquiv base length assignment).symm_apply_apply value).symm
+  rw [represented, encode_power_bit]
+  simpa only [powerLookup, encode, tuple, ← represented] using
+    BitCodec.power_encode_entry_bit (base.codec assignment) (length.eval assignment) tuple index offset
+
+/-- Read a fixed constructor without constructing or exposing carrier casts. -/
+theorem encode_fixed_view_bit (presentation : FixedPresentation.{u}) (assignment : SizeAssignment ctx)
+    (value : (fixed presentation).Value assignment) (offset : ℕ) :
+    ((fixed presentation).encode assignment value).getLsbD offset =
+      (presentation.codec.encode (fixedEquiv presentation assignment value)).getLsbD offset := by
+  have represented : value = fixedValue presentation assignment (fixedEquiv presentation assignment value) := by
+    change value = (fixedEquiv presentation assignment).symm (fixedEquiv presentation assignment value)
+    exact ((fixedEquiv presentation assignment).symm_apply_apply value).symm
+  rw [represented, encode_fixed_bit]
+  simp only [← represented]
+
+/-- Fixed-entry lookup exposes the scalar width directly. -/
+theorem encode_power_fixed_lookup_bit (presentation : FixedPresentation.{u}) (length : SizeExpression ctx)
+    (assignment : SizeAssignment ctx) (value : (power (fixed presentation) length).Value assignment)
+    (index : Fin (length.eval assignment)) (offset : Fin presentation.bitWidth) :
+    ((power (fixed presentation) length).encode assignment value).getLsbD
+        (index.val * presentation.bitWidth + offset.val) =
+      (presentation.codec.encode (fixedEquiv presentation assignment
+        (powerLookup (fixed presentation) length assignment value index))).getLsbD offset.val := by
+  have component := encode_power_lookup_bit (fixed presentation) length assignment value index
+    ⟨offset.val, by simp⟩
+  simpa only [bitWidth_fixed] using component.trans (encode_fixed_view_bit presentation assignment _ offset.val)
 
 @[simp] theorem encode_product_bit (d : DomainExpression.{u} ctx) (ds : List (DomainExpression ctx))
     (a : SizeAssignment ctx) (value : d.Value a × (product ds).Value a) (offset : ℕ) :
