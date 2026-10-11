@@ -1,4 +1,4 @@
-# Target examples for Polytime1
+# Shared target examples
 
 The first three examples are the initial implementation targets, in order;
 examples 4–6 are additional targets. They specify
@@ -16,14 +16,15 @@ maximum, with an added constant), with constants and degree allowed to depend
 on P and S. Users should not have to calculate the resulting polynomial.
 
 The external machine receives the complete size assignment and encoded input.
-Its certified wrapper prepares the working frame, invokes the algorithm on
-that frame, and extracts the output. Copying, navigation, arithmetic,
-initialization, and extraction all count toward the runtime guarantee.
+Its certified wrapper prepares the working storage, invokes the algorithm, and
+extracts the output. Copying, navigation, arithmetic, initialization, and
+extraction all count toward the runtime guarantee.
 
-The framework must provide the [shared building-block libraries](#shared-building-block-libraries)
-specified below. Examples should compose their certified operations rather
-than each developing its own arithmetic, buffers, DAG machinery, or tape
-navigation. These are development requirements, not claims of current support.
+The framework must provide the [shared building-block
+libraries](#shared-building-block-libraries) specified below. Examples should
+compose their certified operations rather than each developing its own
+arithmetic, buffers, DAG machinery, or tape navigation. These are development
+requirements, not claims of current support.
 
 ## 1. Gauss–Jordan elimination over a fixed finite field
 
@@ -507,7 +508,7 @@ variables. Stronger streaming and space bounds require separate certificates.
 
 ## Shared building-block libraries
 
-These libraries belong to Polytime1 and are reusable targets in their own right.
+Each implementation must provide these libraries as reusable targets.
 Develop their operations when required by the examples, keeping the interfaces
 mathematical and avoiding speculative additions. The first three application
 targets retain their priority; libraries can be implemented incrementally as
@@ -640,7 +641,7 @@ Provide parsing and serialization of the complete size header, computation
 of domain widths and offsets, initial scratch/bootstrap routines, frame
 formatting, region navigation, copying between call frames, subroutine
 handoff, and output extraction. Connect canonical `BitVec` value encodings
-to the marked working layout over the universal finite tape alphabet.
+to the implementation's working layout over its finite tape alphabets.
 
 Each routine specifies its entry and exit head positions, marker invariants,
 assigned region, and preservation of caller-owned storage. The wrapper proves
@@ -701,17 +702,17 @@ the group structure theorem alone does not provide the required runtime data.
 
 ### Dependencies and acceptance
 
-The following map identifies the main library dependencies. B2 and B8 are
-common to every external realization; other dependencies may be indirect.
+The map uses the B numbers above. B2 and B8 are common to every external
+realization; other dependencies may be indirect.
 
 | Example | Main additional libraries |
 | --- | --- |
-| 1. Gauss–Jordan elimination | B1 counters, B5 scalar and matrix operations |
-| 2. Monolith preparation | B3 collections, B4 coordinate transport, B5 fixed tables, B10 fixed-size closure |
-| 3. Smith normal form | B1 binary integers, B4 permutations, B5 integer matrix operations |
-| 4. Layered-word exploration | B3 collections, B5 matrix application, B9 compression, B11 modular membership |
-| 5. Central-direction saturation | B5 matrix actions, B7 annotations, B9 compression, B10 worklists, B11 membership |
-| 6. Clause encoding conversion | B1 counters and bit operations, B3 bounded traversal |
+| 1. Gauss–Jordan elimination | B1, B5 |
+| 2. Monolith preparation | B3, B4, B5, B10 |
+| 3. Smith normal form | B1, B4, B5 |
+| 4. Layered-word exploration | B3, B5, B9, B11 |
+| 5. Central-direction saturation | B5, B7, B9, B10, B11 |
+| 6. Clause encoding conversion | B1, B3 |
 
 Prioritize binary arithmetic, bounded buffers, basic matrix operations, and
 shared DAG processing as independent milestones, while developing the
@@ -731,7 +732,8 @@ the certified runtime and capacity bounds.
 
 The specifications above are self-contained.
 
-Acceptance requires actual algorithms built from Polytime1's library, their
-mathematical contracts, bounded intermediate representations, and the complete
-machine-runtime theorem. The reference projects are read-only design sources;
-implementing these targets belongs in this repository.
+Acceptance requires actual algorithms built from each implementation's library,
+their mathematical contracts, bounded intermediate representations, and the
+complete machine-runtime theorem. Implementing these targets belongs in this
+repository.
+

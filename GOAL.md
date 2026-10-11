@@ -1,11 +1,13 @@
-# Polytime1: working specification
+# Shared framework specification
 
-This document records the framework being designed. Requirements below reflect
-the intended goal; proposals and open questions are not yet settled decisions.
-The reference projects under `temp/` inform the design but remain outside this
-repository's implementation scope.
+This document records requirements shared by all implementations. Current
+coverage, execution designs, and implementation-specific next steps belong in
+each implementation's README; target algorithms belong in
+[EXAMPLES.md](EXAMPLES.md). Proposals and open questions are not yet settled
+decisions. The reference projects under `temp/` inform the design but remain
+outside this repository's implementation scope.
 
-Size parameters now have equal roles. The data layer has no distinguished N
+Size parameters have equal roles. The data layer has no distinguished N
 and no admissibility bounds between parameters. Algorithms will be polynomial
 in all declared size parameters, measured by one plus their sum. Generic
 algorithm discussions below using N mean this aggregate, not a parameter
@@ -137,15 +139,15 @@ Examples of required domains include:
 
 - `A^N`, interpreted as exactly N entries of a fixed finite carrier A.
 - Lists of length at most a specified polynomial in N.
-- Nested lists over the disjoint union of fixed finite carriers A and B, with
-  at most `N^3 + N^2` outer entries and at most `N^4` entries in each inner list.
+- Nested lists over the disjoint union of fixed finite carriers A and B, with at
+  most `N^3 + N^2` outer entries and at most `N^4` entries in each inner list.
   Polynomial encoded size should follow from generic nested-list rules without
   asking users to compute the resulting polynomial. Framing, tags, and empty
   lists must be included in the library's encoding proof.
 - K-by-L matrices over a fixed finite carrier, with K and L as independent
   size parameters. Dependent records carrying dimensions are a later extension.
 
-The initial implemented layer uses a recursive domain language with `Fixed`,
+The initial domain language must support `Fixed`,
 `Product`, `Sum`, and `Power`. A Fixed domain supplies an explicit equivalence
 with `Fin k`; its binary labels use `Nat.clog 2 k` bits. Product concatenates
 fields from a fixed finite list. Sum uses a binary alternative tag, its
@@ -153,19 +155,18 @@ payload, and canonical zero padding to the maximum payload width. Power
 contains an exact number of entries, specified by any natural-coefficient
 multivariate polynomial in the size parameters, including constants.
 
-These constructors give fixed-width codecs with round-trip and canonical
-decoding theorems, and automatically compose polynomial-size certificates.
-The initial expression language remains limited to these four constructors.
-Bounded lists, buffers, and heterogeneous coordinates use derived presentations
-with active counts, tags, and contracts; dependent records remain deferred.
-Domain certificates alone establish no algorithmic runtime claim. Declared
-capacities use executable arithmetic expressions with derived mathematical
-polynomials and a proved agreement theorem.
-The executable evaluator has an agreement theorem and a polynomial-time tape
-realization. Exact widths may also use operations such as
-`max` and need not themselves be polynomial expressions, only polynomially bounded.
-Constructor encoding equations hide representation casts and transports
-behind reusable rewriting lemmas.
+These constructors must give fixed-width codecs with round-trip and canonical
+decoding theorems, and automatically compose polynomial-size certificates. The
+initial expression language remains limited to these four constructors. Bounded
+lists, buffers, and heterogeneous coordinates use derived presentations with
+active counts, tags, and contracts; dependent records remain deferred. Domain
+certificates alone establish no algorithmic runtime claim. Declared capacities
+use executable arithmetic expressions with derived mathematical polynomials and
+a proved agreement theorem. The executable evaluator requires an agreement
+theorem and a polynomial-time machine realization. Exact widths may also use
+operations such as `max` and need not themselves be polynomial expressions, only
+polynomially bounded. Constructor encoding equations hide representation casts
+and transports behind reusable rewriting lemmas.
 
 Representations should provide encoding, decoding, a round-trip theorem, and
 encoded-size bounds. Finite indexing needs an explicit enumeration, not just
@@ -306,8 +307,8 @@ and storing returned values. Reindexing is an operation on existing domain
 expressions, giving the value family `D (p(a))`, not a new constructor.
 
 Within a loop, a call site's p is always evaluated at the enclosing program's
-unchanged assignment a. It must not instead be applied to the assignment used
-by the previous iteration. Nested calls compose their fixed polynomial expressions;
+unchanged assignment a. It must not instead be applied to the assignment used by
+the previous iteration. Nested calls compose their fixed polynomial expressions;
 the initial core does not introduce recursive self-calls.
 
 Changing the parameter does not implicitly change a value's contents. For
@@ -329,11 +330,11 @@ machine implementations as new primitive algorithms. Library primitives
 themselves require proved machine realization; no unverified oracle or bare
 function with an asserted cost may enter the certified core.
 
-Named intermediate values provide sharing without a separate program-DAG
-syntax. Traversal, mapping, folding, and bounded repetition can be
-derived from while loops, counters, and list/tuple lookup rather than separate
-core iteration constructs. A generated DAG is runtime data, whose construction
-and evaluation must both be accounted for. Shared term certificates should remain compact
+Named intermediate values provide sharing without a separate program-DAG syntax.
+Traversal, mapping, folding, and bounded repetition can be derived from while
+loops, counters, and list/tuple lookup rather than separate core iteration
+constructs. A generated DAG is runtime data, whose construction and evaluation
+must both be accounted for. Shared term certificates should remain compact
 without requiring expansion into potentially much larger term trees.
 
 Composition certificates must control intermediate representation sizes as
@@ -384,300 +385,87 @@ execution belong to this proof. Tape/control-state reasoning should remain
 inside the reusable library. No termination or result guarantee is required
 on malformed encodings or inputs failing the mathematical hypothesis.
 
-### Working frames and a universal tape alphabet
+### Working storage and external interfaces
 
-A composite program may use one fixed domain expression as a working frame,
-with slots for loop counters, intermediate results, and subprogram arguments
-and results. Fixing P, S, and a complete size assignment determines exact slot
-widths and offsets. The frame expression is fixed across runs of `P_S`, while
-its physical dimensions vary with the assignment. Auxiliary navigation and
-scratch storage must also have polynomial bounds. Bounded-value invariants hold
-at program-operation boundaries; physical scratch and partially written slots
-need not encode complete values. Vacant storage uses explicit tags or physical
-initialization invariants, without assuming default elements or adding errors.
+The working layout is an implementation choice: a prepared frame, separate
+tapes, or another bounded representation. Fixing P, S, and the size assignment
+determines storage capacities. Controllers, tape counts, and finite alphabets
+may depend on P and S, but must be independent of runtime sizes. Growing
+indices and tuples must be stored as data, not in size-dependent controller
+states. A universal alphabet is optional; specialization-dependent finite
+alphabets require a proved standard-machine realization.
 
-Use one fixed finite tape alphabet for the framework, independent of P, S,
-and the size assignment. A possible symbol combines a data component
-(`blank`, `zero`, or `one`) with a fixed collection of marker flags. Flags
-may coexist on a cell and identify boundaries, source and destination cursors,
-or positions needed by counter routines. The exact alphabet and marker set
-remain open until the basic navigation routines establish what is needed.
-Do not introduce one alphabet symbol per slot or input position. Slot numbers,
-lengths, offsets, and saved navigation information can be ordinary tape data.
+Subroutine contracts specify valid representations, workspace, entry and exit
+head positions, and preservation of caller-owned storage. Composition proves
+entry/exit compatibility, including shared storage and scratch reuse. Bounded
+mathematical values are required at program-operation boundaries; physical
+scratch and partially written storage need not encode complete values.
+Vacant storage uses explicit initialization invariants or tags, without
+assuming default elements or adding implicit errors.
 
-The finite controller may depend on P and S, but not on the size assignment.
-Its states describe phases such as decrementing a counter, finding a cursor,
-advancing it, or returning to scratch. It knows the specialized domain
-expressions and constants; assignment-dependent widths and offsets are
-computed and stored on tape. Growing indices and whole tuples must not be
-stored in an input-size-dependent collection of controller states.
-
-An indexed lookup can preserve the index by copying it to a scratch counter,
-place a cursor at the array start, and repeatedly decrement the counter and
-advance the cursor by one element. A varying element width can itself be a
-tape-stored counter, or the routine can compute and follow a bit offset.
-Binary decrement uses a finite borrow-handling controller. Unary routing
-scratch is also permitted when the represented offset is polynomially
-bounded; short binary encodings alone would not justify this conversion for
-arbitrarily large numeric values. Index validity belongs to the lookup's
-mathematical hypothesis.
-
-Copying between disjoint slots can shuttle between source and destination
-cursors, remembering one bit in the controller, writing it, and advancing
-both cursors until the stored length is exhausted. Overlapping copies need a
-proved direction or scratch-buffer strategy. Navigation, copying, updating,
-scratch management, and marker restoration require reusable correctness and
-polynomial-cost proofs. Repeated scans need not give constant-time access;
-polynomial overhead in a polynomially bounded frame is sufficient.
-
-Canonical `BitVec` value encodings remain separate from the machine's working
-tape layout. Marker tracks, delimiters, frame metadata, and scratch space are
-initialized and managed by the realization layer, with their costs included
-in its proof. Program authors use mathematical lookup, update, and copying
-operations and supply shape invariants, without manipulating tape markers.
-
-### Prepared-frame algorithms and composition
-
-Separate a bare algorithm operating on an already prepared working frame from
-the external machine wrapper that prepares that frame. The bare algorithm's
-entry contract specifies valid boundaries and navigation metadata, its assigned
-region and scratch capacity, input slots containing valid representations,
-and an initial head position. Its exit contract specifies the output slots,
-preservation of caller-owned data and metadata outside its assigned region,
-and the final head position and marker configuration needed by subsequent
-routines. Navigation invariants identify the current region and support
-locating positions within it through reusable certified routines.
-
-Mathematical lookup preserves its arguments; physical routines may consume
-scratch copies or overwrite slots. The realization must preserve source values
-needed afterward, with copying and preservation justified by concrete subroutine
-contracts. No ownership type system is required initially. Tape navigation and
-step-count proofs should be reused through these contracts, with polynomial
-bounds in the enclosing frame size and explicit runtime polynomials kept internal.
-
-A composite frame reserves regions for its subroutines. Calls copy arguments
-into the callee's designated slots, execute the callee within its assigned
-region, and copy results into the caller's destination slots. Region
-identifiers, offsets, and saved navigation information are ordinary metadata
-over the same universal alphabet. Loop iterations can reuse prepared regions.
-With the initial finite call structure and no recursive self-calls, capacities
-for the whole frame can be determined in advance from P, S, and the size
-assignment, including fixed polynomial reparameterizations at call sites.
-Capacity is reserved storage, not the amount of data actively used during a
-run. Composition proves entry/exit compatibility and preservation of frame
-invariants; navigation and copying costs remain included in the library's
-polynomial realization proofs.
+Canonical value encodings remain separate from working layouts. Navigation,
+copying, allocation, marker maintenance, and representation conversions require
+certified implementations. Copying must preserve values needed afterward;
+overlapping copies require specified semantics and a proved strategy.
+Polynomial overhead in bounded storage is sufficient; constant-time access is
+not assumed. Program authors should not manipulate physical markers.
 
 The external input supplies the complete size assignment alongside canonical
-input bits. For each fixed P and S, a self-delimiting header records parameter
-values in a fixed known ordering. The assignment is separate from the
-mathematical input value and its domain encoding, and is required even when
-that input is empty. A preparation algorithm parses this header, computes
-input width, slot offsets, and all working capacities, formats the frame with
-its required markers and metadata, and installs the input in its slots. A
-final extraction routine returns the canonical output encoding.
-Other external formats, including exact compact clause streams, require
-certified parsing and serialization adapters, not alternative constructor codecs.
-Unary size headers are permitted because complexity is measured in parameter
-values, rather than their binary encoding lengths.
+input bits, even when the mathematical input is empty. A self-delimiting
+header uses a fixed known parameter ordering. Unary size headers are permitted
+because complexity is measured in parameter values, not their binary lengths.
+Other external formats require certified parsing and serialization adapters,
+not alternative constructor codecs.
 
-Preparation needs its own bootstrap navigation and scratch before the full
-frame exists. One possible convention surrounds the finite external input
-with blank cells distinct from encoded zero and one; scanning to its end
-finds an initial scratch region without first computing the input width.
-The exact bootstrap layout remains an implementation choice. Reading the
-header, locating the input boundary, computing capacities, initializing
-storage and markers, and transporting input data all require polynomial-cost
-proofs.
-
-The complete realization theorem composes three certified stages:
-preparation establishes the bare algorithm's entry contract; bare execution
-computes the result and preserves the frame invariants; extraction produces
-the specified output encoding. A prepared-frame assumption is appropriate
-for the bare interface, but the external runtime theorem must discharge it
-through an executable preparation procedure with polynomial time and storage.
-
-The current Boolean tuple example proves a quadratic bound for a standalone
-machine returning the selected bit and updated tuple. It consumes its index
-counter and prepares working markers from a particular framed input containing
-a unary size header, separator, and end delimiter. Its exchange contract is
-reused in a second example composing two indexed operations in adjacent regions
-of one prepared frame. The first selected bit supplies the second replacement;
-the first updated tuple and surrounding storage are preserved. Correctness and
-a quadratic step bound follow by composing exchange and handoff contracts.
-A general Lean-executable preparer now parses the size header, retains it,
-installs canonical input bits, and reserves exact-width blank scratch slots,
-with input preservation and polynomial storage proofs. Executable size expressions
-now have finite-controller tape realizations with polynomial transition bounds,
-preserving the original size header and input. The rest of frame preparation
-and a general program compiler remain to be realized on tape. Gauss–Jordan
-elimination now has an executable mathematical implementation with proofs of
-reduced row-echelon form and invertible row equivalence. Fixed scalar tables
-have tape realizations, and a guarded-loop rule composes concrete guard and
-body traces with invariant and iteration-bound proofs. Indexed scalar-entry lookup
-and writes now have canonical-encoding contracts and polynomial tape bounds;
-their basic contracts take binary addresses as scratch input. Lookup also composes blank
-scratch initialization and conversion of a supplied bounded unary address, with
-a canonical matrix-entry contract. Row-major address arithmetic also has a
-finite-controller tape proof with a polynomial bound in matrix dimensions;
-lookup now accepts the evaluator's unary result layout and preserves retained
-fields across address conversion. Arithmetic and lookup now compose into a
-canonical matrix-entry read with a polynomial bound in the dimensions. Counter
-initialization accepts consumed all-one windows as well as blanks. Matrix-entry
-reads now also erase evaluator scratch and return to the original counter header,
-preserving the scalar result and matrix suffix. Their contracts accept the previous
-scalar output and consumed counter windows, and two complete reads now compose in
-one restored frame with a polynomial tape bound. Runtime matrix-entry writes now
-also compute their addresses, preserve the replacement scalar, update the canonical
-matrix encoding, and clear scratch before returning to the header. Scratch
-slots support in-place fixed-table operations, including multiplication of two
-runtime scalars; matrix-entry reads, unary operations, and writes now compose in
-one restored frame with a polynomial tape bound. Unary header increments preserve
-following storage, and an entry transformation now composes with advancing its
-column counter. Restoring tape guards now control a complete traversal applying
-a fixed unary operation to one row, preserving other rows and clearing the final
-guard bit, with a polynomial bound. A fixed finite dispatcher now reads a leading
-scalar slot and scales a row by that runtime coefficient, with a uniform polynomial
-bound. Column reset now composes with scaling to restore its zero-index header.
-Pivot normalization now composes address evaluation, inverse lookup, scalar
-copying, and row scaling, with a polynomial bound and row-equivalence contract.
-Scratch reservation remains required.
-Runtime header-field relocation now has a quadratic tape bound and exchanges
-source/target row counters while preserving the shared column and frame suffix.
-Paired indexed reads and writes now retain both row counters; a binary operation
-on source and target entries updates the target and restores the original
-header, with a polynomial tape bound. Guarded column traversal now composes
-these updates into full row addition with a runtime coefficient, resetting the
-column counter and preserving row equivalence for distinct source and target
-rows, with a uniform polynomial tape bound. Three such row traversals now
-swap distinct runtime rows, restoring the counters and preserving row equivalence.
-A restoring guard also handles identical rows when the runtime indices are
-ordered, as they are in pivot search. Row elimination now reads and negates
-the target entry, then performs runtime row addition, clearing that entry when
-the source pivot is normalized and preserving row equivalence for distinct rows.
-A short-circuiting pivot guard now tests the candidate against the row count
-before reading its entry; it stops at a nonzero entry or the row-count sentinel.
-The guarded pivot-search loop now returns the first eligible nonzero row or
-the row-count sentinel, agrees with the mathematical `findPivot`, and has a
-polynomial tape bound. Indexed reads, writes, binary entry operations, and
-complete two-row traversals now preserve additional bounded header counters,
-including a separate runtime pivot-column counter. The original paired APIs
-are special cases of these proofs. Runtime row addition now retains these
-counters too. Row clearing exchanges the saved and traversal column fields,
-reads its coefficient, and restores both fields, retaining the pivot column
-for the next target row. Fixed header-relocation sequences now have a reusable
-finite-controller realization theorem. One target-row step retains the loop
-limit, clears the row, restores the guard layout, and increments the target,
-with a polynomial tape bound. Two guarded row intervals now compose into
-complete column clearing, preserving the pivot row and agreeing with the
-mathematical operation, with a polynomial tape bound. Ordered row swapping
-and normalization now retain caller counters and compose with column clearing
-into the mathematical pivot step, with a polynomial tape bound. Pivot search
-now composes with a found-pivot or sentinel branch, agrees with mathematical
-`columnStep`, and restores the four-counter frame with a polynomial tape bound.
-The guarded outer column traversal now computes complete elimination in a
-prepared frame, with reduced row-echelon form, an invertible row transformation,
-and a polynomial tape bound, including empty dimensions. The complete external
-Gauss–Jordan theorem now constructs that frame from the dimension header and
-canonical input, executes elimination, and extracts canonical output bits,
-clearing working storage. Its polynomial bound includes all three stages.
+The complete realization includes three certified stages: preparation
+establishes the internal entry contract; execution computes the result;
+extraction returns its canonical encoding. Preparation must account for
+bootstrap workspace, reading the header, computing required capacities,
+initializing storage and metadata, and transporting the input. Prepared
+workspace may be assumed by internal subroutines, but the external theorem
+must construct it with polynomial time and storage.
 
 ## Target examples and acceptance goals
 
-The required targets, in order, are specified in [EXAMPLES.md](EXAMPLES.md):
+[EXAMPLES.md](EXAMPLES.md) specifies the prioritized application targets and
+shared building-block libraries, including their contracts and edge cases.
+Each implementation must eventually complete those targets through its own
+certified primitives and combinators, bounded representations, and complete
+external machine-runtime theorem. Implementation status belongs in its README.
 
-1. **Gauss–Jordan elimination over a fixed finite field.** Use independent
-   row and column size parameters and compute the reduced row-echelon form
-   with unchanged dimensions and a proof of row equivalence.
-2. **Single-sorted SMP to a monolith-prepared catalogue instance.** For a
-   fixed finite algebra A, compute coordinate images, decompose them into
-   subdirectly irreducible factors from a fixed HS(A) catalogue, and recursively
-   add quotient coordinates so every monolith quotient is represented by a
-   bounded set of earlier coordinates. Prove subdirectness, the monolith graph
-   equations, linear coordinate expansion, and membership transport. Return an
-   explicit negative result when the target is outside a coordinate image.
-   Input-dependent sort counts are bounded runtime data; the catalogue and its
-   tables remain specialization constants.
-3. **Smith normal form of integer matrices.** For rectangular signed-binary
-   matrices, compute the Smith diagonal and unimodular row and column
-   transformations. Establish polynomial bit complexity and storage in matrix
-   dimensions and entry bit length. Use the result to decide integer systems,
-   recover coefficients, and transport finite-abelian quotient coordinates.
-
-EXAMPLES.md also specifies three additional targets: compressed layered-word
-exploration with counterexample words; central-direction saturation with shared
-witnesses; and compact-to-expanded Boolean clause encoding. These extend the suite without changing the
-priority of the first three examples.
-
-The initial finite-table arithmetic and polynomially bounded natural counters
-support the first two examples. The third requires signed integers of
-polynomially bounded bit length and certified bit-cost arithmetic; their
-numeric values need not be polynomially bounded. Integer arithmetic and the
-normal-form implementation are now required targets, rather than deferred
-outside the example suite.
-Padding a counter below N to N binary bits is acceptable; this convention must
-not allocate storage proportional to the numeric magnitude of general integers.
-Binary integer presentations and exact bounded arithmetic now have correctness
-and output-capacity proofs; their tape-runtime certificates remain to be proved.
-
-All three examples must use the common combinators, bounded representations,
-prepared-frame composition, and proved external machine-runtime guarantee.
-The building-block libraries are derived certified programs and proofs, except
-for the basic operations and execution machinery needed by the core.
 Mathematical existence of decompositions, coordinates, or normal forms is
 insufficient without the required executable construction. Shared term-DAG
-witnesses must stay compact when used; a correctness-only callback is not a
-certified solver. The example specifications include contracts, edge cases,
-and the boundaries left open by the reference projects.
+witnesses must stay compact; correctness-only callbacks are not certified
+solvers. Building-block libraries are derived certified programs and proofs,
+except for the basic operations and execution machinery needed by the core.
 
-The previously proposed semilattice and affine CSP examples remain motivating
-applications of the fixed-template domain design, but are no longer part of
-this three-example acceptance suite. Stronger resource goals such as logspace
-and randomized execution remain outside the initial scope.
+Integers have polynomially bounded bit capacities, not necessarily
+polynomially bounded numeric values. Arithmetic must have certified bit costs
+and sufficient output capacities; algorithms must bound intermediate bit
+lengths. Unary storage for polynomially bounded counters does not justify
+unary storage for general binary integers.
 
-## Reorganization and immediate goals
+Fixed-template CSP remains a motivating application of the domain design.
+Logspace guarantees and randomized execution are outside the initial scope.
 
-The complete Gauss–Jordan realization validates the approach, including actual
-tape costs for preparation and extraction. Retain fixed specialization,
-canonical domain encodings, mathematical contracts, and guard-driven loops.
-The remaining obstacle is reuse: algorithm proofs still expose tape layouts,
-controller composition, and explicit runtime polynomials. Extract the shared
-interface from these proofs before implementing another large example.
+## Development priorities
 
-- **Shared realization interface.** Generalize the pattern of
-  `SizeEvaluation.Realizes` to mathematical preconditions and postconditions,
-  with composition hiding controller packaging and polynomial witnesses.
-  Start with a predicate and reusable lemmas; add structures only when needed.
-- **Frame calling convention.** Specify reserved workspace, boundaries,
-  entry/exit head positions, and preservation of surrounding caller data.
-  Existing blank-left, preserved-right-suffix contracts do not alone establish
-  calls inside arbitrary reserved regions; prove adapters where necessary.
-- **Named layouts.** Derive numerical header positions and relocation sequences
-  from named fields, keeping positional bookkeeping inside the library.
-- **Representation invariants.** Relate mathematical states to physical frames,
-  allowing irrelevant scratch contents to remain existential. Avoid choosing
-  scratch results as components of mathematical loop transitions. Preserve
-  partial computation under preconditions without requiring behavior outside them.
-- **Derived loop rules.** Provide bounded traversal, search, and fold rules
-  from the existing while realization. Users supply mathematical invariants and
-  progress arguments; the library handles counter evolution, control handoff,
-  guard costs, and polynomial closure.
-- **Mathematical access interface.** Prove constructor lookup/update and encoding
-  compatibility once, hiding casts and heterogeneous equalities from algorithms.
-  Consolidate ordinary and saved-counter routines around general contracts,
-  retaining thin convenience wrappers.
-- **Binary arithmetic.** Keep bounded unary counters separate from general
-  binary integers. Smith reduction needs certified bit-cost arithmetic and an
-  algorithm-specific polynomial bound on intermediate coefficient growth.
+Develop the reusable interface from concrete example proofs. Prefer predicates
+and reusable lemmas to new structures, and avoid speculative definitions.
 
-The immediate milestone is to express the existing Gauss–Jordan column
-traversal through shared contracts and derived loop rules, without tape
-configurations, controller sums, header positions, or explicit runtime
-polynomials in its algorithm-level proof. Retain its complete external
-realization as the acceptance check. Then test the interface on a small SMP
-catalogue operation with active counts and on binary addition or division with
-variable-width storage. These tests guide further abstractions; they do not
-require a general compiler or a wholesale rewrite first.
+- Express mathematical preconditions and postconditions through representation
+  relations, allowing irrelevant scratch to remain existential.
+- Hide controller packaging, physical layouts, and runtime polynomial witnesses
+  behind certified composition and access rules.
+- Provide derived search, traversal, and fold rules. Users supply mathematical
+  invariants and progress arguments; the library accounts for guards,
+  handovers, and polynomial closure.
+- Specify preservation and workspace conventions that allow subroutine reuse
+  inside larger computations, including shared storage.
+- Test reuse on small catalogue operations with active counts and on arithmetic
+  with runtime bit capacities before implementing another large example.
+- Retain complete external realization as the acceptance check; a general
+  compiler or wholesale rewrite is not a prerequisite for improving reuse.
 
 ## Alternative implementations and comparison
 
@@ -685,11 +473,11 @@ Keep alternatives in one Lake package with the same pinned Lean and Mathlib
 dependencies. Each has a separate library, root module, source directory, and
 namespace: `Polytime1`, `Polytime2`, and similarly for later alternatives.
 Build separately with `lake build Polytime1` or `lake build Polytime2`;
-the default build checks both. See each alternative's README for its current status.
+the default build checks both. See each alternative's README for its status.
 
-- Implementations must not import one another. Copying proofs is allowed with
-  their origin recorded. Keep `Polytime1` as the working reference
-  implementation.
+- Implementations must not import or refer to one another, including in
+  comments and implementation documentation. Record copied-proof provenance
+  only in repository-level documentation.
 - GOAL.md and EXAMPLES.md specify common mathematical goals, contracts, and edge
   cases. Each alternative's README records its approach, coverage, and limits.
   Different internal designs are allowed; departures from the common goals
@@ -703,62 +491,17 @@ Record comparisons at agreed milestones using these metrics:
 
 | Metric | What it measures |
 | --- | --- |
-| Algorithm and correctness proof lines | Effort required from algorithm authors |
+| Algorithm and proof lines | Effort required from algorithm authors |
 | Reusable infrastructure lines | Initial framework investment |
-| Total Lean lines excluding comments and headers | Overall implementation size |
-| Representation and tape details exposed in algorithm proofs | Distance from mathematical reasoning |
-| Build time with matching cache conditions and scope | Practical verification cost |
+| Lean code lines, excluding comments and headers | Implementation size |
+| Physical details exposed in algorithm proofs | Distance from mathematics |
+| Build time with matching caches and scope | Verification cost |
 | Assumptions and missing realization obligations | Completeness of the result |
 
 Separate algorithm and infrastructure costs consistently, including any shared
 code, and record qualitative difficulties alongside line counts. The initial
 comparison targets are indexed lookup/update and bounded traversal, followed
 by Gauss–Jordan with the same external correctness and runtime obligations.
-
-### Polytime2: multi-tape realization
-
-Base `Polytime2` on a deterministic multi-tape Turing machine. The finite tape
-set, finite controller, and finite alphabet with a blank symbol for each tape
-are fixed by the program and specialization, independently of runtime sizes.
-Each tape extends in both directions and has its own head. A transition reads
-the symbols under all heads and selects a new state, symbols to write, and
-left, right, or stationary movements. Machine execution counts these transitions.
-
-Subroutines specify named tape roles, entry and exit states, valid encodings,
-boundaries, head positions, scratch requirements, and preservation contracts.
-Sequential composition uses the disjoint union of controller states; a
-handover transition enters the next routine without changing tapes or heads.
-Additional coordination work requires explicit transitions and cost proofs.
-
-Disjoint union of tape sets supplies independent storage, but explicit wiring
-also permits sharing. Embed each component's tape names injectively into an
-enclosing finite tape set, with matching alphabets and blank symbols. Components
-preserve every tape outside their image. Different components may share tapes;
-injectivity prevents aliasing within a component. Wiring is static, and the
-first component's contract must establish the next component's precondition.
-The composite tape count is the sum for disjoint wiring; shared tapes are
-counted only once. Only the active component controls its wired tapes.
-Reserve private scratch tapes as needed and reuse them only under compatible
-contracts. Alphabet translations are deferred until an example needs them.
-
-The first library target is lookup/update with three named tapes: a binary
-index, densely encoded array data, and one element, plus temporary tapes.
-Initially element bit width is a specialization constant; array length varies
-at runtime. Under the index-bound hypothesis, lookup preserves the index and
-array and returns the selected element; update preserves the index and supplied
-element and changes only the selected array entry. Both restore agreed head
-positions and scratch conditions. No implicit error result is introduced.
-Runtime-dependent reserved element widths, needed for integer matrices, require
-an explicit metadata convention in a later extension.
-
-First prove embedding with preservation, sequencing with additive transition
-bounds and handover cost, and lookup followed by update on a shared array and
-element tape. The composite copies one selected entry to another without copying
-the whole array. Then develop branching and guarded while composition. Keep
-polynomial storage and runtime certificates internal. A proved polynomial-cost
-simulation by a standard single-tape machine, such as Mathlib's TM0, remains
-required for comparison with the complete external realization of `Polytime1`;
-multi-tape correctness alone does not discharge that obligation.
 
 ## Decisions still being discussed
 
@@ -792,14 +535,15 @@ preserve these representation and certification boundaries:
   values. Polynomial-size witness existence alone does not establish a
   uniform polynomial-time constructor as N varies.
 - Signed integer solvers require extending the finite-table core with bounded
-  binary integer representations and bit-cost arithmetic; this is now required
+  binary integer representations and bit-cost arithmetic; this is required
   by the Smith-normal-form target. Randomized execution and logspace guarantees
   remain outside the initial scope.
 
 ## Reference motivations
 
-For the further semilattice CSP application, the proposed arc-consistency route is described
-in Bodirsky, Macpherson, and Thapper, *Constraint Satisfaction Tractability
-from Semi-lattice Operations on Infinite Sets*, §2 (finite-domain preliminary
-results): <https://arxiv.org/pdf/1111.6616>. This is design provenance, not an
-assumed axiom or a claim that this repository has already verified the result.
+For the further semilattice CSP application, the proposed arc-consistency route
+is described in Bodirsky, Macpherson, and Thapper, *Constraint Satisfaction
+Tractability from Semi-lattice Operations on Infinite Sets*, §2 (finite-domain
+preliminary results): <https://arxiv.org/pdf/1111.6616>. This is design
+provenance, not an assumed axiom or a claim that this repository has already
+verified the result.
