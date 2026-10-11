@@ -23,8 +23,7 @@ Each transition writes one symbol on every tape, then independently moves
 each head left, right, or leaves it stationary. Tapes reuse Mathlib's
 two-sided, eventually blank tape representation. Finiteness is imposed by
 the polynomial-time certificate, rather than by these execution definitions.
-The counted-trace composition proofs follow the pattern in `Polytime/Tape.lean`;
-this module has no dependency on that implementation.
+Counted-trace composition is proved directly for these multi-tape semantics.
 -/
 
 namespace Polytime2.MultiTape

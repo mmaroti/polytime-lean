@@ -1,4 +1,4 @@
-# Target examples for Polytime
+# Target examples for Polytime1
 
 The first three examples are the initial implementation targets, in order;
 examples 4–6 are additional targets. They specify
@@ -507,7 +507,7 @@ variables. Stronger streaming and space bounds require separate certificates.
 
 ## Shared building-block libraries
 
-These libraries belong to Polytime and are reusable targets in their own right.
+These libraries belong to Polytime1 and are reusable targets in their own right.
 Develop their operations when required by the examples, keeping the interfaces
 mathematical and avoiding speculative additions. The first three application
 targets retain their priority; libraries can be implemented incrementally as
@@ -731,7 +731,7 @@ the certified runtime and capacity bounds.
 
 The specifications above are self-contained.
 
-Acceptance requires actual algorithms built from Polytime's library, their
+Acceptance requires actual algorithms built from Polytime1's library, their
 mathematical contracts, bounded intermediate representations, and the complete
 machine-runtime theorem. The reference projects are read-only design sources;
 implementing these targets belongs in this repository.

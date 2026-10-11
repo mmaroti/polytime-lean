@@ -1,4 +1,4 @@
-# Polytime: working specification
+# Polytime1: working specification
 
 This document records the framework being designed. Requirements below reflect
 the intended goal; proposals and open questions are not yet settled decisions.
@@ -683,12 +683,13 @@ require a general compiler or a wholesale rewrite first.
 
 Keep alternatives in one Lake package with the same pinned Lean and Mathlib
 dependencies. Each has a separate library, root module, source directory, and
-namespace: `Polytime`, `Polytime2`, and similarly for later alternatives.
-Build separately with `lake build Polytime` or `lake build Polytime2`;
+namespace: `Polytime1`, `Polytime2`, and similarly for later alternatives.
+Build separately with `lake build Polytime1` or `lake build Polytime2`;
 the default build checks both. See each alternative's README for its current status.
 
 - Implementations must not import one another. Copying proofs is allowed with
-  their origin recorded. Keep `Polytime` as the working reference implementation.
+  their origin recorded. Keep `Polytime1` as the working reference
+  implementation.
 - GOAL.md and EXAMPLES.md specify common mathematical goals, contracts, and edge
   cases. Each alternative's README records its approach, coverage, and limits.
   Different internal designs are allowed; departures from the common goals
@@ -756,7 +757,7 @@ element tape. The composite copies one selected entry to another without copying
 the whole array. Then develop branching and guarded while composition. Keep
 polynomial storage and runtime certificates internal. A proved polynomial-cost
 simulation by a standard single-tape machine, such as Mathlib's TM0, remains
-required for comparison with the complete external realization of `Polytime`;
+required for comparison with the complete external realization of `Polytime1`;
 multi-tape correctness alone does not discharge that obligation.
 
 ## Decisions still being discussed

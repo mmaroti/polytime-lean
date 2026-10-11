@@ -1,7 +1,7 @@
 name = "polytime"
 version = "0.1.0"
 license = "Apache-2.0"
-defaultTargets = ["Polytime", "Polytime2"]
+defaultTargets = ["Polytime1", "Polytime2"]
 
 [[require]]
 name = "mathlib"
@@ -10,7 +10,7 @@ git = "https://github.com/leanprover-community/mathlib4.git"
 rev = "v4.34.0"
 
 [[lean_lib]]
-name = "Polytime"
+name = "Polytime1"
 
 [[lean_lib]]
 name = "Polytime2"

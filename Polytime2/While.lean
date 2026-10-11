@@ -21,8 +21,7 @@ import Polytime2.Complexity
 
 The guard leaves its result under the tape heads. A decreasing measure is
 mathematical proof data only: the machine never reads a measure or a fuel bound.
-The controller construction follows the guarded-loop pattern in
-`Polytime/WhileMachine.lean`, with independent multi-tape execution semantics.
+The controller construction uses independent multi-tape execution semantics.
 -/
 
 namespace Polytime2.MultiTape

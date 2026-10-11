@@ -104,7 +104,10 @@ def main() -> int:
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.lean"],
             cwd=ROOT, check=True, capture_output=True, text=True,
         )
-        paths = sorted(set(filter(None, listing.stdout.split("\0"))))
+        paths = sorted(
+            path for path in set(filter(None, listing.stdout.split("\0")))
+            if (ROOT / path).is_file()
+        )
         if not paths:
             print("No project Lean files found.", file=sys.stderr)
             return 1

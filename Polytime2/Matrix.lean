@@ -23,7 +23,7 @@ import Mathlib.Tactic
 
 Matrices retain their exact rectangular shape. Row equivalence is Mathlib's
 left action by an invertible matrix, rather than only equality of row spaces.
-The mathematical definitions and proofs are copied from `Polytime/Matrix.lean`.
+This module develops the mathematical definitions and proofs used below.
 -/
 
 namespace Polytime2.MatrixOperations

@@ -21,8 +21,8 @@ import Polytime2.Matrix
 
 Each column is visited once. A nonzero entry at or below the next pivot row
 is exchanged into place, normalized, and cleared from all other rows.
-The mathematical definitions and proofs are copied from `Polytime/GaussJordan.lean`;
-machine realization is developed independently in this alternative.
+The mathematical definitions and correctness proofs accompany this
+implementation's independent machine realization.
 -/
 
 namespace Polytime2.GaussJordan

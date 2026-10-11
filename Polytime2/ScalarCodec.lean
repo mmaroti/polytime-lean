@@ -70,7 +70,7 @@ def word (bits : BitVec width) : List Binary.Symbol :=
 @[simp] theorem word_length (bits : BitVec width) : (word bits).length = width := by
   simp [word, Binary.word]
 
-/-- Binary labels from a chosen fixed enumeration, as in `Polytime/Encoding.lean`. -/
+/-- Binary labels from a chosen fixed enumeration. -/
 def represent {cardinality : ℕ} (enumeration : Scalar ≃ Fin cardinality) (value : Scalar) :
     BitVec (Nat.clog 2 cardinality) :=
   BitVec.ofNatLT (enumeration value).val

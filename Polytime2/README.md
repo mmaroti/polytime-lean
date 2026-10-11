@@ -1,6 +1,6 @@
 # Polytime2
 
-An independent multi-tape implementation of the Polytime framework.
+A multi-tape implementation of polynomial-time algorithms.
 
 Implemented and proved:
 
@@ -90,7 +90,7 @@ Implemented and proved:
 
 Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
-There are no imports from `Polytime`.
+All algorithmic dependencies are defined within this implementation.
 
 Intermediate TM0 certificates retain track frames; the complete Gauss–Jordan
 certificate `GaussJordanExternal.realizes_output_tm0` extracts a standalone
