@@ -41,11 +41,6 @@ def accumulate : List Bool → List Bool → List Bool → List Bool
     accumulate (false :: shifted)
       (BinaryAddition.add total (if bit then shifted else List.replicate shifted.length false)) bits
 
-private theorem zero_value (count : ℕ) : value (List.replicate count false) = 0 := by
-  induction count with
-  | zero => rfl
-  | succ count hypothesis => simp [List.replicate_succ, value, hypothesis]
-
 /-- The number of iterations is the multiplier's digit count, not its value. -/
 theorem accumulate_length (shifted total bits : List Bool)
     (sameLength : shifted.length = total.length) :
@@ -76,7 +71,7 @@ theorem accumulate_value (shifted total bits : List Bool)
         (BinaryAddition.add total (if bit then shifted else List.replicate shifted.length false)).length := by
       rw [addedLength, List.length_cons, sameLength]
     rw [accumulate, hypothesis _ _ nextLength, BinaryAddition.add_value total _ selectedLength]
-    cases bit <;> simp [value, zero_value] <;> ring
+    cases bit <;> simp [value] <;> ring
 
 /-- Prepend a binary zero by moving the boundary one cell into blank storage. -/
 def shiftMachine : Machine (fun _ : Unit => Symbol) (Fin 4) := fun state symbols =>
@@ -410,7 +405,7 @@ theorem contract :
     have inner : 4 * (operands.1.length + operands.2.length) + 23 ≤
         4 * (sizes false + sizes true) + 23 := by omega
     exact cost.trans (Nat.add_le_add_right (Nat.mul_le_mul valid.2 inner) 1)
-  · simp [accumulate_value operands.1 (List.replicate operands.1.length false) operands.2 (by simp), zero_value]
+  · simp [accumulate_value operands.1 (List.replicate operands.1.length false) operands.2 (by simp)]
   · rw [accumulate_length operands.1 (List.replicate operands.1.length false) operands.2 (by simp), List.length_replicate]
     omega
   · rfl

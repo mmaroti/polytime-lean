@@ -42,6 +42,19 @@ def value : List Bool → ℕ
   | [] => 0
   | bit :: bits => bit.toNat + 2 * value bits
 
+/-- A padded binary word fits its declared digit capacity. -/
+theorem value_lt_pow_length (bits : List Bool) : value bits < 2 ^ bits.length := by
+  induction bits with
+  | nil => simp [value]
+  | cons bit bits hypothesis =>
+    cases bit <;> simp only [value, Bool.toNat_false, Bool.toNat_true, List.length_cons, pow_succ] <;>
+      nlinarith
+
+@[simp] theorem value_replicate_false (length : ℕ) : value (List.replicate length false) = 0 := by
+  induction length with
+  | zero => rfl
+  | succ length hypothesis => simp [List.replicate_succ, value, hypothesis]
+
 def decrement : List Bool → List Bool
   | [] => []
   | false :: bits => true :: decrement bits

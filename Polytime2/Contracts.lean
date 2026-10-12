@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Complexity
+import Polytime2.Wiring
 
 /-! # Mathematical maps realized by finite multi-tape machines
 
@@ -75,6 +76,48 @@ theorem congr [Fintype State]
   refine ⟨halt, bound, ?_⟩
   intro assignment value initial valid represented
   simpa only [agreement assignment value valid] using runs assignment value initial valid represented
+
+/-- Change boundary representations and strengthen the mathematical hypothesis. -/
+theorem adapt [Fintype State]
+    {machine : Machine Alphabet State} {entry exit : State}
+    {inputRepresentation adaptedInput : ∀ assignment, Input assignment → Tapes Alphabet → Prop}
+    {outputRepresentation adaptedOutput : ∀ assignment, Output assignment → Tapes Alphabet → Prop}
+    {hypothesis adaptedHypothesis : ∀ assignment, Input assignment → Prop}
+    {compute : ∀ assignment, Input assignment → Output assignment}
+    (certificate : Computes machine entry exit inputRepresentation outputRepresentation hypothesis compute)
+    (valid : ∀ assignment value, adaptedHypothesis assignment value → hypothesis assignment value)
+    (representedInput : ∀ assignment value tapes, adaptedInput assignment value tapes → inputRepresentation assignment value tapes)
+    (representedOutput : ∀ assignment value tapes, outputRepresentation assignment value tapes → adaptedOutput assignment value tapes) :
+    Computes machine entry exit adaptedInput adaptedOutput adaptedHypothesis compute := by
+  obtain ⟨halt, bound, runs⟩ := certificate
+  refine ⟨halt, bound, ?_⟩
+  intro assignment value initial good represented
+  obtain ⟨ticks, final, cost, trace, encoded⟩ := runs assignment value initial (valid _ _ good) (representedInput _ _ _ represented)
+  exact ⟨ticks, final, cost, trace, representedOutput _ _ _ encoded⟩
+
+-- sourceLevel: the component's finite tape names.
+universe sourceLevel
+
+/-- Wiring a mathematical contract hides the component's controller and preserves
+all unwired tapes through the underlying exact-cost wiring theorem. -/
+theorem wire {Source : Type sourceLevel} [Fintype Source] [Fintype State]
+    (wiring : Source ↪ TapeName)
+    {component : Machine (fun name => Alphabet (wiring name)) State} {entry exit : State}
+    {inputRepresentation : ∀ assignment, Input assignment → Tapes (fun name => Alphabet (wiring name)) → Prop}
+    {outputRepresentation : ∀ assignment, Output assignment → Tapes (fun name => Alphabet (wiring name)) → Prop}
+    {hypothesis : ∀ assignment, Input assignment → Prop}
+    {compute : ∀ assignment, Input assignment → Output assignment}
+    (certificate : Computes component entry exit inputRepresentation outputRepresentation hypothesis compute) :
+    Computes (MultiTape.wire wiring component) entry exit
+      (fun assignment value tapes => inputRepresentation assignment value (fun name => tapes (wiring name)))
+      (fun assignment value tapes => outputRepresentation assignment value (fun name => tapes (wiring name)))
+      hypothesis compute := by
+  obtain ⟨halt, bound, runs⟩ := certificate
+  refine ⟨by intro symbols; simp [MultiTape.wire, halt], bound, ?_⟩
+  intro assignment value initial good represented
+  obtain ⟨ticks, final, cost, trace, encoded⟩ := runs assignment value _ good represented
+  refine ⟨ticks, install wiring final initial, cost, wire_steps wiring _ trace initial (by intro name; rfl), ?_⟩
+  simpa only [install_at] using encoded
 
 variable {Middle : (Parameter → ℕ) → Type middleLevel}
 variable {First : Type firstLevel} {Second : Type secondLevel}

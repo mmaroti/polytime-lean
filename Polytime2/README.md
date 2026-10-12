@@ -15,17 +15,43 @@ A multi-tape implementation of polynomial-time algorithms.
 - Mathematical map contracts with relational representations and existential
   scratch, sequential composition, and a guarded mathematical fold rule.
   Gauss–Jordan's outer traversal uses the fold rule.
+- Explicit preserved caller context, with composition and wiring rules that
+  expose preservation of unwired tapes and their head positions.
+- Mathematical while and early-stopping search rules with logical invariants,
+  decreasing measures, and conserved answers; runtime witnesses stay internal.
+- Executable mathematical gcd with correctness, capacity preservation, and an
+  iteration bound in binary capacity. A complete four-tape gcd machine composes
+  a zero guard, binary remainder, scratch clearing, and operand copies through
+  the shared mathematical loop rule. Its external wrapper reads a unary width
+  and two binary words, initializes blank work tapes, and extracts standalone
+  binary TM0 output, with a polynomial bound including all wrapper costs.
 - Two fixed catalogue maps at runtime-selected active coordinates, sharing array
   and scalar scratch, preserving both indices, the active count, and inactive
   data, including nonpadding values.
 - Runtime-width binary addition with a final carry digit, linear transition
   cost, preserved operands and neighboring storage, and restored heads. Its
   mathematical contract states exact natural-number addition.
+- Runtime-width binary subtraction with an exact signed-difference contract,
+  a final borrow that also detects unsigned underflow, and linear tape cost.
+  Addition and subtraction reuse one finite-memory ripple scanner.
+- Binary long remainder with a mathematical contract and a quadratic tape
+  bound, preserved operands, restored heads, and fixed-width scratch. A shift
+  and restoring subtraction process each dividend bit once, using in-place
+  arithmetic with a retained finite carry or borrow.
 - Runtime-width shift-and-add multiplication with a polynomial transition bound
   in both operand digit counts. `AddMultiply.contract` composes addition and
   multiplication on shared tapes, computes `(left + right) * multiplier`, and
   proves the output bit-capacity bound. Its internal entry convention requires
-  prepared zero buffers; it does not yet provide an external arithmetic wrapper.
+  prepared zero buffers.
+- Counter-guided binary input transfer and zero-buffer initialization, including
+  zero widths and carry capacity. Fixed finite pipelines hide controller
+  injections and handovers behind stage contracts.
+- External addition followed by multiplication: read unary width fields and
+  binary operands with all working tapes blank, initialize buffers, compute
+  `(left + right) * multiplier`, and extract standalone binary TM0 output.
+  Mathematical contracts compose preparation and arithmetic; a reusable output
+  adapter accounts for simulation, startup, and erasure of working storage.
+  Bits are little endian and may retain leading capacity zeros.
 - Fixed-width element copying in exactly `2 * width + 1` transitions, preserving
   the source and neighboring data and restoring both heads.
 - Binary decrement with a polynomial digit-cost certificate, fixed controller,
@@ -110,9 +136,16 @@ Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
 All algorithmic dependencies are defined within this implementation.
 
-Intermediate TM0 certificates retain track frames; the complete Gauss–Jordan
-certificate `GaussJordanExternal.realizes_output_tm0` extracts a standalone
-binary word. Higher-level algorithm notation remains future work.
+Intermediate TM0 certificates retain track frames. The complete certificates
+`GaussJordanExternal.realizes_output_tm0`,
+`AddMultiplyExternal.realizes_output_tm0`, and
+`GcdExternal.realizes_output_tm0` extract standalone binary words.
+Higher-level algorithm notation remains future work.
+
+For gcd, size parameter `b` bounds both operands by `2^b`. The input stores
+`b + 1` in unary, terminated by `3`, then two little-endian words of that width.
+Their high zero digit prevents remainder-shift overflow. The output is the
+nonnegative binary gcd, including `gcd(0, 0) = 0`, with capacity zeros allowed.
 
 ## Execution design
 
@@ -159,14 +192,14 @@ output extraction, instantiated by the complete external Gauss–Jordan theorem.
 
 ## Limits and next steps
 
-- Extend mathematical contracts to lower-level routines and derive reusable
-  search and traversal rules from the guarded fold interface.
+- Extend mathematical contracts to lower-level routines and apply the shared
+  search rule to pivot search.
 - Simplify nested tape names, wiring, and alphabet-compatibility proofs.
 - Reuse the external parsing, initialization, simulation, serialization, and
   extraction adapters when adding algorithms.
-- Add external arithmetic preparation and extraction, Euclidean division, and
-  the remaining bit arithmetic for integer matrices. Extend polynomial
-  reparameterization of subprogram calls.
+- Add quotient production, signed arithmetic, and the remaining bit arithmetic
+  for integer matrices. Extend polynomial reparameterization of subprogram
+  calls.
 
 Recursive bounded-domain descriptions, a general size-expression evaluator,
 the SMP targets, and Smith normal form remain future work.
