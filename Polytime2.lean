@@ -17,12 +17,18 @@ limitations under the License.
 
 import Polytime2.Machine
 import Polytime2.Complexity
+import Polytime2.Contracts
+import Polytime2.Fold
 import Polytime2.Wiring
 import Polytime2.While
 import Polytime2.Copy
 import Polytime2.Branch
 import Polytime2.Storage
 import Polytime2.Binary
+import Polytime2.BinaryAddition
+import Polytime2.BinaryMultiplication
+import Polytime2.AddMultiply
+import Polytime2.CatalogueMap
 import Polytime2.TerminatedCopy
 import Polytime2.BinaryGuard
 import Polytime2.Head

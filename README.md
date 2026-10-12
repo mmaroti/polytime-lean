@@ -10,9 +10,6 @@ and their correctness and machine-runtime certificates.
 - [Polytime2](Polytime2/README.md): multi-tape implementation, coverage, and
   next steps.
 
-The Lake package is named `polytime`. Each implementation has its own library,
-root module, source directory, and namespace, with no imports between them.
-
 ## Setup and build
 
 Install Lean through Elan, then run from the repository root:
@@ -22,10 +19,8 @@ lake exe cache get
 lake build
 ```
 
-Lean and Mathlib are pinned to `v4.34.0`; `lake-manifest.json` records
-dependency revisions. Run `lake update` only when resolving dependencies again.
-Mathlib's cache command downloads compiled artifacts to avoid rebuilding from
-source.
+Lean and Mathlib are pinned to `v4.34.0`. The cache command downloads compiled
+Mathlib artifacts.
 
 Build one implementation with `lake build Polytime1` or `lake build Polytime2`.
 Use `import Polytime1` or `import Polytime2` in Lean.

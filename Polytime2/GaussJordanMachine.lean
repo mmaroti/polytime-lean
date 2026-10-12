@@ -17,6 +17,7 @@ limitations under the License.
 
 
 import Polytime2.GaussJordanColumn
+import Polytime2.Fold
 
 /-! # Complete multi-tape Gauss–Jordan elimination
 
@@ -81,7 +82,72 @@ private theorem drop_columns (start : ℕ) (valid : start < columns) :
   rw [List.getElem_finRange] at dropped
   exact dropped
 
-/-- The guard-driven execution agrees with the mathematical suffix traversal. -/
+/-- Only the current column, matrix, and pivot row are logical state. -/
+abbrev Value (Scalar : Type) (rows columns : ℕ) :=
+  ℕ × (Matrix (Fin rows) (Fin columns) Scalar × ℕ)
+
+def valid (value : Value Scalar rows columns) : Prop :=
+  value.1 ≤ columns ∧ value.2.2 ≤ rows
+
+def advance (value : Value Scalar rows columns) : Value Scalar rows columns :=
+  if active : value.1 < columns then
+    (value.1 + 1, GaussJordan.columnStep value.2.1 value.2.2 ⟨value.1, active⟩)
+  else value
+
+/-- Candidate and scalar scratch are existential; they are not fold components. -/
+def representation (value : Value Scalar rows columns) (tapes : Tapes (Alphabet Scalar)) : Prop :=
+  ∃ candidate sourceValue targetValue coefficient flag,
+    candidate ≤ rows ∧
+      tapes = frame value.2.1 candidate 0 value.2.2 value.1 sourceValue targetValue coefficient flag
+
+def guardedRepresentation (value : Value Scalar rows columns) (tapes : Tapes (Alphabet Scalar)) : Prop :=
+  representation value tapes ∧ result (read tapes) = decide (value.1 < columns)
+
+omit [Field Scalar] [DecidableEq Scalar] in
+private theorem guard_runs (value : Value Scalar rows columns) (initial : Tapes (Alphabet Scalar))
+    (_valid : valid value) (represented : representation value initial) :
+    ∃ ticks final, ticks ≤ 2 * columns + 3 ∧
+      Steps compareColumn ticks (0, initial) (2, final) ∧ guardedRepresentation value final := by
+  obtain ⟨candidate, sourceValue, targetValue, coefficient, flag, bounded, rfl⟩ := represented
+  refine ⟨_, _, ?_, compareColumn_steps value.2.1 candidate 0 value.2.2 value.1
+    sourceValue targetValue coefficient flag, ?_, by simp⟩
+  · have minimum := Nat.min_le_right value.1 columns; omega
+  · exact ⟨candidate, sourceValue, targetValue, coefficient, _, bounded, rfl⟩
+
+private theorem body_runs (value : Value Scalar rows columns) (initial : Tapes (Alphabet Scalar))
+    (bounded : valid value) (active : value.1 < columns) (represented : guardedRepresentation value initial) :
+    ∃ ticks final, ticks ≤ GaussJordanColumn.bound rows columns + 2 * columns + 4 ∧
+      Steps body ticks (bodyEntry, initial) (bodyExit, final) ∧ representation (advance value) final := by
+  obtain ⟨candidate, sourceValue, targetValue, coefficient, flag, candidateBound, rfl⟩ := represented.1
+  obtain ⟨ticks, finalCandidate, finalSource, finalTarget, finalCoefficient, cost, trace, finalBound⟩ :=
+    body_steps value.2.1 candidate value.2.2 candidateBound bounded.2 ⟨value.1, active⟩
+      sourceValue targetValue coefficient flag
+  refine ⟨ticks, _, cost, trace, ?_⟩
+  exact ⟨finalCandidate, finalSource, finalTarget, finalCoefficient, false, finalBound, by simp [advance, active]⟩
+
+private theorem advance_valid (value : Value Scalar rows columns) (bounded : valid value)
+    (active : value.1 < columns) : valid (advance value) := by
+  have rowBound := (GaussJordan.columnStep_row_bound value.2.1 value.2.2 ⟨value.1, active⟩ bounded.2).2
+  simp only [valid, advance, dite_eq_left active]
+  exact ⟨by omega, rowBound⟩
+
+private def remaining (value : Value Scalar rows columns) :=
+  GaussJordan.eliminateColumns value.2.1 value.2.2 ((List.finRange columns).drop value.1)
+
+private theorem remaining_advance (value : Value Scalar rows columns) :
+    remaining (advance value) = remaining value := by
+  by_cases active : value.1 < columns
+  · simp only [remaining, advance, dite_eq_left active, drop_columns value.1 active,
+      GaussJordan.eliminateColumns]
+  · simp only [advance, dite_eq_right active]
+
+private theorem remaining_iterate (value : Value Scalar rows columns) (count : ℕ) :
+    remaining (advance^[count] value) = remaining value := by
+  induction count with
+  | zero => rfl
+  | succ count hypothesis => rw [Function.iterate_succ_apply', remaining_advance, hypothesis]
+
+/-- A generic mathematical fold supplies the physical traversal and its cost. -/
 private theorem loop_steps (matrix : Matrix (Fin rows) (Fin columns) Scalar)
     (candidate pivotRow start : ℕ) (candidateBound : candidate ≤ rows) (pivotBound : pivotRow ≤ rows)
     (startBound : start ≤ columns) (sourceValue targetValue coefficient : Scalar) (flag : Bool) :
@@ -93,58 +159,36 @@ private theorem loop_steps (matrix : Matrix (Fin rows) (Fin columns) Scalar)
           finalCandidate 0 (GaussJordan.eliminateColumns matrix pivotRow ((List.finRange columns).drop start)).2
             columns finalSource finalTarget finalCoefficient false) ∧
       finalCandidate ≤ rows := by
-  generalize ranking : columns - start = remaining
-  induction remaining using Nat.strong_induction_on generalizing matrix candidate pivotRow start sourceValue targetValue coefficient flag with
-  | h remaining hypothesis =>
-    have comparison := compareColumn_steps matrix candidate 0 pivotRow start sourceValue targetValue coefficient flag
-    have liftedGuard := comparison.rename Sum.inl
-      (target := whileMachine compareColumn body 0 bodyEntry result)
-      (by intro state symbols next actions transition; simp [whileMachine, transition])
-    by_cases active : start < columns
-    · simp only [active, decide_true] at liftedGuard
-      let column : Fin columns := ⟨start, active⟩
-      let next := GaussJordan.columnStep matrix pivotRow column
-      obtain ⟨bodyTicks, nextCandidate, nextSource, nextTarget, nextCoefficient, bodyCost, bodyTrace, nextBound⟩ :=
-        body_steps matrix candidate pivotRow candidateBound pivotBound column sourceValue targetValue coefficient true
-      have liftedBody := bodyTrace.rename Sum.inr
-        (target := whileMachine compareColumn body 0 bodyEntry result)
-        (by intro state symbols nextState actions transition; simp [whileMachine, transition])
-      obtain ⟨restTicks, finalCandidate, finalSource, finalTarget, finalCoefficient, restCost, restTrace, finalBound⟩ :=
-        hypothesis (columns - (start + 1)) (by omega) next.1 nextCandidate next.2 (start + 1) nextBound
-          (GaussJordan.columnStep_row_bound matrix pivotRow column pivotBound).2 (by omega)
-          nextSource nextTarget nextCoefficient false rfl
-      have toBody : step (whileMachine compareColumn body 0 bodyEntry result)
-          (.inl 2, frame matrix candidate 0 pivotRow start sourceValue targetValue coefficient true) =
-          some (.inr bodyEntry, frame matrix candidate 0 pivotRow start sourceValue targetValue coefficient true) := by
-        simp [step, whileMachine, compareColumn_halt]
-      have toGuard : step (whileMachine compareColumn body 0 bodyEntry result)
-          (.inr bodyExit, frame next.1 nextCandidate 0 next.2 (start + 1) nextSource nextTarget nextCoefficient false) =
-          some (.inl 0, frame next.1 nextCandidate 0 next.2 (start + 1) nextSource nextTarget nextCoefficient false) := by
-        simp [step, whileMachine, body_halt]
-      have trace := liftedGuard.trans (.next toBody (liftedBody.trans (.next toGuard restTrace)))
-      have value : GaussJordan.eliminateColumns matrix pivotRow ((List.finRange columns).drop start) =
-          GaussJordan.eliminateColumns next.1 next.2 ((List.finRange columns).drop (start + 1)) := by
-        rw [drop_columns start active]
-        rfl
-      refine ⟨_, finalCandidate, finalSource, finalTarget, finalCoefficient, ?_,
-        by simpa only [value] using trace, finalBound⟩
-      · have minimum := Nat.min_le_right start columns
-        have stepCost : 2 * min start columns + 3 + bodyTicks + 2 ≤
-            GaussJordanColumn.bound rows columns + 4 * columns + 9 := by omega
-        have split : columns - start + 1 = (columns - (start + 1) + 1) + 1 := by omega
-        rw [← ranking, split, Nat.add_mul, one_mul]
-        omega
-    · have finalIndex : start = columns := by omega
-      subst start
-      simp only [lt_self_iff_false, decide_false] at liftedGuard
-      refine ⟨2 * min columns columns + 3, candidate, sourceValue, targetValue, coefficient, ?_, ?_, candidateBound⟩
-      · have dominates := Nat.mul_le_mul_right (GaussJordanColumn.bound rows columns + 4 * columns + 9)
-          (show 1 ≤ remaining + 1 by omega)
-        simp only [one_mul, min_self] at dominates ⊢
-        omega
-      · have empty : (List.finRange columns).drop columns = [] := by
-          exact List.drop_eq_nil_of_le (by simp)
-        simpa only [empty, GaussJordan.eliminateColumns] using liftedGuard
+  let initialValue : Value Scalar rows columns := (start, matrix, pivotRow)
+  obtain ⟨ticks, final, cost, trace, represented, finalValid, finalIndex⟩ :=
+    fold_steps compareColumn body 0 2 bodyEntry bodyExit result representation guardedRepresentation
+      columns Prod.fst valid advance (2 * columns + 3) (GaussJordanColumn.bound rows columns + 2 * columns + 4)
+      compareColumn_halt body_halt guard_runs body_runs
+      (by intro value tapes encoded; exact encoded.2)
+      (by intro value bounded; exact bounded.1) advance_valid
+      (by intro value _ active; simp [advance, active])
+      initialValue (frame matrix candidate 0 pivotRow start sourceValue targetValue coefficient flag)
+      ⟨startBound, pivotBound⟩ ⟨candidate, sourceValue, targetValue, coefficient, flag, candidateBound, rfl⟩
+  let finalValue := advance^[columns - start] initialValue
+  change finalValue.1 = columns at finalIndex
+  have finalPair : finalValue.2 = remaining initialValue := by
+    have preserved := remaining_iterate initialValue (columns - start)
+    change remaining finalValue = remaining initialValue at preserved
+    have empty : (List.finRange columns).drop columns = [] := List.drop_eq_nil_of_le (by simp)
+    simpa only [remaining, finalIndex, empty, GaussJordan.eliminateColumns] using preserved
+  have finalValue_eq : finalValue = (columns, remaining initialValue) := Prod.ext finalIndex finalPair
+  change guardedRepresentation finalValue final at represented
+  obtain ⟨finalCandidate, finalSource, finalTarget, finalCoefficient, finalFlag, finalBound, encoded⟩ := represented.1
+  have stopped : finalFlag = false := by
+    have tested := represented.2
+    rw [encoded, result_frame, finalIndex] at tested
+    simpa using tested
+  subst finalFlag
+  rw [finalValue_eq] at encoded
+  refine ⟨ticks, finalCandidate, finalSource, finalTarget, finalCoefficient, ?_, ?_, finalBound⟩
+  · dsimp only [initialValue] at cost
+    convert cost using 1; ring
+  · simpa only [encoded, remaining, initialValue] using trace
 
 /-- Complete elimination in a prepared frame, with its mathematical output and runtime bound. -/
 theorem steps (matrix : Matrix (Fin rows) (Fin columns) Scalar) :
@@ -167,8 +211,8 @@ theorem steps (matrix : Matrix (Fin rows) (Fin columns) Scalar) :
     GaussJordan.rowEquivalent matrix, GaussJordan.reducedRowEchelon matrix⟩
 
 
-/-- Internal runtime witness shared by prepared and external realization. -/
-noncomputable def runtimePolynomial : MvPolynomial Bool ℕ :=
+/-- Cost of a column operation, internal to the representation adapters. -/
+noncomputable def columnPolynomial : MvPolynomial Bool ℕ :=
   let rowCount : MvPolynomial Bool ℕ := MvPolynomial.X false
   let columnCount : MvPolynomial Bool ℕ := MvPolynomial.X true
   let rowCost := (columnCount + 1) *
@@ -179,13 +223,59 @@ noncomputable def runtimePolynomial : MvPolynomial Bool ℕ :=
   let pivotCost := 2 * rowCost + clearCost + 4
   let columnCost := (rowCount + 1) * (7 * rowCount * columnCount + 13 * rowCount + 7 * columnCount + 33) +
     1 + pivotCost + 9 * rowCount + 23
-  (columnCount + 1) * (columnCost + 4 * columnCount + 9) + 1
+  columnCost
+
+omit [Field Scalar] [DecidableEq Scalar] in
+private theorem eval_columnPolynomial (assignment : Bool → ℕ) :
+    MvPolynomial.eval assignment columnPolynomial = GaussJordanColumn.bound (assignment false) (assignment true) := by
+  simp only [columnPolynomial, GaussJordanColumn.bound, GaussJordanPivot.bound, GaussJordanClear.rowBound,
+    map_add, map_mul, map_one, map_ofNat, MvPolynomial.eval_X]
+
+/-- Internal runtime witness shared by prepared and external realization. -/
+noncomputable def runtimePolynomial : MvPolynomial Bool ℕ :=
+  (MvPolynomial.X true + 1) * (columnPolynomial + 4 * MvPolynomial.X true + 9) + 1
 
 omit [Field Scalar] [DecidableEq Scalar] in
 theorem eval_runtimePolynomial (assignment : Bool → ℕ) :
     MvPolynomial.eval assignment runtimePolynomial = bound (assignment false) (assignment true) := by
-  simp only [runtimePolynomial, bound, GaussJordanColumn.bound, GaussJordanPivot.bound, GaussJordanClear.rowBound,
-    map_add, map_mul, map_one, map_ofNat, MvPolynomial.eval_X]
+  simp only [runtimePolynomial, bound, map_add, map_mul, map_one, map_ofNat, MvPolynomial.eval_X,
+    eval_columnPolynomial]
+
+omit [Field Scalar] [DecidableEq Scalar] in
+private theorem guard_contract [Fintype Scalar] :
+    Computes (compareColumn (Scalar := Scalar)) 0 2
+      (fun sizes : Bool → ℕ => representation (rows := sizes false) (columns := sizes true))
+      (fun _ => guardedRepresentation) (fun _ => valid) (fun _ value => value) := by
+  refine ⟨compareColumn_halt, 2 * MvPolynomial.X true + 3, ?_⟩
+  intro sizes value initial bounded represented
+  obtain ⟨ticks, final, cost, trace, encoded⟩ := guard_runs value initial bounded represented
+  exact ⟨ticks, final, by simpa using cost, trace, encoded⟩
+
+private theorem body_contract [Fintype Scalar] :
+    Computes (body (Scalar := Scalar)) bodyEntry bodyExit
+      (fun sizes : Bool → ℕ => guardedRepresentation (rows := sizes false) (columns := sizes true))
+      (fun _ => representation) (fun sizes value => valid value ∧ value.1 < sizes true)
+      (fun _ => advance) := by
+  refine ⟨body_halt, columnPolynomial + 2 * MvPolynomial.X true + 4, ?_⟩
+  intro sizes value initial bounded represented
+  obtain ⟨ticks, final, cost, trace, encoded⟩ := body_runs value initial bounded.1 bounded.2 represented
+  exact ⟨ticks, final, by simpa only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X,
+    eval_columnPolynomial] using cost, trace, encoded⟩
+
+/-- The algorithm-level traversal is a mathematical fold. Temporary scalars,
+controller sums, handovers, and runtime witnesses remain inside library rules. -/
+theorem traversal_contract [Fintype Scalar] :
+    Computes (machine (Scalar := Scalar)) entry exit
+      (fun sizes : Bool → ℕ => representation (rows := sizes false) (columns := sizes true))
+      (fun sizes value tapes => guardedRepresentation value tapes ∧ valid value ∧ value.1 = sizes true)
+      (fun _ => valid) (fun sizes value => advance^[sizes true - value.1] value) := by
+  exact Computes.fold result _ _ (fun sizes => sizes true) (fun _ => Prod.fst)
+    (fun _ => valid) (fun _ => advance) guard_contract body_contract
+    (by intro sizes value tapes represented; exact represented.2)
+    (by intro sizes value bounded; exact bounded.1)
+    (by intro sizes value bounded active; exact advance_valid value bounded active)
+    (by intro sizes value _ active; simp [advance, active])
+    ⟨MvPolynomial.X true, by intro sizes; simp⟩
 
 /-- A single finite program and polynomial work for every rectangular dimension. -/
 theorem realizes [Fintype Scalar] :

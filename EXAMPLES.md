@@ -506,6 +506,49 @@ logarithmic workspace or polynomial time in a different size measure that
 counts only the binary header length while allowing arbitrarily many unused
 variables. Stronger streaming and space bounds require separate certificates.
 
+## Further application: fixed-template CSP
+
+CSP is a decision problem for a fixed finite relational structure R over a
+fixed finite carrier A. R includes finitely many named relation symbols, their
+fixed arities, and their complete relation tables on A. These are known before
+the algorithm is constructed and do not appear in runtime input. The number
+of symbols, maximum arity, relation tables, and any fixed polymorphism may
+influence both the algorithm and its polynomial bound.
+
+The required theorem order is: for each fixed R satisfying the stated
+mathematical properties, there exists an algorithm and a polynomial runtime
+bound that work for every N and every instance of CSP(R) on N variables.
+There is no requirement to place the algorithm or polynomial witness before
+the quantification over R. Uniformity is required across N and instances for
+one fixed R, not across different R.
+
+N is exactly the number of variables, indexed by `Fin N`. For each relation
+symbol r of arity k, input stores a Boolean table on ordered k-tuples of
+variables: mathematically, `(Fin k → Fin N) → Bool`, represented as a vector
+of exactly `N^k` bits with a certified fixed ordering. A true bit means the
+corresponding relation application is a constraint. The complete instance
+domain is the finite dependent product of these Boolean-table domains over
+the fixed relation symbols.
+
+This domain is constructible from standard domain operations: finite
+products/families, finite tuples of indices, and Boolean vectors of polynomial
+length. Its encoded-size bound follows automatically from the fixed signature.
+There is no separate runtime constraint list or independent constraint-count
+budget. Each possible application occurs once; repeated variables within a
+tuple are allowed. For a signature containing a single binary relation, the
+input is an N-by-N Boolean incidence matrix, stored in `N^2` bits.
+
+The mathematical satisfaction condition for an assignment `a : Fin N → A`
+is: every enabled tuple for symbol r maps coordinatewise under a into the
+fixed relation R(r). The output domain is Boolean, with contract
+`answer = true ↔ there exists a satisfying assignment`. Every well-formed
+instance is covered, including unsatisfiable instances; satisfiability is not
+an input hypothesis.
+
+Alternative representations may be connected through certified polynomial-time
+conversions in N. Exact framing conventions are not part of the user's
+complexity proof; the template and the chosen representation are fixed.
+
 ## Shared building-block libraries
 
 Each implementation must provide these libraries as reusable targets.
@@ -555,6 +598,18 @@ or explicitly specified overlap semantics implemented by a proved direction
 or scratch-buffer strategy. Cover empty ranges, zero capacities, self-copy,
 and boundary indices. Tape costs may depend on the containing frame size;
 array access is not assumed to take one machine step.
+
+Examples of required domains include:
+
+- `A^N`, interpreted as exactly N entries of a fixed finite carrier A.
+- Lists of length at most a specified polynomial in N.
+- Nested lists over the disjoint union of fixed finite carriers A and B, with at
+  most `N^3 + N^2` outer entries and at most `N^4` entries in each inner list.
+  Polynomial encoded size should follow from generic nested-list rules without
+  asking users to compute the resulting polynomial. Framing, tags, and empty
+  lists must be included in the library's encoding proof.
+- K-by-L matrices over a fixed finite carrier, with K and L as independent
+  size parameters. Dependent records carrying dimensions are a later extension.
 
 ### B3. Finite collection processing
 
@@ -737,3 +792,9 @@ their mathematical contracts, bounded intermediate representations, and the
 complete machine-runtime theorem. Implementing these targets belongs in this
 repository.
 
+For the further semilattice CSP application, the proposed arc-consistency route
+is described in Bodirsky, Macpherson, and Thapper, *Constraint Satisfaction
+Tractability from Semi-lattice Operations on Infinite Sets*, §2 (finite-domain
+preliminary results): <https://arxiv.org/pdf/1111.6616>. This is design
+provenance, not an assumed axiom or a claim that this repository has already
+verified the result.

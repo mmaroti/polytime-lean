@@ -12,6 +12,20 @@ A multi-tape implementation of polynomial-time algorithms.
   tapes, including their head positions.
 - Finite-machine polynomial certificates under mathematical preconditions,
   closed under wiring, sequencing, branching, and guarded while loops.
+- Mathematical map contracts with relational representations and existential
+  scratch, sequential composition, and a guarded mathematical fold rule.
+  Gauss–Jordan's outer traversal uses the fold rule.
+- Two fixed catalogue maps at runtime-selected active coordinates, sharing array
+  and scalar scratch, preserving both indices, the active count, and inactive
+  data, including nonpadding values.
+- Runtime-width binary addition with a final carry digit, linear transition
+  cost, preserved operands and neighboring storage, and restored heads. Its
+  mathematical contract states exact natural-number addition.
+- Runtime-width shift-and-add multiplication with a polynomial transition bound
+  in both operand digit counts. `AddMultiply.contract` composes addition and
+  multiplication on shared tapes, computes `(left + right) * multiplier`, and
+  proves the output bit-capacity bound. Its internal entry convention requires
+  prepared zero buffers; it does not yet provide an external arithmetic wrapper.
 - Fixed-width element copying in exactly `2 * width + 1` transitions, preserving
   the source and neighboring data and restoring both heads.
 - Binary decrement with a polynomial digit-cost certificate, fixed controller,
@@ -145,16 +159,14 @@ output extraction, instantiated by the complete external Gauss–Jordan theorem.
 
 ## Limits and next steps
 
-- Lift tape-level certificates to mathematical input/output contracts with
-  relational representations and existential scratch.
-- Derive search, traversal, and fold rules, then refactor Gauss–Jordan's outer
-  traversal to hide trace assembly, controllers, and explicit runtime bounds.
+- Extend mathematical contracts to lower-level routines and derive reusable
+  search and traversal rules from the guarded fold interface.
 - Simplify nested tape names, wiring, and alphabet-compatibility proofs.
 - Reuse the external parsing, initialization, simulation, serialization, and
   extraction adapters when adding algorithms.
-- Add runtime-width binary arithmetic and polynomial reparameterization of
-  subprogram calls. Fixed-width copying alone does not provide integer-matrix
-  arithmetic with runtime bit capacities.
+- Add external arithmetic preparation and extraction, Euclidean division, and
+  the remaining bit arithmetic for integer matrices. Extend polynomial
+  reparameterization of subprogram calls.
 
 Recursive bounded-domain descriptions, a general size-expression evaluator,
 the SMP targets, and Smith normal form remain future work.

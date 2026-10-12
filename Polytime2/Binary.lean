@@ -33,6 +33,11 @@ abbrev Symbol := Fin 4
 def data (bit : Bool) : Symbol := if bit then 2 else 1
 def word (bits : List Bool) : List Symbol := bits.map data
 
+/-- Appending an explicit blank does not change an eventually blank tape. -/
+theorem mk_append_blank (payload : List Symbol) :
+    Turing.ListBlank.mk (payload ++ [0]) = Turing.ListBlank.mk payload :=
+  Quotient.sound (Or.inr ⟨1, by simp⟩)
+
 def value : List Bool → ℕ
   | [] => 0
   | bit :: bits => bit.toNat + 2 * value bits

@@ -135,18 +135,6 @@ witnesses may depend on this fixed data. The same applies to relational
 templates and their relation tables. The framework must not require uniform
 algorithms accepting varying templates or tables as runtime input.
 
-Examples of required domains include:
-
-- `A^N`, interpreted as exactly N entries of a fixed finite carrier A.
-- Lists of length at most a specified polynomial in N.
-- Nested lists over the disjoint union of fixed finite carriers A and B, with at
-  most `N^3 + N^2` outer entries and at most `N^4` entries in each inner list.
-  Polynomial encoded size should follow from generic nested-list rules without
-  asking users to compute the resulting polynomial. Framing, tags, and empty
-  lists must be included in the library's encoding proof.
-- K-by-L matrices over a fixed finite carrier, with K and L as independent
-  size parameters. Dependent records carrying dimensions are a later extension.
-
 The initial domain language must support `Fixed`,
 `Product`, `Sum`, and `Power`. A Fixed domain supplies an explicit equivalence
 with `Fin k`; its binary labels use `Nat.clog 2 k` bits. Product concatenates
@@ -205,49 +193,6 @@ library's existing primitives and combinators, with mathematical contracts.
 Custom domains do not provide a mechanism for registering arbitrary executable
 functions as new primitives. A size bound and round-trip theorem alone do not
 establish the computational cost of an operation or representation conversion.
-
-## Fixed CSP templates and instance domains
-
-CSP is a decision problem for a fixed finite relational structure R over a
-fixed finite carrier A. R includes finitely many named relation symbols, their
-fixed arities, and their complete relation tables on A. These are known before
-the algorithm is constructed and do not appear in runtime input. The number
-of symbols, maximum arity, relation tables, and any fixed polymorphism may
-influence both the algorithm and its polynomial bound.
-
-The required theorem order is: for each fixed R satisfying the stated
-mathematical properties, there exists an algorithm and a polynomial runtime
-bound that work for every N and every instance of CSP(R) on N variables.
-There is no requirement to place the algorithm or polynomial witness before
-the quantification over R. Uniformity is required across N and instances for
-one fixed R, not across different R.
-
-N is exactly the number of variables, indexed by `Fin N`. For each relation
-symbol r of arity k, input stores a Boolean table on ordered k-tuples of
-variables: mathematically, `(Fin k → Fin N) → Bool`, represented as a vector
-of exactly `N^k` bits with a certified fixed ordering. A true bit means the
-corresponding relation application is a constraint. The complete instance
-domain is the finite dependent product of these Boolean-table domains over
-the fixed relation symbols.
-
-This domain is constructible from standard domain operations: finite
-products/families, finite tuples of indices, and Boolean vectors of polynomial
-length. Its encoded-size bound follows automatically from the fixed signature.
-There is no separate runtime constraint list or independent constraint-count
-budget. Each possible application occurs once; repeated variables within a
-tuple are allowed. For a signature containing a single binary relation, the
-input is an N-by-N Boolean incidence matrix, stored in `N^2` bits.
-
-The mathematical satisfaction condition for an assignment `a : Fin N → A`
-is: every enabled tuple for symbol r maps coordinatewise under a into the
-fixed relation R(r). The output domain is Boolean, with contract
-`answer = true ↔ there exists a satisfying assignment`. Every well-formed
-instance is covered, including unsatisfiable instances; satisfiability is not
-an input hypothesis.
-
-Alternative representations may be connected through certified polynomial-time
-conversions in N. Exact framing conventions are not part of the user's
-complexity proof; the template and the chosen representation are fixed.
 
 ## Shapes, contracts, and errors
 
@@ -445,7 +390,8 @@ and sufficient output capacities; algorithms must bound intermediate bit
 lengths. Unary storage for polynomially bounded counters does not justify
 unary storage for general binary integers.
 
-Fixed-template CSP remains a motivating application of the domain design.
+Fixed-template CSP remains a motivating application; its instance domains
+and contracts are specified in [EXAMPLES.md](EXAMPLES.md).
 Logspace guarantees and randomized execution are outside the initial scope.
 
 ## Development priorities
@@ -462,8 +408,6 @@ and reusable lemmas to new structures, and avoid speculative definitions.
   handovers, and polynomial closure.
 - Specify preservation and workspace conventions that allow subroutine reuse
   inside larger computations, including shared storage.
-- Test reuse on small catalogue operations with active counts and on arithmetic
-  with runtime bit capacities before implementing another large example.
 - Retain complete external realization as the acceptance check; a general
   compiler or wholesale rewrite is not a prerequisite for improving reuse.
 
@@ -472,8 +416,8 @@ and reusable lemmas to new structures, and avoid speculative definitions.
 Keep alternatives in one Lake package with the same pinned Lean and Mathlib
 dependencies. Each has a separate library, root module, source directory, and
 namespace: `Polytime1`, `Polytime2`, and similarly for later alternatives.
-Build separately with `lake build Polytime1` or `lake build Polytime2`;
-the default build checks both. See each alternative's README for its status.
+See the root README for build commands and each alternative's README for its
+status.
 
 - Implementations must not import or refer to one another, including in
   comments and implementation documentation. Record copied-proof provenance
@@ -538,12 +482,3 @@ preserve these representation and certification boundaries:
   binary integer representations and bit-cost arithmetic; this is required
   by the Smith-normal-form target. Randomized execution and logspace guarantees
   remain outside the initial scope.
-
-## Reference motivations
-
-For the further semilattice CSP application, the proposed arc-consistency route
-is described in Bodirsky, Macpherson, and Thapper, *Constraint Satisfaction
-Tractability from Semi-lattice Operations on Infinite Sets*, §2 (finite-domain
-preliminary results): <https://arxiv.org/pdf/1111.6616>. This is design
-provenance, not an assumed axiom or a claim that this repository has already
-verified the result.
