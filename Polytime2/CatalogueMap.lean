@@ -15,214 +15,142 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Contracts
-import Polytime2.ScalarAccess
-import Polytime2.HeadTable
-import Polytime2.Unary
-import Polytime2.Alphabet
+import Polytime2.IndexedMapContract
 
-/-! # Two active catalogue maps on shared storage
+/-! # Two active catalogue maps on binary-encoded arrays
 
-The catalogue maps are fixed specialization tables. Active count and both
-selected coordinates are runtime data. Two calls share the array and scalar
-scratch, restore all heads, and preserve inactive entries without inspecting
-or initializing them. Equal selected indices have sequential semantics.
+Both maps are specialization-fixed. The active count, selected coordinates,
+and source array are immutable arguments. A private intermediate array links
+the calls; the final result is separate. Scalar and counter scratch is shared.
 -/
 
 namespace Polytime2.CatalogueMap
 
-open MultiTape
+open MultiTape CallingConvention
 
-variable {Scalar : Type}
+-- parameterLevel: names of the caller's unary size parameters.
+universe parameterLevel
+variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
-inductive TapeName | firstIndex | secondIndex | active | array | element
-  deriving DecidableEq
+abbrev Alphabet := CallingConvention.Alphabet (Sum Parameter (Fin 15))
 
-instance : Fintype TapeName :=
-  ⟨{.firstIndex, .secondIndex, .active, .array, .element}, by intro name; cases name <;> simp⟩
+/-- The ignored scalar parameter of a unary map occupies an empty region. -/
+def unitDomain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
 
-abbrev Alphabet (Scalar : Type) : TapeName → Type
-  | .firstIndex | .secondIndex | .active => Binary.Symbol
-  | .array | .element => TableTraversal.Symbol Scalar
+abbrev State (elementWidth : ℕ) :=
+  Sum (IndexedMap.State (unitDomain.width Empty.elim) elementWidth)
+    (IndexedMap.State (unitDomain.width Empty.elim) elementWidth)
 
-instance (name : TapeName) : Inhabited (Alphabet Scalar name) := by
-  cases name <;> infer_instance
+noncomputable instance stateFintype (elementWidth : ℕ) : Fintype (State elementWidth) := by
+  letI : Fintype (IndexedMap.State (unitDomain.width Empty.elim) elementWidth) := inferInstance
+  exact inferInstanceAs (Fintype (Sum _ _))
 
-instance [Fintype Scalar] (name : TapeName) : Fintype (Alphabet Scalar name) := by
-  cases name <;> infer_instance
+noncomputable def domains (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) : Sum Parameter (Fin 15) → EncodedDomain Parameter
+  | .inl parameter => EncodedDomain.unary parameter
+  | .inr 0 | .inr 1 | .inr 2 => EncodedDomain.binaryNaturals indexCapacity
+  | .inr 3 | .inr 4 | .inr 5 => elementDomain.constant.arrayOfLength length
+  | .inr 6 => unitDomain.constant
+  | .inr 7 | .inr 8 => elementDomain.constant
+  | .inr 9 | .inr 10 | .inr 12 | .inr 13 => EncodedDomain.binaryNaturals indexCapacity
+  | .inr 11 | .inr 14 => EncodedDomain.booleans
 
-def localFrame (values : List Scalar) (index : ℕ) (scratch : Scalar) :
-    Tapes (ScalarAccess.Alphabet Scalar) :=
-  ScalarAccess.frame [3] (List.replicate index 2 ++ [0]) [some none]
-    (TableTraversal.word values ++ [none])
-    (Turing.Tape.mk' (Turing.ListBlank.mk []) (Turing.ListBlank.mk [some (some scratch)]))
+def argumentReadOnly : Sum Parameter (Fin 15) → Bool
+  | .inl _ => true
+  | .inr name => decide (name.val < 4)
 
-def table (operation : Scalar → Scalar) : Symbols (ScalarAccess.Alphabet Scalar) →
-    Symbols (ScalarAccess.Alphabet Scalar) := fun symbols name =>
-  match name with
-  | .index => symbols .index
-  | .array => symbols .array
-  | .element => (symbols .element).map (Option.map operation)
+def sizeTapes : Parameter ↪ Sum Parameter (Fin 15) :=
+  ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
-abbrev LocalState := Sum (Sum (Fin 3) Bool) (Fin 3)
-def localEntry : LocalState := .inl (.inl 0)
-def localExit : LocalState := .inr 2
+def data (second : Bool) (name : Fin 12) : Fin 15 :=
+  ⟨match name.val with
+    | 0 => if second then 1 else 0
+    | 1 => if second then 4 else 3
+    | 2 => 6
+    | 3 => if second then 5 else 4
+    | 4 => 7
+    | 5 => 8
+    | 6 => 9
+    | 7 => 10
+    | 8 => 11
+    | 9 => 12
+    | 10 => 13
+    | _ => 14, by cases second <;> fin_cases name <;> decide⟩
 
-def localMachine (operation : Scalar → Scalar) : Machine (ScalarAccess.Alphabet Scalar) LocalState :=
-  sequence (sequence (ScalarAccess.machine false) (HeadTable.machine (table operation)) false)
-    (ScalarAccess.machine true) 0
+private theorem data_injective (second : Bool) : Function.Injective (data second) := by
+  intro first other equal
+  cases second <;> fin_cases first <;> fin_cases other <;> simp [data] at equal ⊢
 
-private theorem local_halt (operation : Scalar → Scalar) (symbols : Symbols (ScalarAccess.Alphabet Scalar)) :
-    localMachine operation localExit symbols = none := by rfl
+def wiring (second : Bool) : Sum Parameter (Fin 12) ↪ Sum Parameter (Fin 15) :=
+  (Function.Embedding.refl Parameter).sumMap ⟨data second, data_injective second⟩
 
-private theorem table_steps (operation : Scalar → Scalar) (values : List Scalar) (index : ℕ) (scratch : Scalar) :
-    Steps (HeadTable.machine (table operation)) 1
-      (false, localFrame values index scratch) (true, localFrame values index (operation scratch)) := by
-  have trace := HeadTable.steps (table operation) (localFrame values index scratch)
-  convert trace using 1
-  congr 1
-  funext name
-  cases name with
-  | index => exact (Turing.Tape.write_self _).symm
-  | array => exact (Turing.Tape.write_self _).symm
-  | element => simp [table, localFrame, ScalarAccess.frame, MultiTape.read,
-      Turing.Tape.write_mk', Turing.ListBlank.cons_mk]
+noncomputable def algorithm (elementDomain : EncodedDomain Empty)
+    (first second : ∀ assignment, elementDomain.Carrier assignment → elementDomain.Carrier assignment) :
+    Machine (Alphabet (Parameter := Parameter)) (State (elementDomain.width Empty.elim)) :=
+  MultiTape.sequence
+    (MultiTape.wire (wiring false)
+      (IndexedMap.algorithm unitDomain elementDomain (fun assignment _ => first assignment)))
+    (MultiTape.wire (wiring true)
+      (IndexedMap.algorithm unitDomain elementDomain (fun assignment _ => second assignment)))
+    (IndexedMap.entry (unitDomain.width Empty.elim) (elementDomain.width Empty.elim))
 
-/-- Read, apply a fixed table, and update, preserving the index and all heads. -/
-theorem local_steps (operation : Scalar → Scalar) (values : List Scalar)
-    (index : Fin values.length) (scratch : Scalar) :
-    Steps (localMachine operation) (4 * index.val + 9)
-      (localEntry, localFrame values index.val scratch)
-      (localExit, localFrame (values.modify index.val operation) index.val (operation values[index.val])) := by
-  have read := ScalarAccess.lookup_steps values index scratch [] [] [some none] [none] [] []
-  have applied := table_steps operation values index.val values[index.val]
-  have written := ScalarAccess.update_steps values index (operation values[index.val]) [] [] [some none] [none] [] []
-  have first := sequence_steps _ _ false read (by intro symbols; rfl) applied
-  have complete := sequence_steps _ _ 0 first (by intro symbols; rfl) written
-  convert complete using 1 <;> first
-    | rfl
-    | omega
-    | simp [localExit, localFrame,
-        List.modify_eq_set_get operation index.isLt]
+def entry (elementWidth : ℕ) : State elementWidth := .inl (IndexedMap.entry (unitDomain.width Empty.elim) elementWidth)
+def exit (elementWidth : ℕ) : State elementWidth := .inr (IndexedMap.exit (unitDomain.width Empty.elim) elementWidth)
 
-def frame (active firstIndex secondIndex : ℕ) (values : List Scalar) (scratch : Scalar) : Tapes (Alphabet Scalar)
-  | .firstIndex => Binary.tape [3] (List.replicate firstIndex 2 ++ [0]) ()
-  | .secondIndex => Binary.tape [3] (List.replicate secondIndex 2 ++ [0]) ()
-  | .active => Binary.tape [3] (List.replicate active 2 ++ [0]) ()
-  | .array => localFrame values 0 scratch .array
-  | .element => localFrame values 0 scratch .element
+omit [Fintype Parameter] in
+@[simp] theorem halt (elementDomain : EncodedDomain Empty)
+    (first second : ∀ assignment, elementDomain.Carrier assignment → elementDomain.Carrier assignment)
+    (symbols : Symbols (Alphabet (Parameter := Parameter))) :
+    algorithm elementDomain first second (exit (elementDomain.width Empty.elim)) symbols = none := by
+  simp only [algorithm, exit, MultiTape.sequence, MultiTape.wire]
+  rw [IndexedMap.halt unitDomain elementDomain (fun assignment _ => second assignment)]
+  rfl
 
-def wiring (first : Bool) : ScalarAccess.TapeName ↪ TapeName where
-  toFun
-    | .index => if first then .firstIndex else .secondIndex
-    | .array => .array
-    | .element => .element
-  inj' := by intro left right equal; cases first <;> cases left <;> cases right <;> simp_all
+omit [Fintype Parameter] in
+/-- The two calls reuse every scalar and counter scratch tape, with one
+stationary handover and a distinct intermediate array. -/
+theorem sequence_runs (elementDomain : EncodedDomain Empty)
+    (first second : ∀ assignment, elementDomain.Carrier assignment → elementDomain.Carrier assignment)
+    (width : Sum Parameter (Fin 15) → ℕ) (readOnly : Sum Parameter (Fin 15) → Bool)
+    {firstTicks secondTicks : ℕ}
+    {initialPosition middlePosition finalPosition : Sum Parameter (Fin 15) → ℤ}
+    {initial middle final : Tapes (Alphabet (Parameter := Parameter))}
+    (firstTrace : Runs width readOnly
+      (MultiTape.wire (wiring false)
+        (IndexedMap.algorithm unitDomain elementDomain (fun assignment _ => first assignment)))
+      firstTicks (IndexedMap.entry (unitDomain.width Empty.elim) (elementDomain.width Empty.elim)) initialPosition initial
+      (IndexedMap.exit (unitDomain.width Empty.elim) (elementDomain.width Empty.elim)) middlePosition middle)
+    (secondTrace : Runs width readOnly
+      (MultiTape.wire (wiring true)
+        (IndexedMap.algorithm unitDomain elementDomain (fun assignment _ => second assignment)))
+      secondTicks (IndexedMap.entry (unitDomain.width Empty.elim) (elementDomain.width Empty.elim)) middlePosition middle
+      (IndexedMap.exit (unitDomain.width Empty.elim) (elementDomain.width Empty.elim)) finalPosition final) :
+    Runs width readOnly (algorithm elementDomain first second) (firstTicks + secondTicks + 1)
+      (entry (elementDomain.width Empty.elim)) initialPosition initial
+      (exit (elementDomain.width Empty.elim)) finalPosition final :=
+  firstTrace.sequence _ _ (by
+    intro symbols
+    simp only [MultiTape.wire]
+    rw [IndexedMap.halt unitDomain elementDomain (fun assignment _ => first assignment)]
+    rfl) secondTrace
 
-def equivalences (Scalar : Type) (first : Bool) (name : ScalarAccess.TapeName) :
-    ScalarAccess.Alphabet Scalar name ≃ Alphabet Scalar (wiring first name) := by
-  cases first <;> cases name <;> exact Equiv.refl _
+-- Index: runtime array coordinates; Scalar: specialization-fixed entries.
+variable {Index Scalar : Type} [DecidableEq Index]
 
-private theorem blanks (first : Bool) (name : ScalarAccess.TapeName) :
-    equivalences Scalar first name default = default := by cases first <;> cases name <;> rfl
+/-- Equal selected coordinates apply the second map to the first map's result. -/
+def compute (first second : Scalar → Scalar) (array : Index → Scalar)
+    (firstIndex secondIndex : Index) : Index → Scalar :=
+  let middle := Function.update array firstIndex (first (array firstIndex))
+  Function.update middle secondIndex (second (middle secondIndex))
 
-noncomputable def mapAt (first : Bool) (operation : Scalar → Scalar) : Machine (Alphabet Scalar) LocalState :=
-  wire (wiring first) (relabel (equivalences Scalar first) (localMachine operation))
-
-private theorem frame_at (first : Bool) (active firstIndex secondIndex : ℕ)
-    (values : List Scalar) (scratch : Scalar) (name : ScalarAccess.TapeName) :
-    frame active firstIndex secondIndex values scratch (wiring first name) =
-      mapTapes (equivalences Scalar first) (blanks first)
-        (localFrame values (if first then firstIndex else secondIndex) scratch) name := by
-  cases first <;> cases name
-  all_goals first
-    | change (_ : Turing.Tape Binary.Symbol) = Turing.Tape.map (⟨id, rfl⟩ : Turing.PointedMap _ _) _
-      exact (mapTape_identity _).symm
-    | change (_ : Turing.Tape (TableTraversal.Symbol Scalar)) =
-        Turing.Tape.map (⟨id, rfl⟩ : Turing.PointedMap _ _) _
-      exact (mapTape_identity _).symm
-
-/-- Static wiring preserves the active count and the unused index tape. -/
-theorem map_steps (selected : Bool) (operation : Scalar → Scalar)
-    (active firstIndex secondIndex : ℕ) (values : List Scalar) (scratch : Scalar)
-    (bounded : (if selected then firstIndex else secondIndex) < values.length) :
-    let index := if selected then firstIndex else secondIndex
-    Steps (mapAt selected operation) (4 * index + 9)
-      (localEntry, frame active firstIndex secondIndex values scratch)
-      (localExit, frame active firstIndex secondIndex (values.modify index operation) (operation values[index])) := by
-  apply wire_steps_of_eq (wiring selected) _
-    ((local_steps operation values ⟨_, bounded⟩ scratch).relabel (equivalences Scalar selected) (blanks selected))
-  · exact frame_at selected active firstIndex secondIndex values scratch
-  · exact frame_at selected active firstIndex secondIndex _ _
-  · intro name outside
-    cases selected <;> cases name <;> first
-      | rfl
-      | exact False.elim (outside ⟨.index, rfl⟩)
-      | exact False.elim (outside ⟨.array, rfl⟩)
-      | exact False.elim (outside ⟨.element, rfl⟩)
-
-abbrev State := Sum LocalState LocalState
-def entry : State := .inl localEntry
-def exit : State := .inr localExit
-
-noncomputable def machine (first second : Scalar → Scalar) : Machine (Alphabet Scalar) State :=
-  sequence (mapAt true first) (mapAt false second) localEntry
-
-/-- Active count, first index, second index, and the complete reserved array. -/
-abbrev Value (Scalar : Type) := ℕ × (ℕ × (ℕ × List Scalar))
-
-def applyAt (selected : Bool) (operation : Scalar → Scalar) (value : Value Scalar) : Value Scalar :=
-  (value.1, value.2.1, value.2.2.1,
-    value.2.2.2.modify (if selected then value.2.1 else value.2.2.1) operation)
-
-def compute (first second : Scalar → Scalar) (value : Value Scalar) : Value Scalar :=
-  applyAt false second (applyAt true first value)
-
-def valid (capacity : ℕ) (value : Value Scalar) : Prop :=
-  value.1 ≤ value.2.2.2.length ∧ value.2.2.2.length ≤ capacity ∧
-    value.2.1 < value.1 ∧ value.2.2.1 < value.1
-
-def representation (value : Value Scalar) (tapes : Tapes (Alphabet Scalar)) : Prop :=
-  ∃ scratch, tapes = frame value.1 value.2.1 value.2.2.1 value.2.2.2 scratch
-
-/-- One active operation, with unused storage hidden behind its representation. -/
-theorem map_contract [Fintype Scalar] (selected : Bool) (operation : Scalar → Scalar) :
-    Computes (mapAt selected operation) localEntry localExit
-      (fun _sizes : Unit → ℕ => representation) (fun _ => representation)
-      (fun sizes => valid (sizes ())) (fun _ => applyAt selected operation) := by
-  refine ⟨by intro symbols; simp [mapAt, wire, relabel, local_halt], 4 * MvPolynomial.X () + 9, ?_⟩
-  intro sizes value initial bounded represented
-  obtain ⟨scratch, rfl⟩ := represented
-  have selectedBound : (if selected then value.2.1 else value.2.2.1) < value.1 := by
-    cases selected <;> simp_all [valid]
-  have inRange := selectedBound.trans_le bounded.1
-  have trace := map_steps selected operation value.1 value.2.1 value.2.2.1 value.2.2.2 scratch inRange
-  refine ⟨_, _, ?_, trace, ?_⟩
-  · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
-    have capacity := inRange.le.trans bounded.2.1
-    omega
-  · exact ⟨_, rfl⟩
-
--- catalogueLevel: specialization-fixed identifiers for finite catalogue maps.
-universe catalogueLevel
-
-/-- Two catalogue tables compose on shared storage with a mathematical output.
-The machine is fixed before the capacity, active count, indices, and data. -/
-theorem contract [Fintype Scalar] {Catalogue : Type catalogueLevel}
-    (maps : Catalogue → Scalar → Scalar) (first second : Catalogue) :
-    Computes (machine (maps first) (maps second)) entry exit
-      (fun _sizes : Unit → ℕ => representation) (fun _ => representation)
-      (fun sizes => valid (sizes ())) (fun _ => compute (maps first) (maps second)) := by
-  exact (map_contract true (maps first)).sequence (map_contract false (maps second))
-    (by intro sizes value bounded; simpa [valid, applyAt] using bounded)
-
-/-- Inactive data is preserved even when it is not a chosen padding value. -/
-theorem inactive_preserved (first second : Scalar → Scalar) (capacity : ℕ)
-    (value : Value Scalar) (bounded : valid capacity value) (index : Fin value.2.2.2.length)
-    (inactive : value.1 ≤ index.val) :
-    (compute first second value).2.2.2[index.val]'(by simp [compute, applyAt]) = value.2.2.2[index.val] := by
-  have firstDifferent : value.2.1 ≠ index.val := by have selected := bounded.2.2.1; omega
-  have secondDifferent : value.2.2.1 ≠ index.val := by have selected := bounded.2.2.2; omega
-  simp [compute, applyAt, List.getElem_modify_ne, firstDifferent, secondDifferent]
+/-- Every entry outside the active prefix is preserved, regardless of its value. -/
+theorem inactive_preserved (first second : Scalar → Scalar) {length : ℕ}
+    (array : Fin length → Scalar) (firstIndex secondIndex index : Fin length)
+    (active : ℕ) (firstActive : firstIndex.val < active) (secondActive : secondIndex.val < active)
+    (inactive : active ≤ index.val) :
+    compute first second array firstIndex secondIndex index = array index := by
+  have firstDifferent : index ≠ firstIndex := by intro equal; subst index; omega
+  have secondDifferent : index ≠ secondIndex := by intro equal; subst index; omega
+  simp [compute, Function.update_of_ne, firstDifferent, secondDifferent]
 
 end Polytime2.CatalogueMap

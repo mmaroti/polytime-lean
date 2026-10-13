@@ -15,10 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Complexity
 import Mathlib.Data.Nat.Size
 import Mathlib.Data.Nat.GCD.Basic
-import Polytime2.Search
+import Mathlib.Tactic
 
 /-! # Euclidean gcd with a bit-length progress measure
 
@@ -142,56 +141,5 @@ decreasing_by exact decreases value (by assumption)
 theorem iterations_capacity (bits : ℕ) (value : Value)
     (bounded : value.1 < 2 ^ bits ∧ value.2 < 2 ^ bits) :
     iterations value ≤ 2 * bits + 1 := (iterations_bound value).trans (measure_bound bits value bounded)
-
-section MachineContract
-
-open MultiTape
-
--- tapeLevel: tape roles; symbolLevel: symbols; guardLevel/bodyLevel: controllers.
-universe tapeLevel symbolLevel guardLevel bodyLevel
-
-variable {TapeName : Type tapeLevel} [Fintype TapeName]
-variable {Alphabet : TapeName → Type symbolLevel}
-variable [∀ name, Inhabited (Alphabet name)] [∀ name, Fintype (Alphabet name)]
-variable {Guard : Type guardLevel} [Fintype Guard] {Body : Type bodyLevel} [Fintype Body]
-
-/-- Assemble the gcd loop from a zero guard and a remainder body.
-This theorem supplies logical correctness and bit-length termination, while
-the component certificates must account for all physical division work. -/
-theorem contract
-    {guard : Machine Alphabet Guard} {body : Machine Alphabet Body}
-    {guardEntry guardExit : Guard} {bodyEntry bodyExit : Body}
-    (result : Symbols Alphabet → Bool)
-    (representation guardedRepresentation : (Unit → ℕ) → Value → Tapes Alphabet → Prop)
-    (guardCertificate : Computes guard guardEntry guardExit representation guardedRepresentation
-      (fun sizes value => value.1 < 2 ^ sizes () ∧ value.2 < 2 ^ sizes ()) (fun _ value => value))
-    (bodyCertificate : Computes body bodyEntry bodyExit guardedRepresentation representation
-      (fun sizes value => (value.1 < 2 ^ sizes () ∧ value.2 < 2 ^ sizes ()) ∧ condition value = true)
-      (fun _ value => advance value))
-    (resultCorrect : ∀ sizes value tapes, guardedRepresentation sizes value tapes →
-      result (read tapes) = condition value) :
-    Computes (withExit (whileMachine guard body guardEntry bodyEntry result))
-      (.inl (.inl guardEntry)) (.inr ()) representation
-      (fun sizes output tapes => ∃ value, guardedRepresentation sizes value tapes ∧
-        value.2 = 0 ∧ value.1 = output)
-      (fun sizes value => value.1 < 2 ^ sizes () ∧ value.2 < 2 ^ sizes ())
-      (fun _ value => answer value) := by
-  apply Computes.whileLoop result representation guardedRepresentation _
-    (fun _ => condition) (fun sizes value => value.1 < 2 ^ sizes () ∧ value.2 < 2 ^ sizes ())
-    (fun _ => advance) (fun _ => measure) (fun _ => answer)
-    guardCertificate bodyCertificate resultCorrect
-  · intro sizes value bounded active
-    exact preserves (sizes ()) value bounded active
-  · intro _ value _ active
-    exact decreases value active
-  · intro _ value _ _
-    exact conserves value
-  · intro sizes value tapes _ stopped represented
-    exact ⟨value, represented, by simpa [condition] using stopped, (terminal value stopped).symm⟩
-  · refine ⟨2 * MvPolynomial.X () + 1, ?_⟩
-    intro sizes value bounded
-    simpa using measure_bound (sizes ()) value bounded
-
-end MachineContract
 
 end Polytime2.Gcd

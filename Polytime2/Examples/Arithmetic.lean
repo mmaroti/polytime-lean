@@ -15,25 +15,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.AddMultiplyExternal
+import Polytime2.AddMultiply
 import Polytime2.BinarySubtraction
+import Polytime2.StandardBinaryDecrement
+import Polytime2.StandardBinaryIncrement
+import Polytime2.StandardCounterZero
 
-/-! # External arithmetic boundary cases
+/-! # Composed arithmetic boundary cases
 
-The public input contains widths and operands only; empty widths are valid.
-The complete realization theorem covers these inputs with the same controller.
+Separate immutable operands share a fixed-capacity intermediate sum. Output
+and scratch regions may initially be blank or contain arbitrary old symbols.
 -/
 
 namespace Polytime2.Examples.Arithmetic
 
-open AddMultiplyInput (Input inputWord preparedAt blank)
-open AddMultiplyExternal (compute)
-
-#guard inputWord ([], [], []) = [3, 3, 0]
-#guard compute ([], [], []) = 0
-#guard compute ([true, true, true], [true, false, false], [true, false, true, true]) = 104
-#guard (inputWord ([true, true, true], [true, false, false], [true, false, true, true])).length = 20
-#guard compute ([true], [true], []) = 0
+#guard Binary.value (AddMultiply.product
+  [true, true, true, false, false, false, false]
+  [true, false, false, false, false, false, false] [true, false, true, true]
+  (List.replicate 7 0) (List.replicate 7 0) 2) = 104
 
 -- The final subtraction bit is the borrow; lower bits retain their capacity.
 #guard BinarySubtraction.subtract [true, true, false] [true, false, true] =
@@ -44,24 +43,69 @@ open AddMultiplyExternal (compute)
   [false, false, false, false]
 #guard BinarySubtraction.subtract [] [] = [false]
 
--- Only the external input tape contains data at entry.
-example (input : Input) (name : Fin 10) (working : name ≠ 7) :
-    preparedAt input 0 name = blank := by
-  fin_cases name <;> simp_all [preparedAt]
+-- The complete composition accepts blank output and an arbitrary old carry.
+example :
+    let left := [true, true, true, false, false, false, false]
+    let right := [true, false, false, false, false, false, false]
+    let multiplier := [true, false, true, true]
+    let empty : List Binary.Symbol := List.replicate 7 0
+    CallingConvention.Runs (AddMultiply.widths 7 4) AddMultiply.readOnly AddMultiply.machine
+      297 AddMultiply.entry (fun _ => 0)
+      (AddMultiply.frame left right multiplier empty empty empty empty 2 2)
+      AddMultiply.exit (fun _ => 0)
+      (AddMultiply.frame left right multiplier
+        (Binary.word (AddMultiply.product left right multiplier empty empty 2))
+        (Binary.word (AddMultiply.sum left right))
+        (Binary.word (List.replicate 7 false)) (Binary.word (List.replicate 7 false))
+        (Binary.data false) (Binary.data false)) := by
+  exact AddMultiply.runs [true, true, true, false, false, false, false]
+    [true, false, false, false, false, false, false] [true, false, true, true] rfl
+    (List.replicate 7 0) (List.replicate 7 0) (List.replicate 7 0) (List.replicate 7 0)
+    rfl rfl rfl rfl 2 2 (by decide)
 
--- The encoded width fields agree with both size parameters.
-example : AddMultiplyExternal.hypothesis (fun name => if name then 4 else 3)
-    ([true, true, true], [true, false, false], [true, false, true, true]) := by
-  unfold AddMultiplyExternal.hypothesis
-  decide
+-- Zero-width words still initialize both flags and all scratch.
+example : CallingConvention.Runs (AddMultiply.widths 0 0) AddMultiply.readOnly AddMultiply.machine
+    17 AddMultiply.entry (fun _ => 0) (AddMultiply.frame [] [] [] [] [] [] [] 2 2)
+    AddMultiply.exit (fun _ => 0)
+    (AddMultiply.frame [] [] [] [] [] [] [] (Binary.data false) (Binary.data false)) :=
+  AddMultiply.runs [] [] [] rfl [] [] [] [] rfl rfl rfl rfl 2 2 (by decide)
 
--- The preparer also handles all widths zero.
-example : ∃ ticks, ticks ≤ 108 ∧ MultiTape.Steps AddMultiplyInput.machine ticks
-    (AddMultiplyInput.entry, preparedAt ([], [], []) 0)
-    (none, preparedAt ([], [], []) 9) := by
-  simpa using AddMultiplyInput.steps ([], [], []) rfl
+-- Decrement writes through blank digits and propagates a borrow across zeros.
+example : CallingConvention.Runs (fun _ : Bool => 4) (fun name => !name)
+    StandardBinaryDecrement.machine 11 StandardBinaryDecrement.entry (fun _ => 0)
+    (Copy.frame [0] (Binary.word [false, false, false, true] ++ [0]) [0] [0, 2, 0, 0, 0])
+    StandardBinaryDecrement.exit (fun _ => 0)
+    (Copy.frame [0] (Binary.word [false, false, false, true] ++ [0]) [0]
+      (Binary.word [true, true, true, false] ++ [0])) :=
+  StandardBinaryDecrement.runs [false, false, false, true] [0, 2, 0, 0] rfl
 
--- Runtime widths do not enter the controller type.
-example : Fintype AddMultiplyExternal.State := inferInstance
+example : CallingConvention.Runs (fun _ : Bool => 0) (fun name => !name)
+    StandardBinaryDecrement.machine 3 StandardBinaryDecrement.entry (fun _ => 0)
+    (Copy.frame [0] [0] [0] [0]) StandardBinaryDecrement.exit (fun _ => 0)
+    (Copy.frame [0] [0] [0] [0]) := StandardBinaryDecrement.runs [] [] rfl
+
+example : Fintype AddMultiply.State := inferInstance
+
+-- Fixed constants overwrite arbitrary old contents without a source.
+example : CallingConvention.Runs (fun _ : Unit => 2) (fun _ => false)
+    (StandardConstant.machine [false, true]) 5 (false, 2) (fun _ => 0)
+    (fun _ => CallingConvention.buffer [0, 2]) (true, 0) (fun _ => 0)
+    (fun _ => CallingConvention.buffer (Binary.word [false, true])) :=
+  StandardConstant.runs [false, true] [0, 2] rfl
+
+-- An empty encoded constant needs no data cells and still has a restoring exit.
+example : CallingConvention.Runs (fun _ : Unit => 0) (fun _ => false)
+    (StandardConstant.machine []) 1 (false, 0) (fun _ => 0)
+    (fun _ => CallingConvention.buffer []) (true, 0) (fun _ => 0)
+    (fun _ => CallingConvention.buffer []) := StandardConstant.runs [] [] rfl
+
+-- Counter capacity is retained on overflow; no digit is appended.
+#guard BinaryScan.run BinaryScan.increment true [true, true, true] =
+  (true, [false, false, false])
+#guard BinaryScan.run BinaryScan.increment true [false, false, true] =
+  (false, [true, false, true])
+#guard BinaryScan.run BinaryScan.increment true [] = (true, [])
+#guard StandardBinaryIncrement.next () (fun _ => 3) (7 : Fin 8) = 0
+#guard StandardBinaryIncrement.next () (fun _ => 0) (0 : Fin 1) = 0
 
 end Polytime2.Examples.Arithmetic

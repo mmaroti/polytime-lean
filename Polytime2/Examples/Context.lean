@@ -29,24 +29,33 @@ namespace Polytime2.Examples.Context
 
 open MultiTape
 open Binary (word value)
-open BinaryAddition (frame)
+open BinaryAddition (rippleFrame)
 
-example (wiring : Fin 3 ↪ Fin 4) :
-    ComputesWithContext (Context := fun _ : Unit → ℕ => Tapes (fun _ : Fin 4 => Binary.Symbol))
-      (MultiTape.wire wiring BinaryAddition.machine) (.inl false) (.inr 1)
-      (fun _ caller operands tapes =>
-        (∃ old, old.length = operands.1.length ∧
-          (fun name => tapes (wiring name)) =
-            frame [3] (word operands.1 ++ [0]) [3] (word operands.2 ++ [0]) [3] (old ++ [0, 0])) ∧
-        ∀ name, name ∉ Set.range wiring → tapes name = caller name)
-      (fun sizes caller output tapes =>
-        (∃ left right bits, value bits = output ∧ bits.length ≤ sizes () + 1 ∧
-          (fun name => tapes (wiring name)) =
-            frame [3] (word left ++ [0]) [3] (word right ++ [0]) [3] (word bits ++ [0])) ∧
-        ∀ name, name ∉ Set.range wiring → tapes name = caller name)
-      (fun sizes (operands : List Bool × List Bool) =>
-        operands.2.length = operands.1.length ∧ operands.1.length ≤ sizes ())
-      (fun _ operands => value operands.1 + value operands.2) :=
-  Computes.wireWithContext (Alphabet := fun _ : Fin 4 => Binary.Symbol) wiring BinaryAddition.contract
+example (wiring : Fin 3 ↪ Fin 4) (left right : List Bool)
+    (sameLength : right.length = left.length) (old : List Binary.Symbol)
+    (oldLength : old.length = left.length) (oldCarry : Binary.Symbol)
+    (caller : Tapes (CallingConvention.Alphabet (Fin 4))) (callerWidth : Fin 4 → ℕ) :
+    let widths := install wiring (StandardBinaryRipple.width left.length) callerWidth
+    let readonly := install wiring StandardBinaryRipple.readOnly (fun _ => true)
+    let initial := install wiring
+      (rippleFrame [0] (word left ++ [0]) [0] (word right ++ [0]) [0] (old ++ [oldCarry])) caller
+    let final := install wiring
+      (rippleFrame [0] (word left ++ [0]) [0] (word right ++ [0]) [0]
+        (word (BinaryAddition.add left right))) caller
+    CallingConvention.Runs widths readonly (MultiTape.wire wiring BinaryAddition.rippleMachine)
+      (2 * left.length + 2) (.inl false) (fun _ => 0) initial (.inr 1) (fun _ => 0) final ∧
+    value (BinaryAddition.add left right) = value left + value right ∧
+    ∀ name, name ∉ Set.range wiring → final name = caller name := by
+  dsimp only
+  have trace := (BinaryAddition.runs left right sameLength old oldLength oldCarry).wire
+    wiring (install wiring (StandardBinaryRipple.width left.length) callerWidth)
+    (install wiring StandardBinaryRipple.readOnly (fun _ => true))
+    (by intro name; simp) (by intro name premise; simpa using premise) caller (fun _ => 0)
+  have positions : install wiring (fun _ : Fin 3 => (0 : ℤ))
+      (fun _ : Fin 4 => (0 : ℤ)) = fun _ => 0 :=
+    install_self wiring (fun _ : Fin 4 => (0 : ℤ))
+  rw [positions] at trace
+  exact ⟨trace, BinaryAddition.add_value left right sameLength,
+    fun name outside => install_outside _ _ _ name outside⟩
 
 end Polytime2.Examples.Context

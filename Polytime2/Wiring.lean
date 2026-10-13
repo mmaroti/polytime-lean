@@ -60,6 +60,29 @@ theorem install_outside (wiring : Source ↪ Target) {Family : Target → Type v
   simp only [install, Set.mem_range] at outside ⊢
   exact dite_eq_right outside
 
+/-- Installing fields already present in a frame leaves it unchanged. -/
+@[simp] theorem install_self (wiring : Source ↪ Target)
+    {Family : Target → Type valueLevel} (original : ∀ name, Family name) :
+    install wiring (fun name => original (wiring name)) original = original := by
+  classical
+  funext name
+  by_cases located : name ∈ Set.range wiring
+  · obtain ⟨source, rfl⟩ := located
+    simp
+  · exact install_outside _ _ _ _ located
+
+/-- Replacing the same wired fields twice keeps only the latest local values. -/
+@[simp] theorem install_overwrite (wiring : Source ↪ Target)
+    {Family : Target → Type valueLevel}
+    (latest earlier : ∀ name, Family (wiring name)) (original : ∀ name, Family name) :
+    install wiring latest (install wiring earlier original) = install wiring latest original := by
+  classical
+  funext name
+  by_cases located : name ∈ Set.range wiring
+  · obtain ⟨source, rfl⟩ := located
+    simp
+  · simp [install_outside _ _ _ _ located]
+
 /-- Bind a one-tape component to a named enclosing tape. -/
 def oneTape (name : Target) : Unit ↪ Target :=
   ⟨fun _ => name, by intro first second _; cases first; cases second; rfl⟩
@@ -120,6 +143,22 @@ noncomputable def wire (wiring : Source ↪ Target)
     (machine : Machine (fun name => Alphabet (wiring name)) State) : Machine Alphabet State :=
   fun state symbols => (machine state (fun name => symbols (wiring name))).map fun command =>
     (command.1, install wiring command.2 (stationary symbols))
+
+omit [∀ name, Inhabited (Alphabet name)] in
+/-- Identity wiring leaves the controller and every tape action unchanged. -/
+@[simp] theorem wire_refl (machine : Machine Alphabet State) :
+    wire (Function.Embedding.refl Target) machine = machine := by
+  funext state symbols
+  change (machine state symbols).map (fun command =>
+    (command.1, install (Function.Embedding.refl Target) command.2 (stationary symbols))) = machine state symbols
+  cases instruction : machine state symbols with
+  | none => simp only [Option.map_none]
+  | some command =>
+    simp only [Option.map_some, Option.some.injEq]
+    apply Prod.ext
+    · rfl
+    · funext name
+      exact install_at (Function.Embedding.refl Target) command.2 (stationary symbols) name
 
 @[simp] theorem wired_act (wiring : Source ↪ Target)
     (actions : Actions (fun name => Alphabet (wiring name))) (tapes : Tapes Alphabet) :

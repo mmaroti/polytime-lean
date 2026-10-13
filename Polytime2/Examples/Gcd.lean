@@ -17,14 +17,16 @@ limitations under the License.
 
 import Polytime2.Complexity
 import Polytime2.Gcd
-import Polytime2.BinaryRemainder
-import Polytime2.GcdMachine
-import Polytime2.GcdExternal
+import Polytime2.StandardBinaryRemainder
+import Polytime2.StandardBinaryGuard
+import Polytime2.StandardGcdStep
+import Polytime2.StandardGcdMachine
+import Polytime2.StandardGcd
 
 /-! # Gcd boundary cases and bit-length progress
 
-These checks exercise mathematical gcd, binary remainder, and complete external
-input preparation and computation, including zero operands.
+These checks exercise mathematical gcd, binary remainder, and the standard
+separate-tape calling convention, including zero operands.
 -/
 
 namespace Polytime2.Examples.Gcd
@@ -45,93 +47,137 @@ example (bits left right : ℕ) (capacity : left < 2 ^ bits ∧ right < 2 ^ bits
 example (left right : ℕ) : Gcd.run (left, right) = Nat.gcd left right :=
   Gcd.run_correct (left, right)
 
-#guard Binary.value (BinaryRemainder.finish [true, false, true, false, false]
-  [true, false, true, true, false].reverse (List.replicate 5 false)) = 3
-#guard Binary.value (BinaryRemainder.finish [true, true, false, false]
-  [false, true, true, false].reverse (List.replicate 4 false)) = 0
-#guard Binary.value (BinaryRemainder.finish [true] [] [false]) = 0
+#guard Binary.value (StandardBinaryRemainder.finish [true, false, true, false, false]
+  [true, false, true, true, false].reverse
+  (List.replicate 5 false, List.replicate 5 0, List.replicate 5 0, List.replicate 5 0, 0)).1 = 3
+#guard Binary.value (StandardBinaryRemainder.finish [true, true, false, false]
+  [false, true, true, false].reverse
+  (List.replicate 4 false, List.replicate 4 0, List.replicate 4 0, List.replicate 4 0, 0)).1 = 0
+#guard Binary.value (StandardBinaryRemainder.finish [true] []
+  ([false], [0], [0], [0], 0)).1 = 0
 
--- The same fixed controller realizes 13 % 5 in a five-digit workspace.
-example : ∃ ticks, ticks ≤ 233 ∧ MultiTape.Steps BinaryRemainder.machine ticks
-    (BinaryRemainder.entry, BinaryRemainder.frame [3]
-      (Binary.word [true, false, true, true, false] ++ [0])
-      [true, false, true, false, false] (List.replicate 5 false))
-    (BinaryRemainder.exit, BinaryRemainder.frame [3]
-      (Binary.word [true, false, true, true, false] ++ [0])
-      [true, false, true, false, false]
-      (BinaryRemainder.finish [true, false, true, false, false]
-        [true, false, true, true, false].reverse (List.replicate 5 false))) := by
-  simpa using BinaryRemainder.steps [true, false, true, true, false]
-    [true, false, true, false, false] (List.replicate 5 false)
-    (by decide) (by decide) (by decide)
+-- The same fixed controller realizes 13 % 5 from entirely blank writable regions.
+example :
+    let dividend := [true, false, true, true, false]
+    let divisor := [true, false, true, false, false]
+    let empty : List Binary.Symbol := List.replicate 5 0
+    let work : StandardBinaryRemainder.Workspace :=
+      (List.replicate 5 false, empty, empty, empty, 0)
+    CallingConvention.Runs (StandardBinaryRemainder.widths 5 5) StandardBinaryRemainder.readOnly
+      StandardBinaryRemainder.machine 301
+      StandardBinaryRemainder.entry (fun _ => 0)
+      (StandardBinaryRemainder.initialFrame (CallingConvention.buffer (Binary.word dividend))
+        divisor empty work)
+      StandardBinaryRemainder.exit (fun _ => 0)
+      (StandardBinaryRemainder.frame (CallingConvention.buffer (Binary.word dividend)) divisor
+        (StandardBinaryRemainder.finish divisor dividend.reverse work)) := by
+  exact StandardBinaryRemainder.runs [true, false, true, true, false]
+    [true, false, true, false, false] (List.replicate 5 0) (List.replicate 5 0)
+    (List.replicate 5 0) (List.replicate 5 0) rfl rfl rfl rfl 0
 
--- gcd(0,0) stops without calling the positive-divisor remainder routine.
--- Scratch and the previous flag need not start at zero.
-example : ∃ ticks final, MultiTape.Steps GcdMachine.machine ticks
-    (GcdMachine.entry, GcdMachine.frame [false] [false] [true] true)
-    (GcdMachine.exit, final) ∧
-    BinaryOutput.representation 0 (MvPolynomial.X () + 1) (fun _ => 0) 0 final := by
-  obtain ⟨_, _, runs⟩ := GcdMachine.contract
-  obtain ⟨ticks, final, _, trace, output⟩ := runs (fun _ => 0) (0, 0)
-    (GcdMachine.frame [false] [false] [true] true) (by decide)
-    ⟨[false], [false], [true], true, rfl, rfl, rfl, rfl, rfl, rfl⟩
-  exact ⟨ticks, final, trace, output⟩
+-- An empty counter still writes a one-bit false result from a blank output.
+example : CallingConvention.Runs (StandardBinaryGuard.widths 0) StandardBinaryGuard.readOnly
+    StandardBinaryGuard.machine 2 (false, 0) (fun _ => 0)
+    (Copy.frame [0] [0] [0] [0, 0]) (false, 2) (fun _ => 0)
+    (Copy.frame [0] [0] [0] [Binary.data false, 0]) :=
+  StandardBinaryGuard.runs [] 0
 
--- The internal machine computes gcd(13,5) in a common five-digit workspace.
-example : ∃ ticks final, MultiTape.Steps GcdMachine.machine ticks
-    (GcdMachine.entry, GcdMachine.frame [true, false, true, true, false]
-      [true, false, true, false, false] (List.replicate 5 true) false)
-    (GcdMachine.exit, final) ∧
-    BinaryOutput.representation 0 (MvPolynomial.X () + 1) (fun _ => 4) 1 final := by
-  obtain ⟨_, _, runs⟩ := GcdMachine.contract
-  obtain ⟨ticks, final, _, trace, output⟩ := runs (fun _ => 4) (13, 5)
-    (GcdMachine.frame [true, false, true, true, false]
-      [true, false, true, false, false] (List.replicate 5 true) false) (by decide)
-    ⟨[true, false, true, true, false], [true, false, true, false, false],
-      List.replicate 5 true, false, rfl, rfl, rfl, rfl, rfl, rfl⟩
-  exact ⟨ticks, final, trace, output⟩
+-- One Euclidean step preserves both inputs and completely writes both outputs.
+example :
+    let left := [true, false, true, true, false]
+    let right := [true, false, true, false, false]
+    let empty : List Binary.Symbol := List.replicate 5 0
+    let work : StandardGcdStep.Workspace :=
+      (List.replicate 5 false, empty, empty, empty, 0)
+    CallingConvention.Runs (StandardGcdStep.widths 5) StandardGcdStep.readOnly
+      StandardGcdStep.machine 314 StandardGcdStep.entry (fun _ => 0)
+      (StandardGcdStep.initialFrame left right work empty empty)
+      StandardGcdStep.exit (fun _ => 0)
+      (StandardGcdStep.frame left right (StandardBinaryRemainder.finish right left.reverse work)
+        (Binary.word right)) := by
+  exact StandardGcdStep.runs [true, false, true, true, false] [true, false, true, false, false]
+    rfl (List.replicate 5 0) (List.replicate 5 0) (List.replicate 5 0)
+    (List.replicate 5 0) (List.replicate 5 0) rfl rfl rfl rfl rfl 0
 
-#guard GcdInput.inputWord ([false], [false]) = [2, 3, 1, 1, 0]
-#guard GcdExternal.compute ([false], [false]) = 0
-#guard GcdExternal.compute ([false, false, false, false, false, false, false],
-  [true, false, true, false, false, true, false]) = 37
-#guard GcdExternal.compute ([false, false, false, false, true, true, false],
-  [false, true, false, false, true, false, false]) = 6
-example : GcdExternal.hypothesis (fun _ => 0) ([false], [false]) := by
-  unfold GcdExternal.hypothesis GcdInput.hypothesis
-  decide
+-- Empty operands still return canonical scratch and a false guard bit.
+example : ∃ ticks finalLeft finalRight,
+    ticks ≤ 56 ∧ finalLeft.length = 0 ∧ finalRight.length = 0 ∧
+    CallingConvention.Runs (StandardGcdMachine.widths 0) (fun _ => false)
+      StandardGcdMachine.machine ticks StandardGcdMachine.entry (fun _ => 0)
+      (StandardGcdMachine.frame [] [] ((fun _ => []), 2) 0)
+      StandardGcdMachine.exit (fun _ => 0)
+      (StandardGcdMachine.frame finalLeft finalRight (StandardGcdMachine.zeroScratch 0) (Binary.data false)) ∧
+    Binary.value finalRight = 0 ∧ Binary.value finalLeft = 0 := by
+  simpa using StandardGcdMachine.runs [] [] rfl ((fun _ => []), 2) (by intro name; rfl) 0 (by decide)
 
--- The external convention supplies no initialized working tape.
-example (input : GcdInput.Input) (name : Fin 6) (working : name ≠ 4) :
-    GcdInput.preparedAt input 0 name = GcdInput.blank := by
-  fin_cases name <;> simp_all [GcdInput.preparedAt]
+-- The complete private loop handles arbitrary blank words and an arbitrary old flag.
+example : ∃ ticks finalLeft finalRight,
+    ticks ≤ 4316 ∧ finalLeft.length = 5 ∧ finalRight.length = 5 ∧
+    CallingConvention.Runs (StandardGcdMachine.widths 5) (fun _ => false)
+      StandardGcdMachine.machine ticks StandardGcdMachine.entry (fun _ => 0)
+      (StandardGcdMachine.frame [true, false, true, true, false] [true, false, true, false, false]
+        ((fun _ => List.replicate 5 0), 2) 0)
+      StandardGcdMachine.exit (fun _ => 0)
+      (StandardGcdMachine.frame finalLeft finalRight (StandardGcdMachine.zeroScratch 5) (Binary.data false)) ∧
+    Binary.value finalRight = 0 ∧ Binary.value finalLeft = 1 := by
+  simpa [Binary.value] using StandardGcdMachine.runs [true, false, true, true, false]
+    [true, false, true, false, false] rfl ((fun _ => List.replicate 5 0), 2)
+    (by intro name; rfl) 0 (by decide)
 
--- One finite controller handles every runtime width.
-example : Fintype GcdExternal.State := inferInstance
+-- The public machine starts with blank scratch and a separate blank result.
+example :
+    let left := [true, false, true, true, false]
+    let right := [true, false, true, false, false]
+    let contents : Fin 12 → List Binary.Symbol := fun name =>
+      List.replicate (StandardGcd.widths 5 name) 0
+    let initial : MultiTape.Tapes StandardGcd.Alphabet := fun name =>
+      if name = 9 then CallingConvention.buffer (Binary.word left)
+      else if name = 10 then CallingConvention.buffer (Binary.word right)
+      else CallingConvention.buffer (contents name)
+    ∃ ticks finalLeft finalRight final,
+      ticks ≤ 4355 ∧ finalLeft.length = 5 ∧ finalRight.length = 5 ∧
+      CallingConvention.Runs (StandardGcd.widths 5) StandardGcd.readOnly StandardGcd.machine
+        ticks StandardGcd.entry (fun _ => 0) initial StandardGcd.exit (fun _ => 0) final ∧
+      Binary.value finalLeft = 1 ∧
+      (∀ name : Fin 9, final (StandardGcd.kernelWiring name) =
+        StandardGcdMachine.frame finalLeft finalRight (StandardGcdMachine.zeroScratch 5)
+          (Binary.data false) name) ∧
+      final 11 = CallingConvention.buffer (Binary.word finalLeft) := by
+  let contents : Fin 12 → List Binary.Symbol := fun name =>
+    List.replicate (StandardGcd.widths 5 name) 0
+  let initial : MultiTape.Tapes StandardGcd.Alphabet := fun name =>
+    if name = 9 then CallingConvention.buffer (Binary.word [true, false, true, true, false])
+    else if name = 10 then CallingConvention.buffer (Binary.word [true, false, true, false, false])
+    else CallingConvention.buffer (contents name)
+  have trace := StandardGcd.runs [true, false, true, true, false]
+    [true, false, true, false, false] rfl (by decide) initial contents
+    (by simp [initial]) (by simp [initial])
+    (by
+      intro name writable
+      have excluded : name ≠ 9 ∧ name ≠ 10 := by
+        simpa [StandardGcd.readOnly] using writable
+      simp [initial, excluded.1, excluded.2])
+    (by intro name writable; exact List.length_replicate)
+  simpa [initial, contents, Binary.value] using trace
 
--- The complete external multi-tape machine handles the smallest zero input.
-example : ∃ ticks final, MultiTape.Steps GcdExternal.machine ticks
-    (GcdExternal.entry, BinaryOutput.initial 4 (GcdInput.inputWord ([false], [false])))
-    (GcdExternal.exit, final) ∧
-    BinaryOutput.representation 0 GcdExternal.outputCapacity (fun _ => 0) 0 final := by
-  obtain ⟨_, _, runs⟩ := GcdExternal.contract
-  obtain ⟨ticks, final, _, trace, output⟩ := runs (fun _ => 0) ([false], [false])
-    (BinaryOutput.initial 4 (GcdInput.inputWord ([false], [false])))
-    (by unfold GcdExternal.hypothesis GcdInput.hypothesis; decide) rfl
-  exact ⟨ticks, final, trace, output⟩
+-- Zero-width operands also work through both input copies and result extraction.
+example : ∃ ticks finalLeft finalRight final,
+    ticks ≤ 65 ∧ finalLeft.length = 0 ∧ finalRight.length = 0 ∧
+    CallingConvention.Runs (StandardGcd.widths 0) StandardGcd.readOnly StandardGcd.machine
+      ticks StandardGcd.entry (fun _ => 0)
+      (fun name => CallingConvention.buffer (List.replicate (StandardGcd.widths 0 name) 0))
+      StandardGcd.exit (fun _ => 0) final ∧
+    Binary.value finalLeft = 0 ∧
+    (∀ name : Fin 9, final (StandardGcd.kernelWiring name) =
+      StandardGcdMachine.frame finalLeft finalRight (StandardGcdMachine.zeroScratch 0)
+        (Binary.data false) name) ∧
+    final 11 = CallingConvention.buffer (Binary.word finalLeft) := by
+  simpa [Binary.value] using StandardGcd.runs [] [] rfl (by decide)
+    (fun name => CallingConvention.buffer (List.replicate (StandardGcd.widths 0 name) 0))
+    (fun name => List.replicate (StandardGcd.widths 0 name) 0) rfl rfl
+    (by intro name writable; rfl) (by intro name writable; exact List.length_replicate)
 
--- Preparation, scratch initialization, and gcd compute gcd(13,5) together.
-example : ∃ ticks final, MultiTape.Steps GcdExternal.machine ticks
-    (GcdExternal.entry, BinaryOutput.initial 4
-      (GcdInput.inputWord ([true, false, true, true, false], [true, false, true, false, false])))
-    (GcdExternal.exit, final) ∧
-    BinaryOutput.representation 0 GcdExternal.outputCapacity (fun _ => 4) 1 final := by
-  obtain ⟨_, _, runs⟩ := GcdExternal.contract
-  obtain ⟨ticks, final, _, trace, output⟩ := runs (fun _ => 4)
-    ([true, false, true, true, false], [true, false, true, false, false])
-    (BinaryOutput.initial 4
-      (GcdInput.inputWord ([true, false, true, true, false], [true, false, true, false, false])))
-    (by unfold GcdExternal.hypothesis GcdInput.hypothesis; decide) rfl
-  exact ⟨ticks, final, trace, output⟩
+-- A single finite controller handles every runtime width.
+example : Fintype StandardGcd.State := inferInstance
 
 end Polytime2.Examples.Gcd

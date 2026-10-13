@@ -15,9 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Complexity
-import Polytime2.Contracts
 import Polytime2.BinaryRipple
+
+import Polytime2.StandardBinaryRipple
+import Polytime2.StandardBinaryArithmetic
 
 /-! # Runtime-width binary subtraction
 
@@ -31,8 +32,8 @@ namespace Polytime2.BinarySubtraction
 open MultiTape
 open Binary (Symbol word value)
 
-abbrev Alphabet := BinaryRipple.Alphabet
-abbrev State := BinaryRipple.State
+abbrev RippleAlphabet := BinaryRipple.Alphabet
+abbrev RippleState := BinaryRipple.State
 
 def digit (left right previous : Bool) : Bool := (left != right) != previous
 
@@ -41,8 +42,7 @@ def borrow (left right previous : Bool) : Bool :=
 
 abbrev ripple := BinaryRipple.ripple digit borrow
 abbrev subtract := BinaryRipple.output digit borrow
-abbrev frame := BinaryRipple.frame
-abbrev machine := BinaryRipple.machine digit borrow
+abbrev rippleFrame := BinaryRipple.frame
 
 private theorem digit_equation (left right previous : Bool) :
     (digit left right previous).toNat + right.toNat + previous.toNat =
@@ -105,43 +105,81 @@ theorem difference_of_no_borrow (left right : List Bool) (sameLength : right.len
     (subtract left right).length = left.length + 1 := by
   simp [subtract, BinaryRipple.output, BinaryRipple.ripple_length digit borrow false left right sameLength]
 
-/-- Linear cost, preserved operands and neighbors, and restored heads. -/
-theorem steps (left right : List Bool) (sameLength : right.length = left.length)
-    (old : List Symbol) (oldLength : old.length = left.length)
-    (leftFirst leftSecond leftOutput tailFirst tailSecond tailOutput : List Symbol) :
-    Steps machine (2 * left.length + 3)
-      (.inl false, frame (3 :: leftFirst) (word left ++ 0 :: tailFirst)
-        (3 :: leftSecond) (word right ++ 0 :: tailSecond)
-        (3 :: leftOutput) (old ++ 0 :: tailOutput))
-      (.inr 1, frame (3 :: leftFirst) (word left ++ 0 :: tailFirst)
-        (3 :: leftSecond) (word right ++ 0 :: tailSecond)
-        (3 :: leftOutput) (word (subtract left right) ++ tailOutput)) :=
-  BinaryRipple.steps digit borrow left right sameLength old oldLength
-    leftFirst leftSecond leftOutput tailFirst tailSecond tailOutput
+/-- The immutable-input implementation needs neither boundary markers nor
+prepared output contents. -/
+abbrev rippleMachine := StandardBinaryRipple.machine digit borrow
 
-/-- Mathematical signed subtraction on equally padded unsigned operands.
-Scratch contents are existential; the final borrow is an explicit output bit. -/
+/-- The standard implementation writes every result bit and restores every
+head, while preserving both operands and every cell outside their regions. -/
+theorem runs (left right : List Bool)
+    (sameLength : right.length = left.length) (old : List Symbol)
+    (oldLength : old.length = left.length) (oldCarry : Symbol) :
+    CallingConvention.Runs (StandardBinaryRipple.width left.length)
+      StandardBinaryRipple.readOnly rippleMachine (2 * left.length + 2)
+      (.inl false) (fun _ => 0)
+      (rippleFrame [0] (word left ++ [0]) [0] (word right ++ [0]) [0] (old ++ [oldCarry]))
+      (.inr 1) (fun _ => 0)
+      (rippleFrame [0] (word left ++ [0]) [0] (word right ++ [0]) [0] (word (subtract left right))) := by
+  exact StandardBinaryRipple.runs digit borrow false left right sameLength old oldLength oldCarry
+
+/-- Standard four-tape interface: immutable operands, low difference, and borrow. -/
+abbrev domains := StandardBinaryArithmetic.domains
+abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly
+abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes
+
+noncomputable def algorithm :
+    Machine (CallingConvention.Alphabet (Sum Unit (Fin 4))) (Sum StandardBinaryArithmetic.State Unit) :=
+  StandardBinaryArithmetic.algorithm digit borrow
+
+def entry := StandardBinaryArithmetic.entry false
+def exit := StandardBinaryArithmetic.exit
+
+/-- The standard interface returns the low difference and final borrow. -/
 theorem contract :
-    Computes machine (.inl false) (.inr 1)
-      (fun _sizes : Unit → ℕ => fun (operands : List Bool × List Bool) tapes => ∃ old,
-        old.length = operands.1.length ∧ tapes =
-          frame [3] (word operands.1 ++ [0]) [3] (word operands.2 ++ [0]) [3] (old ++ [0, 0]))
-      (fun sizes => fun (result : ℤ) tapes => ∃ left right bits finalBorrow,
-        (value bits : ℤ) - (2 : ℤ) ^ bits.length * (finalBorrow.toNat : ℤ) = result ∧
-        bits.length ≤ sizes () ∧ tapes =
-          frame [3] (word left ++ [0]) [3] (word right ++ [0]) [3] (word (bits ++ [finalBorrow]) ++ [0]))
-      (fun sizes operands => operands.2.length = operands.1.length ∧ operands.1.length ≤ sizes ())
-      (fun _ operands => (value operands.1 : ℤ) - value operands.2) := by
-  refine ⟨by intro symbols; rfl, 2 * MvPolynomial.X () + 3, ?_⟩
-  intro sizes operands initial valid represented
-  obtain ⟨old, oldLength, rfl⟩ := represented
-  refine ⟨_, _, ?_, steps operands.1 operands.2 valid.1 old oldLength [] [] [] [] [] [0],
-    operands.1, operands.2, (ripple false operands.1 operands.2).1,
-    (ripple false operands.1 operands.2).2, ?_, ?_, rfl⟩
-  · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
-    omega
-  · rw [BinaryRipple.ripple_length digit borrow false operands.1 operands.2 valid.1]
-    exact subtract_value operands.1 operands.2 valid.1
-  · simpa only [BinaryRipple.ripple_length digit borrow false operands.1 operands.2 valid.1] using valid.2
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+      (fun _ _ => True)
+      (fun assignment input output =>
+        (output ⟨.inr 2, rfl⟩ : Fin (2 ^ assignment ())).val =
+            value (ripple false
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
+          output ⟨.inr 3, rfl⟩ =
+            (ripple false
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).2) := by
+  exact StandardBinaryArithmetic.contract digit borrow false
+
+/-- Loop guards can use the borrow output directly as unsigned comparison;
+the low difference remains a valid fixed-width scratch result. -/
+theorem comparison_contract :
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+      (fun _ _ => True)
+      (fun assignment input output => output ⟨.inr 3, rfl⟩ =
+        decide ((input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment ())).val <
+          (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val)) := by
+  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := contract
+  refine ⟨sizeReadOnly, halts, bound, ?_⟩
+  intro assignment input initial valid represented headers
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
+    execute assignment input initial valid represented headers
+  refine ⟨ticks, output, final, cost, trace, ?_, canonical⟩
+  apply Eq.trans correct.2
+  apply Bool.eq_iff_iff.mpr
+  simp only [decide_eq_true_eq]
+  let left := List.ofFn (fun index : Fin (assignment ()) =>
+    (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val)
+  let right := List.ofFn (fun index : Fin (assignment ()) =>
+    (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val)
+  have leftValue : value left = (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment ())).val :=
+    Binary.value_bits (BitVec.ofFin (input ⟨.inr 0, rfl⟩))
+  have rightValue : value right = (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val :=
+    Binary.value_bits (BitVec.ofFin (input ⟨.inr 1, rfl⟩))
+  have compared := underflow_iff left right (by simp [left, right])
+  rw [leftValue, rightValue] at compared
+  exact compared
 
 end Polytime2.BinarySubtraction

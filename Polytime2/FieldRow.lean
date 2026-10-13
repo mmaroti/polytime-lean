@@ -15,116 +15,104 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.TableTraversal
-import Polytime2.Matrix
+import Polytime2.StandardArrayMapContract
+import Polytime2.StandardRowCombineContract
+import Mathlib.Algebra.Field.Defs
 
-/-! # Finite-field operations on stored rows
+/-! # Binary-encoded finite-field row operations
 
-Coefficients are runtime data on a stationary tape. Row length varies at
-runtime, while the field, arithmetic tables, and controller stay fixed.
-These routines operate on row buffers; selecting rows in a matrix is separate.
+The field presentation is fixed by the specialization. Coefficients and source
+rows are immutable; results occupy separate tapes with arbitrary initial data.
+For binary row operations, each array entry is a pair of source and target
+values. Its fixed presentation hides the scalar-pair bit layout.
 -/
 
 namespace Polytime2.FieldRow
 
-open MultiTape TableTraversal
+open CallingConvention
 
--- scalarLevel: the specialization-fixed finite field carrier.
-universe scalarLevel
-variable {Scalar : Type scalarLevel} [Field Scalar] [DecidableEq Scalar]
-variable {rows columns : ℕ}
+-- parameterLevel: unary size names; Scalar: the fixed field carrier.
+universe parameterLevel
+variable {Parameter : Type parameterLevel} [Fintype Parameter]
+variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
 
-local instance fieldScalarInhabited : Inhabited Scalar := ⟨0⟩
+def scalarDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
+  EncodedDomain.fixed enumeration
 
-def scaleTable (coefficient : Scalar) (entry : Unit → Scalar) : Unit → Scalar :=
-  fun _ => coefficient * entry ()
+def pairDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
+  EncodedDomain.fixed ((enumeration.prodCongr enumeration).trans finProdFinEquiv)
 
-def addTable (coefficient : Scalar) (entries : Bool → Scalar) : Bool → Scalar :=
-  fun target => if target then entries true + coefficient * entries false else entries false
+def scale (coefficient value : Scalar) : Scalar := coefficient * value
+def normalize (coefficient value : Scalar) : Scalar := coefficient⁻¹ * value
 
-def swapTable (_coefficient : Scalar) (entries : Bool → Scalar) : Bool → Scalar :=
-  fun target => entries (!target)
+def add (coefficient : Scalar) (values : Scalar × Scalar) : Scalar × Scalar :=
+  (values.1, values.2 + coefficient * values.1)
 
-def rowFrame (parameter : Turing.Tape (Symbol Scalar))
-    (matrix : Matrix (Fin rows) (Fin columns) Scalar) (target : Fin rows)
-    (left right : List (Symbol Scalar)) : Tapes (fun _ : TapeName Unit => Symbol Scalar) :=
-  frame parameter (fun _ => some none :: left)
-    (fun _ => word (List.ofFn (matrix target)) ++ none :: right)
+def swap (_coefficient : Scalar) (values : Scalar × Scalar) : Scalar × Scalar :=
+  (values.2, values.1)
 
-def pairFrame (parameter : Turing.Tape (Symbol Scalar))
-    (matrix : Matrix (Fin rows) (Fin columns) Scalar) (source target : Fin rows)
-    (left right : Bool → List (Symbol Scalar)) : Tapes (fun _ : TapeName Bool => Symbol Scalar) :=
-  frame parameter (fun name => some none :: left name)
-    (fun name => word (List.ofFn (matrix (if name then target else source))) ++ none :: right name)
+omit [Field Scalar] in
+/-- Corresponding entries can also be combined on separate argument tapes,
+without first packing them into an array of scalar pairs. -/
+theorem combine_contract (enumeration : Scalar ≃ Fin cardinality)
+    (operation : Scalar → Scalar → Scalar → Scalar × Scalar) :
+    CallingConvention.Realizes (StandardRowCombine.domains (scalarDomain enumeration))
+      StandardRowCombine.readOnly StandardRowCombine.sizeTapes
+      (StandardRowCombine.algorithm (scalarDomain enumeration) (fun _ => operation))
+      StandardRowCombine.entry StandardRowCombine.exit (fun _ _ => True)
+      (fun _ input output => (output ⟨3, rfl⟩, output ⟨4, rfl⟩) =
+        operation (input ⟨0, rfl⟩) (input ⟨1, rfl⟩) (input ⟨2, rfl⟩)) :=
+  StandardRowCombine.contract (scalarDomain enumeration) (fun _ => operation)
 
-/-- Scaling works even for coefficient zero; invertibility is a separate contract. -/
-theorem scale_steps (parameter : Turing.Tape (Symbol Scalar)) (coefficient : Scalar)
-    (parameterHead : parameter.head = some (some coefficient))
-    (matrix : Matrix (Fin rows) (Fin columns) Scalar) (target : Fin rows)
-    (left right : List (Symbol Scalar)) :
-    Steps (machine () (scaleTable (Scalar := Scalar))) (2 * columns + 3)
-      (0, rowFrame parameter matrix target left right)
-      (2, rowFrame parameter (MatrixOperations.scaleRow matrix target coefficient) target left right) := by
-  have trace := TableTraversal.steps () (scaleTable (Scalar := Scalar)) parameter coefficient parameterHead
-    (List.ofFn (fun column : Fin columns => fun _ : Unit => matrix target column))
-    (fun _ => left) (fun _ => right)
-  simpa [rowFrame, word, List.map_ofFn, Function.comp_def, scaleTable, MatrixOperations.scaleRow] using trace
+/-- Multiplication by any coefficient, including zero, maps the whole row. -/
+theorem scale_contract (enumeration : Scalar ≃ Fin cardinality)
+    (length : MvPolynomial Parameter ℕ) :
+    let domain := scalarDomain enumeration
+    CallingConvention.Realizes (StandardArrayMap.domains domain domain length)
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      (StandardArrayMap.algorithm domain domain (fun _ => scale (Scalar := Scalar)))
+      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
+      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+        fun index => scale (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
+  StandardArrayMap.contract (scalarDomain enumeration) (scalarDomain enumeration) length (fun _ => scale (Scalar := Scalar))
 
-/-- A runtime pivot coefficient can be inverted through the fixed field table. -/
-theorem normalize_steps (parameter : Turing.Tape (Symbol Scalar)) (coefficient : Scalar)
-    (parameterHead : parameter.head = some (some coefficient))
-    (matrix : Matrix (Fin rows) (Fin columns) Scalar) (target : Fin rows)
-    (left right : List (Symbol Scalar)) :
-    Steps (machine () (fun coefficient => scaleTable (coefficient⁻¹ : Scalar))) (2 * columns + 3)
-      (0, rowFrame parameter matrix target left right)
-      (2, rowFrame parameter (MatrixOperations.scaleRow matrix target coefficient⁻¹) target left right) := by
-  have trace := TableTraversal.steps () (fun coefficient => scaleTable (coefficient⁻¹ : Scalar))
-    parameter coefficient parameterHead
-    (List.ofFn (fun column : Fin columns => fun _ : Unit => matrix target column))
-    (fun _ => left) (fun _ => right)
-  simpa [rowFrame, word, List.map_ofFn, Function.comp_def, scaleTable, MatrixOperations.scaleRow] using trace
+/-- Pivot inversion is part of the fixed field table, with no runtime arithmetic
+oracle. A nonzero-pivot assumption belongs to the caller's correctness proof. -/
+theorem normalize_contract (enumeration : Scalar ≃ Fin cardinality)
+    (length : MvPolynomial Parameter ℕ) :
+    let domain := scalarDomain enumeration
+    CallingConvention.Realizes (StandardArrayMap.domains domain domain length)
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      (StandardArrayMap.algorithm domain domain (fun _ => normalize (Scalar := Scalar)))
+      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
+      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+        fun index => normalize (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
+  StandardArrayMap.contract (scalarDomain enumeration) (scalarDomain enumeration) length (fun _ => normalize (Scalar := Scalar))
 
-/-- Source and target row buffers are separate tapes. The source is unchanged. -/
-theorem add_steps (parameter : Turing.Tape (Symbol Scalar)) (coefficient : Scalar)
-    (parameterHead : parameter.head = some (some coefficient))
-    (matrix : Matrix (Fin rows) (Fin columns) Scalar) (source target : Fin rows)
-    (distinct : source ≠ target) (left right : Bool → List (Symbol Scalar)) :
-    Steps (machine false (addTable (Scalar := Scalar))) (2 * columns + 3)
-      (0, pairFrame parameter matrix source target left right)
-      (2, pairFrame parameter (Function.update matrix target
-        (fun column => matrix target column + coefficient * matrix source column)) source target left right) := by
-  have trace := TableTraversal.steps false (addTable (Scalar := Scalar)) parameter coefficient parameterHead
-    (List.ofFn (fun column : Fin columns => fun name : Bool => matrix (if name then target else source) column))
-    left right
-  convert trace using 1
-  · simp
-  · simp [pairFrame, word, List.map_ofFn, Function.comp_def]
-  · congr 2
-    funext name
-    cases name with
-    | inl name => rfl
-    | inr name =>
-      cases name <;> simp [pairFrame, frame, word, List.map_ofFn, Function.comp_def, addTable, Function.update, distinct]
+/-- The source component is retained, and the target receives its scaled sum. -/
+theorem add_contract (enumeration : Scalar ≃ Fin cardinality)
+    (length : MvPolynomial Parameter ℕ) :
+    CallingConvention.Realizes
+      (StandardArrayMap.domains (scalarDomain enumeration) (pairDomain enumeration) length)
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      (StandardArrayMap.algorithm (scalarDomain enumeration) (pairDomain enumeration) (fun _ => add (Scalar := Scalar)))
+      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
+      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+        fun index => add (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
+  StandardArrayMap.contract (scalarDomain enumeration) (pairDomain enumeration) length (fun _ => add (Scalar := Scalar))
 
-/-- Exchanging equal rows is also covered; the row buffers need not be distinct mathematically. -/
-theorem swap_steps (parameter : Turing.Tape (Symbol Scalar)) (coefficient : Scalar)
-    (parameterHead : parameter.head = some (some coefficient))
-    (matrix : Matrix (Fin rows) (Fin columns) Scalar) (source target : Fin rows)
-    (left right : Bool → List (Symbol Scalar)) :
-    Steps (machine false (swapTable (Scalar := Scalar))) (2 * columns + 3)
-      (0, pairFrame parameter matrix source target left right)
-      (2, pairFrame parameter (MatrixOperations.swapRows matrix source target) source target left right) := by
-  have trace := TableTraversal.steps false (swapTable (Scalar := Scalar)) parameter coefficient parameterHead
-    (List.ofFn (fun column : Fin columns => fun name : Bool => matrix (if name then target else source) column))
-    left right
-  convert trace using 1
-  · simp
-  · simp [pairFrame, word, List.map_ofFn, Function.comp_def]
-  · congr 2
-    funext name
-    cases name with
-    | inl name => rfl
-    | inr name =>
-      cases name <;> simp [pairFrame, frame, word, List.map_ofFn, Function.comp_def, swapTable, MatrixOperations.swapRows]
+omit [Field Scalar] in
+/-- Swapping also covers identical mathematical rows. Both result components
+are written to the separate output array; every input remains unchanged. -/
+theorem swap_contract (enumeration : Scalar ≃ Fin cardinality)
+    (length : MvPolynomial Parameter ℕ) :
+    CallingConvention.Realizes
+      (StandardArrayMap.domains (scalarDomain enumeration) (pairDomain enumeration) length)
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      (StandardArrayMap.algorithm (scalarDomain enumeration) (pairDomain enumeration) (fun _ => swap (Scalar := Scalar)))
+      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
+      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+        fun index => swap (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
+  StandardArrayMap.contract (scalarDomain enumeration) (pairDomain enumeration) length (fun _ => swap (Scalar := Scalar))
 
 end Polytime2.FieldRow

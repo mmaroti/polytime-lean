@@ -19,9 +19,8 @@ import Polytime2.Binary
 
 /-! # Head positioning for fixed-width array elements
 
-Fixed movement uses a specialization-dependent controller. Returning to an
-array's left boundary uses a fixed controller and a linear scan of binary data.
-Neither routine changes tape contents.
+Fixed movement uses a specialization-dependent controller and never changes
+tape contents. Standard restoring scans are certified in `StandardHead`.
 -/
 
 namespace Polytime2.Move
@@ -83,65 +82,3 @@ theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter] [Fintype 
   exact ⟨count, _, by simp, steps count direction initial, rfl⟩
 
 end Polytime2.Move
-
-namespace Polytime2.BoundaryReturn
-
-open MultiTape
-open Binary (Symbol data word tape)
-
-def machine : Machine (fun _ : Unit => Symbol) (Fin 2) := fun state symbols =>
-  if state = 0 then
-    if symbols () = 3 then some (1, fun _ => (symbols (), some .right))
-    else some (0, fun _ => (symbols (), some .left))
-  else none
-
-theorem steps (preceding : List Bool) (current : Symbol) (notBoundary : current ≠ 3)
-    (left right : List Symbol) :
-    Steps machine (preceding.length + 2)
-      (0, tape (word preceding ++ 3 :: left) (current :: right))
-      (1, tape (3 :: left) ((word preceding).reverse ++ current :: right)) := by
-  induction preceding generalizing current right with
-  | nil =>
-    have first : step machine (0, tape (3 :: left) (current :: right)) =
-        some (0, tape left (3 :: current :: right)) := by
-      simp only [step, machine, MultiTape.read, tape, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte]
-      congr 2
-    have second : step machine (0, tape left (3 :: current :: right)) =
-        some (1, tape (3 :: left) (current :: right)) := by
-      simp only [step, machine, MultiTape.read, tape, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte]
-      congr 2
-    simpa [word] using Steps.next first (Steps.next second (.zero _))
-  | cons bit preceding hypothesis =>
-    have first : step machine
-        (0, tape (word (bit :: preceding) ++ 3 :: left) (current :: right)) =
-        some (0, tape (word preceding ++ 3 :: left) (data bit :: current :: right)) := by
-      simp only [step, machine, MultiTape.read, tape, word, List.map_cons, List.cons_append,
-        Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte]
-      congr 2
-    have notMarker : data bit ≠ 3 := by cases bit <;> decide
-    have rest := hypothesis (data bit) notMarker (current :: right)
-    simpa [word, List.reverse_cons, List.append_assoc, Nat.add_assoc] using Steps.next first rest
-
--- parameterLevel: size names bounding the distance to the array boundary.
-universe parameterLevel
-
-theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter]
-    (capacity : MvPolynomial Parameter ℕ) :
-    Realizes machine 0 1
-      (fun assignment initial => ∃ preceding current left right,
-        preceding.length ≤ MvPolynomial.eval assignment capacity ∧ current ≠ 3 ∧
-          initial = tape (word preceding ++ 3 :: left) (current :: right))
-      (fun _ initial final => ∃ preceding current left right,
-        initial = tape (word preceding ++ 3 :: left) (current :: right) ∧
-          final = tape (3 :: left) ((word preceding).reverse ++ current :: right)) := by
-  refine ⟨by intro symbols; rfl, capacity + 2, ?_⟩
-  intro assignment initial valid
-  obtain ⟨preceding, current, left, right, fits, notBoundary, rfl⟩ := valid
-  refine ⟨preceding.length + 2, tape (3 :: left) ((word preceding).reverse ++ current :: right),
-    ?_, steps preceding current notBoundary left right, preceding, current, left, right, rfl, rfl⟩
-  simp only [map_add, map_ofNat]
-  omega
-
-end Polytime2.BoundaryReturn

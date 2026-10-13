@@ -15,15 +15,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Contracts
 import Polytime2.Binary
 import Polytime2.BinaryRipple
+
+import Polytime2.StandardBinaryRipple
+import Polytime2.StandardBinaryArithmetic
 
 /-! # Runtime-width binary addition
 
 Two equally padded little-endian operands are preserved on tapes 0 and 1.
 Tape 2 receives the sum, including the final carry digit. All heads return to
-just after their left boundaries. The carry is finite controller memory; the
+to the first data cell. The carry is finite controller memory; the
 common operand capacity is runtime data, never a controller parameter.
 -/
 
@@ -32,8 +34,8 @@ namespace Polytime2.BinaryAddition
 open MultiTape
 open Binary (Symbol data word value)
 
-abbrev Alphabet := fun _ : Fin 3 => Symbol
-abbrev State := Sum Bool (Fin 2)
+abbrev RippleAlphabet := fun _ : Fin 3 => Symbol
+abbrev RippleState := Sum Bool (Fin 2)
 
 def digit (left right carry : Bool) : Bool := (left != right) != carry
 
@@ -95,62 +97,58 @@ theorem add_value (left right : List Bool) (sameLength : right.length = left.len
   simpa [add, value_append, value, ripple_length false left right sameLength] using
     ripple_value false left right sameLength
 
-def frame (leftFirst rightFirst leftSecond rightSecond leftOutput rightOutput : List Symbol) :
-    Tapes Alphabet := fun name =>
+def rippleFrame (leftFirst rightFirst leftSecond rightSecond leftOutput rightOutput : List Symbol) :
+    Tapes RippleAlphabet := fun name =>
   if name = 0 then Turing.Tape.mk' (Turing.ListBlank.mk leftFirst) (Turing.ListBlank.mk rightFirst)
   else if name = 1 then Turing.Tape.mk' (Turing.ListBlank.mk leftSecond) (Turing.ListBlank.mk rightSecond)
   else Turing.Tape.mk' (Turing.ListBlank.mk leftOutput) (Turing.ListBlank.mk rightOutput)
 
-def machine : Machine Alphabet State
-  | .inl previous, symbols =>
-    if symbols 0 = 0 then
-      some (.inr 0, fun name => (if name = 2 then data previous else symbols name, none))
-    else
-      let left := symbols 0 == 2
-      let right := symbols 1 == 2
-      some (.inl (carry left right previous),
-        fun name => (if name = 2 then data (digit left right previous) else symbols name, some .right))
-  | .inr position, symbols =>
-    if position = 0 then
-      if symbols 0 = 3 then some (.inr 1, fun name => (symbols name, some .right))
-      else some (.inr 0, fun name => (symbols name, some .left))
-    else none
+/-- The immutable-input implementation needs neither boundary markers nor
+prepared output contents. -/
+abbrev rippleMachine := StandardBinaryRipple.machine digit carry
 
-/-- Linear tape time, preserved operands and neighbors, and restored heads. -/
-theorem steps (left right : List Bool) (sameLength : right.length = left.length)
-    (old : List Symbol) (oldLength : old.length = left.length)
-    (leftFirst leftSecond leftOutput tailFirst tailSecond tailOutput : List Symbol) :
-    Steps machine (2 * left.length + 3)
-      (.inl false, frame (3 :: leftFirst) (word left ++ 0 :: tailFirst)
-        (3 :: leftSecond) (word right ++ 0 :: tailSecond)
-        (3 :: leftOutput) (old ++ 0 :: tailOutput))
-      (.inr 1, frame (3 :: leftFirst) (word left ++ 0 :: tailFirst)
-        (3 :: leftSecond) (word right ++ 0 :: tailSecond)
-        (3 :: leftOutput) (word (add left right) ++ tailOutput)) := by
-  exact BinaryRipple.steps digit carry left right sameLength old oldLength
-    leftFirst leftSecond leftOutput tailFirst tailSecond tailOutput
+/-- The standard implementation writes every result bit and restores every
+head, while preserving both operands and every cell outside their regions. -/
+theorem runs (left right : List Bool)
+    (sameLength : right.length = left.length) (old : List Symbol)
+    (oldLength : old.length = left.length) (oldCarry : Symbol) :
+    CallingConvention.Runs (StandardBinaryRipple.width left.length)
+      StandardBinaryRipple.readOnly rippleMachine (2 * left.length + 2)
+      (.inl false) (fun _ => 0)
+      (rippleFrame [0] (word left ++ [0]) [0] (word right ++ [0]) [0] (old ++ [oldCarry]))
+      (.inr 1) (fun _ => 0)
+      (rippleFrame [0] (word left ++ [0]) [0] (word right ++ [0]) [0] (word (add left right))) := by
+  exact StandardBinaryRipple.runs digit carry false left right sameLength old oldLength oldCarry
 
-/-- Runtime digit capacity and numeric addition, with irrelevant output scratch
-hidden by the input representation. The machine is the same for every capacity. -/
+/-- Standard four-tape interface: immutable operands, low result, and carry. -/
+abbrev domains := StandardBinaryArithmetic.domains
+abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly
+abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes
+
+noncomputable def algorithm :
+    Machine (CallingConvention.Alphabet (Sum Unit (Fin 4))) (Sum StandardBinaryArithmetic.State Unit) :=
+  StandardBinaryArithmetic.algorithm digit carry
+
+def entry := StandardBinaryArithmetic.entry false
+def exit := StandardBinaryArithmetic.exit
+
+/-- The standard interface returns the ripple result and final carry. -/
 theorem contract :
-    Computes machine (.inl false) (.inr 1)
-      (fun _sizes : Unit → ℕ => fun (operands : List Bool × List Bool) tapes => ∃ old,
-        old.length = operands.1.length ∧ tapes =
-          frame [3] (word operands.1 ++ [0]) [3] (word operands.2 ++ [0]) [3] (old ++ [0, 0]))
-      (fun sizes => fun result tapes => ∃ left right resultBits,
-        value resultBits = result ∧ resultBits.length ≤ sizes () + 1 ∧ tapes =
-          frame [3] (word left ++ [0]) [3] (word right ++ [0]) [3] (word resultBits ++ [0]))
-      (fun sizes operands => operands.2.length = operands.1.length ∧ operands.1.length ≤ sizes ())
-      (fun _ operands => value operands.1 + value operands.2) := by
-  refine ⟨by intro symbols; rfl, 2 * MvPolynomial.X () + 3, ?_⟩
-  intro sizes operands initial valid represented
-  obtain ⟨old, oldLength, rfl⟩ := represented
-  refine ⟨_, _, ?_, steps operands.1 operands.2 valid.1 old oldLength [] [] [] [] [] [0],
-    operands.1, operands.2, add operands.1 operands.2,
-    add_value operands.1 operands.2 valid.1, ?_, rfl⟩
-  · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
-    omega
-  · rw [add_length operands.1 operands.2 valid.1]
-    omega
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+      (fun _ _ => True)
+      (fun assignment input output =>
+        (output ⟨.inr 2, rfl⟩ : Fin (2 ^ assignment ())).val =
+            value (ripple false
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
+          output ⟨.inr 3, rfl⟩ =
+            (ripple false
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
+              (List.ofFn (fun index : Fin (assignment ()) =>
+                (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).2) := by
+  exact StandardBinaryArithmetic.contract digit carry false
 
 end Polytime2.BinaryAddition

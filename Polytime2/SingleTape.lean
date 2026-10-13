@@ -17,7 +17,6 @@ limitations under the License.
 
 
 import Polytime2.Complexity
-import Polytime2.Binary
 import Mathlib.Computability.TuringMachine.PostTuringMachine
 
 /-! # Exact realization of one-tape routines by Mathlib's TM0
@@ -128,19 +127,5 @@ theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter]
   refine ⟨2 * ticks, final, ?_, steps machine trace, ?_, correct⟩
   · simpa only [map_mul, map_ofNat] using Nat.mul_le_mul_left 2 cost
   · exact halt machine (exit, final) (by simp [step, stopped])
-
-/-- Concrete binary decrement on TM0, linear in digit count and with the head
-restored. The surrounding tape regions are unchanged. -/
-theorem binary_decrement (bits : List Bool) (positive : 0 < Binary.value bits)
-    (left right : List Binary.Symbol) :
-    ∃ ticks, ticks ≤ 4 * bits.length + 6 ∧
-      (fun current => current.bind (Turing.TM0.step (compile Binary.machine)))^[ticks]
-        (some (configuration (0, Binary.tape (3 :: left) (Binary.word bits ++ right)))) =
-        some (configuration (2, Binary.tape (3 :: left) (Binary.word (Binary.decrement bits) ++ right))) ∧
-      Turing.TM0.step (compile Binary.machine)
-        (configuration (2, Binary.tape (3 :: left) (Binary.word (Binary.decrement bits) ++ right))) = none := by
-  obtain ⟨ticks, cost, trace⟩ := Binary.steps bits positive left right
-  refine ⟨2 * ticks, by omega, steps Binary.machine trace, ?_⟩
-  exact halt Binary.machine _ (by simp [step, Binary.machine])
 
 end Polytime2.SingleTape

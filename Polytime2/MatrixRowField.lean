@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 
-import Polytime2.MatrixRows
+import Polytime2.MatrixRowOperations
 import Polytime2.Matrix
 
 /-! # Finite-field instances of the shared matrix-row traversal
