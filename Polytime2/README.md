@@ -8,6 +8,8 @@ A multi-tape implementation of polynomial-time algorithms.
   widths, canonical encoding and partial decoding, round-trip laws, and an
   existential polynomial width bound. Fixed finite presentations supply the
   existing scalar codecs; examples cover tagged carriers and runtime bit widths.
+  Presentations do not certify executable encoding, decoding, or width
+  evaluation.
 - Deterministic transitions over Mathlib's two-sided tapes, with separate
   alphabets, writes, and head movements for each tape.
 - Counted execution, controller embedding, and sequential composition with one
@@ -16,17 +18,15 @@ A multi-tape implementation of polynomial-time algorithms.
   tapes, including their head positions.
 - Finite-machine polynomial certificates under mathematical preconditions,
   closed under wiring, sequencing, branching, and guarded while loops.
-- Mathematical map contracts with relational representations and existential
-  scratch, sequential composition, and a guarded mathematical fold rule.
+- Raw mathematical map contracts with relational representations and existential
+  scratch, sequential composition, and guarded fold, while, and search rules.
 - Explicit preserved caller context, with composition and wiring rules that
   expose preservation of unwired tapes and their head positions.
-- Mathematical while and early-stopping search rules with logical invariants,
-  decreasing measures, and conserved answers; runtime witnesses stay internal.
 - Executable mathematical gcd with correctness, capacity preservation, and an
   iteration bound in binary capacity. A standard-convention gcd machine composes
-  a zero guard, binary remainder, scratch clearing, and operand copies through
-  the shared mathematical loop rule. It preserves both binary operands, accepts
-  arbitrary writable contents, and returns valid output and scratch encodings.
+  a zero guard, binary remainder, scratch clearing, and operand copies.
+  It preserves both binary operands, accepts arbitrary writable contents, and
+  returns valid output and scratch encodings.
 - Two fixed catalogue maps at runtime-selected active coordinates, sharing array
   and scalar scratch, preserving both indices, the active count, and inactive
   data. Binary-encoded scalars use fixed finite tables; each map writes a
@@ -49,6 +49,8 @@ A multi-tape implementation of polynomial-time algorithms.
   contracts, preserving the standard tape convention at every transition.
 - Fixed-width element copying in exactly `2 * width + 1` transitions, preserving
   the source and neighboring data and restoring both heads.
+- Runtime-width copying, counter initialization and increment, and unary-size
+  reading into binary counters under capacity hypotheses.
 - Specialization-fixed encoded constants written from arbitrary output contents,
   without a source tape, in `2 * width + 1` transitions with a restored head.
 - Binary decrement with a polynomial digit-cost certificate, fixed controller,
@@ -127,8 +129,7 @@ A multi-tape implementation of polynomial-time algorithms.
 - Standard Gauss–Jordan startup copies the immutable encoded matrix, reads the
   unary column size, and initializes every writable tape. Its TM0 certificate
   includes startup and preserves the mathematical row-equivalence and reduced
-  row-echelon guarantees. The older packed-input and prepared-frame wrappers
-  have been removed.
+  row-echelon guarantees.
 - Generic standalone TM0 output extraction erases every working track and
   boundary marker, leaving canonical binary output with the head at its start.
   Its polynomial bound includes extraction; empty output leaves a blank tape.
@@ -139,7 +140,8 @@ All algorithmic dependencies are defined within this implementation.
 
 `CallingConvention.Realizes.tm0` retains track frames;
 `CallingConvention.Realizes.tm0_output` extracts standalone binary words.
-Higher-level algorithm notation remains future work.
+Both start from a padded simulator track encoding. Construction of that encoding
+from an external size header and canonical input bits is not yet certified.
 
 For gcd, size parameter `b` fixes the binary width of both separate operands
 and the result. A separate immutable tape stores `b` in unary. The contract
@@ -174,15 +176,11 @@ scratch tapes as needed and reuse them only under compatible contracts.
 `MultiTape.relabel` transports machines across blank-preserving alphabet
 equivalences without changing transition counts.
 
-Lookup/update uses three argument tapes: a binary index, densely encoded array
-data, and one element, plus temporary tapes. Element bit width is a
-specialization constant; array length varies at runtime. Under the index-bound
-hypothesis, lookup preserves the index and array and returns the selected
-element; update preserves the index and supplied
-element and changes only the selected array entry. Both restore agreed head
-positions and scratch conditions. No implicit error result is introduced.
-Runtime-dependent reserved element widths, needed for integer matrices, require
-an explicit metadata convention in a later extension.
+Lookup takes an immutable binary index and array and writes a separate element.
+Update takes an immutable index, array, and replacement and writes a separate
+result array. Both use temporary tapes, preserve their arguments, and restore
+heads. Element bit width is a specialization constant; array length varies at
+runtime. Runtime-dependent element widths remain unsupported.
 
 The general `Simulation` theorem transfers multi-tape certificates with
 polynomial input storage to polynomial-time finite TM0 machines. Intermediate
@@ -199,160 +197,6 @@ Simulator track markers belong to the TM0 backend and never appear on source
 tapes.
 `CallingConvention` records immutable inputs, arbitrary initial output
 contents, fixed regions, restored heads, and preservation at every transition.
-`StandardCopy` certifies fixed-width copying under this contract.
-`StandardTerminatedCopy.contract` certifies runtime copying of any encoded
-domain, with immutable unary size inputs and arbitrary output contents.
-`StandardBinaryRipple` similarly certifies carry/borrow scans, instantiated by
-the internal `BinaryAddition.rippleMachine` and
-`BinarySubtraction.rippleMachine` controllers. The public
-`BinaryAddition.algorithm` and `BinarySubtraction.algorithm` expose separate
-immutable operands, low-word outputs, and carry/borrow outputs under
-`CallingConvention.Realizes` contracts.
-Both controllers have exact `2 * width + 2` execution bounds and handle empty
-operands. The carry/borrow scanner also accepts either initial carry value.
-`StandardBinaryScan.contract` certifies finite-memory digit maps between
-encoded domains of equal width; its common exit hides private final memory.
-The counter-clearing example instantiates this contract with a constant-zero
-mathematical map. `StandardBinaryArithmetic.contract` supplies separate
-encoded-domain tapes for two immutable operands, a low-word result, and carry;
-its postcondition is the corresponding finite ripple map.
-`StandardBinaryReduce.contract` certifies bounded natural remainder when the
-dividend is less than twice the divisor. Its exact
-bound is `4 * width + 7`; both operands remain immutable.
-`StandardBinaryDivisionStep` composes shifting and reduction in
-`6 * width + 10` steps, computing `(2 * remainder + bit) % divisor` under the
-division invariant. Both accept arbitrary scratch contents and preserve every
-region throughout execution. `StandardBinaryRemainder.contract` certifies the
-complete long-division loop with bound `8 * width² + 19 * width + 6`, including
-valid scratch results and unchanged operands. Its entry accepts entirely
-blank output regions; the divisor must be positive and reserve shift capacity.
-`StandardBinaryDecrement.contract` writes the predecessor of a positive
-counter to a separate output, preserving its width and input, in
-`2 * width + 3` steps.
-`StandardBinaryGuard.contract` certifies the nonzero test in `2 * width + 2`
-steps, including zero-width counters and initially blank one-bit outputs.
-`StandardGcdStep.contract` computes `(b, a % b)` on separate output tapes in
-`8 * width² + 21 * width + 9` steps, preserving both operands.
-`StandardGcdMachine.runs` certifies the complete private Euclidean loop and
-return cleanup, with bound `16 * width³ + 70 * width² + 102 * width + 56`.
-Every scratch region is cleared to a valid encoding, including for zero
-operands and empty words. `StandardGcd.contract` adds immutable separate inputs
-and a separate output, with bound
-`16 * width³ + 70 * width² + 108 * width + 65`.
-The obsolete packed-input GCD controllers have been removed.
-`StandardBinaryMultiplication.contract` uses separate immutable factor and
-multiplier tapes, with independent widths `n` and `m`, and a separate result.
-Its internal Horner step also has a mathematical contract for the shifted word,
-low result, and carry, with arbitrary initial scratch. The multiplication bound
-is `m * (6 * n + 14) + 6 * n + 14`; the result capacity must contain the
-product. Initialization and scratch cleanup work even for empty operands.
-`StandardBitFold` shares the restoring high-bit-first traversal with remainder
-division.
-Safe runs support control-state renaming, branching, sequential composition,
-guard-driven loops, and wiring into larger tape collections.
-`StandardTapeCommands` provides copy, clear, and Boolean initialization
-commands for those callers. `StandardCounterZero.contract` initializes a binary
-counter directly from its unary capacity tape.
-`StandardBinaryIncrement.contract` certifies modular increment without growing
-the counter. `StandardSizeRead.contract` reads an immutable unary size into a
-binary counter when it fits, with arbitrary initial result and scratch.
-`StandardPivotSearch.algorithm` composes workspace initialization, unary row
-limit reading, and bounded first-nonzero search. Its `Realizes` contract returns
-the row-count sentinel when no pivot remains, certifies the skipped prefix, and
-validates every writable tape on return. Its returned row is bounded below by
-the starting row; `StandardPivotSearch.field_runs` proves exact agreement with
-mathematical `GaussJordan.findPivot` over the specialization's finite field.
-`MultiplyAdd.contract` computes `factor * multiplier + addend` with the same
-convention, providing the arithmetic needed for binary matrix addresses.
-`booleanContract` verifies that initialization overwrites an
-arbitrary one-bit output region and restores its head.
-`Examples.Context` uses the new addition controller and proves preservation of
-unrelated caller tapes.
-`StandardArrayLookup.runs` certifies binary-indexed lookup with separate
-immutable index and array tapes, arbitrary initial output and scratch, and
-restored heads. Its private seek phase clears both counter words and the guard,
-including at index zero. `StandardHead.BlankReturn` restores the array head
-using surrounding blanks and handles zero-bit elements.
-`StandardArrayUpdate.contract` specifies a separate immutable source array and
-replacement, a separate output array, and valid fixed-width scratch outputs.
-Its output contract proves that exactly the selected array entry is replaced.
-`StandardMatrixLookup.contract` gives the same calling convention to
-row-major rectangular matrices, using their mathematical matrix domain and
-proving that the selected flat coordinate is returned.
-`StandardMatrixUpdate.contract` writes that coordinate to a separate result
-matrix and specifies the exact changed flat entry.
-`IndexedCopy.contract` composes lookup and update without copying the
-source array between calls; the selected source entry replaces the target
-entry in a separate output array.
-`StandardFiniteTable.contract` certifies specialization-fixed scalar operations
-on binary arguments. `StandardArrayMap.contract` lifts them pointwise to
-polynomial-length arrays, including empty arrays and zero-bit elements.
-`FieldRow` uses these contracts for scaling, normalization, addition, and swap.
-`StandardMatrixRowField.clear_target_contract` specializes row addition to
-clearing a target entry when the pivot entry is one and the supplied scalar is
-the negated target entry. This isolates the row-update phase of column
-clearing. `StandardGaussJordanClearTarget.algorithm` composes standard
-lookup, finite-table negation, and row traversal. Its `Realizes` contract proves
-the complete row update with immutable arguments, arbitrary writable contents,
-valid scratch, restored heads, and polynomial time.
-`StandardGaussJordanClearStep.runs` certifies a complete internal row-clear
-step: clear the target row, commit the separate result to the loop's private
-working matrix, and advance its counter through a separate increment output.
-All writable tapes return valid values, with polynomial time and restored
-heads. `StandardGaussJordanClearInterval` supplies the guarded interval
-controller, with verified comparison, body wiring, and exhausted-interval exit.
-Its polynomial traversal theorem computes the ordinary matrix updates on an
-interval excluding the pivot, stops at its limit, and returns valid scratch.
-`StandardGaussJordanClear.handover_runs` certifies skipping the pivot and
-loading the second interval's row-count limit while preserving both matrices.
-The two interval calls and handover have a verified polynomial execution theorem
-computing `clearColumn` and returning valid scratch. Caller initialization from
-arbitrary writable contents now includes verified field-zero and working-matrix
-seeding, reuse of the nineteen-tape row initializer, and extra-counter setup.
-`StandardGaussJordanClear.algorithm` combines initialization and traversal under
-a `Realizes` contract computing `clearColumn`, with immutable arguments, valid
-scratch, restored heads, and polynomial time.
-`StandardGaussJordanPivot` composes matrix copying, candidate-entry lookup,
-swapping, normalization, and column clearing. The copy and lookup calls are
-verified, as are the shared row calls, result commits, and final column-clear
-call. Its complete `Realizes` contract computes `MatrixOperations.pivotStep`
-with immutable arguments, arbitrary writable contents, valid scratch, restored
-heads, and polynomial time. The enclosing column now has a complete
-`Realizes` contract: it initializes the shared frame, searches the column,
-applies the found-pivot branch, and returns both the updated matrix and next
-pivot row. The outer elimination controller has a standard guard and a verified
-body that commits the matrix and pivot outputs and advances the column without
-overflow. Its polynomial loop theorem computes `eliminateColumns`. The complete
-`StandardGaussJordanElimination.algorithm` initializes arbitrary writable
-contents and computes `GaussJordan.eliminate` under a `Realizes` contract,
-including empty rectangular matrices, with immutable input and valid scratch.
-Its `realizes_tm0` theorem transfers this contract and the mathematical
-row-equivalence and reduced-row-echelon guarantees to the finite TM0 simulator.
-`CallingConvention.Realizes.tm0_output` also supports standalone binary output
-for any standard routine, charging simulation, extraction, erasure, and startup.
-`StandardGaussJordanColumn` shares arguments and the selected candidate between
-search and pivot calls. Search and the separate next-row increment are verified;
-the branch controller uses search's certified found flag. Column initialization
-is verified from arbitrary writable contents. The successful branch and both
-dispatch paths are verified, including counter capacity, scratch validity, and
-the unchanged tapes on the sentinel path.
-`StandardGaussJordanColumn.workspace` prepares all writable column tapes without
-matrix lookup or dimension hypotheses, including when there are zero columns.
-`TableTraversal` exports the binary traversal; its old marker controller has
-been removed.
-`StandardCopy.slice_runs` and `CallingConvention.Runs.regions` certify transfers
-inside larger regions.
-`EncodedDomain.arrayOfLength` encodes arrays whose length is any polynomial
-size expression; `EncodedDomain.array` is the named-parameter case. The lookup
-contract connects indexed access to the machine, with immutable unary sizes
-and valid scratch on return. The superseded marker-based scalar, matrix, unary
-counter, and Gauss–Jordan controllers and their wrappers have been removed.
-The marker-based binary array controllers and packed arithmetic input/output
-wrappers have been removed; `ArrayTM0` uses the standard array contracts.
-`AddMultiply.contract` composes the standard arithmetic routines, with bound
-`m * (6 * n + 14) + 8 * n + 17`. Its old packed-input preparation and growing
-word multiplication controllers have been removed. The standard array and
-matrix lookup contracts are available.
 
 - Size parameters occupy separate read-only tapes, each encoded as that many
   unary ones surrounded by blanks. Zero has an empty data region.
@@ -369,32 +213,32 @@ matrix lookup contracts are available.
   region before and after execution. For an empty region, this is the same
   designated blank cell on entry and exit.
 - Private scratch tapes also have encoded domains and fixed regions. Their
-  number and contents are implementation details. Temporary contents need not
-  be valid encodings; validity is required at routine boundaries where a value
-  is exposed or consumed. Scratch heads also return to their region starts.
+  contents may temporarily be invalid. `CallingConvention.Realizes` requires
+  valid encodings on all writable tapes on return, including scratch, and
+  restores their heads. Its output family includes every writable tape.
 
 No separate output prefill is required: the same routine handles fresh blank
 and reused output regions. Execution determines its write extent from the
-read-only size tapes, not from existing output contents. For example, nested
-unary traversals can write a region of width `K * L * N`. The realization proof
-accounts for this work and establishes the exact written width; an encoded
-domain need not supply a separately certified executable width evaluator.
+read-only inputs, not from existing output contents. The realization proof
+establishes the exact written width; an encoded domain need not supply a
+separately certified executable width evaluator.
 
 ## Limits and next steps
 
-- Extend mathematical contracts to lower-level routines and apply the shared
-  search rule to pivot search.
+- Adapt the raw mathematical composition, fold, while, and search rules to
+  `CallingConvention.Runs`; current safe algorithm proofs handle this manually.
 - Simplify nested tape names, wiring, and alphabet-compatibility proofs.
-- Reuse the external parsing, initialization, simulation, serialization, and
-  extraction adapters when adding algorithms.
+- Certify external input preparation and compose it with simulation and output
+  extraction.
 - Add quotient production, signed arithmetic, and the remaining bit arithmetic
   for integer matrices. Extend polynomial reparameterization of subprogram
   calls.
 
-Recursive domain syntax, a general size-expression evaluator,
-the SMP targets, and Smith normal form remain future work.
+`MultiTape.Realizes`, `MultiTape.Computes`, `Copy.realizes`, and `Move.realizes`
+remain raw interfaces without the standard calling convention. Higher-level
+algorithm notation, the SMP targets, and Smith normal form remain future work.
 
-Build from the repository root with `lake build Polytime2`, and use `import
-Polytime2`. See [GOAL.md](../GOAL.md) for the shared specification and
+Build from the repository root with `lake build Polytime2`, and use
+`import Polytime2`. See [GOAL.md](../GOAL.md) for the shared specification and
 [EXAMPLES.md](../EXAMPLES.md) for target algorithms and building-block
 libraries.
