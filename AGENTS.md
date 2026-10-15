@@ -15,3 +15,5 @@
   avoid speculative additions.
 - Try to avoid introducing new Lean structures, keep their number to the
   absolute minimum. Always try to reuse Lean structures from Mathlib.
+- When a structure or theorem or any other artifact is no longer needed or 
+  used, then remove it and its documentation.

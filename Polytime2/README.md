@@ -223,9 +223,44 @@ read-only inputs, not from existing output contents. The realization proof
 establishes the exact written width; an encoded domain need not supply a
 separately certified executable width evaluator.
 
+## Mathematical specifications and implementations
+
+- `Computation` specifies finitely many named input encoded domains, one output
+  encoded domain, a precondition, and a mathematical function total on the
+  subtype of admissible inputs, all parameterized by the size assignment.
+  Each argument occupies its own tape; sizes have separate unary tapes.
+- `Computation.Realizable computation` existentially quantifies finite scratch
+  names and domains, controller states, a machine, entry/exit states, and its
+  `CallingConvention.Realizes` execution certificate. There is no implementation
+  structure in the public interface; polynomial witnesses remain existential.
+
+Application proofs MUST NOT unpack realizations or depend on their machines,
+scratch layouts, execution traces, or polynomial witnesses. Reuse computations
+ONLY through certified mathematical composition rules. Missing rules must be
+added to the library, not bypassed by inspecting an existing realization.
+Witness handling belongs exclusively to foundational library proofs in
+`Computation.Realizable.Internal` and the implementations of certified rules.
+
+`Computation.Realizable.followedBy` feeds a result to a single-argument
+computation. Its proof combines hidden implementations with disjoint scratch
+and a private intermediate tape. Callers prove domain and precondition
+compatibility mathematically. `withPrecondition` reuses an implementation under
+a stronger hypothesis. Public certificates cover copying, counter increment,
+and finite tables with two separately encoded arguments of possibly different
+types. `Examples.Computation` demonstrates nested composition and nontrivial
+preconditions without accessing implementation fields.
+
+Implementation changes require no downstream proof edits when specifications
+and realizability statements stay unchanged. Lean may rebuild dependent modules;
+executable implementations are not a requirement.
+
 ## Limits and next steps
 
-- Adapt the raw mathematical composition, fold, while, and search rules to
+- The next goal is to migrate all existing Polytime2 algorithm interfaces and
+  callers to `Computation` and `Computation.Realizable`. Extend composition
+  and loop rules as needed so application proofs never unpack realizations.
+  Preserve low-level machine and simulation proofs as internal infrastructure.
+- Adapt the raw mathematical fold, while, and search rules to
   `CallingConvention.Runs`; current safe algorithm proofs handle this manually.
 - Simplify nested tape names, wiring, and alphabet-compatibility proofs.
 - Certify external input preparation and compose it with simulation and output

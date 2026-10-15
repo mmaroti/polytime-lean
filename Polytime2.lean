@@ -16,6 +16,12 @@ limitations under the License.
 -/
 
 import Polytime2.Machine
+import Polytime2.Computation
+import Polytime2.Computation.Realizable
+import Polytime2.Computation.Composition
+import Polytime2.Computations.Counter
+import Polytime2.Computations.FiniteTable
+import Polytime2.Examples.Computation
 import Polytime2.EncodedDomain
 import Polytime2.CallingConvention
 import Polytime2.CallingConventionSimulation
