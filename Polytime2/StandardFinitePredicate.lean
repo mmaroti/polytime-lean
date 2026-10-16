@@ -28,11 +28,12 @@ namespace Polytime2.StandardFinitePredicate
 
 open MultiTape CallingConvention
 
-def unitDomain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
-abbrev State (width : ℕ) := StandardFiniteTable.State width 0 1
+noncomputable def unitDomain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
+noncomputable abbrev State (width : ℕ) := StandardFiniteTable.State width
+  (unitDomain.width Empty.elim) (EncodedDomain.booleans.width Empty.elim)
 abbrev Alphabet := CallingConvention.Alphabet (Fin 3)
 
-def domains (domain : EncodedDomain.{0, 0} Empty) : Fin 3 → EncodedDomain Empty :=
+noncomputable def domains (domain : EncodedDomain.{0, 0} Empty) : Fin 3 → EncodedDomain Empty :=
   StandardFiniteTable.domains domain unitDomain EncodedDomain.booleans
 
 def readOnly (name : Fin 3) : Bool := decide (name = 0)
@@ -55,10 +56,12 @@ theorem contract (domain : EncodedDomain.{0, 0} Empty)
   have sameAssignment : assignment = (Empty.elim : Empty → ℕ) := Subsingleton.elim _ _
   subst assignment
   obtain ⟨oldUnit, length, unitEq⟩ := represented.2 1 rfl
-  change oldUnit.length = 0 at length
-  have empty : oldUnit = [] := List.eq_nil_of_length_eq_zero length
+  norm_num [domains, StandardFiniteTable.domains, unitDomain, EncodedDomain.fixed,
+    EncodedDomain.ofCodec] at length
   subst oldUnit
-  have unitCanonical : initial 1 = encoded unitDomain Empty.elim (0 : Fin 1) := unitEq
+  have unitCanonical : initial 1 = encoded unitDomain Empty.elim (0 : Fin 1) := by
+    simpa [encoded, unitDomain, EncodedDomain.fixed, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits, tape, buffer, Binary.word] using unitEq
   let localInput : Inputs (domains domain) StandardFiniteTable.readOnly Empty.elim := fun name => by
     rcases name with ⟨name, readonly⟩
     by_cases scalar : name = 0

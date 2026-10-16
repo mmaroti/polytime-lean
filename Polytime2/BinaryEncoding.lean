@@ -106,16 +106,17 @@ variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- A size parameter fixes digit capacity, while numeric magnitude may be
 exponential in that capacity. Zero digits still encode the natural number zero. -/
-def binaryNaturals (parameter : Parameter) : EncodedDomain Parameter where
-  Carrier assignment := Fin (2 ^ assignment parameter)
-  width assignment := assignment parameter
-  encode _ := BitVec.ofFin
-  decode _ bits := some bits.toFin
-  decode_encode _ _ := rfl
-  encode_decode _ _ _ hypothesis := by cases hypothesis; rfl
-  polynomial_width := ⟨MvPolynomial.X parameter, by intro assignment; simp⟩
+noncomputable def binaryNaturals (parameter : Parameter) : EncodedDomain Parameter :=
+  ofCodec (fun assignment => Fin (2 ^ assignment parameter)) (MvPolynomial.X parameter)
+    (fun assignment => assignment parameter) (by intro assignment; simp)
+    (fun _ => BitVec.ofFin) (fun _ bits => some bits.toFin)
+    (by intros; rfl) (by intro assignment bits value hypothesis; cases hypothesis; rfl)
+
+@[simp] theorem binaryNaturals_width (parameter : Parameter) (assignment : Parameter → ℕ) :
+    (binaryNaturals parameter).width assignment = assignment parameter := by
+  simp [binaryNaturals, ofCodec]
 
 /-- Boolean results use one canonical bit, with no unused labels. -/
-def booleans : EncodedDomain Parameter := fixed finTwoEquiv.symm
+noncomputable def booleans : EncodedDomain Parameter := fixed finTwoEquiv.symm
 
 end Polytime2.EncodedDomain

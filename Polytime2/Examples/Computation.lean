@@ -26,7 +26,7 @@ namespace Polytime2.Examples.Computation
 
 open Polytime2.Computation
 
-def copiedIncrement : Polytime2.Computation Unit Unit :=
+noncomputable def copiedIncrement : Polytime2.Computation Unit Unit :=
   (copy (EncodedDomain.binaryNaturals ())).followedBy (counterIncrement ()) rfl
     (by intro sizes arguments valid; trivial)
 
@@ -35,7 +35,7 @@ theorem copiedIncrement_realizable : copiedIncrement.Realizable :=
   (copy_realizable (EncodedDomain.binaryNaturals ())).followedBy
     (counterIncrement_realizable ()) rfl (by intro sizes arguments valid; trivial)
 
-def copiedDoubleIncrement : Polytime2.Computation Unit Unit :=
+noncomputable def copiedDoubleIncrement : Polytime2.Computation Unit Unit :=
   copiedIncrement.followedBy (counterIncrement ()) rfl
     (by intro sizes arguments valid; trivial)
 
@@ -49,12 +49,12 @@ example : (copiedDoubleIncrement.compute (fun _ => 3)
 example : (copiedDoubleIncrement.compute (fun _ => 0)
     ⟨(fun _ => (0 : Fin 1)), True.intro⟩ : Fin 1) = (0 : Fin 1) := rfl
 
-def copyWithRoom : Polytime2.Computation Unit Unit :=
+noncomputable def copyWithRoom : Polytime2.Computation Unit Unit :=
   (copy (EncodedDomain.binaryNaturals ())).withPrecondition
     (fun sizes arguments => (arguments ()).val + 1 < 2 ^ sizes ())
     (by intro sizes arguments valid; trivial)
 
-def incrementWithRoom : Polytime2.Computation Unit Unit :=
+noncomputable def incrementWithRoom : Polytime2.Computation Unit Unit :=
   (counterIncrement ()).withPrecondition
     (fun sizes arguments => (arguments ()).val + 1 < 2 ^ sizes ())
     (by intro sizes arguments valid; trivial)
@@ -66,10 +66,10 @@ example : (copyWithRoom.followedBy incrementWithRoom rfl
   · exact (copy_realizable (EncodedDomain.binaryNaturals ())).withPrecondition _ _
   · exact (counterIncrement_realizable ()).withPrecondition _ _
 
-def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
+noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
 /-- The two named inputs have different mathematical carriers and separate tapes. -/
-def conditionalIncrement : Polytime2.Computation Empty Bool :=
+noncomputable def conditionalIncrement : Polytime2.Computation Empty Bool :=
   finiteTable threeElements EncodedDomain.booleans threeElements
     (fun _ (value : Fin 3) (flag : Bool) => if flag then value + 1 else value)
 
@@ -86,7 +86,7 @@ example : (conditionalIncrement.compute Empty.elim
     ⟨(fun | false => (2 : Fin 3) | true => true), True.intro⟩ : Fin 3) = (0 : Fin 3) := rfl
 
 /-- No mathematical arguments are needed to initialize and increment a counter. -/
-def initializedIncrement : Polytime2.Computation Unit Empty :=
+noncomputable def initializedIncrement : Polytime2.Computation Unit Empty :=
   (counterZero ()).followedBy (counterIncrement ()) rfl
     (by intro sizes arguments valid; trivial)
 

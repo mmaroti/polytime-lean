@@ -99,7 +99,9 @@ theorem loop_runs (enumeration : Scalar ≃ Fin cardinality) :
         limitEq headers regions canonical
       obtain ⟨guardTicks, guarded, guardCost, guardTrace, flagEq, difference, guardOutside⟩ :=
         executeGuard sizes tapes ⟨count, counterFits⟩ limit (headers 0) counterEq limitEq
-          (regions differenceTape) (regions guardTape)
+          (by simpa [width, domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using regions differenceTape)
+          (by simpa [width, domains, guardTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+            show Nat.clog 2 2 = 1 from by decide] using regions guardTape)
       have guardedRegions : ∀ name, Region (width name) 0 (guarded name) :=
         fun name => guardTrace.region name (regions name)
       have guardedCanonical : ∀ name, readOnly name = false →

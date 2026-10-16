@@ -170,7 +170,7 @@ theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry sca
     StandardMatrixEntry.readOnly StandardMatrixEntry.sizeTapes StandardMatrixEntry.outputTapes
     (StandardMatrixEntry.machine (scalar.width Empty.elim))
     (StandardMatrixEntry.entry (scalar.width Empty.elim)) (StandardMatrixEntry.exit (scalar.width Empty.elim)) _ _
-    (StandardMatrixEntry.contract scalar.constant (scalar.width Empty.elim) (fun _ => rfl))
+    (StandardMatrixEntry.contract scalar.constant (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec]))
     matrixEntryEmbedding values
     (by intro name sizes; fin_cases name <;> rfl)
     (by intro name sizes value; fin_cases name <;> rfl)
@@ -201,7 +201,7 @@ theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace
     StandardMatrixReplace.readOnly StandardMatrixReplace.sizeTapes StandardMatrixReplace.outputTapes
     (StandardMatrixReplace.machine (scalar.width Empty.elim))
     (StandardMatrixReplace.entry (scalar.width Empty.elim)) (StandardMatrixReplace.exit (scalar.width Empty.elim)) _ _
-    (StandardMatrixReplace.contract scalar.constant (scalar.width Empty.elim) (fun _ => rfl))
+    (StandardMatrixReplace.contract scalar.constant (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec]))
     matrixReplaceEmbedding values
     (by intro name sizes; fin_cases name <;> rfl)
     (by intro name sizes value; fin_cases name <;> rfl)

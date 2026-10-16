@@ -45,7 +45,7 @@ def inputBits (domains : TapeName → EncodedDomain.{parameterLevel, carrierLeve
     EncodedDomain.ArrayEncoding.bits ((domains name).encode sizes (input ⟨name, immutable⟩))
   else []
 
-def inputTapes (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+noncomputable def inputTapes (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (readOnly : TapeName → Bool) (sizes : Parameter → ℕ) (input : Inputs domains readOnly sizes) :
     Tapes (Alphabet TapeName) :=
   fun name => if immutable : readOnly name = true then encoded (domains name) sizes (input ⟨name, immutable⟩)
@@ -147,7 +147,7 @@ theorem Realizes.tm0_delimited
     obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
       execute sizes input initial validInput represented headers
     exact ⟨ticks, final, cost, trace.steps, input, output, validInput, represented, correct, canonical⟩
-  choose widthBound widthBounded using fun name => (domains name).polynomial_width
+  let widthBound := fun name => (domains name).widthPolynomial
   let rowCapacity : MvPolynomial Parameter ℕ := (inputNames.map (fun name => widthBound name + 1)).sum + 1
   obtain ⟨simulationBound, rowBound, executeSimulation⟩ := Simulation.realizes_steps names
     (Finset.nodup_toList _) (by intro name; simp [names]) physical rowCapacity
@@ -164,7 +164,7 @@ theorem Realizes.tm0_delimited
   have bitBound (name : TapeName) : (bits name).length ≤ MvPolynomial.eval sizes (widthBound name) := by
     dsimp [bits, inputBits]
     split
-    · simpa only [EncodedDomain.ArrayEncoding.bits, List.length_ofFn] using widthBounded name sizes
+    · simp [EncodedDomain.ArrayEncoding.bits, widthBound]
     · simp
   have sumBound (ordered : List TapeName) :
       (ordered.map (fun name => (bits name).length + 1)).sum ≤

@@ -96,13 +96,14 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
           ∃ value : (domains enumeration (.inl name)).Carrier sizes,
             final (.inl name) = encoded (domains enumeration (.inl name)) sizes value) := by
   obtain ⟨workspaceBound, executeWorkspace⟩ := StandardGaussJordanClear.initialization_runs enumeration
-  obtain ⟨matrixBound, matrixWidthBound⟩ := (matrixDomain (FieldRow.scalarDomain enumeration)).polynomial_width
+  let matrixBound := (matrixDomain (FieldRow.scalarDomain enumeration)).widthPolynomial
   refine ⟨workspaceBound + 2 * matrixBound + 2 * MvPolynomial.X 0 + 6, ?_⟩
   intro sizes initial pivotRow matrix pivotEq matrixEq headers regions
   have nextTrace := StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0)
     sizes pivotRow pivotTape nextRowTape (by decide)
     (fun name => (domains enumeration name).width sizes) readOnly rfl rfl rfl
     initial pivotEq (regions nextRowTape)
+  simp only [EncodedDomain.binaryNaturals_width] at nextTrace
   let afterNext := Function.update initial nextRowTape (encoded (EncodedDomain.binaryNaturals 0) sizes pivotRow)
   have afterNextRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (afterNext name) :=
     fun name => nextTrace.region name (regions name)
@@ -147,11 +148,10 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
   refine ⟨(2 * sizes 0 + 2) +
     ((2 * (matrixDomain (FieldRow.scalarDomain enumeration)).width sizes + 2) + workspaceTicks + 1) + 1,
     final, ?_, ?_, ?_, finalNext, ?_⟩
-  · have widthBound := matrixWidthBound sizes
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
+  · simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [initialization, initializationEntry, initializationExit, prepareNextRow,
-      prepareMatrix, final, EncodedDomain.binaryNaturals] using complete
+      prepareMatrix, final] using complete
   · exact (install_at workspaceWiring localFinal copied StandardGaussJordanClear.workingTape).trans workspaceMatrix
   · intro name writable
     cases name with
@@ -171,7 +171,7 @@ abbrev AlgorithmState (initWidth searchWidth scalarWidth : ℕ) :=
   Sum (InitializationState initWidth)
     (Sum (StandardPivotSearch.AlgorithmState searchWidth scalarWidth) (SelectState initWidth scalarWidth))
 
-instance algorithmStateFinite (initWidth searchWidth scalarWidth : ℕ) :
+noncomputable instance algorithmStateFinite (initWidth searchWidth scalarWidth : ℕ) :
     Fintype (AlgorithmState initWidth searchWidth scalarWidth) := by
   letI : Fintype (InitializationState initWidth) := inferInstance
   letI : Fintype (StandardPivotSearch.AlgorithmState searchWidth scalarWidth) := inferInstance

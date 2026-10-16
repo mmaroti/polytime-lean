@@ -55,7 +55,7 @@ theorem copy_realizable (domain : EncodedDomain.{0, carrierLevel} Parameter) :
   intro sizes input output equal
   exact ⟨True.intro, equal⟩
 
-def counterIncrement (capacity : Parameter) : Computation Parameter Unit where
+noncomputable def counterIncrement (capacity : Parameter) : Computation Parameter Unit where
   inputDomains _ := EncodedDomain.binaryNaturals capacity
   outputDomain := EncodedDomain.binaryNaturals capacity
   precondition _ _ := True
@@ -71,7 +71,7 @@ theorem counterIncrement_realizable (capacity : Parameter) :
   exact ⟨True.intro, equal⟩
 
 /-- The predecessor is specified only for positive inputs. -/
-def counterDecrement (capacity : Parameter) : Computation Parameter Unit where
+noncomputable def counterDecrement (capacity : Parameter) : Computation Parameter Unit where
   inputDomains _ := EncodedDomain.binaryNaturals capacity
   outputDomain := EncodedDomain.binaryNaturals capacity
   precondition _ arguments := 0 < (arguments ()).val
@@ -86,7 +86,7 @@ theorem counterDecrement_realizable (capacity : Parameter) :
   intro sizes input output valid equal
   exact ⟨valid, equal⟩
 
-def counterNonzero : Computation Unit Unit where
+noncomputable def counterNonzero : Computation Unit Unit where
   inputDomains _ := EncodedDomain.binaryNaturals ()
   outputDomain := EncodedDomain.booleans
   precondition _ _ := True

@@ -296,7 +296,7 @@ def readOnly : Sum Parameter Bool → Bool
   | .inr name => !name
 
 /-- Every argument tape, including each unary size argument, has a domain. -/
-def domains (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
+noncomputable def domains (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
     Sum Parameter Bool → EncodedDomain.{parameterLevel, carrierLevel} Parameter
   | .inl parameter => EncodedDomain.unary parameter
   | .inr _ => domain
@@ -320,7 +320,7 @@ theorem contract (domain : EncodedDomain.{parameterLevel, carrierLevel} Paramete
     CallingConvention.Realizes (domains domain) readOnly sizeTapes outputTapes algorithm 0 2
       (fun _ _ => True)
       (fun _ input output => output () = input ⟨.inr false, rfl⟩) := by
-  obtain ⟨bound, widthBound⟩ := domain.polynomial_width
+  let bound := domain.widthPolynomial
   refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine]),
     2 * bound + 2, ?_⟩
   intro assignment input initial valid represented sizes
@@ -360,8 +360,8 @@ theorem contract (domain : EncodedDomain.{parameterLevel, carrierLevel} Paramete
   refine ⟨2 * bits.length + 2, output,
     install dataTapes (frame [0] (word bits ++ [0]) [0] (word bits ++ [0])) initial,
     ?_, ?_, rfl, ?_⟩
-  · have bounded := widthBound assignment
-    simp only [map_add, map_mul, map_ofNat]
+  · simp only [EncodedDomain.width] at bitsLength
+    simp only [bound, map_add, map_mul, map_ofNat]
     omega
   · exact trace
   · intro name

@@ -164,7 +164,9 @@ theorem skipPivot_runs (enumeration : Scalar ≃ Fin cardinality) :
   have copyTrace := StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0)
     sizes (StandardBinaryIncrement.next 0 sizes pivot) nextTape (dataTape 1) (by decide)
     (fun name => (domains enumeration name).width sizes) readOnly rfl rfl rfl
-    incremented nextEq (trace.region (dataTape 1) targetRegion)
+    incremented nextEq (trace.region (dataTape 1) (by
+      simpa only [show (domains enumeration (dataTape 1)).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using targetRegion))
+  simp only [EncodedDomain.binaryNaturals_width] at copyTrace
   have complete := trace.sequence advance 0 (by intro symbols; rfl) copyTrace
   let final := Function.update incremented (dataTape 1)
     (encoded (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes pivot))
@@ -172,7 +174,7 @@ theorem skipPivot_runs (enumeration : Scalar ≃ Fin cardinality) :
   · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [skipPivot, skipEntry, skipExit, advance, final,
-      EncodedDomain.binaryNaturals] using complete
+      EncodedDomain.binaryNaturals_width] using complete
   · exact (Function.update_of_ne (by decide) _ _).trans nextEq
   · intro name notNext notTarget
     exact (Function.update_of_ne notTarget _ _).trans (outside name notNext)
@@ -219,7 +221,15 @@ theorem readRows_runs (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
     StandardSizeRead.Internal.runs_wired rowLimitWiring localSizes
       (fun name => (domains enumeration name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardGaussJordanClearInterval.domains, StandardGaussJordanClearStep.domains,
+          StandardGaussJordanClearTarget.domains, StandardMatrixRows.domains,
+          StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
+          StandardSizeRead.domains, EncodedDomain.unary, EncodedDomain.binaryNaturals,
+          EncodedDomain.ofCodec, localSizes, sizeTape, limitTape, differenceTape,
+          StandardGaussJordanClearInterval.sizeTape, StandardGaussJordanClearStep.sizeTape,
+          StandardGaussJordanClearTarget.sizeTape, StandardMatrixRows.sizeTape,
+          StandardGaussJordanClearInterval.limitTape, StandardGaussJordanClearInterval.differenceTape])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
   let resultBits := StandardSizeRead.advanceBits (sizes 1) (List.replicate (sizes 0) false)
@@ -281,12 +291,12 @@ theorem handover_runs (enumeration : Scalar ≃ Fin cardinality) :
   refine ⟨skipBound + readBound + 1, ?_⟩
   intro sizes initial pivot fits pivotEq headers regions
   obtain ⟨skipTicks, skipped, skipCost, skipTrace, targetEq, nextEq, skipOutside⟩ :=
-    executeSkip sizes initial pivot pivotEq headers (regions nextTape) (regions (dataTape 1))
+    executeSkip sizes initial pivot pivotEq headers (by simpa only [show (domains enumeration nextTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using regions nextTape) (by simpa only [show (domains enumeration (dataTape 1)).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using regions (dataTape 1))
   obtain ⟨readTicks, final, readCost, readTrace, limitEq, differenceEq, readOutside⟩ :=
     executeRead sizes skipped fits
       (fun parameter => (skipTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter))
-      (skipTrace.region limitTape (regions limitTape))
-      (skipTrace.region differenceTape (regions differenceTape))
+      (by simpa only [show (domains enumeration limitTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using skipTrace.region limitTape (regions limitTape))
+      (by simpa only [show (domains enumeration differenceTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using skipTrace.region differenceTape (regions differenceTape))
   have complete := skipTrace.sequence readRows StandardSizeRead.entry skipPivot_halt readTrace
   refine ⟨skipTicks + readTicks + 1, final, ?_, ?_,
     (readOutside (dataTape 1) (by decide) (by decide)).trans targetEq,

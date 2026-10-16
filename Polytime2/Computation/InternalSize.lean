@@ -60,17 +60,22 @@ universe carrierLevel
 
 /-- Substitute the private capacity while retaining the original encoded bits. -/
 noncomputable def withInternalSize (domain : EncodedDomain.{0, carrierLevel} (Fin 3)) :
-    EncodedDomain (Fin 2) where
-  Carrier sizes := domain.Carrier (Computation.Realizable.Internal.internalSizes sizes)
-  width sizes := domain.width (Computation.Realizable.Internal.internalSizes sizes)
-  encode sizes := domain.encode (Computation.Realizable.Internal.internalSizes sizes)
-  decode sizes := domain.decode (Computation.Realizable.Internal.internalSizes sizes)
-  decode_encode sizes := domain.decode_encode (Computation.Realizable.Internal.internalSizes sizes)
-  encode_decode sizes := domain.encode_decode (Computation.Realizable.Internal.internalSizes sizes)
-  polynomial_width := by
-    obtain ⟨bound, bounded⟩ := domain.polynomial_width
-    exact ⟨Computation.Realizable.Internal.internalBound bound, fun sizes => by
-      rw [Computation.Realizable.Internal.internalBound_eval]; exact bounded _⟩
+    EncodedDomain (Fin 2) :=
+  ofCodec (fun sizes => domain.Carrier (Computation.Realizable.Internal.internalSizes sizes))
+    (Computation.Realizable.Internal.internalBound domain.widthPolynomial)
+    (fun sizes => domain.width (Computation.Realizable.Internal.internalSizes sizes))
+    (fun sizes => (Computation.Realizable.Internal.internalBound_eval domain.widthPolynomial sizes).symm)
+    (fun sizes => domain.encode (Computation.Realizable.Internal.internalSizes sizes))
+    (fun sizes => domain.decode (Computation.Realizable.Internal.internalSizes sizes))
+    (fun sizes => domain.decode_encode (Computation.Realizable.Internal.internalSizes sizes))
+    (fun sizes => domain.encode_decode (Computation.Realizable.Internal.internalSizes sizes))
+
+/-- Substituting private sizes preserves the canonical tape. -/
+@[simp] theorem encoded_withInternalSize (domain : EncodedDomain.{0, carrierLevel} (Fin 3))
+    (sizes : Fin 2 → ℕ) (value : domain.Carrier (Computation.Realizable.Internal.internalSizes sizes)) :
+    CallingConvention.encoded domain.withInternalSize sizes value =
+      CallingConvention.encoded domain (Computation.Realizable.Internal.internalSizes sizes) value := by
+  simp only [CallingConvention.encoded, withInternalSize, ofCodec, ArrayEncoding.bits_cast]
 
 end EncodedDomain
 
@@ -135,7 +140,9 @@ theorem withInternalSize {computation : Computation.{carrierLevel} (Fin 3) Input
     let arguments := Internal.arguments target scratch sizes input
     let width := fun name => (Internal.domains target scratch name).width sizes
     let readonly : TapeName target (Unit ⊕ ScratchName) → Bool := Internal.readOnly target
-    have capacityWidth : width capacityTape = sizes 0 + sizes 1 + 1 := rfl
+    have capacityWidth : width capacityTape = sizes 0 + sizes 1 + 1 := by
+      simp [width, Internal.domains, target, scratch, capacityTape, EncodedDomain.withInternalSize,
+        EncodedDomain.ofCodec, internalBound_eval, EncodedDomain.unary, internalSizes]
     obtain ⟨prepareTicks, prepareCost, prepared⟩ := StandardUnarySum.runs
       (.inl 0) (.inl 1) capacityTape (by simp [capacityTape]) (by simp [capacityTape]) width readonly rfl
       (sizes 0) (sizes 1) capacityWidth initial (headers 0) (headers 1)
@@ -145,10 +152,26 @@ theorem withInternalSize {computation : Computation.{carrierLevel} (Fin 3) Input
         (Internal.domains computation scratchDomains name).width (internalSizes sizes) := by
       intro name
       rcases name with parameter | argument | result | name
-      · fin_cases parameter <;> rfl
-      · rfl
-      · rfl
-      · rfl
+      · fin_cases parameter
+        · change (EncodedDomain.unary.{0, carrierLevel} (0 : Fin 3)).withInternalSize.width sizes =
+            (EncodedDomain.unary.{0, carrierLevel} (0 : Fin 3)).width (internalSizes sizes)
+          simp [EncodedDomain.withInternalSize, EncodedDomain.ofCodec, internalBound_eval,
+            EncodedDomain.unary]
+        · change (EncodedDomain.unary.{0, carrierLevel} (0 : Fin 2)).width sizes =
+            (EncodedDomain.unary.{0, carrierLevel} (1 : Fin 3)).width (internalSizes sizes)
+          simp [EncodedDomain.unary, EncodedDomain.ofCodec, internalSizes]
+        · change (EncodedDomain.unary.{0, carrierLevel} (1 : Fin 2)).width sizes =
+            (EncodedDomain.unary.{0, carrierLevel} (2 : Fin 3)).width (internalSizes sizes)
+          simp [EncodedDomain.unary, EncodedDomain.ofCodec, internalSizes]
+      · change (computation.inputDomains argument).withInternalSize.width sizes = _
+        simp [EncodedDomain.withInternalSize, EncodedDomain.ofCodec, internalBound_eval,
+          Internal.domains]
+      · change computation.outputDomain.withInternalSize.width sizes = _
+        simp [EncodedDomain.withInternalSize, EncodedDomain.ofCodec, internalBound_eval,
+          Internal.domains]
+      · change (scratchDomains name).withInternalSize.width sizes = _
+        simp [EncodedDomain.withInternalSize, EncodedDomain.ofCodec, internalBound_eval,
+          Internal.domains]
     have immutable : ∀ name, readonly (wiring name) = true → Internal.readOnly computation name = true := by
       intro name premise
       rcases name with parameter | argument | result | name
@@ -172,9 +195,15 @@ theorem withInternalSize {computation : Computation.{carrierLevel} (Fin 3) Input
       (by
         intro name
         change middle (inputTape target name) =
-          encoded (target.inputDomains name) sizes (arguments name)
-        exact (Function.update_of_ne (show inputTape target name ≠ capacityTape by
-          dsimp [capacityTape]; simp) _ _).trans (represented.1 (inputTape target name) rfl))
+          encoded (computation.inputDomains name) (internalSizes sizes) (arguments name)
+        apply (Function.update_of_ne (show inputTape target name ≠ capacityTape by
+          dsimp [capacityTape]; simp) _ _).trans
+        have original := represented.1 (inputTape target name) rfl
+        change initial (inputTape target name) =
+          encoded (computation.inputDomains name).withInternalSize sizes (arguments name) at original
+        exact original.trans (EncodedDomain.encoded_withInternalSize
+          (computation.inputDomains name) sizes (arguments name)))
+
       (by intro name; exact prepared.region (wiring name) (represented.region (wiring name)))
     have combined := prepared.sequence (MultiTape.wire wiring source) sourceEntry
       (StandardUnarySum.halt (.inl 0) (.inl 1) capacityTape (by simp [capacityTape]) (by simp [capacityTape])) trace
@@ -184,7 +213,11 @@ theorem withInternalSize {computation : Computation.{carrierLevel} (Fin 3) Input
       simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
       omega
     · intro name; cases name
-      exact correct
+      change final (outputTape target) =
+        encoded computation.outputDomain.withInternalSize sizes _
+      exact correct.trans (EncodedDomain.encoded_withInternalSize
+        computation.outputDomain sizes _).symm
+
 
 end Realizable
 end Computation

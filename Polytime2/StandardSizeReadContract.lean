@@ -24,7 +24,7 @@ namespace Polytime2.StandardSizeRead
 open MultiTape CallingConvention
 open Binary (word)
 
-def domains : Sum Bool Bool → EncodedDomain Bool
+noncomputable def domains : Sum Bool Bool → EncodedDomain Bool
   | .inl parameter => EncodedDomain.unary parameter
   | .inr _ => EncodedDomain.binaryNaturals true
 
@@ -71,7 +71,17 @@ theorem Internal.runs_wired {TargetTape : Type} [Fintype TargetTape]
     oldResult oldScratch resultLength scratchLength
   let localInitial := fun name => initial (targetWiring name)
   have trace := rawTrace.wire wiring (fun name => (domains name).width assignment)
-    argumentReadOnly (by intro name; fin_cases name <;> rfl)
+    argumentReadOnly (by
+      intro name
+      fin_cases name
+      · change (domains (.inl false)).width assignment = _
+        simp [domains, widths, EncodedDomain.unary, EncodedDomain.ofCodec]
+      · change (domains (.inl true)).width assignment = _
+        simp [domains, widths, EncodedDomain.unary, EncodedDomain.ofCodec]
+      · change (domains (.inr false)).width assignment = _
+        simp [domains, widths, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+      · change (domains (.inr true)).width assignment = _
+        simp [domains, widths, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec])
     (by intro name premise; fin_cases name <;> exact premise) localInitial (fun _ => 0)
   have initialMatches : (fun name => localInitial (wiring name)) =
       entryFrame (assignment false) (assignment true) oldResult oldScratch := by
@@ -116,6 +126,7 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   intro assignment input initial valid represented sizes
   obtain ⟨oldResult, resultLength, resultEq⟩ := represented.2 (.inr false) rfl
   obtain ⟨oldScratch, scratchLength, scratchEq⟩ := represented.2 (.inr true) rfl
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at resultLength scratchLength
   obtain ⟨finalScratch, finalLength, localTrace⟩ := runs (assignment false) (assignment true)
     oldResult oldScratch resultLength scratchLength
   let result := advanceBits (assignment false) (List.replicate (assignment true) false)
@@ -128,7 +139,17 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   let localFinal := entryFrame (assignment false) (assignment true) (word result) (word finalScratch)
   have trace := localTrace.wire wiring
     (fun name => (domains name).width assignment) argumentReadOnly
-    (by intro name; fin_cases name <;> rfl)
+    (by
+      intro name
+      fin_cases name
+      · change (domains (.inl false)).width assignment = _
+        simp [domains, widths, EncodedDomain.unary, EncodedDomain.ofCodec]
+      · change (domains (.inl true)).width assignment = _
+        simp [domains, widths, EncodedDomain.unary, EncodedDomain.ofCodec]
+      · change (domains (.inr false)).width assignment = _
+        simp [domains, widths, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+      · change (domains (.inr true)).width assignment = _
+        simp [domains, widths, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec])
     (by intro name premise; fin_cases name <;> exact premise) initial (fun _ => 0)
   have initialMatches : (fun name => initial (wiring name)) =
       entryFrame (assignment false) (assignment true) oldResult oldScratch := by

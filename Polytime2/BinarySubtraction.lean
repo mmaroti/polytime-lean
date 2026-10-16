@@ -123,7 +123,7 @@ theorem runs (left right : List Bool)
   exact StandardBinaryRipple.runs digit borrow false left right sameLength old oldLength oldCarry
 
 /-- Standard four-tape interface: immutable operands, low difference, and borrow. -/
-abbrev domains := StandardBinaryArithmetic.domains
+noncomputable abbrev domains := StandardBinaryArithmetic.domains
 abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly
 abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes
 

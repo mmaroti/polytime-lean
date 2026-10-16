@@ -24,7 +24,7 @@ namespace Polytime2.Examples.MatrixRowSteps
 
 open MultiTape CallingConvention StandardMatrixRowStep
 
-private abbrev scalar := EncodedDomain.booleans (Parameter := Empty)
+private noncomputable abbrev scalar := EncodedDomain.booleans (Parameter := Empty)
 private abbrev sizes : Fin 3 → ℕ := ![2, 1, 2]
 private noncomputable abbrev arrayDomain := scalar.constant.arrayOfLength StandardMatrixEntry.length
 private abbrev operation (_assignment : Empty → ℕ) (_coefficient source target : Bool) := (source, !target)
@@ -61,12 +61,12 @@ private theorem initial_regions (name : TapeName) :
       fin_cases name <;> norm_num [initial, Fin.ext_iff]
       all_goals first
         | exact encoded_region _ _ _
+        | simpa [domains, StandardMatrixRowEntry.domains, EncodedDomain.constant, EncodedDomain.ofCodec] using encoded_region scalar Empty.elim false
         | simpa only [List.length_replicate] using buffer_region
             (List.replicate ((domains scalar _).width sizes) 2)
   | inr name =>
     cases name
-    change Region (sizes 0) 0 (buffer (List.replicate (sizes 0) 2))
-    simpa only [initial, List.length_replicate] using buffer_region (List.replicate (sizes 0) 2)
+    simpa [initial, domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using buffer_region (List.replicate (sizes 0) 2)
 
 /-- The second call consumes the matrix and counter produced by the first;
 no host-side tape preparation occurs between calls. Invalid scratch symbols
@@ -74,9 +74,9 @@ are overwritten, and all heads return to zero after both calls. -/
 theorem two_columns :
     ∃ firstTicks secondTicks middle final,
       Runs (fun name => (domains scalar name).width sizes) readOnly
-        (machine false scalar operation) firstTicks (entry 1) (fun _ => 0) initial (exit 1) (fun _ => 0) middle ∧
+        (machine false scalar operation) firstTicks (entry (scalar.width Empty.elim)) (fun _ => 0) initial (exit (scalar.width Empty.elim)) (fun _ => 0) middle ∧
       Runs (fun name => (domains scalar name).width sizes) readOnly
-        (machine false scalar operation) secondTicks (entry 1) (fun _ => 0) middle (exit 1) (fun _ => 0) final ∧
+        (machine false scalar operation) secondTicks (entry (scalar.width Empty.elim)) (fun _ => 0) middle (exit (scalar.width Empty.elim)) (fun _ => 0) final ∧
       final (.inl (.inr 4)) = encoded arrayDomain sizes (fun _ => true) ∧
       final (.inl (.inr 2)) = encoded (EncodedDomain.binaryNaturals 0) sizes (2 : Fin 4) := by
   obtain ⟨bound, execute⟩ := runs false scalar operation
@@ -133,15 +133,15 @@ the standard tape contract. The generic pipeline hides the state injections. -/
 theorem pipeline_two_columns :
     ∃ ticks final,
       Runs (fun name => (domains scalar name).width sizes) readOnly
-        (Pipeline.machine (fun _ : Fin 2 => machine false scalar operation) (fun _ => entry 1)) ticks
-        (Pipeline.position (fun _ : Fin 2 => entry 1) 0) (fun _ => 0) initial none (fun _ => 0) final ∧
+        (Pipeline.machine (fun _ : Fin 2 => machine false scalar operation) (fun _ => entry (scalar.width Empty.elim))) ticks
+        (Pipeline.position (fun _ : Fin 2 => entry (scalar.width Empty.elim)) 0) (fun _ => 0) initial none (fun _ => 0) final ∧
       final (.inl (.inr 4)) = encoded arrayDomain sizes (fun _ => true) := by
   obtain ⟨firstTicks, secondTicks, middle, final, firstTrace, secondTrace, matrixEq, columnEq⟩ := two_columns
   let representation : Fin 3 → Tapes Alphabet → Prop := fun stage tapes =>
     match stage.val with | 0 => tapes = initial | 1 => tapes = middle | _ => tapes = final
   obtain ⟨ticks, result, cost, trace, resultEq⟩ := Pipeline.runs
     (fun name => (domains scalar name).width sizes) readOnly
-    (fun _ : Fin 2 => machine false scalar operation) (fun _ => entry 1) (fun _ => exit 1)
+    (fun _ : Fin 2 => machine false scalar operation) (fun _ => entry (scalar.width Empty.elim)) (fun _ => exit (scalar.width Empty.elim))
     representation (firstTicks + secondTicks)
     (by intro stage symbols; exact halt false scalar operation symbols)
     (by

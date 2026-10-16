@@ -118,7 +118,17 @@ theorem readColumns_runs (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
     StandardSizeRead.Internal.runs_wired columnLimitWiring localSizes
       (fun name => (domains enumeration name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by
+        intro name
+        fin_cases name
+        · change (EncodedDomain.unary.{0, 0} (0 : Fin 3)).width sizes = (EncodedDomain.unary.{0, 0} true).width localSizes
+          simp [EncodedDomain.unary, EncodedDomain.ofCodec, localSizes]
+        · change (EncodedDomain.unary.{0, 0} (2 : Fin 3)).width sizes = (EncodedDomain.unary.{0, 0} false).width localSizes
+          simp [EncodedDomain.unary, EncodedDomain.ofCodec, localSizes]
+        · change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = (EncodedDomain.binaryNaturals true).width localSizes
+          simp [localSizes]
+        · change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = (EncodedDomain.binaryNaturals true).width localSizes
+          simp [localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
   let resultBits := StandardSizeRead.advanceBits (sizes 2) (List.replicate (sizes 0) false)

@@ -132,7 +132,7 @@ noncomputable def readTest (scalar : EncodedDomain.{0, 0} Empty)
   MultiTape.sequence (readEntry (scalar.width Empty.elim)) (zeroTest scalar isZero) StandardFiniteTable.entry
 
 def readTestEntry (width : ℕ) : ReadTestState width := .inl (StandardMatrixEntry.entry width)
-def readTestExit (width : ℕ) : ReadTestState width := .inr StandardFiniteTable.exit
+noncomputable def readTestExit (width : ℕ) : ReadTestState width := .inr StandardFiniteTable.exit
 
 noncomputable def stop : Machine Alphabet Bool := StandardTapeCommands.setBoolean continueTape false
 

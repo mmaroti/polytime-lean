@@ -66,9 +66,9 @@ def indexedCopy : Polytime2.Computation Bool (Fin 3) :=
 /-- Lookup and update compose without exposing either machine or scratch. -/
 theorem indexedCopy_realizable : indexedCopy.Realizable := by
   apply Computation.Realizable.letThen
-  · exact ((arrayLookup_realizable element false length 2 (fun _ => rfl)).withArguments
+  · exact ((arrayLookup_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])).withArguments
       originalDomains sourceSelection _).withPrecondition _ _
-  · exact (arrayUpdate_realizable element false length 2 (fun _ => rfl)).withArguments
+  · exact (arrayUpdate_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])).withArguments
       continuationDomains updateSelection _
 
 /-- Equal source and target indices are allowed; lookup finishes before update. -/
@@ -79,15 +79,15 @@ theorem indexedCopy_correct (sizes : Bool → ℕ) (arguments : indexedCopy.Argu
         (arguments 2 ⟨(arguments 0).val, valid.1⟩) := rfl
 
 example : (arrayLookup element false length).Realizable :=
-  arrayLookup_realizable element false length 2 (fun _ => rfl)
+  arrayLookup_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 example : (arrayUpdate element false length).Realizable :=
-  arrayUpdate_realizable element false length 2 (fun _ => rfl)
+  arrayUpdate_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 
 -- Singleton elements occupy zero bits, but lookup and update remain realizable.
 example : (arrayLookup (EncodedDomain.fixed (Equiv.refl (Fin 1))) false length).Realizable :=
-  arrayLookup_realizable _ _ _ 0 (fun _ => rfl)
+  arrayLookup_realizable _ _ _ 0 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 example : (arrayUpdate (EncodedDomain.fixed (Equiv.refl (Fin 1))) false length).Realizable :=
-  arrayUpdate_realizable _ _ _ 0 (fun _ => rfl)
+  arrayUpdate_realizable _ _ _ 0 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 
 end MathematicalExamples
 end Polytime2.Examples.Array

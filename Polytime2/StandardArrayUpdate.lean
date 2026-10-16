@@ -109,7 +109,7 @@ universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- The same update layout over any finite collection of unary size inputs. -/
-def domainsSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
+noncomputable def domainsSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
     Sum Parameter (Fin 7) → EncodedDomain.{parameterLevel, 0} Parameter
   | .inl parameter => EncodedDomain.unary parameter
@@ -392,7 +392,7 @@ theorem runs (elementWidth : ℕ) (index before block after replacement : List B
     (by
       intro name
       cases name <;> simp [width, widths, arrayWidth, arrayBits, patchWiring_apply,
-        List.length_map, word, List.length_append])
+        List.length_append])
     (by
       intro name premise
       cases name <;> simp [readOnly, patchWiring_apply, StandardCopy.readOnly] at premise ⊢)
@@ -504,12 +504,12 @@ theorem runs (elementWidth : ℕ) (index before block after replacement : List B
         (word (List.replicate index.length false)) (data false) := by
     funext name
     fin_cases name
+    · simp [install_one, frame]
+    · simp [install_one, frame]
+    · simp [install_one, frame]
     · simp [install_one, frame, List.append_assoc]
-    · simp [install_one, frame, List.append_assoc]
-    · simp [install_one, frame, List.append_assoc]
-    · simp [install_one, frame, List.append_assoc]
-    · simp [install_one, frame, List.append_assoc]
-    · simp [install_one, frame, List.append_assoc]
+    · simp [install_one, frame]
+    · simp [install_one, frame]
     · apply install_outside
       rintro ⟨localName, equal⟩
       cases localName
@@ -540,8 +540,8 @@ theorem runs (elementWidth : ℕ) (index before block after replacement : List B
       cases localName <;> simp [patchWiring_apply] at equal
     · change install patchWiring _ _ (patchWiring false) = _
       rw [install_at]
-      simp [Copy.frame, Binary.tape, Turing.Tape.mk₁, Turing.Tape.mk₂,
-        frame, word, List.map_append, List.append_assoc]
+      simp [Copy.frame,
+        frame, word]
       exact buffer_padding (word replacement)
     · change install patchWiring _ _ (patchWiring true) = _
       rw [install_at]
@@ -605,7 +605,7 @@ theorem runs (elementWidth : ℕ) (index before block after replacement : List B
       (value index * (6 * index.length + elementWidth + 11) +
         4 * index.length + 6 + (2 * elementWidth + 1 + restoreTicks + 1) + 1) + 1) + 1
   refine ⟨totalTicks, ?_, ?_⟩
-  · simp only [totalTicks, arrayWidth, arrayBits]
+  · simp only [totalTicks, arrayBits]
     omega
   · simpa [totalTicks, machine, prepareIndex, copyArray, seek, patch, restore,
       entry, exit, initialFrame, frame, width, widths, arrayWidth, arrayBits,
@@ -657,12 +657,11 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
   let replacementBits := EncodedDomain.ArrayEncoding.bits (element.encode assignment replacement)
   let arrayBits := EncodedDomain.ArrayEncoding.bits
     ((element.arrayOfLength length).encode assignment arrayValue)
-  have arrayBitsEq : arrayBits = before ++ block ++ after := decomposition
+  have arrayBitsEq : arrayBits = before ++ block ++ after := by
+    simpa only [arrayBits, EncodedDomain.arrayOfLength_encode_bits] using decomposition
   have arrayBitsLength : arrayBits.length = arrayLength * element.width assignment := by
-    change (List.ofFn (fun index : Fin (arrayLength * element.width assignment) =>
-      ((EncodedDomain.ArrayEncoding.encode (element.encode assignment)
-        arrayLength arrayValue).getLsbD index.val))).length = _
-    simp
+    simp [arrayBits, arrayLength,
+      EncodedDomain.ArrayEncoding.bits]
   have blockLength : block.length = element.width assignment := List.length_ofFn
   have replacementLength : replacementBits.length = element.width assignment :=
     List.length_ofFn
@@ -833,7 +832,8 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     rw [install_at]
     change buffer (word (before ++ replacementBits ++ after)) =
       encoded (domainsSized element indexCapacity length (Sum.inr 3)) assignment (output ())
-    simp only [output, domainsSized, EncodedDomain.arrayOfLength]
+    simp only [output, domainsSized, encoded, EncodedDomain.arrayOfLength,
+      EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast]
     change buffer (word (before ++ replacementBits ++ after)) =
       buffer (word (EncodedDomain.ArrayEncoding.bits
         (EncodedDomain.ArrayEncoding.encode (element.encode assignment) arrayLength resultValue)))

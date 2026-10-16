@@ -27,7 +27,7 @@ namespace Polytime2.Examples.Arithmetic
 open Polytime2.Computation
 
 /-- Subtract the original second argument from the preceding sum. -/
-private def subtractOriginal : Polytime2.Computation Unit (Bool ⊕ Unit) :=
+private noncomputable def subtractOriginal : Polytime2.Computation Unit (Bool ⊕ Unit) :=
   binarySubtract.withArguments (fun _ => EncodedDomain.binaryNaturals ())
     ⟨(fun | false => .inr () | true => .inl true), by
       intro first second equal
@@ -35,7 +35,7 @@ private def subtractOriginal : Polytime2.Computation Unit (Bool ⊕ Unit) :=
     (fun _ => rfl)
 
 /-- Compute a sum, then reuse one original argument in the next call. -/
-def addThenCancel : Polytime2.Computation Unit Bool :=
+noncomputable def addThenCancel : Polytime2.Computation Unit Bool :=
   binaryAdd.letThen subtractOriginal (fun _ => rfl) rfl (by
     intro sizes arguments valid
     change (arguments true).val ≤ (arguments false).val + (arguments true).val
@@ -69,7 +69,7 @@ example : (counterIncrement ()).compute (fun _ => 0)
     ⟨(fun _ => (0 : Fin 1)), True.intro⟩ = (0 : Fin 1) := rfl
 
 /-- The zero case needs no proof that the decrement routine accepts zero. -/
-def saturatingDecrement : Polytime2.Computation Unit Unit :=
+noncomputable def saturatingDecrement : Polytime2.Computation Unit Unit :=
   counterNonzero.letThen
     ((counterDecrement ()).choose (copy (EncodedDomain.binaryNaturals ()))
       (fun _ => rfl) rfl)
@@ -102,7 +102,7 @@ example : binaryLess.compute (fun _ => 0)
 private def operandSelection (which : Bool) : Unit ↪ Bool :=
   ⟨(fun _ => which), by intro first second _; cases first; cases second; rfl⟩
 
-private def selectOperand (which : Bool) : Polytime2.Computation Unit Bool :=
+private noncomputable def selectOperand (which : Bool) : Polytime2.Computation Unit Bool :=
   (copy (EncodedDomain.binaryNaturals ())).withArguments
     (fun _ => EncodedDomain.binaryNaturals ()) (operandSelection which) (fun _ => rfl)
 
@@ -110,7 +110,7 @@ private theorem selectOperand_realizable (which : Bool) : (selectOperand which).
   (copy_realizable (EncodedDomain.binaryNaturals ())).withArguments _ _ _
 
 /-- Comparison chooses an operand while retaining both original arguments. -/
-def minimum : Polytime2.Computation Unit Bool := binaryLess.letThen
+noncomputable def minimum : Polytime2.Computation Unit Bool := binaryLess.letThen
   ((selectOperand false).choose (selectOperand true) (fun _ => rfl) rfl)
   (fun _ => rfl) rfl (by
     intro sizes arguments valid

@@ -5,11 +5,12 @@ A multi-tape implementation of polynomial-time algorithms.
 ## Implemented and proved
 
 - Abstract encoded domains combine mathematical carrier families, exact bit
-  widths, canonical encoding and partial decoding, round-trip laws, and an
-  existential polynomial width bound. Fixed finite presentations supply the
-  existing scalar codecs; examples cover tagged carriers and runtime bit widths.
-  Presentations do not certify executable encoding, decoding, or width
-  evaluation.
+  widths given by concrete multivariate polynomials over `ℕ`, canonical encoding
+  and partial decoding, and round-trip laws. Fixed finite presentations supply
+  the existing scalar codecs; examples cover tagged carriers and runtime bit
+  widths.
+  Encoding and decoding remain mathematical specifications. Routines that
+  evaluate widths on tape still need machine certificates.
 - Deterministic transitions over Mathlib's two-sided tapes, with separate
   alphabets, writes, and head movements for each tape.
 - Counted execution, controller embedding, and sequential composition with one
@@ -206,7 +207,8 @@ contents, fixed regions, restored heads, and preservation at every transition.
   unary ones surrounded by blanks. Zero has an empty data region.
 - Each input and each output occupies a separate tape and has an encoded
   domain. Its fixed data width is determined by the specialization and size
-  assignment. Blank, binary zero, and binary one are the entire source alphabet.
+  assignment by evaluating its width polynomial. Valid encodings use only binary
+  zero and one. Blank is reserved for cells outside canonical data regions.
 - Input regions contain canonical encodings and are never modified. Output
   regions initially contain arbitrary symbols, including blanks; outside each
   region, every cell is blank. Outputs do not alias inputs or one another.

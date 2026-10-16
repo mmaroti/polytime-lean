@@ -105,7 +105,7 @@ theorem interval_runs (enumeration : Scalar ≃ Fin cardinality) :
 abbrev TraversalState (width : ℕ) := Sum (StandardGaussJordanClearInterval.State width)
   (Sum HandoverState (StandardGaussJordanClearInterval.State width))
 
-instance traversalStateFinite (width : ℕ) : Fintype (TraversalState width) := by
+noncomputable instance traversalStateFinite (width : ℕ) : Fintype (TraversalState width) := by
   letI : Fintype (StandardGaussJordanClearInterval.State width) := inferInstance
   dsimp only [TraversalState, HandoverState, SkipState]
   infer_instance

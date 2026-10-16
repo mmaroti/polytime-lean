@@ -32,8 +32,8 @@ private def sizes : Unit → ℕ := fun _ => 3
 private def lookup := matrixLookup element () rows columns
 private def update := matrixUpdate element () rows columns
 
-example : lookup.Realizable := matrixLookup_realizable element () rows columns 1 (fun _ => rfl)
-example : update.Realizable := matrixUpdate_realizable element () rows columns 1 (fun _ => rfl)
+example : lookup.Realizable := matrixLookup_realizable element () rows columns 1 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+example : update.Realizable := matrixUpdate_realizable element () rows columns 1 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 
 private def lookupArguments : lookup.Arguments sizes
   | false => (4 : Fin 8)
@@ -69,9 +69,9 @@ example : EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes
 
 -- A singleton scalar domain still supports zero-bit matrix storage.
 example : (matrixLookup (EncodedDomain.fixed (Equiv.refl (Fin 1))) () rows columns).Realizable :=
-  matrixLookup_realizable _ _ _ _ 0 (fun _ => rfl)
+  matrixLookup_realizable _ _ _ _ 0 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 example : (matrixUpdate (EncodedDomain.fixed (Equiv.refl (Fin 1))) () rows columns).Realizable :=
-  matrixUpdate_realizable _ _ _ _ 0 (fun _ => rfl)
+  matrixUpdate_realizable _ _ _ _ 0 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
 
 end MatrixExamples
 end Polytime2.Examples.MatrixAccess

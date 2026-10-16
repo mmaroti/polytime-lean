@@ -203,7 +203,7 @@ universe carrierLevel
 
 /-- A decoded finite operation becomes a table on fixed controller registers.
 Unused binary labels have arbitrary behavior outside the input contract. -/
-def encodedTable (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLevel} Empty)
+noncomputable def encodedTable (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLevel} Empty)
     (operation : ∀ assignment, firstDomain.Carrier assignment →
       secondDomain.Carrier assignment → outputDomain.Carrier assignment) :
     Register (firstDomain.width Empty.elim) → Register (secondDomain.width Empty.elim) →

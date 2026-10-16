@@ -68,8 +68,8 @@ noncomputable def processed (writeSource : Bool) (scalar : EncodedDomain.{0, 0} 
       Function.update (Function.update current sourceIndex values.1) targetIndex values.2
     else current
 
-private theorem result_of_encoded (tapes : Tapes Alphabet) (bit : Bool)
-    (encodedFlag : tapes guardTape = encoded EncodedDomain.booleans (fun _ : Fin 3 => 0) bit) :
+private theorem result_of_encoded {sizes : Fin 3 → ℕ} (tapes : Tapes Alphabet) (bit : Bool)
+    (encodedFlag : tapes guardTape = encoded EncodedDomain.booleans sizes bit) :
     result (MultiTape.read tapes) = bit := by
   unfold result MultiTape.read
   rw [encodedFlag, encoded_booleans]
@@ -162,7 +162,9 @@ theorem loop_runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       intro count ranking bounded counterFits tapes sourceEq targetEq columnEq coefficientEq workEq matrixEq limitEq headers regions canonical
       obtain ⟨guardTicks, guarded, guardCost, guardTrace, flagEq, difference, guardOutside⟩ :=
         executeGuard sizes tapes ⟨count, counterFits⟩ ⟨sizes 2, fits⟩ (headers 0) columnEq limitEq
-          (regions differenceTape) (regions guardTape)
+          (by simpa [width, domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using regions differenceTape)
+          (by simpa [width, domains, guardTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+            show Nat.clog 2 2 = 1 from by decide] using regions guardTape)
       have guardedRegions : ∀ name, Region (width name) 0 (guarded name) := fun name => guardTrace.region name (regions name)
       have guardedCanonical := guard_canonical scalar sizes tapes guarded _ canonical flagEq difference guardOutside
       have tested : result (MultiTape.read guarded) = decide (count < sizes 2) := result_of_encoded guarded _ flagEq

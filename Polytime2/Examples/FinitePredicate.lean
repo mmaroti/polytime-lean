@@ -23,9 +23,9 @@ namespace Polytime2.Examples.FinitePredicate
 
 open Polytime2.Computation
 
-private def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
+private noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
-def isZero : Polytime2.Computation Empty Unit :=
+noncomputable def isZero : Polytime2.Computation Empty Unit :=
   finitePredicate threeElements (fun _ (value : Fin 3) => decide (value = 0))
 
 example : isZero.Realizable := finitePredicate_realizable threeElements _

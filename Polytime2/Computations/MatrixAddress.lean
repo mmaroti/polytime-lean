@@ -27,7 +27,7 @@ open MultiTape CallingConvention Realizable
 /-- Sizes are binary capacity, row count, and column count. Arguments are the
 row and column indices. Address arithmetic requires only that its result fits;
 checking whether the coordinate belongs to a matrix is the caller's task. -/
-def matrixAddress : Computation (Fin 3) Bool where
+noncomputable def matrixAddress : Computation (Fin 3) Bool where
   inputDomains _ := EncodedDomain.binaryNaturals 0
   outputDomain := EncodedDomain.binaryNaturals 0
   precondition sizes arguments := sizes 2 < 2 ^ sizes 0 ∧
@@ -61,7 +61,7 @@ private theorem addressLayout_leftInverse : Function.LeftInverse addressSource a
 private def addressEmbedding : Fin 3 ⊕ Fin 9 ↪ Fin 3 ⊕ (Bool ⊕ (Unit ⊕ Fin 9)) :=
   ⟨addressLayout, addressLayout_leftInverse.injective⟩
 
-private def addressScratch (name : Fin 9) : EncodedDomain (Fin 3) :=
+private noncomputable def addressScratch (name : Fin 9) : EncodedDomain (Fin 3) :=
   StandardMatrixAddress.domains (.inr name)
 
 private theorem addressDomains (name : Fin 3 ⊕ Fin 9) :

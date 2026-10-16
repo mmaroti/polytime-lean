@@ -348,7 +348,7 @@ universe parameterLevel carrierLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- The scan's mathematical domains can differ while their bit widths agree. -/
-def domains (inputDomain outputDomain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
+noncomputable def domains (inputDomain outputDomain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
     Sum Parameter Bool → EncodedDomain.{parameterLevel, carrierLevel} Parameter
   | .inl parameter => EncodedDomain.unary parameter
   | .inr false => inputDomain
@@ -376,7 +376,7 @@ theorem contract [Fintype Memory] (memory : Memory)
       (fun assignment input => hypothesis assignment (input ⟨.inr false, rfl⟩))
       (fun assignment input output =>
         output () = compute assignment (input ⟨.inr false, rfl⟩)) := by
-  obtain ⟨bound, widthBound⟩ := inputDomain.polynomial_width
+  let bound := inputDomain.widthPolynomial
   refine ⟨(by intro parameter; rfl), (by intro name; rfl),
     (by intro symbols; simp [algorithm, MultiTape.wire, MultiTape.withExit]), 2 * bound + 3, ?_⟩
   intro assignment input initial valid represented sizes
@@ -425,8 +425,8 @@ theorem contract [Fintype Memory] (memory : Memory)
   refine ⟨2 * bits.length + 2 + 1, output,
     install wiring (frame [0] (word bits ++ [0]) [0] (word (run update memory bits).2 ++ [0])) initial,
     ?_, trace, rfl, ?_⟩
-  · have bounded := widthBound assignment
-    simp only [map_add, map_mul, map_ofNat]
+  · simp only [EncodedDomain.width] at bitsLength
+    simp only [bound, map_add, map_mul, map_ofNat]
     omega
   · intro name
     cases name

@@ -36,7 +36,7 @@ abbrev ripple := BinaryRipple.ripple
 
 variable (digit carry : Bool → Bool → Bool → Bool)
 
-def domains : Sum Unit (Fin 4) → EncodedDomain Unit
+noncomputable def domains : Sum Unit (Fin 4) → EncodedDomain Unit
   | .inl _ => EncodedDomain.unary ()
   | .inr 0 => EncodedDomain.binaryNaturals ()
   | .inr 1 => EncodedDomain.binaryNaturals ()
@@ -486,9 +486,10 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
     have rightLength : right.length = assignment () := List.length_ofFn
     obtain ⟨oldOutput, oldOutputLength, oldOutputEq⟩ := represented.2 (.inr 2) rfl
     obtain ⟨oldFlagList, oldFlagLength, oldFlagEq⟩ := represented.2 (.inr 3) rfl
-    change oldFlagList.length = 1 at oldFlagLength
+    norm_num [domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at oldFlagLength
     obtain ⟨oldFlag, rfl⟩ := List.length_eq_one_iff.mp oldFlagLength
-    change oldOutput.length = assignment () at oldOutputLength
+    simp only [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+      EncodedDomain.width, MvPolynomial.eval_X] at oldOutputLength
     have leftValue : value left = (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment ())).val :=
       Binary.value_bits (BitVec.ofFin (input ⟨.inr 0, rfl⟩))
     have rightValue : value right = (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val :=
@@ -571,8 +572,7 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
       install dataTapes
         (frame [0] (word left ++ [0]) [0] (word right ++ [0]) [0]
           (word computed.1 ++ [0]) (data computed.2)) initial, ?_, trace, ?_, ?_⟩
-    · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X,
-        MvPolynomial.eval_C]
+    · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
       omega
     · constructor
       · rfl

@@ -56,7 +56,7 @@ theorem encoded_runsOfLength (element : EncodedDomain.{parameterLevel, 0} Parame
   let replacementBits := EncodedDomain.ArrayEncoding.bits (element.encode sizes replacement)
   have wholeLength : (before ++ block ++ after).length = (element.arrayOfLength length).width sizes := by
     rw [← decomposition]
-    exact List.length_ofFn
+    simp [EncodedDomain.arrayOfLength, EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits]
   obtain ⟨ticks, cost, trace⟩ := runs (element.width sizes) index before block after replacementBits
     prefixLength List.length_ofFn List.length_ofFn oldOutput oldCounter scratch
     (outputLength.trans wholeLength.symm) counterLength scratchLength flag
@@ -64,14 +64,17 @@ theorem encoded_runsOfLength (element : EncodedDomain.{parameterLevel, 0} Parame
   · have indexBound : value index ≤ MvPolynomial.eval sizes length := Nat.le_of_lt within
     have bound := Nat.mul_le_mul_right (6 * index.length + 2 * element.width sizes + 11) indexBound
     have widthEq : (before ++ block ++ after).length = MvPolynomial.eval sizes length * element.width sizes :=
-      wholeLength
+      by simpa [EncodedDomain.arrayOfLength, EncodedDomain.ofCodec] using wholeLength
     nlinarith [prefixLength]
   · rw [wholeLength] at trace
     have arrayBitsEq : EncodedDomain.ArrayEncoding.bits
-        ((element.arrayOfLength length).encode sizes array) = before ++ block ++ after := decomposition
+        ((element.arrayOfLength length).encode sizes array) = before ++ block ++ after := by
+      simpa only [EncodedDomain.arrayOfLength_encode_bits] using decomposition
     have updatedBitsEq : EncodedDomain.ArrayEncoding.bits
         ((element.arrayOfLength length).encode sizes (Function.update array ⟨value index, within⟩ replacement)) =
-        before ++ replacementBits ++ after := updatedDecomposition
+        before ++ replacementBits ++ after := by
+      simpa only [EncodedDomain.arrayOfLength, EncodedDomain.ofCodec,
+        EncodedDomain.ArrayEncoding.bits_cast] using updatedDecomposition
     have sourceEq : buffer (word (before ++ block ++ after)) =
         encoded (element.arrayOfLength length) sizes array :=
       congrArg (fun bits => buffer (word bits)) arrayBitsEq.symm

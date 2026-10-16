@@ -106,11 +106,10 @@ theorem Realizes.tm0
       run assignment input initial hypothesis represented sizes
     exact ⟨ticks, final, cost, trace.steps, input, output, hypothesis, represented,
       correct, returned, fun name immutable => trace.readOnly_tape name immutable⟩
-  choose bound bounded using fun name => (domains name).polynomial_width
+  let bound := fun name => (domains name).widthPolynomial
   let inputCapacity := ∑ name, bound name
   have capacity (assignment : Parameter → ℕ) (name : TapeName) :
       (domains name).width assignment ≤ MvPolynomial.eval assignment inputCapacity := by
-    apply (bounded name assignment).trans
     simp only [inputCapacity, map_sum]
     exact Finset.single_le_sum (f := fun name => MvPolynomial.eval assignment (bound name))
       (fun _ _ => Nat.zero_le _) (Finset.mem_univ name)

@@ -96,7 +96,7 @@ abbrev BodyState (initWidth searchWidth scalarWidth : ℕ) :=
   Sum (StandardGaussJordanColumn.AlgorithmState initWidth searchWidth scalarWidth)
     (Sum (Fin 3) (Sum (Fin 3) (Sum IncrementState (Fin 3))))
 
-instance bodyStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
+noncomputable instance bodyStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
     Fintype (BodyState initWidth searchWidth scalarWidth) := by
   letI : Fintype (StandardGaussJordanColumn.AlgorithmState initWidth searchWidth scalarWidth) := inferInstance
   dsimp only [BodyState, IncrementState]
@@ -145,7 +145,7 @@ def continues (symbols : Symbols Alphabet) : Bool := decide (symbols guardTape =
 abbrev LoopState (initWidth searchWidth scalarWidth : ℕ) :=
   Sum (Sum GuardState (BodyState initWidth searchWidth scalarWidth)) Unit
 
-instance loopStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
+noncomputable instance loopStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
     Fintype (LoopState initWidth searchWidth scalarWidth) := by
   letI : Fintype (BodyState initWidth searchWidth scalarWidth) := inferInstance
   dsimp only [LoopState, GuardState]

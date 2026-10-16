@@ -97,10 +97,13 @@ theorem seedStage_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3
   · by_cases last : stage = 5
     · subst stage
       obtain ⟨old, length, oldEq⟩ := (regions guardTape).exists_buffer
-      change old.length = 1 at length
+      change old.length = (EncodedDomain.booleans (Parameter := Fin 3)).width sizes at length
+      norm_num [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at length
       obtain ⟨oldBit, rfl⟩ := List.length_eq_one_iff.mp length
       have trace := StandardTapeCommands.setBoolean_runs guardTape false width readOnly (by decide)
-        rfl initial oldBit oldEq
+        (by
+          change (EncodedDomain.booleans (Parameter := Fin 3)).width sizes = 1
+          norm_num [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec]) initial oldBit oldEq
       refine ⟨1, by omega, ?_⟩
       change Runs width readOnly (StandardTapeCommands.setBoolean guardTape false) 1
         false (fun _ => 0) initial true (fun _ => 0)
@@ -108,12 +111,15 @@ theorem seedStage_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3
       rw [encoded_booleans]
       exact trace
     · have targetWidth : width (seedTarget stage) = sizes 0 := by
-        fin_cases stage <;> solve | rfl | contradiction
+        fin_cases stage <;> solve | contradiction | exact EncodedDomain.binaryNaturals_width 0 sizes
       obtain ⟨old, length, oldEq⟩ := (regions (seedTarget stage)).exists_buffer
       have trace := StandardTapeCommands.clear_runs (sizeTape 0) (seedTarget stage)
         (by fin_cases stage <;> decide) width readOnly writable
         (List.replicate (sizes 0) true) old
-        (by simp only [List.length_replicate]; rfl)
+        (by
+          simp only [List.length_replicate]
+          change (EncodedDomain.unary.{0, 0} (0 : Fin 3)).width sizes = sizes 0
+          simp [EncodedDomain.unary, EncodedDomain.ofCodec])
         (by simpa only [List.length_replicate] using targetWidth)
         (by simpa only [List.length_replicate] using length.trans targetWidth) initial header oldEq
       have zeroEncoding : encoded (EncodedDomain.binaryNaturals 0) sizes
@@ -137,8 +143,7 @@ theorem seed_runs (enumeration : Scalar ≃ Fin cardinality) :
         Runs (fun name => (domains enumeration name).width sizes) readOnly seed ticks
           (Pipeline.position seedEntry 0) (fun _ => 0) initial none (fun _ => 0) final ∧
         (∀ stage, final (seedTarget stage) = seedDefault enumeration sizes matrix stage) := by
-  obtain ⟨matrixBound, matrixWidthBound⟩ :=
-    (matrixDomain (FieldRow.scalarDomain enumeration)).polynomial_width
+  let matrixBound := (matrixDomain (FieldRow.scalarDomain enumeration)).widthPolynomial
   refine ⟨6 * (2 * matrixBound + 2 * MvPolynomial.X 0 + 3), ?_⟩
   intro sizes initial matrix inputEq header regions
   obtain ⟨ticks, final, cost, trace, outputs⟩ := Pipeline.updates_runs
@@ -152,8 +157,7 @@ theorem seed_runs (enumeration : Scalar ≃ Fin cardinality) :
         ((immutable inputTape rfl).trans inputEq)
         ((immutable (sizeTape 0) (by decide)).trans header) currentRegions)
   refine ⟨ticks, final, ?_, trace, outputs⟩
-  have widthBound := matrixWidthBound sizes
-  simp only [map_mul, map_add, map_ofNat, MvPolynomial.eval_X]
+  simp only [matrixBound, map_mul, map_add, map_ofNat, MvPolynomial.eval_X]
   omega
 
 end Polytime2.StandardGaussJordanElimination

@@ -55,7 +55,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨swapBound, executeSwap⟩ := row_runs true enumeration (MatrixRowField.swap (Scalar := Scalar))
   obtain ⟨normalizeBound, executeNormalize⟩ := row_runs false enumeration (MatrixRowField.normalize (Scalar := Scalar))
   obtain ⟨clearBound, executeClear⟩ := clear_runs enumeration
-  obtain ⟨matrixBound, matrixWidthBound⟩ := (matrixDomain (FieldRow.scalarDomain enumeration)).polynomial_width
+  let matrixBound := (matrixDomain (FieldRow.scalarDomain enumeration)).widthPolynomial
   refine ⟨lookupBound + swapBound + normalizeBound + clearBound + 6 * matrixBound + 12, ?_⟩
   intro sizes initial candidate pivot column candidateValid pivotValid columnValid matrix
     rowsFit columnsFit capacity candidateEq pivotEq columnEq matrixEq headers regions
@@ -177,10 +177,10 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     simpa only [algorithm, entry, exit, prepareMatrix, commit, swapRows, normalizeRow,
       clearEntry, rowEntry, lookupEntry, total, copyCost] using complete
   refine ⟨total, final, ?_, fullTrace, ?_, ?_⟩
-  · have widthBound := matrixWidthBound sizes
-    dsimp only [total, copyCost]
-    simp only [map_add, map_mul, map_ofNat]
+  · dsimp only [total, copyCost]
+    simp only [matrixBound, map_add, map_mul, map_ofNat]
     rw [inputWidth]
+    simp only [EncodedDomain.width]
     omega
   · exact finalMatrix
   · intro name writable

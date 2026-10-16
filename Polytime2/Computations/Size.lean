@@ -24,7 +24,7 @@ namespace Polytime2.Computation
 
 /-- The count is size `false`; size `true` is its binary result capacity.
 There are no ordinary arguments, since both unary headers are implicit inputs. -/
-def readSize : Computation Bool Empty where
+noncomputable def readSize : Computation Bool Empty where
   inputDomains := Empty.elim
   outputDomain := EncodedDomain.binaryNaturals true
   precondition sizes _ := sizes false < 2 ^ sizes true
@@ -53,7 +53,7 @@ private def sizeReadLayout : Bool ⊕ Bool ≃ Bool ⊕ (Empty ⊕ (Unit ⊕ Uni
     · cases result; rfl
     · cases scratch; rfl
 
-private def sizeReadScratch (_name : Unit) : EncodedDomain Bool := EncodedDomain.binaryNaturals true
+private noncomputable def sizeReadScratch (_name : Unit) : EncodedDomain Bool := EncodedDomain.binaryNaturals true
 
 private theorem sizeReadDomains (name : Bool ⊕ Bool) :
     domains readSize sizeReadScratch (sizeReadLayout name) = StandardSizeRead.domains name := by

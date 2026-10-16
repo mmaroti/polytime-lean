@@ -33,7 +33,7 @@ universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- Encoded domains determine fixed tape widths, including private scratch. -/
-def domainsSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
+noncomputable def domainsSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
     Sum Parameter (Fin 6) → EncodedDomain.{parameterLevel, 0} Parameter
   | .inl parameter => EncodedDomain.unary parameter
@@ -88,12 +88,12 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
   obtain ⟨oldCounter, counterLength, counterEq⟩ := represented.2 (.inr 3) rfl
   obtain ⟨scratch, scratchLength, scratchEq⟩ := represented.2 (.inr 4) rfl
   obtain ⟨flags, flagLength, flagEq⟩ := represented.2 (.inr 5) rfl
-  change flags.length = 1 at flagLength
+  norm_num [domainsSized, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at flagLength
   obtain ⟨flag, rfl⟩ := List.length_eq_one_iff.mp flagLength
   change oldElement.length = element.width assignment at elementLength
-  change oldCounter.length = assignment indexCapacity at counterLength
-  change scratch.length = assignment indexCapacity at scratchLength
-  have indexEq : initial (.inr 0) = buffer (word index) := represented.1 (.inr 0) rfl
+  simp [domainsSized, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at counterLength scratchLength
+  have indexEq : initial (.inr 0) = buffer (word index) :=
+    (represented.1 (.inr 0) rfl).trans (encoded_binaryNaturals_value indexCapacity assignment _)
   have arrayEq : initial (.inr 1) = encoded (element.arrayOfLength length) assignment array := represented.1 (.inr 1) rfl
   obtain ⟨ticks, cost, localTrace⟩ := encoded_runsOfLength element length assignment index within array oldElement oldCounter scratch elementLength (counterLength.trans indexLength.symm)
     (scratchLength.trans indexLength.symm) flag

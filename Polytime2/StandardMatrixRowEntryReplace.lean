@@ -84,7 +84,7 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
         (∀ name, name ∉ Set.range (replaceWiring source) → final name = initial name) ∧
         (∀ name, StandardMatrixReplace.readOnly name = true → final (replaceWiring source name) = initial (replaceWiring source name)) := by
   obtain ⟨bound, execute⟩ := StandardMatrixReplace.Internal.wired_runs scalar.constant (scalar.width Empty.elim)
-    (fun _ => rfl) (replaceWiring source)
+    (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec]) (replaceWiring source)
   refine ⟨bound, ?_⟩
   intro sizes initial row column array replacement within columnsFit rowValid columnValid capacity
     rowEq columnEq arrayEq replacementEq headers regions
@@ -127,7 +127,7 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
             exact arrayEq
           · by_cases isElement : name = 1
             · subst name
-              exact replacementEq
+              exact replacementEq.trans (encoded_constant scalar sizes _).symm
             · have isResult : name = 2 := by omega
               subst name
               contradiction)

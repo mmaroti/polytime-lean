@@ -57,12 +57,14 @@ theorem contract : CallingConvention.Realizes domains readOnly sizeTapes outputT
   obtain ⟨oldResult, resultLength, resultEq⟩ := represented.2 (.inr 7) rfl
   obtain ⟨multiplyFlags, multiplyFlagLength, multiplyFlagEq⟩ := represented.2 (.inr 4) rfl
   obtain ⟨addFlags, addFlagLength, addFlagEq⟩ := represented.2 (.inr 8) rfl
-  change multiplyFlags.length = 1 at multiplyFlagLength
-  change addFlags.length = 1 at addFlagLength
+  norm_num [domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at multiplyFlagLength addFlagLength
   obtain ⟨multiplyFlag, rfl⟩ := List.length_eq_one_iff.mp multiplyFlagLength
   obtain ⟨addFlag, rfl⟩ := List.length_eq_one_iff.mp addFlagLength
-  have rowEq : initial (.inr 1) = buffer (word row) := represented.1 (.inr 1) rfl
-  have columnEq : initial (.inr 6) = buffer (word column) := represented.1 (.inr 6) rfl
+  have rowEq : initial (.inr 1) = buffer (word row) :=
+    (represented.1 (.inr 1) rfl).trans (encoded_binaryNaturals_value 0 sizes _)
+  have columnEq : initial (.inr 6) = buffer (word column) :=
+    (represented.1 (.inr 6) rfl).trans (encoded_binaryNaturals_value 0 sizes _)
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at productLength shiftedLength nextLength columnsLength resultLength
   have addressFit : value row * sizes 2 + value column < 2 ^ sizes 0 := by
     rw [rowValue, columnValue]
     exact valid.2

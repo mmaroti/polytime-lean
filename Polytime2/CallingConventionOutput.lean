@@ -63,7 +63,7 @@ theorem extract_runs (name : TapeName) (domain : EncodedDomain.{parameterLevel, 
       | nil => exact Turing.ListBlank.cons_head_tail (Turing.ListBlank.mk [])
       | cons => rfl
     symm
-    simpa only [encoded, tape, Turing.Tape.mk₁, Turing.Tape.mk₂, Turing.Tape.mk', Turing.ListBlank.head_mk,
+    simpa only [encoded, EncodedDomain.ArrayEncoding.bits, tape, Turing.Tape.mk₁, Turing.Tape.mk₂, Turing.Tape.mk', Turing.ListBlank.head_mk,
       Turing.ListBlank.tail_mk, Turing.ListBlank.cons_mk, reconstruct, List.map_cons, bits] using right
   subst rows
   exact TrackOutput.steps _ _ _ before current after bits unmarked marked payload
@@ -130,11 +130,10 @@ theorem Realizes.tm0_output
       execute assignment input initial validInput represented headers
     exact ⟨ticks, final, cost, trace.steps, input, output, validInput, represented,
       correct, returned, fun name immutable => trace.readOnly_tape name immutable⟩
-  choose widthBound widthBounded using fun name => (domains name).polynomial_width
+  let widthBound := fun name => (domains name).widthPolynomial
   let inputCapacity := ∑ name, widthBound name
   have capacity (assignment : Parameter → ℕ) (name : TapeName) :
       (domains name).width assignment ≤ MvPolynomial.eval assignment inputCapacity := by
-    apply (widthBounded name assignment).trans
     simp only [inputCapacity, map_sum]
     exact Finset.single_le_sum (f := fun name => MvPolynomial.eval assignment (widthBound name))
       (fun _ _ => Nat.zero_le _) (Finset.mem_univ name)

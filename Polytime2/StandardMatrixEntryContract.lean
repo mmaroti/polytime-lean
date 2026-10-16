@@ -112,14 +112,17 @@ theorem Internal.execute (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth 
   obtain ⟨oldResult, resultLength, resultEq⟩ := represented.2 (.inl (.inr 7)) rfl
   obtain ⟨multiplyFlags, multiplyFlagLength, multiplyFlagEq⟩ := represented.2 (.inl (.inr 4)) rfl
   obtain ⟨addFlags, addFlagLength, addFlagEq⟩ := represented.2 (.inl (.inr 8)) rfl
-  change multiplyFlags.length = 1 at multiplyFlagLength
-  change addFlags.length = 1 at addFlagLength
+  norm_num [domains, StandardMatrixAddress.domains, EncodedDomain.booleans,
+    EncodedDomain.fixed, EncodedDomain.ofCodec] at multiplyFlagLength addFlagLength
   obtain ⟨multiplyFlag, rfl⟩ := List.length_eq_one_iff.mp multiplyFlagLength
   obtain ⟨addFlag, rfl⟩ := List.length_eq_one_iff.mp addFlagLength
-  have rowEq : initial (.inl (.inr 1)) = buffer (word row) := represented.1 (.inl (.inr 1)) rfl
-  have columnEq : initial (.inl (.inr 6)) = buffer (word column) := represented.1 (.inl (.inr 6)) rfl
+  have rowEq : initial (.inl (.inr 1)) = buffer (word row) :=
+    (represented.1 (.inl (.inr 1)) rfl).trans (encoded_binaryNaturals_value 0 sizes _)
+  have columnEq : initial (.inl (.inr 6)) = buffer (word column) :=
+    (represented.1 (.inl (.inr 6)) rfl).trans (encoded_binaryNaturals_value 0 sizes _)
   have arrayEq : initial (.inr false) = encoded (element.arrayOfLength length) sizes array :=
     represented.1 (.inr false) rfl
+  simp [domains, StandardMatrixAddress.domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at productLength shiftedLength nextLength columnsLength resultLength
   obtain ⟨ticks, addressBits, addressBitsLength, addressValue, cost, trace⟩ :=
     runs element sizes row column rowLength columnLength array oldElement oldProduct oldShifted oldNext
       oldColumns oldResult elementLength productLength shiftedLength nextLength columnsLength resultLength

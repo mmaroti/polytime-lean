@@ -73,7 +73,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
           final name = encoded (domains scalar name) sizes value) := by
   obtain ⟨readBound, executeRead⟩ := readLimit_runs scalar
   obtain ⟨loopBound, executeLoop⟩ := loop_runs writeSource scalar operation
-  obtain ⟨matrixBound, matrixWidthBound⟩ := (scalar.constant.arrayOfLength StandardMatrixEntry.length).polynomial_width
+  let matrixBound := (scalar.constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
   refine ⟨19 * (2 * matrixBound + MvPolynomial.C (2 * scalar.width Empty.elim) + 2 * MvPolynomial.X 0 + 3) +
     readBound + loopBound + 2, ?_⟩
   intro sizes initial sourceRow targetRow sourceValid targetValid coefficient array fits capacity
@@ -85,7 +85,9 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   obtain ⟨readTicks, prepared, readCost, readTrace, limitEq, scratchEq, readOutside⟩ :=
     executeRead sizes initialized fits
       (fun parameter => (initTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter))
-      (initializedRegions limitTape) (initializedRegions (dataTape 12))
+      (by simpa [domains, limitTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using initializedRegions limitTape)
+      (by simpa [domains, dataTape, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
+        EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using initializedRegions (dataTape 12))
   have preparedCanonical : ∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
       prepared name = encoded (domains scalar name) sizes value := by
     intro name writable
@@ -112,8 +114,8 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     readLimit_halt loopTrace
   have complete := initTrace.sequence _ (Sum.inl StandardSizeRead.entry) (by intro symbols; rfl) tail
   refine ⟨initTicks + (readTicks + loopTicks + 1) + 1, final, ?_, ?_, finalMatrix, finalCanonical⟩
-  · have widthBound := matrixWidthBound sizes
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_C, MvPolynomial.eval_X]
+  · simp only [EncodedDomain.width] at initCost
+    simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_C, MvPolynomial.eval_X]
     omega
   · simpa only [machine, entry, exit] using complete
 
@@ -146,7 +148,7 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     execute sizes initial (input ⟨dataTape 0, rfl⟩) (input ⟨dataTape 1, rfl⟩) valid.1 valid.2.1
       (input ⟨dataTape 3, rfl⟩) (input ⟨inputTape, rfl⟩) valid.2.2.1 valid.2.2.2
       (represented.1 (dataTape 0) rfl) (represented.1 (dataTape 1) rfl)
-      (represented.1 (dataTape 3) rfl) (represented.1 inputTape rfl) headers represented.region
+      ((represented.1 (dataTape 3) rfl).trans (encoded_constant scalar sizes _)) (represented.1 inputTape rfl) headers represented.region
   let output : Outputs (domains scalar) outputTapes sizes := fun _ => resultArray
   refine ⟨ticks, output, final, cost, trace, ⟨valid.1, valid.2.1, rfl⟩, ?_⟩
   intro name

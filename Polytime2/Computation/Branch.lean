@@ -27,7 +27,7 @@ variable {Parameter InputName : Type} [Fintype Parameter] [Fintype InputName]
 
 /-- The final argument is a Boolean guard. Only the selected branch's
 precondition is required. Both branches return the same encoded domain. -/
-def choose (first second : Computation.{0} Parameter InputName)
+noncomputable def choose (first second : Computation.{0} Parameter InputName)
     (inputEqual : ∀ name, first.inputDomains name = second.inputDomains name)
     (outputEqual : second.outputDomain = first.outputDomain) :
     Computation Parameter (InputName ⊕ Unit) where

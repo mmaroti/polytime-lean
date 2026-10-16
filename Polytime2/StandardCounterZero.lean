@@ -32,7 +32,7 @@ open Binary (Symbol word)
 universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter] [DecidableEq Parameter]
 
-def domains (capacity : Parameter) : Sum Parameter Unit → EncodedDomain Parameter
+noncomputable def domains (capacity : Parameter) : Sum Parameter Unit → EncodedDomain Parameter
   | .inl parameter => EncodedDomain.unary parameter
   | .inr _ => EncodedDomain.binaryNaturals capacity
 
@@ -60,7 +60,7 @@ theorem contract (capacity : Parameter) :
     2 * MvPolynomial.X capacity + 2, ?_⟩
   intro assignment input initial valid represented sizes
   obtain ⟨old, oldLength, oldEq⟩ := represented.2 (.inr ()) rfl
-  change old.length = assignment capacity at oldLength
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at oldLength
   have sourceEq : initial (.inl capacity) =
       buffer (word (List.replicate (assignment capacity) true)) := sizes capacity
   have trace := StandardTapeCommands.clear_runs (.inl capacity) (.inr ()) (by simp)

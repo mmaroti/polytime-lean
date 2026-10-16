@@ -39,7 +39,7 @@ private def predecessor (sizes : Unit → ℕ)
   ⟨value.val.val - 1, lt_of_le_of_lt (Nat.sub_le _ _) value.val.isLt⟩
 
 /-- The answer is zero; the implementation reaches it by a genuine while loop. -/
-def countdown : Polytime2.Computation Unit Unit := unaryMap
+noncomputable def countdown : Polytime2.Computation Unit Unit := unaryMap
   (EncodedDomain.binaryNaturals ()) (EncodedDomain.binaryNaturals ()) admissible
   (fun sizes _ => (0 : Fin (2 ^ sizes ())))
 

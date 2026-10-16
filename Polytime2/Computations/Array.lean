@@ -29,7 +29,7 @@ open MultiTape CallingConvention Realizable
 variable {Parameter : Type} [Fintype Parameter]
 
 /-- False names the binary index and true the immutable mathematical array. -/
-def arrayLookup (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+noncomputable def arrayLookup (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ) : Computation Parameter Bool where
   inputDomains | false => EncodedDomain.binaryNaturals indexCapacity
                | true => element.arrayOfLength length
@@ -39,7 +39,7 @@ def arrayLookup (element : EncodedDomain Parameter) (indexCapacity : Parameter)
 
 /-- Arguments are the index, immutable array, and replacement. The result is a
 separate array; the original remains available to subsequent computations. -/
-def arrayUpdate (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+noncomputable def arrayUpdate (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) where
   inputDomains | 0 => EncodedDomain.binaryNaturals indexCapacity
                | 1 => element.arrayOfLength length
@@ -50,7 +50,7 @@ def arrayUpdate (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     ⟨(arguments.val 0).val, arguments.property⟩ (arguments.val 2)
 
 /-- A fixed finite binary operation maps an array using one runtime coefficient. -/
-def arrayMap (parameterDomain elementDomain : EncodedDomain Empty)
+noncomputable def arrayMap (parameterDomain elementDomain : EncodedDomain Empty)
     (length : MvPolynomial Parameter ℕ)
     (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
     Computation Parameter Bool where
@@ -68,7 +68,7 @@ private def arrayLayout {InputName : Type} (arity : ℕ) (enumeration : Fin arit
     (finSumFinEquiv.symm.trans (Equiv.sumCongr enumeration
       (finSumFinEquiv.symm.trans (Equiv.sumCongr (Equiv.ofUnique (Fin 1) Unit) (Equiv.refl (Fin 3))))))
 
-private def arrayScratch (capacity : Parameter) (name : Fin 3) : EncodedDomain Parameter :=
+private noncomputable def arrayScratch (capacity : Parameter) (name : Fin 3) : EncodedDomain Parameter :=
   if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals capacity
 
 private theorem lookupDomains (element : EncodedDomain Parameter) (capacity : Parameter)

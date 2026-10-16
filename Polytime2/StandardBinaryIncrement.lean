@@ -49,6 +49,10 @@ theorem contract (capacity : Parameter) :
     (by intro assignment; rfl) (fun _ _ => True) (next capacity)
   intro assignment value valid
   let bits := List.ofFn (fun index : Fin (assignment capacity) => (BitVec.ofFin value).getLsbD index.val)
+  simp only [EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+  change (BinaryScan.run _ _ (EncodedDomain.ArrayEncoding.bits _)).2 =
+    EncodedDomain.ArrayEncoding.bits _
+  rw [EncodedDomain.ArrayEncoding.bits_cast, EncodedDomain.ArrayEncoding.bits_cast]
   change (BinaryScan.run BinaryScan.increment true bits).2 =
     List.ofFn (fun index : Fin (assignment capacity) =>
       (BitVec.ofFin (next capacity assignment value)).getLsbD index.val)

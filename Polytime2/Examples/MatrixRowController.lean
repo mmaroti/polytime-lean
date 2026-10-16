@@ -96,7 +96,7 @@ theorem coincident_rows (scalar : EncodedDomain.{0, 0} Empty) (value : scalar.Ca
 example : ∃ ticks final,
     Runs (fun name => (domains (EncodedDomain.booleans (Parameter := Empty)) name).width ![1, 1, 1]) readOnly
       (machine true EncodedDomain.booleans (fun _ _ (source target : Bool) => (!source, target))) ticks
-      (entry 1) (fun _ => 0) (initial EncodedDomain.booleans true) (exit 1) (fun _ => 0) final ∧
+      (entry ((EncodedDomain.booleans (Parameter := Empty)).width Empty.elim)) (fun _ => 0) (initial EncodedDomain.booleans true) (exit ((EncodedDomain.booleans (Parameter := Empty)).width Empty.elim)) (fun _ => 0) final ∧
     final (.inr 5) = encoded (EncodedDomain.booleans.constant.arrayOfLength StandardMatrixEntry.length)
       ![1, 1, 1] (fun _ => true) := coincident_rows EncodedDomain.booleans true (fun _ (value : Bool) => !value)
 
@@ -105,8 +105,8 @@ example : ∃ ticks final,
 example : ∃ ticks final,
     Runs (fun name => (domains (EncodedDomain.fixed (Equiv.refl (Fin 1))) name).width ![1, 1, 1]) readOnly
       (machine true (EncodedDomain.fixed (Equiv.refl (Fin 1))) (fun _ _ (source target : Fin 1) => (source, target))) ticks
-      (entry 0) (fun _ => 0) (initial (EncodedDomain.fixed (Equiv.refl (Fin 1))) (0 : Fin 1))
-      (exit 0) (fun _ => 0) final ∧
+      (entry ((EncodedDomain.fixed (Equiv.refl (Fin 1)) (Parameter := Empty)).width Empty.elim)) (fun _ => 0) (initial (EncodedDomain.fixed (Equiv.refl (Fin 1))) (0 : Fin 1))
+      (exit ((EncodedDomain.fixed (Equiv.refl (Fin 1)) (Parameter := Empty)).width Empty.elim)) (fun _ => 0) final ∧
     final (.inr 5) = encoded ((EncodedDomain.fixed (Equiv.refl (Fin 1))).constant.arrayOfLength StandardMatrixEntry.length)
       ![1, 1, 1] (fun _ => (0 : Fin 1)) :=
   coincident_rows (EncodedDomain.fixed (Equiv.refl (Fin 1))) (0 : Fin 1) (fun _ (value : Fin 1) => value)

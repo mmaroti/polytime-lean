@@ -190,7 +190,7 @@ theorem runs (left right multiplier : List Bool) (sameLength : right.length = le
 
 
 /-- Two sizes specify word capacity and the independent multiplier width. -/
-def domains : Sum Bool (Fin 9) → EncodedDomain Bool
+noncomputable def domains : Sum Bool (Fin 9) → EncodedDomain Bool
   | .inl parameter => EncodedDomain.unary parameter
   | .inr name => if name = 4 ∨ name = 8 then EncodedDomain.booleans
       else EncodedDomain.binaryNaturals (decide (name = 5))
@@ -252,13 +252,16 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   obtain ⟨oldNext, nextLength, nextEq⟩ := represented.2 (.inr 3) rfl
   obtain ⟨multiplyFlags, multiplyFlagLength, multiplyFlagEq⟩ := represented.2 (.inr 4) rfl
   obtain ⟨addFlags, addFlagLength, addFlagEq⟩ := represented.2 (.inr 8) rfl
-  change multiplyFlags.length = 1 at multiplyFlagLength
-  change addFlags.length = 1 at addFlagLength
+  norm_num [domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at multiplyFlagLength addFlagLength
   obtain ⟨multiplyFlag, rfl⟩ := List.length_eq_one_iff.mp multiplyFlagLength
   obtain ⟨addFlag, rfl⟩ := List.length_eq_one_iff.mp addFlagLength
-  have leftEq : initial (.inr 6) = buffer (word left) := represented.1 (.inr 6) rfl
-  have rightEq : initial (.inr 7) = buffer (word right) := represented.1 (.inr 7) rfl
-  have multiplierEq : initial (.inr 5) = buffer (word multiplier) := represented.1 (.inr 5) rfl
+  have leftEq : initial (.inr 6) = buffer (word left) :=
+    (represented.1 (.inr 6) rfl).trans (encoded_binaryNaturals_value false assignment _)
+  have rightEq : initial (.inr 7) = buffer (word right) :=
+    (represented.1 (.inr 7) rfl).trans (encoded_binaryNaturals_value false assignment _)
+  have multiplierEq : initial (.inr 5) = buffer (word multiplier) :=
+    (represented.1 (.inr 5) rfl).trans (encoded_binaryNaturals_value true assignment _)
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at productLength oldSumLength shiftedLength nextLength
   have sameLength : right.length = left.length := rightLength.trans leftLength.symm
   have productFits : oldProduct.length = left.length := productLength.trans leftLength.symm
   have sumFits : oldSum.length = left.length := oldSumLength.trans leftLength.symm

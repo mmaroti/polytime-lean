@@ -28,7 +28,7 @@ open Polytime2.Computation
 example : gcd.Realizable := gcd_realizable
 
 /-- A client may copy the gcd without knowing any private tape or controller. -/
-def copiedGcd : Polytime2.Computation Unit Bool :=
+noncomputable def copiedGcd : Polytime2.Computation Unit Bool :=
   gcd.followedBy (copy (EncodedDomain.binaryNaturals ())) rfl
     (by intro sizes arguments valid; trivial)
 

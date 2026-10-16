@@ -33,23 +33,43 @@ variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- The polynomial bounds digit capacity rather than numeric magnitude.
 Even zero digits encode exactly one natural number. -/
-abbrev binaryNaturals : EncodedDomain Unit := EncodedDomain.binaryNaturals ()
+noncomputable abbrev binaryNaturals : EncodedDomain Unit := EncodedDomain.binaryNaturals ()
 
-#guard binaryNaturals.width (fun _ => 7) = 7
-example : binaryNaturals.decode (fun _ => 0) 0#0 = some (0 : Fin 1) := rfl
-example : binaryNaturals.encode (fun _ => 3) (5 : Fin 8) = 5#3 := rfl
+example : binaryNaturals.width (fun _ => 7) = 7 := by
+  simp [binaryNaturals, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+
+example : binaryNaturals.decode (fun _ => 0) 0 = some (0 : Fin 1) := by
+  simp [binaryNaturals, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec, BitVec.cast]
+
+example : EncodedDomain.ArrayEncoding.bits (binaryNaturals.encode (fun _ => 3) (5 : Fin 8)) =
+    EncodedDomain.ArrayEncoding.bits (5#3) := by
+  simp only [binaryNaturals, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+    EncodedDomain.ArrayEncoding.bits_cast]
+  rfl
 
 -- Empty and singleton carriers share zero-bit width but have different decoders.
-#guard (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 0))).decode
-  (fun _ => 0) 0#0 = none
+example : (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 0))).decode
+    (fun _ => 0) 0 = none := by
+  simp [EncodedDomain.fixed, EncodedDomain.ofCodec, BitVec.cast]
+
 example : (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 1))).decode
-    (fun _ => 0) 0#0 = some (0 : Fin 1) := rfl
+    (fun _ => 0) 0 =
+      some (0 : Fin 1) := by
+  simp [EncodedDomain.fixed, EncodedDomain.ofCodec, BitVec.cast]
 
 -- Unused binary labels are rejected rather than assigned an arbitrary element.
-#guard (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 3))).decode
-  (fun _ => 0) 3#2 = none
 example : (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 3))).decode
-    (fun _ => 0) 2#2 = some (2 : Fin 3) := rfl
+    (fun _ => 0) ((3#2).cast (by
+      simp only [EncodedDomain.fixed, EncodedDomain.ofCodec, MvPolynomial.eval_C]
+      decide)) = none := by
+  simp [EncodedDomain.fixed, EncodedDomain.ofCodec, BitVec.cast]
+
+example : (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 3))).decode
+    (fun _ => 0) ((2#2).cast (by
+      simp only [EncodedDomain.fixed, EncodedDomain.ofCodec, MvPolynomial.eval_C]
+      decide)) =
+      some (2 : Fin 3) := by
+  simp [EncodedDomain.fixed, EncodedDomain.ofCodec, BitVec.cast]
 
 /-- A family of finite carriers is specialization data. The tagged union's
 chosen enumeration is fixed independently of the number of coordinates. -/

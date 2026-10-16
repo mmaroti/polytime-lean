@@ -58,7 +58,11 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
   obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
     StandardSizeRead.Internal.runs_wired limitWiring localSizes
       (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
+          StandardSizeRead.domains,
+          EncodedDomain.unary, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+          sizeTape, dataTape, limitTape, localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
   let resultBits := StandardSizeRead.advanceBits (sizes 2) (List.replicate (sizes 0) false)

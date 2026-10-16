@@ -81,7 +81,7 @@ theorem encode_decode (elementEncode : Carrier → BitVec width)
     simp [BitVec.extractLsb'_append_extractLsb', BitVec.cast_cast]
 
 /-- The bit order used by the tape controllers. -/
-def bits {width : ℕ} (value : BitVec width) : List Bool :=
+abbrev bits {width : ℕ} (value : BitVec width) : List Bool :=
   List.ofFn (fun index : Fin width => value.getLsbD index.val)
 
 /-- Reindexing an array by an equality of lengths does not change its bit
@@ -239,38 +239,44 @@ noncomputable def flattenPolynomial (rows columns : MvPolynomial Parameter ℕ)
 end MatrixEncoding
 
 /-- Arrays whose length is any polynomial expression in the size parameters. -/
-def arrayOfLength (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter where
-  Carrier assignment := Fin (MvPolynomial.eval assignment length) → element.Carrier assignment
-  width assignment := MvPolynomial.eval assignment length * element.width assignment
-  encode assignment := ArrayEncoding.encode (element.encode assignment) _
-  decode assignment := ArrayEncoding.decode (element.decode assignment) _
-  decode_encode assignment := ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _
-  encode_decode assignment := ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _
-  polynomial_width := by
-    obtain ⟨bound, bounded⟩ := element.polynomial_width
-    refine ⟨length * bound, ?_⟩
-    intro assignment
-    calc
-      MvPolynomial.eval assignment length * element.width assignment ≤
-          MvPolynomial.eval assignment length * MvPolynomial.eval assignment bound :=
-        Nat.mul_le_mul_left _ (bounded assignment)
-      _ = MvPolynomial.eval assignment (length * bound) := by simp [MvPolynomial.eval_mul]
+noncomputable def arrayOfLength (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  ofCodec (fun assignment => Fin (MvPolynomial.eval assignment length) → element.Carrier assignment)
+    (length * element.widthPolynomial)
+    (fun assignment => MvPolynomial.eval assignment length * element.width assignment)
+    (by intro assignment; simp)
+    (fun assignment => ArrayEncoding.encode (element.encode assignment) _)
+    (fun assignment => ArrayEncoding.decode (element.decode assignment) _)
+    (fun assignment => ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _)
+    (fun assignment => ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _)
 
 /-- Arrays of a named assigned length are the common coordinate-indexed case. -/
-def array (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (lengthParameter : Parameter) : EncodedDomain Parameter where
-  Carrier assignment := Fin (assignment lengthParameter) → element.Carrier assignment
-  width assignment := assignment lengthParameter * element.width assignment
-  encode assignment := ArrayEncoding.encode (element.encode assignment) _
-  decode assignment := ArrayEncoding.decode (element.decode assignment) _
-  decode_encode assignment := ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _
-  encode_decode assignment := ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _
-  polynomial_width := by
-    obtain ⟨bound, bounded⟩ := element.polynomial_width
-    refine ⟨MvPolynomial.X lengthParameter * bound, ?_⟩
-    intro assignment
-    simpa using Nat.mul_le_mul_left (assignment lengthParameter) (bounded assignment)
+noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (lengthParameter : Parameter) : EncodedDomain Parameter :=
+  ofCodec (fun assignment => Fin (assignment lengthParameter) → element.Carrier assignment)
+    (MvPolynomial.X lengthParameter * element.widthPolynomial)
+    (fun assignment => assignment lengthParameter * element.width assignment)
+    (by intro assignment; simp)
+    (fun assignment => ArrayEncoding.encode (element.encode assignment) _)
+    (fun assignment => ArrayEncoding.decode (element.decode assignment) _)
+    (fun assignment => ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _)
+    (fun assignment => ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _)
+
+/-- Polynomial evaluation casts leave the concatenated array bits unchanged. -/
+@[simp] theorem arrayOfLength_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (length : MvPolynomial Parameter ℕ) (assignment : Parameter → ℕ)
+    (values : (element.arrayOfLength length).Carrier assignment) :
+    ArrayEncoding.bits ((element.arrayOfLength length).encode assignment values) =
+      ArrayEncoding.bits (ArrayEncoding.encode (element.encode assignment) _ values) := by
+  simp only [arrayOfLength, ofCodec, ArrayEncoding.bits_cast]
+
+/-- Named-length arrays have the same consecutive element blocks. -/
+@[simp] theorem array_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (parameter : Parameter) (assignment : Parameter → ℕ)
+    (values : (element.array parameter).Carrier assignment) :
+    ArrayEncoding.bits ((element.array parameter).encode assignment values) =
+      ArrayEncoding.bits (ArrayEncoding.encode (element.encode assignment) _ values) := by
+  simp only [array, ofCodec, ArrayEncoding.bits_cast]
 
 /-- Rectangular matrices use their mathematical row and column indices while
 retaining a flat row-major array encoding. -/

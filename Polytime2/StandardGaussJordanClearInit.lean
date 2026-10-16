@@ -69,8 +69,8 @@ theorem seedZero_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3 
       (Function.update initial (dataTape 3)
         (encoded (FieldRow.scalarDomain enumeration) Empty.elim (0 : Scalar))) := by
   have targetWidth : (domains enumeration (dataTape 3)).width sizes = (zeroBits enumeration).length := by
-    simp only [zeroBits, List.length_ofFn]
-    rfl
+    change (FieldRow.scalarDomain enumeration).constant.width sizes = (zeroBits enumeration).length
+    simp [zeroBits, EncodedDomain.constant, EncodedDomain.ofCodec]
   obtain ⟨old, oldLength, oldEq⟩ := region.exists_buffer
   have trace := StandardTapeCommands.setConstant_runs (dataTape 3) (zeroBits enumeration)
     (fun name => (domains enumeration name).width sizes) readOnly rfl targetWidth initial old
@@ -93,8 +93,7 @@ theorem seed_runs (enumeration : Scalar ≃ Fin cardinality) :
         final workingTape = encoded (domains enumeration workingTape) sizes matrix ∧
         final (dataTape 3) = encoded (FieldRow.scalarDomain enumeration) Empty.elim (0 : Scalar) ∧
         (∀ name, name ≠ workingTape → name ≠ dataTape 3 → final name = initial name) := by
-  obtain ⟨matrixBound, matrixWidthBound⟩ :=
-    ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).polynomial_width
+  let matrixBound := ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
   refine ⟨2 * matrixBound + MvPolynomial.C
     (2 * (FieldRow.scalarDomain enumeration).width Empty.elim + 4), ?_⟩
   intro sizes initial matrix matrixEq regions
@@ -115,9 +114,9 @@ theorem seed_runs (enumeration : Scalar ≃ Fin cardinality) :
   refine ⟨(2 * (zeroBits enumeration).length + 1) +
     (2 * (domains enumeration originalTape).width sizes + 2) + 1, final, ?_, ?_,
     Function.update_self _ _ _, ?_, ?_⟩
-  · have widthBound := matrixWidthBound sizes
-    change (domains enumeration originalTape).width sizes ≤ MvPolynomial.eval sizes matrixBound at widthBound
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_C, zeroBits, List.length_ofFn]
+  · have matrixWidth : (domains enumeration originalTape).width sizes = MvPolynomial.eval sizes matrixBound := rfl
+    rw [matrixWidth]
+    simp only [matrixBound, map_add, map_mul, map_ofNat, MvPolynomial.eval_C, zeroBits, List.length_ofFn]
     omega
   · simpa only [seed, seedEntry, seedExit, seedMatrix, final, sameEncoding, sameDomain] using complete
   · exact (Function.update_of_ne (by decide) _ _).trans (Function.update_self _ _ _)
@@ -238,7 +237,7 @@ theorem finishStage_halt (stage : Fin 5) (symbols : Symbols Alphabet) :
     finishStage stage (finishExit stage) symbols = none := by
   fin_cases stage <;> rfl
 
-def finishDefault (sizes : Fin 3 → ℕ) (pivot : Fin (2 ^ sizes 0)) (stage : Fin 5) :
+noncomputable def finishDefault (sizes : Fin 3 → ℕ) (pivot : Fin (2 ^ sizes 0)) (stage : Fin 5) :
     Turing.Tape Binary.Symbol :=
   if stage.val < 3 then encoded (EncodedDomain.binaryNaturals 0) sizes
     (⟨0, by positivity⟩ : Fin (2 ^ sizes 0))
@@ -262,7 +261,7 @@ theorem finishStage_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin
   have writable : finishReadOnly (finishTarget stage) = false := by fin_cases stage <;> decide
   by_cases counterStage : stage.val < 3
   · have targetWidth : width (finishTarget stage) = sizes 0 := by
-      fin_cases stage <;> first | rfl | norm_num at counterStage
+      fin_cases stage <;> solve | norm_num at counterStage | exact EncodedDomain.binaryNaturals_width 0 sizes
     obtain ⟨old, oldLength, oldEq⟩ := (regions (finishTarget stage)).exists_buffer
     have trace := StandardTapeCommands.clear_runs (sizeTape 0) (finishTarget stage)
       (by fin_cases stage <;> decide) width finishReadOnly writable
@@ -287,10 +286,13 @@ theorem finishStage_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin
   · by_cases booleanStage : stage = 3
     · subst stage
       obtain ⟨old, oldLength, oldEq⟩ := (regions guardTape).exists_buffer
-      change old.length = 1 at oldLength
+      change old.length = (EncodedDomain.booleans (Parameter := Fin 3)).width sizes at oldLength
+      norm_num [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at oldLength
       obtain ⟨oldBit, rfl⟩ := List.length_eq_one_iff.mp oldLength
       have trace := StandardTapeCommands.setBoolean_runs guardTape false width finishReadOnly
-        (by decide) rfl initial oldBit oldEq
+        (by decide) (by
+          change (EncodedDomain.booleans (Parameter := Fin 3)).width sizes = 1
+          norm_num [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec]) initial oldBit oldEq
       refine ⟨1, by omega, ?_⟩
       change Runs width finishReadOnly (StandardTapeCommands.setBoolean guardTape false)
         1 false (fun _ => 0) initial true (fun _ => 0)
@@ -303,6 +305,7 @@ theorem finishStage_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin
       have trace := StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0)
         sizes pivot (dataTape 0) limitTape (by decide) width finishReadOnly (by decide)
         rfl rfl initial pivotEq (regions limitTape)
+      simp only [EncodedDomain.binaryNaturals_width] at trace
       exact ⟨2 * sizes 0 + 2, le_refl _, trace⟩
 
 omit [Field Scalar] in

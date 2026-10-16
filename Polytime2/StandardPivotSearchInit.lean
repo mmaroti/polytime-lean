@@ -54,7 +54,7 @@ theorem initCapacity_distinct (stage : Fin 15) : sizeTape 0 ≠ initTarget stage
   fin_cases stage <;> simp [initTarget, sizeTape, counterTape, elementTape, rowLimitTape,
     differenceTape, nextTape, foundTape, continueTape, unitTape]
 
-def defaultBits (scalar : EncodedDomain.{0, 0} Empty) (defaultValue : scalar.Carrier Empty.elim) : List Bool :=
+noncomputable def defaultBits (scalar : EncodedDomain.{0, 0} Empty) (defaultValue : scalar.Carrier Empty.elim) : List Bool :=
   List.ofFn (fun index : Fin (scalar.width Empty.elim) => (scalar.encode Empty.elim defaultValue).getLsbD index.val)
 
 def InitStageState (width : ℕ) (stage : Fin 15) : Type :=
@@ -131,7 +131,8 @@ theorem initStage_runs (scalar : EncodedDomain.{0, 0} Empty) (sizes : Fin 3 → 
   by_cases isDefault : stage = 0
   · subst stage
     obtain ⟨old, length, oldEq⟩ := (regions elementTape).exists_buffer
-    change old.length = scalar.width Empty.elim at length
+    simp [domains, elementTape, StandardMatrixEntry.domains, EncodedDomain.constant,
+      EncodedDomain.ofCodec] at length
     have trace := StandardTapeCommands.setConstant_runs elementTape (defaultBits scalar defaultValue) width readOnly rfl
       (by simp [width, domains, elementTape, StandardMatrixEntry.domains, EncodedDomain.constant, defaultBits])
       initial old (by simpa only [defaultBits, List.length_ofFn] using length) oldEq
@@ -142,16 +143,32 @@ theorem initStage_runs (scalar : EncodedDomain.{0, 0} Empty) (sizes : Fin 3 → 
     · subst stage
       have trace := StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0) sizes start
         startTape (counterTape 1) (by decide) width readOnly rfl rfl rfl initial startEq (regions _)
-      exact ⟨2 * sizes 0 + 2, by omega, trace⟩
+      refine ⟨2 * sizes 0 + 2, by omega, ?_⟩
+      have exactWidth : (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = sizes 0 := by
+        simp [EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+      rw [exactWidth] at trace
+      exact trace
     · by_cases isUnit : stage = 14
       · subst stage
         obtain ⟨old, length, oldEq⟩ := (regions unitTape).exists_buffer
-        change old.length = 0 at length
-        have trace := StandardTapeCommands.setConstant_runs unitTape [] width readOnly rfl rfl initial old length oldEq
-        exact ⟨1, by omega, trace⟩
+        norm_num [domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
+          EncodedDomain.fixed, EncodedDomain.ofCodec] at length
+        have trace := StandardTapeCommands.setConstant_runs unitTape [] width readOnly rfl (by norm_num [width, domains, unitTape,
+          StandardFinitePredicate.unitDomain, EncodedDomain.constant, EncodedDomain.fixed,
+          EncodedDomain.ofCodec]) initial old (by simp [length]) oldEq
+        refine ⟨1, by omega, ?_⟩
+        have unitEncoding : encoded StandardFinitePredicate.unitDomain Empty.elim (0 : Fin 1) = buffer [] := by
+          simp [StandardFinitePredicate.unitDomain, encoded, EncodedDomain.fixed, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits, tape, buffer, Binary.word]
+        change Runs width readOnly _ _ _ _ _ _ _
+          (Function.update initial unitTape (encoded StandardFinitePredicate.unitDomain Empty.elim (0 : Fin 1)))
+        rw [unitEncoding]
+        exact trace
       · by_cases counterStage : stage.val < 10
         · have targetWidth : width (initTarget stage) = sizes 0 := by
-            fin_cases stage <;> solve | rfl | norm_num at isDefault | norm_num at isCopy | norm_num at isUnit | norm_num at counterStage
+            fin_cases stage <;> solve | simp [width, initTarget, domains, counterTape, rowLimitTape, nextTape, differenceTape,
+                StandardMatrixEntry.domains, StandardMatrixAddress.domains, EncodedDomain.binaryNaturals,
+                EncodedDomain.ofCodec] | norm_num at isDefault | norm_num at isCopy | norm_num at isUnit | norm_num at counterStage
           obtain ⟨old, length, oldEq⟩ := (regions (initTarget stage)).exists_buffer
           have trace := StandardTapeCommands.clear_runs (sizeTape 0) (initTarget stage) (initCapacity_distinct stage)
             width readOnly (initTarget_writable stage) (List.replicate (sizes 0) true) old
@@ -163,7 +180,9 @@ theorem initStage_runs (scalar : EncodedDomain.{0, 0} Empty) (sizes : Fin 3 → 
           refine ⟨2 * sizes 0 + 2, by omega, ?_⟩
           fin_cases stage <;> solve | exact trace | norm_num at isDefault | norm_num at isCopy | norm_num at isUnit | norm_num at counterStage
         · have targetWidth : width (initTarget stage) = 1 := by
-            fin_cases stage <;> solve | rfl | norm_num at counterStage | norm_num at isUnit
+            fin_cases stage <;> solve | norm_num [width, initTarget, domains, counterTape, foundTape, continueTape,
+                StandardMatrixEntry.domains, StandardMatrixAddress.domains, EncodedDomain.booleans,
+                EncodedDomain.fixed, EncodedDomain.ofCodec] | norm_num at counterStage | norm_num at isUnit
           obtain ⟨old, length, oldEq⟩ := (regions (initTarget stage)).exists_buffer
           change old.length = width (initTarget stage) at length
           rw [targetWidth] at length
@@ -181,7 +200,9 @@ private theorem initDefault_valid (scalar : EncodedDomain.{0, 0} Empty) (sizes :
     ∃ value : (domains scalar (initTarget stage)).Carrier sizes,
       initDefault scalar sizes defaultValue start stage = encoded (domains scalar (initTarget stage)) sizes value := by
   fin_cases stage <;> first
-    | exact ⟨defaultValue, rfl⟩ | exact ⟨start, rfl⟩ | exact ⟨(0 : Fin 1), rfl⟩
+    | exact ⟨defaultValue, (encoded_constant scalar sizes _).symm⟩
+    | exact ⟨start, rfl⟩
+    | exact ⟨(0 : Fin 1), (encoded_constant StandardFinitePredicate.unitDomain sizes _).symm⟩
     | exact ⟨(⟨0, by positivity⟩ : Fin (2 ^ sizes 0)), rfl⟩ | exact ⟨false, rfl⟩
 
 /-- All private words are valid before the first guard, including when there

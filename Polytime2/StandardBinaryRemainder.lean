@@ -380,7 +380,7 @@ theorem result_value (input divisor : List Bool) (shifted difference result : Li
 
 /-- The dividend and divisor are separate inputs, with unary digit capacity.
 All five writable tapes have bounded mathematical domains, including scratch. -/
-def domains : Sum Unit (Fin 7) → EncodedDomain Unit
+noncomputable def domains : Sum Unit (Fin 7) → EncodedDomain Unit
   | .inl parameter => EncodedDomain.unary parameter
   | .inr name => if name = 4 then EncodedDomain.booleans else EncodedDomain.binaryNaturals ()
 
@@ -428,12 +428,16 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   obtain ⟨oldDifference, differenceLength, differenceEq⟩ := represented.2 (.inr 3) rfl
   obtain ⟨oldResult, resultLength, resultEq⟩ := represented.2 (.inr 5) rfl
   obtain ⟨flags, flagLength, flagEq⟩ := represented.2 (.inr 4) rfl
-  change flags.length = 1 at flagLength
+  norm_num [domains, StandardBinaryScan.domains, EncodedDomain.booleans,
+    EncodedDomain.fixed, EncodedDomain.ofCodec] at flagLength
   obtain ⟨oldFlag, rfl⟩ := List.length_eq_one_iff.mp flagLength
-  have sourceEq : initial (.inr 6) = buffer (word dividend) := represented.1 (.inr 6) rfl
-  have divisorEq : initial (.inr 1) = buffer (word divisor) := represented.1 (.inr 1) rfl
+  have sourceEq : initial (.inr 6) = buffer (word dividend) :=
+    (represented.1 (.inr 6) rfl).trans (encoded_binaryNaturals_value () assignment _)
+  have divisorEq : initial (.inr 1) = buffer (word divisor) :=
+    (represented.1 (.inr 1) rfl).trans (encoded_binaryNaturals_value () assignment _)
   let work : Workspace :=
     (List.replicate divisor.length false, oldShifted, oldDifference, oldResult, oldFlag)
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at oldLength shiftedLength differenceLength resultLength
   have oldFits : old.length = divisor.length := oldLength.trans divisorLength.symm
   have shiftedFits : oldShifted.length = divisor.length := shiftedLength.trans divisorLength.symm
   have differenceFits : oldDifference.length = divisor.length := differenceLength.trans divisorLength.symm

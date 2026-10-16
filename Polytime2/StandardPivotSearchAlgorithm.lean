@@ -28,7 +28,7 @@ abbrev AlgorithmState (initWidth loopWidth : ℕ) :=
   Sum (Pipeline.State (InitStageState initWidth))
     (Sum StandardSizeRead.State (LoopState loopWidth))
 
-instance algorithmStateFinite (initWidth loopWidth : ℕ) :
+noncomputable instance algorithmStateFinite (initWidth loopWidth : ℕ) :
     Fintype (AlgorithmState initWidth loopWidth) := by
   letI : Fintype (Pipeline.State (InitStageState initWidth)) := inferInstance
   letI : Fintype (LoopState loopWidth) := by
@@ -116,7 +116,9 @@ theorem runs (scalar : EncodedDomain.{0, 0} Empty)
     executeRead sizes initialized rowFits
       (fun parameter => (initTrace.readOnly_tape (sizeTape parameter) rfl).trans
         (headers parameter))
-      (initializedRegions rowLimitTape) (initializedRegions (counterTape 2))
+      (by simpa [domains, rowLimitTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using initializedRegions rowLimitTape)
+      (by simpa [domains, counterTape, StandardMatrixEntry.domains, StandardMatrixAddress.domains,
+        EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using initializedRegions (counterTape 2))
   have preparedRegions : ∀ name, Region ((domains scalar name).width sizes) 0
       (prepared name) := fun name => readTrace.region name (initializedRegions name)
   have preparedCanonical : ∀ name, readOnly name = false →
@@ -166,7 +168,7 @@ theorem runs (scalar : EncodedDomain.{0, 0} Empty)
       calc
         initTicks ≤ 15 * (2 * scalar.width Empty.elim + 2 * sizes 0 + 3) := initCost
         _ = MvPolynomial.eval sizes initBound := by
-          simp [initBound, MvPolynomial.eval_C, MvPolynomial.eval_X]
+          simp [initBound, MvPolynomial.eval_X]
           ring
     have totalCost : initTicks + readTicks + loopTicks ≤
         MvPolynomial.eval sizes initBound + MvPolynomial.eval sizes readBound +
@@ -178,7 +180,7 @@ theorem runs (scalar : EncodedDomain.{0, 0} Empty)
           MvPolynomial.eval sizes loopBound + 2 := Nat.add_le_add_right totalCost 2
       _ = MvPolynomial.eval sizes
           (initBound + readBound + loopBound + MvPolynomial.C (2 : ℕ)) := by
-        simp [MvPolynomial.eval_C]
+        simp []
   · simpa only [algorithm, algorithmEntry, algorithmExit] using complete
 
 end Polytime2.StandardPivotSearch

@@ -123,7 +123,11 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty) :
           contradiction
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute localSizes input (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
+          BinarySubtraction.domains, StandardBinaryArithmetic.domains, EncodedDomain.unary,
+          EncodedDomain.binaryNaturals, EncodedDomain.booleans, EncodedDomain.fixed,
+          EncodedDomain.ofCodec, sizeTape, dataTape, limitTape, differenceTape, guardTape, localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       trivial
       (by
@@ -132,21 +136,38 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty) :
         · change initial (sizeTape 0) = encoded (EncodedDomain.unary ()) localSizes PUnit.unit
           rw [encoded_unary]
           exact header
-        · exact columnEq
-        · exact limitEq
+        · change initial (dataTape 2) = encoded (EncodedDomain.binaryNaturals ()) localSizes column
+          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using columnEq
+        · change initial (limitTape) = encoded (EncodedDomain.binaryNaturals ()) localSizes limit
+          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using limitEq
         · contradiction
         · contradiction)
       (by
         intro name writable
-        fin_cases name <;> first | contradiction | exact differenceRegion | exact guardRegion)
+        fin_cases name
+        · contradiction
+        · contradiction
+        · contradiction
+        · convert differenceRegion using 1 <;>
+            norm_num [domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] <;> rfl
+        · convert guardRegion using 1 <;>
+            norm_num [domains, guardTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl)
       (by intro parameter; cases parameter; exact header)
   refine ⟨ticks, final, ?_, trace, ?_, ?_, ?_⟩
   · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
   · have flag := canonical true
+    change final guardTape = encoded EncodedDomain.booleans localSizes (output true) at flag
     change output true = decide (column.val < limit.val) at correct
     rw [correct] at flag
-    exact flag
-  · exact ⟨output false, canonical false⟩
+    simpa only [encoded, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast] using flag
+  · have result := canonical false
+    change final differenceTape = encoded (EncodedDomain.binaryNaturals ()) localSizes (output false) at result
+    refine ⟨output false, ?_⟩
+    simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast, localSizes] using result
   · intro name notDifference notGuard
     apply preserved_of_wiring guardWiring BinarySubtraction.argumentReadOnly initial final outside immutable
     intro localName equal

@@ -23,9 +23,9 @@ namespace Polytime2.Examples.FiniteTables
 
 open Polytime2.Computation
 
-private def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
+private noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
-def addition : Polytime2.Computation Empty Bool :=
+noncomputable def addition : Polytime2.Computation Empty Bool :=
   finiteTable threeElements threeElements threeElements
     (fun _ (first : Fin 3) (second : Fin 3) => first + second)
 

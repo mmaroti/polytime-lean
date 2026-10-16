@@ -142,7 +142,7 @@ theorem increment_runs (scalar : EncodedDomain.{0, 0} Empty) :
         | inr name => cases name with
           | false => exact columnEq
           | true => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact region)
+      (by intro name writable; fin_cases name <;> first | contradiction | simpa [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using region)
       headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
   · have result := canonical ()
@@ -198,8 +198,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   classical
   obtain ⟨entryBound, executeEntry⟩ := StandardMatrixRowEntry.runs writeSource scalar operation
   obtain ⟨incrementBound, executeIncrement⟩ := increment_runs scalar
-  obtain ⟨matrixBound, matrixWidthBound⟩ :=
-    (scalar.constant.arrayOfLength StandardMatrixEntry.length).polynomial_width
+  let matrixBound := (scalar.constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
   refine ⟨entryBound + incrementBound + 2 * matrixBound + 2 * MvPolynomial.X 0 + 7, ?_⟩
   intro sizes initial sourceRow targetRow column array coefficient sourceWithin targetWithin
     columnsFit sourceValid targetValid columnValid capacity sourceEq targetEq columnEq coefficientEq arrayEq headers regions
@@ -242,7 +241,8 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (2 * (scalar.constant.arrayOfLength StandardMatrixEntry.length).width sizes + 2)
       0 (fun _ => 0) afterEntry 2 (fun _ => 0) committed := by
     dsimp only [commit, committed]
-    exact StandardTapeCommands.copy_encoded_runs (TapeName := TapeName)
+    simpa only [EncodedDomain.binaryNaturals_width] using
+      StandardTapeCommands.copy_encoded_runs (TapeName := TapeName)
       (scalar.constant.arrayOfLength StandardMatrixEntry.length)
       sizes resultArray (.inl (.inr 5)) (.inl (.inr 4))
       (by decide) width readOnly rfl rfl rfl afterEntry matrixEq (entryRegions _)
@@ -255,7 +255,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
         intro parameter
         have header := (entryTrace.readOnly_tape (.inl (.inl parameter)) rfl).trans (headers parameter)
         simpa only [committed, Function.update_of_ne (by simp : (.inl (.inl parameter) : TapeName) ≠ .inl (.inr 4))] using header)
-      (committedRegions (.inr ()))
+      (by simpa [width, domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using committedRegions (.inr ()))
   have incrementRegions : ∀ name, Region (width name) 0 (afterIncrement name) :=
     fun name => incrementTrace.region name (committedRegions name)
   let nextColumn := StandardBinaryIncrement.next 0 sizes column
@@ -264,7 +264,8 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   have advanceTrace : Runs width readOnly advance (2 * sizes 0 + 2)
       0 (fun _ => 0) afterIncrement 2 (fun _ => 0) final := by
     dsimp only [advance, final]
-    exact StandardTapeCommands.copy_encoded_runs (TapeName := TapeName)
+    simpa only [EncodedDomain.binaryNaturals_width] using
+      StandardTapeCommands.copy_encoded_runs (TapeName := TapeName)
       (EncodedDomain.binaryNaturals 0) sizes nextColumn (.inr ()) (.inl (.inr 2))
       (by decide) width readOnly rfl rfl rfl afterIncrement nextEq (incrementRegions _)
   have tail := incrementTrace.sequence advance 0
@@ -280,8 +281,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     exact incrementOutside (.inl name) (by simp)
   refine ⟨entryTicks + ((2 * (scalar.constant.arrayOfLength StandardMatrixEntry.length).width sizes + 2) +
     (incrementTicks + (2 * sizes 0 + 2) + 1) + 1) + 1, final, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have widthCost := matrixWidthBound sizes
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
+  · simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [machine, entry, exit] using complete
   · exact (finalPreserved (.inr 4) (by decide)).trans (Function.update_self _ _ _)

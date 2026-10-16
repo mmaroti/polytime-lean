@@ -39,14 +39,17 @@ example :
   obtain ⟨bound, execute⟩ := combine_runs false scalar
     (fun _ (coefficient source target : Bool) => (source, target != (coefficient && source)))
   have coefficientEq : initial (.inr 3) = encoded scalar Empty.elim true := by
-    change buffer [2] = encoded EncodedDomain.booleans Empty.elim true
-    exact (encoded_booleans Empty.elim true).symm
+    simpa [initial, domains, scalar, EncodedDomain.booleans, EncodedDomain.constant,
+      EncodedDomain.fixed, EncodedDomain.ofCodec, show Nat.clog 2 2 = 1 from by decide,
+      Binary.data] using (encoded_booleans Empty.elim true).symm
   have sourceEq : initial (.inr 7) = encoded scalar Empty.elim true := by
-    change buffer [2] = encoded EncodedDomain.booleans Empty.elim true
-    exact (encoded_booleans Empty.elim true).symm
+    simpa [initial, domains, scalar, EncodedDomain.booleans, EncodedDomain.constant,
+      EncodedDomain.fixed, EncodedDomain.ofCodec, show Nat.clog 2 2 = 1 from by decide,
+      Binary.data] using (encoded_booleans Empty.elim true).symm
   have targetEq : initial (.inr 8) = encoded scalar Empty.elim true := by
-    change buffer [2] = encoded EncodedDomain.booleans Empty.elim true
-    exact (encoded_booleans Empty.elim true).symm
+    simpa [initial, domains, scalar, EncodedDomain.booleans, EncodedDomain.constant,
+      EncodedDomain.fixed, EncodedDomain.ofCodec, show Nat.clog 2 2 = 1 from by decide,
+      Binary.data] using (encoded_booleans Empty.elim true).symm
   obtain ⟨ticks, final, cost, trace, first, second, outside, immutable⟩ := execute sizes initial true true true
     coefficientEq sourceEq targetEq (by
       intro name

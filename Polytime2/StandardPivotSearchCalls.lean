@@ -42,7 +42,13 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
   obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
     StandardSizeRead.Internal.runs_wired limitWiring localSizes
       (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardMatrixEntry.domains, StandardMatrixAddress.domains,
+          StandardSizeRead.domains,
+          EncodedDomain.unary, EncodedDomain.binaryNaturals,
+          EncodedDomain.ofCodec,
+          sizeTape, counterTape, rowLimitTape,
+          localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
   let resultBits := StandardSizeRead.advanceBits (sizes 1) (List.replicate (sizes 0) false)
@@ -100,7 +106,13 @@ theorem compare_runs (scalar : EncodedDomain.{0, 0} Empty) :
           contradiction
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute localSizes input (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardMatrixEntry.domains, StandardMatrixAddress.domains,
+          BinarySubtraction.domains, StandardBinaryArithmetic.domains,
+          EncodedDomain.unary, EncodedDomain.binaryNaturals,
+          EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+          sizeTape, counterTape, rowLimitTape,
+          differenceTape, foundTape, localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       trivial
       (by
@@ -109,18 +121,38 @@ theorem compare_runs (scalar : EncodedDomain.{0, 0} Empty) :
         · change initial (sizeTape 0) = encoded (EncodedDomain.unary ()) localSizes PUnit.unit
           rw [encoded_unary]
           exact header
-        · exact candidateEq
-        · exact limitEq
+        · change initial (counterTape 1) = encoded (EncodedDomain.binaryNaturals ()) localSizes candidate
+          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using candidateEq
+        · change initial rowLimitTape = encoded (EncodedDomain.binaryNaturals ()) localSizes limit
+          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using limitEq
         · contradiction
         · contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact differenceRegion | exact foundRegion)
+      (by
+        intro name writable
+        fin_cases name
+        · contradiction
+        · contradiction
+        · contradiction
+        · convert differenceRegion using 1 <;>
+            norm_num [domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] <;> rfl
+        · convert foundRegion using 1 <;>
+            norm_num [domains, foundTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl)
       (by intro parameter; cases parameter; exact header)
-  refine ⟨ticks, final, ?_, trace, ?_, ⟨output false, canonical false⟩, ?_⟩
+  have differenceEq := canonical false
+  change final differenceTape = encoded (EncodedDomain.binaryNaturals ()) localSizes (output false) at differenceEq
+  have differenceCanonical : final differenceTape = encoded (EncodedDomain.binaryNaturals 0) sizes (output false) := by
+    simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast, localSizes] using differenceEq
+  refine ⟨ticks, final, ?_, trace, ?_, ⟨output false, differenceCanonical⟩, ?_⟩
   · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
   · have flag := canonical true
+    change final foundTape = encoded EncodedDomain.booleans localSizes (output true) at flag
     change output true = decide (candidate.val < limit.val) at correct
     rw [correct] at flag
-    exact flag
+    simpa only [encoded, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast] using flag
   · intro name notDifference notFound
     apply preserved_of_wiring comparisonWiring BinarySubtraction.argumentReadOnly initial final outside immutable
     intro localName equal
@@ -157,21 +189,41 @@ theorem zeroTest_runs (scalar : EncodedDomain.{0, 0} Empty)
     exact value
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute Empty.elim input (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardMatrixEntry.domains,
+          StandardFinitePredicate.domains, StandardFiniteTable.domains,
+          StandardFinitePredicate.unitDomain,
+          EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant, EncodedDomain.ofCodec,
+          elementTape, unitTape, continueTape])
       (by intro name premise; fin_cases name <;> contradiction)
       trivial
       (by intro name readonly; fin_cases name <;> first | exact scalarEq | contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact unitRegion | exact continueRegion)
+      (by
+        intro name writable
+        fin_cases name
+        · contradiction
+        · convert unitRegion using 1 <;>
+            norm_num [domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
+              EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl
+        · convert continueRegion using 1 <;>
+            norm_num [domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl)
       (by intro parameter; cases parameter)
+  have unitWidth : (domains scalar unitTape).width sizes = 0 := by
+    norm_num [domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
+      EncodedDomain.fixed, EncodedDomain.ofCodec]
   have unitFinal : final unitTape = initial unitTape := by
-    obtain ⟨contents, length, finalEq⟩ := (trace.region unitTape unitRegion).exists_buffer
+    obtain ⟨contents, length, finalEq⟩ := (trace.region unitTape (by simpa only [unitWidth] using unitRegion)).exists_buffer
+    rw [unitWidth] at length
     have empty : contents = [] := List.eq_nil_of_length_eq_zero length
     subst contents
     exact finalEq.trans unitEq.symm
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
   · have result := canonical ()
+    change final continueTape = encoded EncodedDomain.booleans Empty.elim (output ()) at result
     change output () = isZero Empty.elim value at correct
-    exact result.trans (congrArg (encoded EncodedDomain.booleans Empty.elim) correct)
+    simpa only [encoded, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast] using
+      result.trans (congrArg (encoded EncodedDomain.booleans Empty.elim) correct)
   · intro name notContinue
     by_cases isUnit : name = unitTape
     · subst name
@@ -205,7 +257,7 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
         (∀ name, StandardMatrixEntry.readOnly name = false → ∃ value : (domains scalar (.inl name)).Carrier sizes,
           final (.inl name) = encoded (domains scalar (.inl name)) sizes value) ∧
         (∀ name : Fin 7, final (.inr name) = initial (.inr name)) := by
-  obtain ⟨bound, execute⟩ := StandardMatrixEntry.Internal.wired_runs scalar.constant (scalar.width Empty.elim) (fun _ => rfl)
+  obtain ⟨bound, execute⟩ := StandardMatrixEntry.Internal.wired_runs scalar.constant (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])
     (Function.Embedding.inl (α := StandardMatrixEntry.TapeName) (β := Fin 7))
   refine ⟨bound, ?_⟩
   intro sizes initial candidate column array within columnsFit candidateValid columnValid capacity candidateEq columnEq arrayEq headers regions
@@ -241,7 +293,7 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
   refine ⟨ticks, final, cost, trace, ?_, (immutable (.inl (.inr 1)) rfl).trans candidateEq, ?_, ?_⟩
   · have result := canonical ()
     rw [valueEq] at result
-    exact result
+    exact result.trans (encoded_constant scalar sizes _)
   · intro name writable
     exact privateFrame name writable
   · intro name

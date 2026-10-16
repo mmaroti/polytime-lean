@@ -61,8 +61,7 @@ theorem body_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality
         (∀ name : Fin 5, name ≠ 4 → final (.inr name) = initial (.inr name)) := by
   obtain ⟨columnBound, executeColumn⟩ := column_runs enumeration
   obtain ⟨incrementBound, executeIncrement⟩ := increment_runs enumeration
-  obtain ⟨matrixBound, matrixWidthBound⟩ :=
-    (matrixDomain (FieldRow.scalarDomain enumeration)).polynomial_width
+  let matrixBound := (matrixDomain (FieldRow.scalarDomain enumeration)).widthPolynomial
   refine ⟨columnBound + incrementBound + 2 * matrixBound + 4 * MvPolynomial.X 0 + 10, ?_⟩
   intro sizes initial pivotRow columnIndex matrix pivotBound columnValid rowsFit columnsFit capacity
     pivotEq columnEq matrixEq headers regions initialCanonical
@@ -113,7 +112,7 @@ theorem body_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality
   let rowCommitted := Function.update matrixCommitted pivotTape
     (encoded (EncodedDomain.binaryNaturals 0) sizes nextRow)
   have rowTrace := commitRow_runs enumeration sizes nextRow matrixCommitted savedRow
-    (matrixRegions pivotTape)
+    (by simpa only [show (domains enumeration pivotTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using matrixRegions pivotTape)
   have rowRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (rowCommitted name) :=
     fun name => rowTrace.region name (matrixRegions name)
   have rowCanonical := updateCanonical matrixCommitted matrixCanonical pivotTape nextRow
@@ -129,7 +128,7 @@ theorem body_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality
       ((matrixTrace.readOnly_tape (sizeTape parameter) (sizeReadOnly parameter)).trans
         ((columnTrace.readOnly_tape (sizeTape parameter) (sizeReadOnly parameter)).trans (headers parameter)))
   obtain ⟨incrementTicks, incremented, incrementCost, incrementTrace, incrementEq, incrementOutside⟩ :=
-    executeIncrement sizes rowCommitted columnIndex savedColumn rowHeaders (rowRegions nextColumnTape)
+    executeIncrement sizes rowCommitted columnIndex savedColumn rowHeaders (by simpa only [show (domains enumeration nextColumnTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using rowRegions nextColumnTape)
   have nextColumnFits : columnIndex.val + 1 < 2 ^ sizes 0 :=
     lt_of_le_of_lt (Nat.succ_le_of_lt columnValid) columnsFit
   let nextColumn : Fin (2 ^ sizes 0) := ⟨columnIndex.val + 1, nextColumnFits⟩
@@ -151,7 +150,7 @@ theorem body_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality
   let final := Function.update incremented columnTape
     (encoded (EncodedDomain.binaryNaturals 0) sizes nextColumn)
   have advanceTrace := commitColumn_runs enumeration sizes nextColumn incremented incrementEq
-    (incrementRegions columnTape)
+    (by simpa only [show (domains enumeration columnTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using incrementRegions columnTape)
   have advanceTail := incrementTrace.sequence commitColumn 0 (by intro symbols; rfl) advanceTrace
   have rowTail := rowTrace.sequence (MultiTape.sequence increment commitColumn 0)
     (.inl (.inl (.inl true))) (by intro symbols; rfl) advanceTail
@@ -167,9 +166,8 @@ theorem body_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality
   let total := columnTicks + (matrixCost + (counterCost + (incrementTicks + counterCost + 1) + 1) + 1) + 1
   refine ⟨total, final, nextRow, nextColumn, ?_, ?_, ?_, ?_, nextRowValue, nextRowBound,
     Function.update_self _ _ _, rfl, ?_, ?_⟩
-  · have widthBound := matrixWidthBound sizes
-    dsimp only [total, matrixCost, counterCost]
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
+  · dsimp only [total, matrixCost, counterCost]
+    simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [body, bodyEntry, bodyExit, total, matrixCost, counterCost, final] using whole
   · exact (Function.update_of_ne (by decide) _ _).trans

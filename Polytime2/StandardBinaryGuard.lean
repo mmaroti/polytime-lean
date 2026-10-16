@@ -257,7 +257,7 @@ theorem runs (bits : List Bool) (oldFlag : Symbol) :
   simpa only [zero] using trace
 
 /-- The result is a one-bit Boolean, independently of the counter's capacity. -/
-abbrev domains : Sum Unit Bool → EncodedDomain Unit :=
+noncomputable abbrev domains : Sum Unit Bool → EncodedDomain Unit :=
   StandardBinaryScan.domains (EncodedDomain.binaryNaturals ()) EncodedDomain.booleans
 
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Unit Bool)) State :=
@@ -277,9 +277,11 @@ theorem contract : CallingConvention.Realizes domains StandardTerminatedCopy.rea
   have bitsValue : Binary.value bits = (input ⟨.inr false, rfl⟩ : Fin (2 ^ assignment ())).val :=
     Binary.value_bits (BitVec.ofFin (input ⟨.inr false, rfl⟩))
   obtain ⟨old, oldLength, targetEq⟩ := represented.2 (.inr true) rfl
-  change old.length = 1 at oldLength
+  norm_num [domains, StandardBinaryScan.domains, EncodedDomain.booleans,
+    EncodedDomain.fixed, EncodedDomain.ofCodec] at oldLength
   obtain ⟨oldFlag, rfl⟩ := List.length_eq_one_iff.mp oldLength
-  have sourceEq : initial (.inr false) = buffer (word bits) := represented.1 (.inr false) rfl
+  have sourceEq : initial (.inr false) = buffer (word bits) :=
+    (represented.1 (.inr false) rfl).trans (encoded_binaryNaturals_value () assignment _)
   have start : install StandardTerminatedCopy.dataTapes
       (frame [0] (word bits ++ [0]) [0] [oldFlag, 0]) initial = initial := by
     funext name

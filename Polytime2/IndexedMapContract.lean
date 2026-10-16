@@ -63,11 +63,11 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
   let element : EncodedDomain Parameter := elementDomain.constant
   let elementWidth := elementDomain.width Empty.elim
   obtain ⟨lookupSizes, lookupOutputsWritable, lookupHalt, lookupBound, lookupRun⟩ :=
-    StandardArrayLookupSized.contractSized element elementWidth indexCapacity length (by intro assignment; rfl)
+    StandardArrayLookupSized.contractSized element elementWidth indexCapacity length (by intro assignment; simp [element, elementWidth, EncodedDomain.constant, EncodedDomain.ofCodec])
   obtain ⟨tableSizes, tableOutputsWritable, tableHalt, tableBound, tableRun⟩ :=
     StandardFiniteTable.contract parameterDomain elementDomain elementDomain operation
   obtain ⟨updateSizes, updateOutputsWritable, updateHalt, updateBound, updateRun⟩ :=
-    StandardArrayUpdate.contractSized element elementWidth indexCapacity length (by intro assignment; rfl)
+    StandardArrayUpdate.contractSized element elementWidth indexCapacity length (by intro assignment; simp [element, elementWidth, EncodedDomain.constant, EncodedDomain.ofCodec])
   refine ⟨(by intro parameter; rfl), (by intro name; rfl), ?_,
     lookupBound + MvPolynomial.C (MvPolynomial.eval Empty.elim tableBound) + updateBound + 2, ?_⟩
   · intro symbols
@@ -149,16 +149,18 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
       fin_cases name
       · change afterLookup (.inr 2) = _
         rw [lookupOutside 2 (Or.inl rfl)]
-        exact represented.1 (.inr 2) rfl
-      · exact lookupReturned
+        exact (represented.1 (.inr 2) rfl).trans (encoded_constant parameterDomain assignment _)
+      · exact lookupReturned.trans (encoded_constant elementDomain assignment _)
       · contradiction
     · intro name writable
       fin_cases name
       · contradiction
       · contradiction
       · obtain ⟨contents, length, equal⟩ := represented.2 (.inr 5) rfl
-        exact ⟨contents, length,
+        refine ⟨contents, ?_,
           (lookupOutside 5 (Or.inr (Or.inr (Or.inl rfl)))).trans equal⟩
+        simpa [domains, tableDomains, StandardFiniteTable.domains, element,
+          EncodedDomain.constant, EncodedDomain.ofCodec] using length
   obtain ⟨tableTicks, tableOutput, tableFinal, tableCost, tableTrace,
       tableCorrect, tableExit⟩ :=
     tableRun Empty.elim tableInput tableInitial trivial tableEntry (by intro parameter; cases parameter)
@@ -229,7 +231,7 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
           change afterLookup (lookupWiring (.inr 1)) = _
           rw [lookupInputPreserved (.inr 1) rfl]
           exact represented.1 (.inr 1) rfl
-        · exact tableReturned
+        · exact tableReturned.trans (encoded_constant elementDomain assignment _).symm
         all_goals contradiction
     · intro name writable
       cases name with
@@ -271,7 +273,16 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     (by intro name outside; exact install_outside _ _ _ _ outside)
   have wiredTable := tableTrace.wire_of_eq tableWiring
     (fun name => (domains parameterDomain elementDomain indexCapacity length name).width assignment)
-    argumentReadOnly (by intro name; fin_cases name <;> rfl)
+    argumentReadOnly
+    (by
+      intro name
+      fin_cases name
+      · change (domains parameterDomain elementDomain indexCapacity length (.inr 2)).width assignment = _
+        simp [domains, StandardFiniteTable.domains, EncodedDomain.constant, EncodedDomain.ofCodec]
+      · change (domains parameterDomain elementDomain indexCapacity length (.inr 4)).width assignment = _
+        simp [domains, StandardFiniteTable.domains, EncodedDomain.constant, EncodedDomain.ofCodec]
+      · change (domains parameterDomain elementDomain indexCapacity length (.inr 5)).width assignment = _
+        simp [domains, StandardFiniteTable.domains, EncodedDomain.constant, EncodedDomain.ofCodec])
     (by intro name immutable; fin_cases name <;> first | rfl | contradiction)
     afterLookup afterTable (by intro name; rfl) (by intro name; exact install_at _ _ _ _)
     (by intro name outside; exact install_outside _ _ _ _ outside)

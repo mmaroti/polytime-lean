@@ -67,7 +67,9 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
   let width : TapeName → ℕ := fun name => (domains scalar name).width sizes
   obtain ⟨compareTicks, compared, compareCost, compareTrace, foundEq, difference, compareOutside⟩ :=
     executeCompare sizes initial candidate ⟨sizes 1, rowFits⟩ (headers 0) candidateEq limitEq
-      (regions differenceTape) (regions foundTape)
+      (by simpa [domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using regions differenceTape)
+      (by simpa [domains, foundTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+        show Nat.clog 2 2 = 1 from by decide] using regions foundTape)
   have comparedRegions : ∀ name, Region (width name) 0 (compared name) :=
     fun name => compareTrace.region name (regions name)
   have comparedCanonical : ∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
@@ -107,7 +109,10 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
         obtain ⟨entryValue, encodedValue⟩ := comparedCanonical (.inr name) writable
         exact ⟨entryValue, (readOutside name).trans encodedValue⟩
     obtain ⟨testTicks, final, testCost, testTrace, continueEq, testOutside⟩ :=
-      executeTest sizes afterRead value elementEq (readRegions unitTape) (readRegions continueTape)
+      executeTest sizes afterRead value elementEq (by simpa [width, domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
+          EncodedDomain.fixed, EncodedDomain.ofCodec] using readRegions unitTape)
+        (by simpa [width, domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+          show Nat.clog 2 2 = 1 from by decide] using readRegions continueTape)
     have readTestTrace := readTrace.sequence (zeroTest scalar isZero) StandardFiniteTable.entry
       (by intro symbols; simp [readEntry, MultiTape.wire, StandardMatrixEntry.halt]) testTrace
     have selectTrace := readTestTrace.branch_true found stop false
@@ -134,9 +139,10 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
       · obtain ⟨entryValue, encodedValue⟩ := afterReadCanonical name writable
         exact ⟨entryValue, (testOutside name isContinue).trans encodedValue⟩
   · obtain ⟨old, length, oldEq⟩ := (comparedRegions continueTape).exists_buffer
-    change old.length = 1 at length
+    norm_num [width, domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at length
     obtain ⟨oldBit, rfl⟩ := List.length_eq_one_iff.mp length
-    have stopTrace := StandardTapeCommands.setBoolean_runs continueTape false width readOnly rfl rfl compared oldBit oldEq
+    have stopTrace := StandardTapeCommands.setBoolean_runs continueTape false width readOnly rfl
+      (by norm_num [width, domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec]) compared oldBit oldEq
     have booleanEq : buffer [Binary.data false] = encoded EncodedDomain.booleans sizes false := (encoded_booleans sizes false).symm
     rw [booleanEq] at stopTrace
     have selectTrace := stopTrace.branch_false found (readTest scalar isZero) (readTestEntry (scalar.width Empty.elim))

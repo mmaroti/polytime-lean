@@ -28,7 +28,7 @@ variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
 abbrev AlgorithmState (initWidth searchWidth scalarWidth : ℕ) :=
   Sum (InitializationState initWidth searchWidth) (LoopState initWidth searchWidth scalarWidth)
 
-instance algorithmStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
+noncomputable instance algorithmStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
     Fintype (AlgorithmState initWidth searchWidth scalarWidth) := by
   letI : Fintype (InitializationState initWidth searchWidth) := inferInstance
   letI : Fintype (LoopState initWidth searchWidth scalarWidth) := inferInstance

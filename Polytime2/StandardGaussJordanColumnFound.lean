@@ -130,7 +130,10 @@ theorem found_runs (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨incrementTicks, final, incrementCost, incrementTrace, nextEq, incrementOutside⟩ :=
     executeIncrement sizes pivoted pivotRow ((pivotTrace.readOnly_tape pivotTape rfl).trans pivotEq)
       (fun parameter => (pivotTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter))
-      (pivotTrace.region nextRowTape (regions nextRowTape))
+      (by
+        have region := pivotTrace.region nextRowTape (regions nextRowTape)
+        change Region ((EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes) 0 (pivoted nextRowTape) at region
+        simpa only [EncodedDomain.binaryNaturals_width] using region)
   have nextFits : pivotRow.val + 1 < 2 ^ sizes 0 := lt_of_le_of_lt (Nat.succ_le_of_lt pivotValid) rowsFit
   have nextValue : StandardBinaryIncrement.next 0 sizes pivotRow =
       (⟨pivotRow.val + 1, nextFits⟩ : Fin (2 ^ sizes 0)) := by

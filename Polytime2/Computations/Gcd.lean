@@ -32,7 +32,7 @@ def gcdValue (bits : ℕ) (left right : Fin (2 ^ bits)) : Fin (2 ^ bits) :=
     · exact lt_of_le_of_lt (Nat.gcd_le_left right.val (Nat.pos_of_ne_zero zero)) left.isLt⟩
 
 /-- False names the first operand and true the second; capacity is an immutable size. -/
-def gcd : Computation Unit Bool where
+noncomputable def gcd : Computation Unit Bool where
   inputDomains _ := EncodedDomain.binaryNaturals ()
   outputDomain := EncodedDomain.binaryNaturals ()
   precondition sizes arguments := 2 * (arguments true).val ≤ 2 ^ sizes ()
@@ -40,10 +40,10 @@ def gcd : Computation Unit Bool where
 
 namespace Realizable.Internal
 
-private def gcdScratchDomains (name : Fin 9) : EncodedDomain Unit :=
+private noncomputable def gcdScratchDomains (name : Fin 9) : EncodedDomain Unit :=
   StandardGcd.domains (.inr ⟨name.val, by omega⟩)
 
-private def gcdLayout : Unit ⊕ Fin 12 ≃ TapeName gcd (Fin 9) where
+private noncomputable def gcdLayout : Unit ⊕ Fin 12 ≃ TapeName gcd (Fin 9) where
   toFun
     | .inl parameter => .inl parameter
     | .inr name => if privateTape : name.val < 9 then scratchTape gcd ⟨name.val, privateTape⟩

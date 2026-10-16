@@ -29,7 +29,7 @@ namespace Polytime2.Computation
 
 open MultiTape CallingConvention Realizable
 
-private def binarySpecification
+private noncomputable def binarySpecification
     (precondition : ∀ sizes : Unit → ℕ, (Bool → Fin (2 ^ sizes ())) → Prop)
     (compute : ∀ sizes, {arguments : Bool → Fin (2 ^ sizes ()) // precondition sizes arguments} →
       Fin (2 ^ sizes ())) : Computation Unit Bool where
@@ -39,39 +39,39 @@ private def binarySpecification
   compute := compute
 
 /-- Addition is exact whenever the sum fits the declared result capacity. -/
-def binaryAdd : Computation Unit Bool := binarySpecification
+noncomputable def binaryAdd : Computation Unit Bool := binarySpecification
   (fun sizes arguments => (arguments false).val + (arguments true).val < 2 ^ sizes ())
   (fun _ arguments => ⟨(arguments.val false).val + (arguments.val true).val, arguments.property⟩)
 
 /-- Natural subtraction is specified only when the second operand is no larger. -/
-def binarySubtract : Computation Unit Bool := binarySpecification
+noncomputable def binarySubtract : Computation Unit Bool := binarySpecification
   (fun _ arguments => (arguments true).val ≤ (arguments false).val)
   (fun _ arguments => ⟨(arguments.val false).val - (arguments.val true).val,
     lt_of_le_of_lt (Nat.sub_le _ _) (arguments.val false).isLt⟩)
 
 /-- Unsigned comparison has no capacity or ordering precondition. -/
-def binaryLess : Computation Unit Bool where
+noncomputable def binaryLess : Computation Unit Bool where
   inputDomains _ := EncodedDomain.binaryNaturals ()
   outputDomain := EncodedDomain.booleans
   precondition _ _ := True
   compute _ arguments := decide ((arguments.val false).val < (arguments.val true).val)
 
 /-- The factor/result and multiplier capacities are independent size parameters. -/
-def binaryMultiply : Computation Bool Bool where
+noncomputable def binaryMultiply : Computation Bool Bool where
   inputDomains := EncodedDomain.binaryNaturals
   outputDomain := EncodedDomain.binaryNaturals false
   precondition sizes arguments := (arguments false).val * (arguments true).val < 2 ^ sizes false
   compute _ arguments := ⟨(arguments.val false).val * (arguments.val true).val, arguments.property⟩
 
 /-- A positive divisor reserves the shift bit needed by binary long remainder. -/
-def binaryRemainder : Computation Unit Bool := binarySpecification
+noncomputable def binaryRemainder : Computation Unit Bool := binarySpecification
   (fun sizes arguments => 0 < (arguments true).val ∧ 2 * (arguments true).val ≤ 2 ^ sizes ())
   (fun _ arguments => ⟨(arguments.val false).val % (arguments.val true).val,
     lt_trans (Nat.mod_lt _ arguments.property.1) (arguments.val true).isLt⟩)
 
 /-- Arguments are the two summands and the independent-width multiplier.
 The intermediate sum and final product must fit the declared capacity. -/
-def binaryAddMultiply : Computation Bool (Fin 3) where
+noncomputable def binaryAddMultiply : Computation Bool (Fin 3) where
   inputDomains name := EncodedDomain.binaryNaturals (decide (name = 2))
   outputDomain := EncodedDomain.binaryNaturals false
   precondition sizes arguments :=
@@ -82,7 +82,7 @@ def binaryAddMultiply : Computation Bool (Fin 3) where
       arguments.property.2⟩
 
 /-- Arguments are the factor, independent-width multiplier, and addend. -/
-def binaryMultiplyAdd : Computation Bool (Fin 3) where
+noncomputable def binaryMultiplyAdd : Computation Bool (Fin 3) where
   inputDomains name := EncodedDomain.binaryNaturals (decide (name = 1))
   outputDomain := EncodedDomain.binaryNaturals false
   precondition sizes arguments :=
@@ -220,7 +220,7 @@ private def multiplicationLayout : Bool ⊕ Fin 6 ≃ Bool ⊕ (Bool ⊕ (Unit �
     · cases result; rfl
     · fin_cases scratch <;> rfl
 
-private def multiplicationScratch (name : Fin 3) : EncodedDomain Bool :=
+private noncomputable def multiplicationScratch (name : Fin 3) : EncodedDomain Bool :=
   if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals false
 
 private theorem multiplicationDomains (name : Bool ⊕ Fin 6) :
@@ -257,7 +257,7 @@ private def remainderLayout : Unit ⊕ Fin 7 ≃ Unit ⊕ (Bool ⊕ (Unit ⊕ Fi
     · cases result; rfl
     · fin_cases scratch <;> rfl
 
-private def remainderScratch (name : Fin 4) : EncodedDomain Unit :=
+private noncomputable def remainderScratch (name : Fin 4) : EncodedDomain Unit :=
   if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals ()
 
 private theorem remainderDomains (name : Unit ⊕ Fin 7) :
@@ -266,7 +266,7 @@ private theorem remainderDomains (name : Unit ⊕ Fin 7) :
   | inl parameter => rfl
   | inr name => fin_cases name <;> rfl
 
-private def compoundScratch (name : Fin 5) : EncodedDomain Bool :=
+private noncomputable def compoundScratch (name : Fin 5) : EncodedDomain Bool :=
   if name = 3 ∨ name = 4 then EncodedDomain.booleans else EncodedDomain.binaryNaturals false
 
 private def binaryAddMultiplyLayout : Bool ⊕ Fin 9 ≃ Bool ⊕ (Fin 3 ⊕ (Unit ⊕ Fin 5)) where

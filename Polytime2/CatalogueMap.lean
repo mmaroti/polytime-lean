@@ -35,7 +35,7 @@ variable {Parameter : Type parameterLevel} [Fintype Parameter]
 abbrev Alphabet := CallingConvention.Alphabet (Sum Parameter (Fin 15))
 
 /-- The ignored scalar parameter of a unary map occupies an empty region. -/
-def unitDomain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
+noncomputable def unitDomain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
 
 abbrev State (elementWidth : ℕ) :=
   Sum (IndexedMap.State (unitDomain.width Empty.elim) elementWidth)
@@ -94,8 +94,8 @@ noncomputable def algorithm (elementDomain : EncodedDomain Empty)
       (IndexedMap.algorithm unitDomain elementDomain (fun assignment _ => second assignment)))
     (IndexedMap.entry (unitDomain.width Empty.elim) (elementDomain.width Empty.elim))
 
-def entry (elementWidth : ℕ) : State elementWidth := .inl (IndexedMap.entry (unitDomain.width Empty.elim) elementWidth)
-def exit (elementWidth : ℕ) : State elementWidth := .inr (IndexedMap.exit (unitDomain.width Empty.elim) elementWidth)
+noncomputable def entry (elementWidth : ℕ) : State elementWidth := .inl (IndexedMap.entry (unitDomain.width Empty.elim) elementWidth)
+noncomputable def exit (elementWidth : ℕ) : State elementWidth := .inr (IndexedMap.exit (unitDomain.width Empty.elim) elementWidth)
 
 omit [Fintype Parameter] in
 @[simp] theorem halt (elementDomain : EncodedDomain Empty)

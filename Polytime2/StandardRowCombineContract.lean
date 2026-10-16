@@ -27,7 +27,7 @@ open Binary (word)
 -- carrierLevel: the mathematical scalar carrier fixed by specialization.
 universe carrierLevel
 
-def encodedTable (domain : EncodedDomain.{0, carrierLevel} Empty)
+noncomputable def encodedTable (domain : EncodedDomain.{0, carrierLevel} Empty)
     (operation : ∀ sizes, domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes →
       domain.Carrier sizes × domain.Carrier sizes) :
     Register (domain.width Empty.elim) → Register (domain.width Empty.elim) →

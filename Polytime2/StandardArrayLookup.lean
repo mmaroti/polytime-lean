@@ -305,11 +305,13 @@ theorem encoded_runsOfLength {Parameter : Type parameterLevel} [Fintype Paramete
   · have encodedLength : (beforeBits ++ block ++ afterBits).length =
         (EncodedDomain.arrayOfLength elementDomain length).width assignment := by
       rw [← decomposition]
-      exact List.length_ofFn
+      simp [EncodedDomain.arrayOfLength, EncodedDomain.ofCodec,
+        EncodedDomain.ArrayEncoding.bits]
     rw [encodedLength] at trace
     have whole : EncodedDomain.ArrayEncoding.bits
         ((EncodedDomain.arrayOfLength elementDomain length).encode assignment array) =
-        beforeBits ++ block ++ afterBits := decomposition
+        beforeBits ++ block ++ afterBits := by
+      simpa only [EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.array_encode_bits] using decomposition
     simp only [← whole] at trace
     exact trace
 
@@ -357,11 +359,13 @@ theorem encoded_runs {Parameter : Type parameterLevel} [Fintype Parameter]
   · have encodedLength : (beforeBits ++ block ++ afterBits).length =
         (EncodedDomain.array elementDomain lengthParameter).width assignment := by
       rw [← decomposition]
-      exact List.length_ofFn
+      simp [EncodedDomain.array, EncodedDomain.ofCodec,
+        EncodedDomain.ArrayEncoding.bits]
     rw [encodedLength] at trace
     have whole : EncodedDomain.ArrayEncoding.bits
         ((EncodedDomain.array elementDomain lengthParameter).encode assignment array) =
-        beforeBits ++ block ++ afterBits := decomposition
+        beforeBits ++ block ++ afterBits := by
+      simpa only [EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.array_encode_bits] using decomposition
     simp only [← whole] at trace
     exact trace
 

@@ -119,15 +119,17 @@ noncomputable def additionOperation (enumeration : Scalar ≃ Fin cardinality) :
       infer_instance
     exact (source, target + coefficient * source)
 
-abbrev NegateState (width : ℕ) :=
-  StandardFiniteTable.State width 1 width
+noncomputable abbrev NegateState (width : ℕ) :=
+  StandardFiniteTable.State width
+    ((EncodedDomain.booleans (Parameter := Empty)).width Empty.elim) width
 
-abbrev State (width : ℕ) :=
+noncomputable abbrev State (width : ℕ) :=
   Sum (StandardMatrixEntry.State width)
     (Sum Bool (Sum (NegateState width) (StandardMatrixRows.State width)))
 
-instance statesFinite (width : ℕ) : Fintype (State width) := by
-  letI : Fintype (StandardFiniteTable.State width 1 width) := inferInstance
+noncomputable instance statesFinite (width : ℕ) : Fintype (State width) := by
+  letI : Fintype (StandardFiniteTable.State width
+    ((EncodedDomain.booleans (Parameter := Empty)).width Empty.elim) width) := inferInstance
   letI : Fintype (StandardMatrixRows.State width) := inferInstance
   dsimp only [State, NegateState]
   infer_instance
@@ -190,7 +192,6 @@ omit [Field Scalar] in
     negate enumeration StandardFiniteTable.exit symbols = none := by
   simp [negate, MultiTape.wire, StandardFiniteTable.algorithm,
     StandardFiniteTable.machine, StandardFiniteTable.exit]
-  rfl
 
 @[simp] theorem rowClear_halt (enumeration : Scalar ≃ Fin cardinality)
     (symbols : Symbols Alphabet) :
@@ -232,7 +233,7 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
           final (lookupWiring name) = initial (lookupWiring name)) := by
   let scalar := Polytime2.FieldRow.scalarDomain enumeration
   obtain ⟨bound, execute⟩ := (StandardMatrixEntry.contract scalar.constant
-    (scalar.width Empty.elim) (fun _ => rfl)).wired_runs lookupWiring
+    (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])).wired_runs lookupWiring
   refine ⟨bound, ?_⟩
   intro sizes initial targetRow column matrix within columnsFit targetValid columnValid
     capacity targetEq columnEq matrixEq headers regions
@@ -270,7 +271,7 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
   have result := canonical ()
   rw [valueEq] at result
   refine ⟨ticks, final, cost, trace, ?_, outside, immutable⟩
-  exact result
+  exact result.trans (encoded_constant scalar sizes _)
 
 /-- Fixed-table negation uses separate immutable arguments and overwrites the
 coefficient output, including for zero-bit scalar presentations. -/
@@ -311,7 +312,13 @@ theorem negate_runs (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute Empty.elim input (fun name => (domains enumeration name).width sizes)
       readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by
+        intro name
+        change (domains enumeration (tableTarget name)).width sizes = _
+        fin_cases name <;> simp [domains, tableTarget, dataTape, scalar, boolean,
+          StandardMatrixRows.domains, StandardMatrixRows.dataTape, StandardMatrixRowStep.domains,
+          StandardMatrixRowEntry.domains, StandardFiniteTable.domains, EncodedDomain.constant,
+          EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
       (by intro name; fin_cases name <;> decide)
       trivial
       (by
@@ -452,11 +459,16 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   have loadedRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (loaded name) :=
     fun name => lookupTrace.region name (regions name)
   obtain ⟨old, oldLength, oldEq⟩ := (loadedRegions (dataTape 16)).exists_buffer
-  change old.length = 1 at oldLength
+  norm_num [domains, dataTape, StandardMatrixRows.domains, StandardMatrixRows.dataTape,
+    StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains, EncodedDomain.booleans,
+    EncodedDomain.fixed, EncodedDomain.ofCodec] at oldLength
   obtain ⟨oldBit, rfl⟩ := List.length_eq_one_iff.mp oldLength
   let prepared := Function.update loaded (dataTape 16) (buffer [Binary.data false])
   have flagTrace := StandardTapeCommands.setBoolean_runs (dataTape 16) false
-    (fun name => (domains enumeration name).width sizes) readOnly rfl rfl loaded oldBit oldEq
+    (fun name => (domains enumeration name).width sizes) readOnly rfl (by norm_num [domains, dataTape,
+      StandardMatrixRows.domains, StandardMatrixRows.dataTape, StandardMatrixRowStep.domains,
+      StandardMatrixRowEntry.domains, EncodedDomain.booleans, EncodedDomain.fixed,
+      EncodedDomain.ofCodec]) loaded oldBit oldEq
   have preparedValue : prepared (dataTape 3) =
       encoded (Polytime2.FieldRow.scalarDomain enumeration) Empty.elim value := by
     exact (Function.update_of_ne (by decide) _ _).trans valueEq
@@ -465,7 +477,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     change Function.update loaded (dataTape 16) (buffer [Binary.data false])
       (dataTape 16) = _
     rw [Function.update_self]
-    rfl
+    exact (encoded_booleans Empty.elim false).symm
   have preparedRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (prepared name) :=
     fun name => flagTrace.region name (loadedRegions name)
   obtain ⟨negateTicks, negated, negationCost, negateTrace, coefficientEq, negateOutside, negateImmutable⟩ :=
@@ -501,7 +513,8 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     | inl name =>
       by_cases isCoefficient : name = StandardMatrixRows.dataTape 7
       · subst name
-        exact ⟨-value, (rowImmutable (StandardMatrixRows.dataTape 3) rfl).trans coefficientEq⟩
+        exact ⟨-value, (rowImmutable (StandardMatrixRows.dataTape 3) rfl).trans
+          (coefficientEq.trans (encoded_constant (Polytime2.FieldRow.scalarDomain enumeration) sizes _).symm)⟩
       · have localWritable : StandardMatrixRows.readOnly (rowSwap name) = false := by
           fin_cases name <;> first | rfl | exact False.elim (isCoefficient rfl) | contradiction
         have valid := canonical (rowSwap name) localWritable

@@ -69,8 +69,7 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
         (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
           final name = encoded (domains enumeration name) sizes value) := by
   obtain ⟨seedBound, executeSeed⟩ := seed_runs enumeration
-  obtain ⟨matrixBound, matrixWidthBound⟩ :=
-    ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).polynomial_width
+  let matrixBound := ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
   refine ⟨seedBound + 19 * (2 * matrixBound +
     MvPolynomial.C (2 * (FieldRow.scalarDomain enumeration).width Empty.elim) + 2 * MvPolynomial.X 0 + 3) +
     5 * (2 * MvPolynomial.X 0 + 3) + 2, ?_⟩
@@ -99,8 +98,8 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
     (seed_halt enumeration) tail
   refine ⟨seedTicks + (rowTicks + finishTicks + 1) + 1, final, ?_, ?_, finalMatrix,
     finishValues 0, finishValues 4, ?_⟩
-  · have widthBound := matrixWidthBound sizes
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_C, MvPolynomial.eval_X]
+  · simp only [EncodedDomain.width] at rowCost
+    simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_C, MvPolynomial.eval_X]
     omega
   · simpa only [initialization, initializationEntry, initializationExit] using complete
   · intro name writable
@@ -124,7 +123,8 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
                 exact ⟨matrix, finalMatrix⟩
               · by_cases isScalar : name = dataTape 3
                 · subst name
-                  exact ⟨(0 : Scalar), finalZero⟩
+                  exact ⟨(0 : Scalar), finalZero.trans
+                    (encoded_constant (FieldRow.scalarDomain enumeration) sizes _).symm⟩
                 · have preserved : final name = prepared name := finishPreserved name (by
                     simp only [finishReadOnly, isTarget, isNext, isDifference, isGuard, isLimit,
                       or_self, ↓reduceIte])

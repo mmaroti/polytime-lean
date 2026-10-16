@@ -23,9 +23,9 @@ namespace Polytime2.Examples.RowCombine
 
 open Polytime2.Computation
 
-private def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
+private noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
-def linearCombination : Polytime2.Computation Empty (Fin 3) :=
+noncomputable def linearCombination : Polytime2.Computation Empty (Fin 3) :=
   finiteTernary threeElements (fun _ (coefficient source target : Fin 3) => coefficient * source + target)
 
 theorem linearCombination_realizable : linearCombination.Realizable := finiteTernary_realizable _ _

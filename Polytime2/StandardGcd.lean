@@ -161,7 +161,7 @@ theorem runs (left right : List Bool) (sameLength : left.length = right.length)
     rw [install_at]
 
 /-- The immutable size tape and all data tapes have canonical encoded domains. -/
-def domains : Sum Unit (Fin 12) → EncodedDomain Unit
+noncomputable def domains : Sum Unit (Fin 12) → EncodedDomain Unit
   | .inl parameter => EncodedDomain.unary parameter
   | .inr name => if name = 4 ∨ name = 8 then EncodedDomain.booleans
       else EncodedDomain.binaryNaturals ()
@@ -218,7 +218,8 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   obtain ⟨ticks, finalLeft, finalRight, final, cost, finalLeftLength, finalRightLength,
     trace, correct, scratchEq, resultEq⟩ := runs left right (leftLength.trans rightLength.symm)
     (by rw [rightValue, rightLength]; exact valid) (fun name => initial (.inr name)) contents
-    (represented.1 (.inr 9) rfl) (represented.1 (.inr 10) rfl)
+    ((represented.1 (.inr 9) rfl).trans (encoded_binaryNaturals_value () assignment _))
+    ((represented.1 (.inr 10) rfl).trans (encoded_binaryNaturals_value () assignment _))
     (fun name writable => (contentsSpec name writable).2)
     (by
       intro name writable

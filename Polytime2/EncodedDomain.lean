@@ -22,7 +22,7 @@ import Mathlib.Data.Nat.Log
 /-! # Bounded mathematical domains with canonical bit encodings
 
 A domain may be constructed from any fixed specialization. Its carrier and
-exact width vary with size assignments; one polynomial bounds every width.
+exact width vary with size assignments; a concrete polynomial gives the width.
 These presentations specify meaning, not the runtime of encoding or decoding.
 Working tape layouts and scratch remain separate representation relations.
 -/
@@ -35,63 +35,84 @@ universe parameterLevel carrierLevel
 /-- A mathematical family with a unique accepted encoding for each element. -/
 structure EncodedDomain (Parameter : Type parameterLevel) [Fintype Parameter] where
   Carrier : (Parameter → ℕ) → Type carrierLevel
-  width : (Parameter → ℕ) → ℕ
-  encode : ∀ assignment, Carrier assignment → BitVec (width assignment)
-  decode : ∀ assignment, BitVec (width assignment) → Option (Carrier assignment)
+  widthPolynomial : MvPolynomial Parameter ℕ
+  encode : ∀ assignment, Carrier assignment →
+    BitVec (MvPolynomial.eval assignment widthPolynomial)
+  decode : ∀ assignment, BitVec (MvPolynomial.eval assignment widthPolynomial) →
+    Option (Carrier assignment)
   decode_encode : ∀ assignment value, decode assignment (encode assignment value) = some value
   encode_decode : ∀ assignment bits value,
     decode assignment bits = some value → encode assignment value = bits
-  polynomial_width : ∃ bound : MvPolynomial Parameter ℕ,
-    ∀ assignment, width assignment ≤ MvPolynomial.eval assignment bound
 
 namespace EncodedDomain
 
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
+/-- The exact number of bits, obtained by evaluating the domain's polynomial. -/
+@[simp] noncomputable abbrev width (domain : EncodedDomain Parameter) (assignment : Parameter → ℕ) : ℕ :=
+  MvPolynomial.eval assignment domain.widthPolynomial
+
+/-- Construct a domain from a codec whose width equals the chosen polynomial.
+The equality only transports vector types; it is not stored in the domain. -/
+noncomputable abbrev ofCodec (Carrier : (Parameter → ℕ) → Type carrierLevel)
+    (widthPolynomial : MvPolynomial Parameter ℕ) (width : (Parameter → ℕ) → ℕ)
+    (width_eq : ∀ assignment, width assignment = MvPolynomial.eval assignment widthPolynomial)
+    (encode : ∀ assignment, Carrier assignment → BitVec (width assignment))
+    (decode : ∀ assignment, BitVec (width assignment) → Option (Carrier assignment))
+    (decode_encode : ∀ assignment value, decode assignment (encode assignment value) = some value)
+    (encode_decode : ∀ assignment bits value,
+      decode assignment bits = some value → encode assignment value = bits) :
+    EncodedDomain Parameter where
+  Carrier := Carrier
+  widthPolynomial := widthPolynomial
+  encode assignment value := (encode assignment value).cast (width_eq assignment)
+  decode assignment bits := decode assignment (bits.cast (width_eq assignment).symm)
+  decode_encode assignment value := by simpa using decode_encode assignment value
+  encode_decode assignment bits value accepted := by
+    simpa using congrArg (fun value => value.cast (width_eq assignment))
+      (encode_decode assignment _ value accepted)
+
 /-- A chosen finite enumeration fixes labels and width before runtime sizes. -/
-def fixed {Carrier : Type carrierLevel} {cardinality : ℕ}
-    (enumeration : Carrier ≃ Fin cardinality) : EncodedDomain Parameter where
-  Carrier _ := Carrier
-  width _ := Nat.clog 2 cardinality
-  encode _ value := BitVec.ofNatLT (enumeration value).val
-    (lt_of_lt_of_le (enumeration value).isLt (Nat.le_pow_clog (by decide) cardinality))
-  decode _ bits := if valid : bits.toNat < cardinality then
-    some (enumeration.symm ⟨bits.toNat, valid⟩) else none
-  decode_encode _ value := by simp [BitVec.toNat_ofNatLT, (enumeration value).isLt]
-  encode_decode _ bits value hypothesis := by
-    split at hypothesis
-    next valid =>
-      have equality := Option.some.inj hypothesis
-      subst value
-      apply BitVec.eq_of_toNat_eq
-      simp
-    next invalid => simp at hypothesis
-  polynomial_width := ⟨MvPolynomial.C (Nat.clog 2 cardinality), by intro assignment; simp⟩
+noncomputable def fixed {Carrier : Type carrierLevel} {cardinality : ℕ}
+    (enumeration : Carrier ≃ Fin cardinality) : EncodedDomain Parameter :=
+  ofCodec (fun _ => Carrier) (MvPolynomial.C (Nat.clog 2 cardinality))
+    (fun _ => Nat.clog 2 cardinality) (by intro assignment; simp)
+    (fun _ value => BitVec.ofNatLT (enumeration value).val
+      (lt_of_lt_of_le (enumeration value).isLt (Nat.le_pow_clog (by decide) cardinality)))
+    (fun _ bits => if valid : bits.toNat < cardinality then
+      some (enumeration.symm ⟨bits.toNat, valid⟩) else none)
+    (by intro assignment value; simp [BitVec.toNat_ofNatLT, (enumeration value).isLt])
+    (by
+      intro assignment bits value hypothesis
+      split at hypothesis
+      next valid =>
+        have equality := Option.some.inj hypothesis
+        subst value
+        apply BitVec.eq_of_toNat_eq
+        simp
+      next invalid => simp at hypothesis)
 
 /-- A specialization-fixed presentation can be used alongside any runtime size
 parameters without changing its carrier, width, or encoding. -/
-def constant (domain : EncodedDomain.{0, carrierLevel} Empty) : EncodedDomain Parameter where
-  Carrier _ := domain.Carrier Empty.elim
-  width _ := domain.width Empty.elim
-  encode _ := domain.encode Empty.elim
-  decode _ := domain.decode Empty.elim
-  decode_encode _ := domain.decode_encode Empty.elim
-  encode_decode _ := domain.encode_decode Empty.elim
-  polynomial_width := ⟨MvPolynomial.C (domain.width Empty.elim), by intro assignment; simp⟩
+noncomputable def constant (domain : EncodedDomain.{0, carrierLevel} Empty) : EncodedDomain Parameter :=
+  ofCodec (fun _ => domain.Carrier Empty.elim) (MvPolynomial.C (domain.width Empty.elim))
+    (fun _ => domain.width Empty.elim) (by intro assignment; simp)
+    (fun _ => domain.encode Empty.elim) (fun _ => domain.decode Empty.elim)
+    (fun _ => domain.decode_encode Empty.elim) (fun _ => domain.encode_decode Empty.elim)
 
 /-- A size input has exactly the assigned number of unary ones. Its value is
 already fixed by the assignment, so its mathematical carrier is a singleton. -/
-def unary (parameter : Parameter) : EncodedDomain Parameter where
-  Carrier _ := PUnit.{carrierLevel + 1}
-  width assignment := assignment parameter
-  encode assignment _ := BitVec.allOnes (assignment parameter)
-  decode assignment bits := if bits = BitVec.allOnes (assignment parameter) then some PUnit.unit else none
-  decode_encode assignment value := by cases value; simp
-  encode_decode assignment bits value valid := by
-    split at valid
-    next equal => exact equal.symm
-    next different => simp at valid
-  polynomial_width := ⟨MvPolynomial.X parameter, by intro assignment; simp⟩
+noncomputable def unary (parameter : Parameter) : EncodedDomain Parameter :=
+  ofCodec (fun _ => PUnit.{carrierLevel + 1}) (MvPolynomial.X parameter)
+    (fun assignment => assignment parameter) (by intro assignment; simp)
+    (fun assignment _ => BitVec.allOnes (assignment parameter))
+    (fun assignment bits => if bits = BitVec.allOnes (assignment parameter) then some PUnit.unit else none)
+    (by intro assignment value; cases value; simp)
+    (by
+      intro assignment bits value valid
+      split at valid
+      next equal => exact equal.symm
+      next different => simp at valid)
 
 /-- Change the mathematical carrier while retaining its canonical bit layout. -/
 def reindex (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
@@ -99,7 +120,7 @@ def reindex (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (equivalence : ∀ assignment, Carrier' assignment ≃ domain.Carrier assignment) :
     EncodedDomain Parameter where
   Carrier := Carrier'
-  width := domain.width
+  widthPolynomial := domain.widthPolynomial
   encode assignment value := domain.encode assignment (equivalence assignment value)
   decode assignment bits := (domain.decode assignment bits).map (equivalence assignment).symm
   decode_encode assignment value := by
@@ -114,7 +135,6 @@ def reindex (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
       have oldAccepted : domain.decode assignment bits = some (equivalence assignment value) := by
         rw [decoding, valuesEqual]
       exact domain.encode_decode assignment bits (equivalence assignment value) oldAccepted
-  polynomial_width := domain.polynomial_width
 
 end EncodedDomain
 end Polytime2

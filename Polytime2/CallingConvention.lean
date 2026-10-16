@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.BinaryEncoding
+import Polytime2.EncodedArray
 import Polytime2.Binary
 import Polytime2.Branch
 import Polytime2.While
@@ -610,11 +611,18 @@ def tape (bits : List Bool) : Turing.Tape Symbol := Turing.Tape.mk₁ (word bits
 def buffer (contents : List Symbol) : Turing.Tape Symbol := Turing.Tape.mk₁ contents
 
 /-- The existing bit encoding determines the complete argument tape. -/
-def encoded {Parameter : Type parameterLevel} [Fintype Parameter]
+noncomputable def encoded {Parameter : Type parameterLevel} [Fintype Parameter]
     (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (assignment : Parameter → ℕ) (value : domain.Carrier assignment) : Turing.Tape Symbol :=
-  tape (List.ofFn (fun index : Fin (domain.width assignment) =>
-    (domain.encode assignment value).getLsbD index.val))
+  tape (EncodedDomain.ArrayEncoding.bits (domain.encode assignment value))
+
+/-- Lifting a fixed codec to runtime sizes preserves its tape. -/
+@[simp] theorem encoded_constant {Parameter : Type parameterLevel} [Fintype Parameter]
+    (domain : EncodedDomain.{0, carrierLevel} Empty) (assignment : Parameter → ℕ)
+    (value : domain.Carrier Empty.elim) :
+    encoded domain.constant assignment value = encoded domain Empty.elim value := by
+  simp only [encoded, EncodedDomain.constant, EncodedDomain.ofCodec,
+    EncodedDomain.ArrayEncoding.bits_cast]
 
 /-- Size parameters are immutable unary words; zero uses the empty region. -/
 def unary (count : ℕ) : Turing.Tape Symbol := tape (List.replicate count true)
@@ -627,7 +635,9 @@ theorem encoded_unary {Parameter : Type parameterLevel} [Fintype Parameter]
       (BitVec.allOnes (assignment parameter)).getLsbD index.val) = fun _ => true := by
     funext index
     simp [index.isLt]
-  simp only [encoded, EncodedDomain.unary, equal, List.ofFn_const, unary]
+  simp only [encoded, EncodedDomain.unary, EncodedDomain.ofCodec]
+  rw [EncodedDomain.ArrayEncoding.bits_cast]
+  simp only [EncodedDomain.ArrayEncoding.bits, equal, List.ofFn_const, unary]
 
 /-- Explicit surrounding blanks describe the same tape as the canonical buffer. -/
 theorem buffer_padding (contents : List Symbol) :
@@ -644,16 +654,19 @@ variable {Parameter : Type parameterLevel} [Fintype Parameter]
 /-- The Boolean encoded domain uses exactly one binary symbol. -/
 theorem encoded_booleans (assignment : Parameter → ℕ) (flag : Bool) :
     encoded (EncodedDomain.booleans (Parameter := Parameter)) assignment flag = buffer [data flag] := by
-  have digit : ((EncodedDomain.booleans (Parameter := Parameter)).encode assignment flag).getLsbD 0 = flag := by
-    unfold EncodedDomain.booleans EncodedDomain.fixed
-    dsimp only
-    simp only [BitVec.getLsbD, BitVec.toNat_ofNatLT]
-    cases flag <;> decide
-  norm_num [encoded, EncodedDomain.booleans, EncodedDomain.fixed, finTwoEquiv,
+  simp only [encoded, EncodedDomain.booleans, EncodedDomain.fixed,
+    EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast]
+  norm_num [EncodedDomain.ArrayEncoding.bits, finTwoEquiv,
     tape, buffer, word, data, List.ofFn_succ]
-  all_goals change Turing.Tape.mk₁ [data (((EncodedDomain.booleans (Parameter := Parameter)).encode assignment flag).getLsbD 0)] = _
-  all_goals rw [digit]
-  all_goals rfl
+  cases flag <;> rfl
+
+/-- Bounded naturals retain their little-endian digit word. -/
+@[simp] theorem encoded_binaryNaturals_value (parameter : Parameter) (assignment : Parameter → ℕ)
+    (value : Fin (2 ^ assignment parameter)) :
+    encoded (EncodedDomain.binaryNaturals parameter) assignment value =
+      tape (EncodedDomain.ArrayEncoding.bits (BitVec.ofFin value)) := by
+  simp only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+    EncodedDomain.ArrayEncoding.bits_cast]
 
 /-- Canonical bounded-natural encodings agree with the arithmetic bit words. -/
 theorem encoded_binaryNaturals (parameter : Parameter) (assignment : Parameter → ℕ) (bits : List Bool)
@@ -661,6 +674,8 @@ theorem encoded_binaryNaturals (parameter : Parameter) (assignment : Parameter �
     encoded (EncodedDomain.binaryNaturals parameter) assignment
       (⟨Binary.value bits, by simpa only [sameLength] using Binary.value_lt_pow_length bits⟩ :
         Fin (2 ^ assignment parameter)) = buffer (word bits) := by
+  simp only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+    EncodedDomain.ArrayEncoding.bits_cast]
   change buffer (word (List.ofFn (fun index : Fin (assignment parameter) =>
     (BitVec.ofFin ⟨Binary.value bits, _⟩).getLsbD index.val))) = buffer (word bits)
   rw [← BitVec.ofNat_finVal]

@@ -36,10 +36,10 @@ universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
 
-def scalarDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
+noncomputable def scalarDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
   EncodedDomain.fixed enumeration
 
-def pairDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
+noncomputable def pairDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
   EncodedDomain.fixed ((enumeration.prodCongr enumeration).trans finProdFinEquiv)
 
 def scale (coefficient value : Scalar) : Scalar := coefficient * value

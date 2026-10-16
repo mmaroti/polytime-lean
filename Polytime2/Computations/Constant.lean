@@ -37,7 +37,7 @@ def constant (domain : EncodedDomain.{0, carrierLevel} Empty)
   compute sizes _ := value sizes
 
 /-- Counter initialization reads its unary capacity and needs no value input. -/
-def counterZero {Parameter : Type} [Fintype Parameter] (capacity : Parameter) : Computation Parameter Empty where
+noncomputable def counterZero {Parameter : Type} [Fintype Parameter] (capacity : Parameter) : Computation Parameter Empty where
   inputDomains := Empty.elim
   outputDomain := EncodedDomain.binaryNaturals capacity
   precondition _ _ := True

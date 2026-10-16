@@ -144,7 +144,7 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
     executeRead sizes prepared columnsFit
       (fun parameter => (workspaceTrace.readOnly_tape (sizeTape parameter) (sizeReadOnly parameter)).trans
         ((seedTrace.readOnly_tape (sizeTape parameter) (sizeReadOnly parameter)).trans (headers parameter)))
-      (preparedRegions limitTape) (preparedRegions differenceTape)
+      (by simpa only [show (domains enumeration limitTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using preparedRegions limitTape) (by simpa only [show (domains enumeration differenceTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using preparedRegions differenceTape)
   have tail := workspaceTrace.sequence readColumns StandardSizeRead.entry
     (by intro symbols; rfl) readTrace
   have complete := seedTrace.sequence

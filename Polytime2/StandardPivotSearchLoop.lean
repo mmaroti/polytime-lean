@@ -28,8 +28,8 @@ open MultiTape CallingConvention
 open StandardMatrixEntry (index_lt)
 open Binary (word)
 
-private theorem continue_result (tapes : Tapes Alphabet) (bit : Bool)
-    (encodedFlag : tapes continueTape = encoded EncodedDomain.booleans (fun _ : Fin 3 => 0) bit) :
+private theorem continue_result {sizes : Fin 3 → ℕ} (tapes : Tapes Alphabet) (bit : Bool)
+    (encodedFlag : tapes continueTape = encoded EncodedDomain.booleans sizes bit) :
     continues (MultiTape.read tapes) = bit := by
   unfold continues MultiTape.read
   rw [encodedFlag, encoded_booleans]
@@ -80,11 +80,12 @@ private theorem loopBody_runs (scalar : EncodedDomain.{0, 0} Empty) :
   have advancedBuffer : advanced continueTape = buffer (word [true]) :=
     advancedContinue.trans continueBuffer
   have clearTrace := StandardTapeCommands.setBoolean_runs continueTape false
-    (fun name => (domains scalar name).width sizes) readOnly (by rfl) (by rfl)
+    (fun name => (domains scalar name).width sizes) readOnly (by rfl)
+    (by norm_num [domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
     advanced (Binary.data true) (by simpa [word, buffer] using advancedBuffer)
   let final := Function.update advanced continueTape (encoded EncodedDomain.booleans sizes false)
   refine ⟨advanceTicks + 2, final, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [map_add, map_one, map_ofNat, MvPolynomial.eval_X]
+  · simp only [map_add, map_ofNat]
     omega
   · let joinedMachine := MultiTape.sequence advance stop false
     have first := advanceTrace.rename Sum.inl (target := joinedMachine)
@@ -298,9 +299,9 @@ theorem loop_runs (scalar : EncodedDomain.{0, 0} Empty)
                 ((guardTrace.readOnly_tape matrixTape rfl).trans matrixEq'))
               (fun parameter =>
                 (bodyOutside (sizeTape parameter)
-                  (by simp [sizeTape, counterTape, nextTape])
-                  (by simp [sizeTape, counterTape, nextTape])
-                  (by simp [sizeTape, continueTape, counterTape])).trans
+                  (by simp [sizeTape, counterTape])
+                  (by simp [sizeTape, nextTape])
+                  (by simp [sizeTape, continueTape])).trans
                 ((guardTrace.readOnly_tape (sizeTape parameter) rfl).trans
                   (headers' parameter)))
               nextSkipped advancedRegions advancedCanonical'
@@ -379,14 +380,13 @@ theorem loop_runs (scalar : EncodedDomain.{0, 0} Empty)
   have completed := trace.withExit_at controllerStops
   refine ⟨ticks + 1, final, finalCount, ?_, completed,
     resultBound, resultEq, resultPrefix, resultStop, finalFound, finalFlag, finalCanonical⟩
-  · simp only [map_mul, map_add, map_one, map_ofNat,
-      MvPolynomial.eval_C, MvPolynomial.eval_X]
+  · simp only [map_mul, map_add, map_one]
     have rowCount : sizes 1 - start.val + 1 ≤ sizes 1 + 2 := by omega
     have dominates := Nat.mul_le_mul_right allowance rowCount
     have rowEvaluation : MvPolynomial.eval sizes rowBound = sizes 1 + 2 := by
-      simp [rowBound, MvPolynomial.eval_C, MvPolynomial.eval_X]
+      simp [rowBound, MvPolynomial.eval_X]
     have iterationEvaluation : MvPolynomial.eval sizes iterationBound = allowance := by
-      simp [iterationBound, allowance, MvPolynomial.eval_C]
+      simp [iterationBound, allowance]
     calc
       ticks + 1 ≤ (sizes 1 - start.val + 1) * allowance + 1 :=
         Nat.add_le_add_right cost 1

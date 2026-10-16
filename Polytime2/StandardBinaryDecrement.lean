@@ -89,6 +89,10 @@ theorem contract (parameter : Parameter) :
   have computed : (compute parameter assignment number).val = value (Binary.decrement bits) := by
     dsimp only [compute]
     omega
+  simp only [EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+  change (BinaryScan.run _ _ (EncodedDomain.ArrayEncoding.bits _)).2 =
+    EncodedDomain.ArrayEncoding.bits _
+  rw [EncodedDomain.ArrayEncoding.bits_cast, EncodedDomain.ArrayEncoding.bits_cast]
   change (BinaryScan.run update true bits).2 =
     List.ofFn (fun index : Fin (assignment parameter) =>
       (BitVec.ofFin (compute parameter assignment number)).getLsbD index.val)

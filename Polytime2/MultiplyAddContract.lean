@@ -24,7 +24,7 @@ namespace Polytime2.MultiplyAdd
 open MultiTape CallingConvention
 open Binary (data word value)
 
-def domains : Sum Bool (Fin 9) → EncodedDomain Bool
+noncomputable def domains : Sum Bool (Fin 9) → EncodedDomain Bool
   | .inl parameter => EncodedDomain.unary parameter
   | .inr name => if name = 4 ∨ name = 8 then EncodedDomain.booleans
       else EncodedDomain.binaryNaturals (decide (name = 5))
@@ -80,13 +80,16 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   obtain ⟨oldResult, oldResultLength, resultEq⟩ := represented.2 (.inr 7) rfl
   obtain ⟨multiplyFlags, multiplyFlagLength, multiplyFlagEq⟩ := represented.2 (.inr 4) rfl
   obtain ⟨addFlags, addFlagLength, addFlagEq⟩ := represented.2 (.inr 8) rfl
-  change multiplyFlags.length = 1 at multiplyFlagLength
-  change addFlags.length = 1 at addFlagLength
+  norm_num [domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at multiplyFlagLength addFlagLength
   obtain ⟨multiplyFlag, rfl⟩ := List.length_eq_one_iff.mp multiplyFlagLength
   obtain ⟨addFlag, rfl⟩ := List.length_eq_one_iff.mp addFlagLength
-  have factorEq : initial (.inr 1) = buffer (word factor) := represented.1 (.inr 1) rfl
-  have multiplierEq : initial (.inr 5) = buffer (word multiplier) := represented.1 (.inr 5) rfl
-  have addendEq : initial (.inr 6) = buffer (word addend) := represented.1 (.inr 6) rfl
+  have factorEq : initial (.inr 1) = buffer (word factor) :=
+    (represented.1 (.inr 1) rfl).trans (encoded_binaryNaturals_value false assignment _)
+  have multiplierEq : initial (.inr 5) = buffer (word multiplier) :=
+    (represented.1 (.inr 5) rfl).trans (encoded_binaryNaturals_value true assignment _)
+  have addendEq : initial (.inr 6) = buffer (word addend) :=
+    (represented.1 (.inr 6) rfl).trans (encoded_binaryNaturals_value false assignment _)
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at productLength shiftedLength nextLength oldResultLength
   have sameLength : addend.length = factor.length := addendLength.trans factorLength.symm
   have productFits : oldProduct.length = factor.length := productLength.trans factorLength.symm
   have shiftedFits : oldShifted.length = factor.length := shiftedLength.trans factorLength.symm

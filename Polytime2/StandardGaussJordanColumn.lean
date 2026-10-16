@@ -201,7 +201,7 @@ def idle : Machine Alphabet Unit := fun _ _ => none
 abbrev SelectState (initWidth scalarWidth : ℕ) :=
   Sum (Sum Unit (Sum (FoundState initWidth scalarWidth) Unit)) Unit
 
-instance selectStateFinite (initWidth scalarWidth : ℕ) : Fintype (SelectState initWidth scalarWidth) := by
+noncomputable instance selectStateFinite (initWidth scalarWidth : ℕ) : Fintype (SelectState initWidth scalarWidth) := by
   letI : Fintype (StandardGaussJordanPivot.State initWidth scalarWidth) := inferInstance
   dsimp only [SelectState, FoundState, IncrementState]
   infer_instance
@@ -260,7 +260,12 @@ theorem advancePivot_runs (enumeration : Scalar ≃ Fin cardinality) :
         | inr output => cases output with
           | false => exact pivotEq
           | true => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact region) headers
+      (by
+        intro name writable
+        fin_cases name <;> first
+          | contradiction
+          | change Region ((EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes) 0 (initial nextRowTape)
+            simpa only [EncodedDomain.binaryNaturals_width] using region) headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
   · have result := canonical ()
     change output () = StandardBinaryIncrement.next 0 sizes pivotRow at correct

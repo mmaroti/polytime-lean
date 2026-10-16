@@ -93,7 +93,7 @@ theorem finiteTable_realizable
   exact (canonical ()).trans (congrArg (encoded outputDomain sizes) correct)
 
 /-- A unary specialization-fixed predicate returns a single Boolean. -/
-def finitePredicate (domain : EncodedDomain.{0, 0} Empty)
+noncomputable def finitePredicate (domain : EncodedDomain.{0, 0} Empty)
     (predicate : ∀ sizes, domain.Carrier sizes → Bool) : Computation Empty Unit :=
   unaryMap domain EncodedDomain.booleans (fun _ _ => True)
     (fun sizes value => predicate sizes value.val)

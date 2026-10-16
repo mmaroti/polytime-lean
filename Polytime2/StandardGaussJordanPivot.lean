@@ -127,7 +127,7 @@ abbrev State (initWidth scalarWidth : ℕ) := Sum (Fin 3)
       (Sum (Fin 3) (Sum (StandardMatrixRows.State scalarWidth)
         (Sum (Fin 3) (StandardGaussJordanClear.AlgorithmState initWidth scalarWidth))))))
 
-instance statesFinite (initWidth scalarWidth : ℕ) : Fintype (State initWidth scalarWidth) := by
+noncomputable instance statesFinite (initWidth scalarWidth : ℕ) : Fintype (State initWidth scalarWidth) := by
   letI : Fintype (StandardMatrixEntry.State scalarWidth) := inferInstance
   letI : Fintype (StandardMatrixRows.State scalarWidth) := inferInstance
   letI : Fintype (StandardGaussJordanClear.AlgorithmState initWidth scalarWidth) := inferInstance
@@ -209,7 +209,7 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
           final (lookupWiring name) = initial (lookupWiring name)) := by
   let scalar := FieldRow.scalarDomain enumeration
   obtain ⟨bound, execute⟩ := (StandardMatrixEntry.contract scalar.constant
-    (scalar.width Empty.elim) (fun _ => rfl)).wired_runs lookupWiring
+    (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])).wired_runs lookupWiring
   refine ⟨bound, ?_⟩
   intro sizes initial candidate column matrix within columnsFit candidateValid columnValid
     capacity candidateEq columnEq matrixEq headers regions
@@ -242,7 +242,7 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
   change output () = matrix ⟨candidate.val * sizes 2 + column.val, otherWithin⟩ at valueEq
   have result := canonical ()
   rw [valueEq] at result
-  exact ⟨ticks, final, cost, trace, result, outside, immutable⟩
+  exact ⟨ticks, final, cost, trace, result.trans (encoded_constant scalar sizes _), outside, immutable⟩
 
 end Polytime2.StandardGaussJordanPivot
 

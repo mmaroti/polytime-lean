@@ -35,7 +35,7 @@ instance tapeNamesFinite : Fintype TapeName := by
 abbrev AlgorithmState (initWidth scalarWidth : ℕ) :=
   Sum (InitializationState initWidth) (TraversalState scalarWidth)
 
-instance algorithmStateFinite (initWidth scalarWidth : ℕ) : Fintype (AlgorithmState initWidth scalarWidth) := by
+noncomputable instance algorithmStateFinite (initWidth scalarWidth : ℕ) : Fintype (AlgorithmState initWidth scalarWidth) := by
   letI : Fintype (InitializationState initWidth) := inferInstance
   letI : Fintype (TraversalState scalarWidth) := inferInstance
   dsimp only [AlgorithmState]

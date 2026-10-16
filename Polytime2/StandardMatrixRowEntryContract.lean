@@ -77,7 +77,7 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     execute sizes initial sourceRow targetRow column array coefficient sourceWithin targetWithin
       valid.1 valid.2.1 valid.2.2.1 valid.2.2.2.1 valid.2.2.2.2
       (represented.1 (.inr 0) rfl) (represented.1 (.inr 1) rfl) (represented.1 (.inr 2) rfl)
-      (represented.1 (.inr 3) rfl) (represented.1 (.inr 4) rfl) headers represented.region
+      ((represented.1 (.inr 3) rfl).trans (encoded_constant scalar sizes _)) (represented.1 (.inr 4) rfl) headers represented.region
   let output : Outputs (domains scalar) outputTapes sizes := fun _ => resultArray
   refine ⟨ticks, output, final, cost, trace, ?_, ?_⟩
   · exact ⟨sourceWithin, targetWithin, by rfl⟩

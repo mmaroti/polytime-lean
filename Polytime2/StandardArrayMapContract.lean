@@ -29,7 +29,7 @@ open Binary (Symbol word)
 universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
-def domains (parameterDomain elementDomain : EncodedDomain Empty)
+noncomputable def domains (parameterDomain elementDomain : EncodedDomain Empty)
     (length : MvPolynomial Parameter ℕ) : Sum Parameter (Fin 3) → EncodedDomain Parameter
   | .inl parameter => EncodedDomain.unary parameter
   | .inr 0 => parameterDomain.constant
@@ -61,9 +61,10 @@ private theorem arrayBits (elementDomain : EncodedDomain Empty)
     encoded (elementDomain.constant.arrayOfLength length) assignment array =
       buffer (word (bits (List.ofFn (fun index (bit : Fin (elementDomain.width Empty.elim)) =>
         (elementDomain.encode Empty.elim (array index)).getLsbD bit.val)))) := by
-  change tape (EncodedDomain.ArrayEncoding.bits (EncodedDomain.ArrayEncoding.encode
-    (elementDomain.encode Empty.elim) _ array)) = _
+  simp only [encoded, EncodedDomain.arrayOfLength, EncodedDomain.constant,
+    EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast]
   rw [EncodedDomain.ArrayEncoding.bits_encode]
+  simp only [EncodedDomain.ArrayEncoding.bits_cast]
   congr 2
   simp only [List.map_ofFn, EncodedDomain.ArrayEncoding.bits]
   rfl
@@ -109,13 +110,15 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     funext index bit
     exact congrArg (fun code : BitVec elementWidth => code.getLsbD bit.val) (tableCorrect (array index))
   have parameterEq : initial (.inr 0) = buffer (word (List.ofFn parameterRegister)) :=
-    represented.1 (.inr 0) rfl
+    by simpa [domains, encoded, EncodedDomain.constant, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast, tape, buffer] using represented.1 (.inr 0) rfl
   have arrayEq : initial (.inr 1) = buffer (word (bits registers)) :=
     (represented.1 (.inr 1) rfl).trans (arrayBits elementDomain length assignment array)
   obtain ⟨old, oldLength, oldEq⟩ := represented.2 (.inr 2) rfl
   have count : registers.length = MvPolynomial.eval assignment length := by simp [registers]
   have oldWidth : old.length = (bits registers).length := by
-    change old.length = MvPolynomial.eval assignment length * elementWidth at oldLength
+    simp [domains, EncodedDomain.arrayOfLength, EncodedDomain.constant,
+      EncodedDomain.ofCodec] at oldLength
     simpa [count] using oldLength
   obtain ⟨ticks, cost, localTrace⟩ := runs table parameterRegister registers old oldWidth
   have initialLocal : (fun name => initial (dataTapes name)) =
@@ -136,12 +139,9 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     (by
       intro name
       change (domains parameterDomain elementDomain length (.inr name)).width assignment = _
-      fin_cases name
-      · rfl
-      · change MvPolynomial.eval assignment length * elementWidth = (bits registers).length
-        simp [count]
-      · change MvPolynomial.eval assignment length * elementWidth = (bits registers).length
-        simp [count])
+      fin_cases name <;>
+        simp [domains, widths, EncodedDomain.arrayOfLength, EncodedDomain.constant,
+          EncodedDomain.ofCodec, count, elementWidth])
     (by intro name premise; exact premise) initial (fun _ => 0)
   have start : install dataTapes (frame parameterRegister [] (bits registers) [] old) initial = initial := by
     rw [← initialLocal, install_self]

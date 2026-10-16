@@ -170,7 +170,8 @@ theorem combine_runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     if name.val = 0 then coefficient else if name.val = 1 then source else target
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute Empty.elim input (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by intro name; fin_cases name <;>
+        simp [domains, StandardRowCombine.domains, EncodedDomain.constant, EncodedDomain.ofCodec])
       (by
         intro name premise
         simp only [combineWiring_apply] at premise

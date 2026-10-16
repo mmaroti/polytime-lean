@@ -38,7 +38,7 @@ namespace Computation.Realizable.Internal
 abbrev TapeName (_computation : Computation.{carrierLevel} Parameter InputName)
     (ScratchName : Type) := Parameter ⊕ (InputName ⊕ (Unit ⊕ ScratchName))
 
-def domains (computation : Computation.{carrierLevel} Parameter InputName)
+noncomputable def domains (computation : Computation.{carrierLevel} Parameter InputName)
     {ScratchName : Type} (scratchDomains : ScratchName → EncodedDomain.{0, carrierLevel} Parameter) :
     Internal.TapeName computation ScratchName → EncodedDomain Parameter :=
   Sum.elim EncodedDomain.unary (Sum.elim computation.inputDomains

@@ -148,15 +148,15 @@ theorem initStage_runs (scalar : EncodedDomain.{0, 0} Empty) (sizes : Fin 3 → 
   · by_cases scalarStage : stage.val < 7
     · have source : initSource stage = dataTape 3 := ite_eq_right matrixStage
       have targetWidth : width (initTarget stage) = scalar.width Empty.elim := by
-        fin_cases stage <;> solve | rfl | norm_num at matrixStage | norm_num at scalarStage
+        fin_cases stage <;> solve | simp [width, initTarget, domains, dataTape, nextTape, limitTape, differenceTape, guardTape, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains, EncodedDomain.constant, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] | norm_num at matrixStage | norm_num at scalarStage
       have trace := StandardTapeCommands.copy_encoded_runs scalar Empty.elim coefficient
         (initSource stage) (initTarget stage) (initSource_distinct stage) width readOnly
-        (initTarget_writable stage) (by rw [source]; rfl) targetWidth initial (source ▸ coefficientEq) (regions _)
+        (initTarget_writable stage) (by rw [source]; simp [width, domains, dataTape, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains, EncodedDomain.constant, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]) targetWidth initial (source ▸ coefficientEq) (regions _)
       refine ⟨2 * scalar.width Empty.elim + 2, by omega, ?_⟩
       fin_cases stage <;> solve | exact trace | norm_num at matrixStage | norm_num at scalarStage
     · by_cases counterStage : stage.val < 16
       · have targetWidth : width (initTarget stage) = sizes 0 := by
-          fin_cases stage <;> solve | rfl | norm_num at matrixStage | norm_num at scalarStage | norm_num at counterStage
+          fin_cases stage <;> solve | simp [width, initTarget, domains, dataTape, nextTape, limitTape, differenceTape, guardTape, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains, EncodedDomain.constant, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] | norm_num at matrixStage | norm_num at scalarStage | norm_num at counterStage
         obtain ⟨old, oldLength, oldEq⟩ := (regions (initTarget stage)).exists_buffer
         have trace := StandardTapeCommands.clear_runs (sizeTape 0) (initTarget stage) (initCapacity_distinct stage)
           width readOnly (initTarget_writable stage) (List.replicate (sizes 0) true) old
@@ -168,7 +168,7 @@ theorem initStage_runs (scalar : EncodedDomain.{0, 0} Empty) (sizes : Fin 3 → 
         rw [← encoded_zero sizes] at trace
         fin_cases stage <;> solve | exact trace | norm_num at scalarStage | norm_num at counterStage
       · have targetWidth : width (initTarget stage) = 1 := by
-          fin_cases stage <;> solve | rfl | norm_num at counterStage
+          fin_cases stage <;> solve | norm_num [width, initTarget, domains, dataTape, guardTape, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] | norm_num at counterStage
         obtain ⟨old, oldLength, oldEq⟩ := (regions (initTarget stage)).exists_buffer
         change old.length = width (initTarget stage) at oldLength
         rw [targetWidth] at oldLength
@@ -188,7 +188,7 @@ private theorem initDefault_valid (scalar : EncodedDomain.{0, 0} Empty) (sizes :
       initDefault scalar sizes coefficient array stage = encoded (domains scalar (initTarget stage)) sizes value := by
   fin_cases stage <;> first
     | exact ⟨array, rfl⟩
-    | exact ⟨coefficient, rfl⟩
+    | exact ⟨coefficient, (encoded_constant scalar sizes _).symm⟩
     | exact ⟨(⟨0, by positivity⟩ : Fin (2 ^ sizes 0)), rfl⟩
     | exact ⟨false, rfl⟩
 

@@ -47,7 +47,7 @@ theorem access_runs (target : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
         (∀ name, name ∉ Set.range (accessWiring target) → final name = initial name) ∧
         (∀ name, StandardMatrixEntry.readOnly name = true → final (accessWiring target name) = initial (accessWiring target name)) := by
   obtain ⟨bound, execute⟩ := StandardMatrixEntry.Internal.wired_runs scalar.constant (scalar.width Empty.elim)
-    (fun _ => rfl) (accessWiring target)
+    (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec]) (accessWiring target)
   refine ⟨bound, ?_⟩
   intro sizes initial row column array within columnsFit rowValid columnValid capacity rowEq columnEq arrayEq headers regions
   let input := StandardMatrixEntry.inputValues scalar.constant sizes row column array
@@ -93,7 +93,7 @@ theorem access_runs (target : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
   refine ⟨ticks, final, cost, trace, ?_, ?_, outside, immutable⟩
   · have result := canonical ()
     rw [valueEq] at result
-    exact result
+    exact result.trans (encoded_constant scalar sizes _)
   · intro name writable
     rw [sameDomain name]
     exact privateFrame name writable

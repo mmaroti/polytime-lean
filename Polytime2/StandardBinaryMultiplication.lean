@@ -402,7 +402,7 @@ theorem runs (input factor : List Bool) (old shifted result : List Symbol)
 
 
 /-- The factor/result capacity and multiplier width are independent sizes. -/
-def domains : Sum Bool (Fin 6) → EncodedDomain Bool
+noncomputable def domains : Sum Bool (Fin 6) → EncodedDomain Bool
   | .inl parameter => EncodedDomain.unary parameter
   | .inr name => if name = 4 then EncodedDomain.booleans
       else EncodedDomain.binaryNaturals (decide (name = 5))
@@ -451,10 +451,14 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   obtain ⟨oldShifted, shiftedLength, shiftedEq⟩ := represented.2 (.inr 2) rfl
   obtain ⟨oldResult, resultLength, resultEq⟩ := represented.2 (.inr 3) rfl
   obtain ⟨flags, flagLength, flagEq⟩ := represented.2 (.inr 4) rfl
-  change flags.length = 1 at flagLength
+  norm_num [domains, StandardBinaryScan.domains, EncodedDomain.booleans,
+    EncodedDomain.fixed, EncodedDomain.ofCodec] at flagLength
   obtain ⟨oldFlag, rfl⟩ := List.length_eq_one_iff.mp flagLength
-  have factorEq : initial (.inr 1) = buffer (word factor) := represented.1 (.inr 1) rfl
-  have multiplierEq : initial (.inr 5) = buffer (word multiplier) := represented.1 (.inr 5) rfl
+  have factorEq : initial (.inr 1) = buffer (word factor) :=
+    (represented.1 (.inr 1) rfl).trans (encoded_binaryNaturals_value false assignment _)
+  have multiplierEq : initial (.inr 5) = buffer (word multiplier) :=
+    (represented.1 (.inr 5) rfl).trans (encoded_binaryNaturals_value true assignment _)
+  simp [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at oldLength shiftedLength resultLength
   have oldFits : old.length = factor.length := oldLength.trans factorLength.symm
   have shiftedFits : oldShifted.length = factor.length := shiftedLength.trans factorLength.symm
   have resultFits : oldResult.length = factor.length := resultLength.trans factorLength.symm

@@ -74,9 +74,10 @@ theorem contract (elementDomain : EncodedDomain Empty)
   have secondWithin := lt_of_lt_of_le valid.2.2 valid.1
   have unitInitial : initial (.inr 6) = encoded unitDomain.constant assignment (0 : Fin 1) := by
     obtain ⟨contents, width, equal⟩ := represented.2 (.inr 6) rfl
-    have empty : contents = [] := List.eq_nil_of_length_eq_zero width
+    norm_num [domains, unitDomain, EncodedDomain.constant, EncodedDomain.fixed, EncodedDomain.ofCodec] at width
     subst contents
-    exact equal
+    simpa [encoded, unitDomain, EncodedDomain.constant, EncodedDomain.fixed, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits, tape, buffer, Binary.word] using equal
   let firstInput : Inputs localDomains IndexedMap.argumentReadOnly assignment := fun name => by
     rcases name with ⟨name, immutable⟩
     cases name with

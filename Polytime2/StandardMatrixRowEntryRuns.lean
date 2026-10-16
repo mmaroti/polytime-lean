@@ -158,14 +158,14 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
         exact (lastWriteImmutable (.inr 0) rfl).trans intermediateEq
       · refine ⟨array sourceIndex, ?_⟩
         exact (lastScalars 7 (by decide)).trans ((firstScalars 7 (by decide)).trans
-          ((combineImmutable 1 rfl).trans (sourcePreserved.trans sourceValueEq)))
+          ((combineImmutable 1 rfl).trans (sourcePreserved.trans (sourceValueEq.trans (encoded_constant scalar sizes _).symm))))
       · refine ⟨array targetIndex, ?_⟩
         exact (lastScalars 8 (by decide)).trans ((firstScalars 8 (by decide)).trans
-          ((combineImmutable 2 rfl).trans targetValueEq))
+          ((combineImmutable 2 rfl).trans (targetValueEq.trans (encoded_constant scalar sizes _).symm)))
       · refine ⟨result.1, ?_⟩
-        exact (lastScalars 9 (by decide)).trans ((firstScalars 9 (by decide)).trans newSourceEq)
+        exact (lastScalars 9 (by decide)).trans ((firstScalars 9 (by decide)).trans (newSourceEq.trans (encoded_constant scalar sizes _).symm))
       · refine ⟨result.2, ?_⟩
-        exact (lastScalars 10 (by decide)).trans ((firstScalars 10 (by decide)).trans newTargetEq)
+        exact (lastScalars 10 (by decide)).trans ((firstScalars 10 (by decide)).trans (newTargetEq.trans (encoded_constant scalar sizes _).symm))
       · exact lastWriteCanonical (.inl (.inr 0)) rfl
       · exact lastWriteCanonical (.inl (.inr 2)) rfl
       · exact lastWriteCanonical (.inl (.inr 3)) rfl

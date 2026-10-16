@@ -51,11 +51,12 @@ theorem commitRow_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3
     Runs (fun name => (domains enumeration name).width sizes) readOnly commitRow
       (2 * sizes 0 + 2) 0 (fun _ => 0) initial 2 (fun _ => 0)
       (Function.update initial pivotTape (encoded (EncodedDomain.binaryNaturals 0) sizes row)) := by
-  simpa only [commitRow, EncodedDomain.binaryNaturals] using
+  simpa only [commitRow, EncodedDomain.binaryNaturals_width] using
     StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0)
       sizes row nextRowTape pivotTape (by decide)
       (fun name => (domains enumeration name).width sizes) readOnly (by decide) rfl rfl
-      initial resultEq region
+      initial resultEq (by
+        simpa only [show (domains enumeration pivotTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using region)
 
 omit [Field Scalar] in
 theorem commitColumn_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3 → ℕ)
@@ -65,11 +66,12 @@ theorem commitColumn_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fi
     Runs (fun name => (domains enumeration name).width sizes) readOnly commitColumn
       (2 * sizes 0 + 2) 0 (fun _ => 0) initial 2 (fun _ => 0)
       (Function.update initial columnTape (encoded (EncodedDomain.binaryNaturals 0) sizes columnIndex)) := by
-  simpa only [commitColumn, EncodedDomain.binaryNaturals] using
+  simpa only [commitColumn, EncodedDomain.binaryNaturals_width] using
     StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0)
       sizes columnIndex nextColumnTape columnTape (by decide)
       (fun name => (domains enumeration name).width sizes) readOnly (by decide) rfl rfl
-      initial resultEq region
+      initial resultEq (by
+        simpa only [show (domains enumeration columnTape).width sizes = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes] using region)
 
 omit [Field Scalar] in
 theorem increment_runs (enumeration : Scalar ≃ Fin cardinality) :
@@ -109,7 +111,12 @@ theorem increment_runs (enumeration : Scalar ≃ Fin cardinality) :
         | inr output => cases output with
           | false => exact columnEq
           | true => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact region) headers
+      (by
+        intro name writable
+        fin_cases name <;> first
+          | contradiction
+          | change Region ((EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes) 0 (initial nextColumnTape)
+            simpa only [EncodedDomain.binaryNaturals_width] using region) headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
   · have result := canonical ()
     change output () = StandardBinaryIncrement.next 0 sizes columnIndex at correct
@@ -157,7 +164,19 @@ theorem guard_runs (enumeration : Scalar ≃ Fin cardinality) :
           contradiction
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute localSizes input (fun name => (domains enumeration name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
+      (by
+        intro name
+        fin_cases name
+        · change (EncodedDomain.unary.{0, 0} (0 : Fin 3)).width sizes = (EncodedDomain.unary.{0, 0} ()).width localSizes
+          simp [EncodedDomain.unary, EncodedDomain.ofCodec, localSizes]
+        · change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = (EncodedDomain.binaryNaturals ()).width localSizes
+          simp [localSizes]
+        · change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = (EncodedDomain.binaryNaturals ()).width localSizes
+          simp [localSizes]
+        · change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = (EncodedDomain.binaryNaturals ()).width localSizes
+          simp [localSizes]
+        · change (EncodedDomain.booleans (Parameter := Fin 3)).width sizes = (EncodedDomain.booleans (Parameter := Unit)).width localSizes
+          simp [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
       trivial
       (by
@@ -166,21 +185,39 @@ theorem guard_runs (enumeration : Scalar ≃ Fin cardinality) :
         · change initial (sizeTape 0) = encoded (EncodedDomain.unary ()) localSizes PUnit.unit
           rw [encoded_unary]
           exact header
-        · exact columnEq
-        · exact limitEq
+        · change initial columnTape = encoded (EncodedDomain.binaryNaturals ()) localSizes columnIndex
+          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using columnEq
+        · change initial limitTape = encoded (EncodedDomain.binaryNaturals ()) localSizes limit
+          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using limitEq
         · contradiction
         · contradiction)
       (by
         intro name writable
-        fin_cases name <;> first | contradiction | exact differenceRegion | exact guardRegion)
+        fin_cases name
+        · contradiction
+        · contradiction
+        · contradiction
+        · change Region ((EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes) 0 (initial differenceTape)
+          simpa only [EncodedDomain.binaryNaturals_width] using differenceRegion
+        · change Region ((EncodedDomain.booleans (Parameter := Fin 3)).width sizes) 0 (initial guardTape)
+          simpa [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+            show Nat.clog 2 2 = 1 from by decide] using guardRegion)
       (by intro parameter; cases parameter; exact header)
   refine ⟨ticks, final, ?_, trace, ?_, ?_, ?_⟩
   · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
   · have flag := canonical true
+    change final guardTape = encoded EncodedDomain.booleans localSizes (output true) at flag
     change output true = decide (columnIndex.val < limit.val) at correct
     rw [correct] at flag
-    exact flag
-  · exact ⟨output false, canonical false⟩
+    simpa only [encoded, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast] using flag
+  · have result := canonical false
+    change final differenceTape = encoded (EncodedDomain.binaryNaturals ()) localSizes (output false) at result
+    refine ⟨output false, ?_⟩
+    simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+      EncodedDomain.ArrayEncoding.bits_cast, localSizes] using result
   · intro name notDifference notGuard
     apply preserved_of_wiring guardWiring BinarySubtraction.argumentReadOnly initial final outside immutable
     intro localName equal

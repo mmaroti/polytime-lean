@@ -36,7 +36,7 @@ abbrev IncrementState := Sum (StandardBinaryScan.State Bool) Unit
 abbrev State (width : ℕ) := Sum (StandardGaussJordanClearTarget.State width)
   (Sum (Fin 3) (Sum IncrementState (Fin 3)))
 
-instance statesFinite (width : ℕ) : Fintype (State width) := by
+noncomputable instance statesFinite (width : ℕ) : Fintype (State width) := by
   letI : Fintype (StandardGaussJordanClearTarget.State width) := inferInstance
   dsimp only [State, IncrementState]
   infer_instance
@@ -146,7 +146,7 @@ theorem increment_runs (enumeration : Scalar ≃ Fin cardinality) :
         | inr output => cases output with
           | false => exact targetEq
           | true => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact region)
+      (by intro name writable; fin_cases name <;> first | contradiction | simpa [domains, nextTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using region)
       headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
   · have result := canonical ()
@@ -198,8 +198,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
           final name = encoded (domains enumeration name) sizes value) := by
   obtain ⟨targetBound, executeTarget⟩ := StandardGaussJordanClearTarget.runs enumeration
   obtain ⟨incrementBound, executeIncrement⟩ := increment_runs enumeration
-  obtain ⟨matrixBound, matrixWidthBound⟩ :=
-    ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).polynomial_width
+  let matrixBound := ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
   refine ⟨targetBound + incrementBound + 2 * matrixBound + 2 * MvPolynomial.X 0 + 7, ?_⟩
   intro sizes initial sourceRow targetRow column sourceValid targetValid matrix
     columnsFit columnValid capacity sourceEq targetEq columnEq matrixEq headers regions
@@ -248,12 +247,16 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
       ((Function.update_of_ne (by decide) _ _).trans targetStill)
       (fun parameter => (commitTrace.readOnly_tape (sizeTape parameter) rfl).trans
         ((targetTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)))
-      (commitTrace.region nextTape (targetTrace.region nextTape (regions nextTape)))
+      (by
+        have region := commitTrace.region nextTape (targetTrace.region nextTape (regions nextTape))
+        change Region ((EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes) 0 (afterCommit nextTape) at region
+        simpa only [EncodedDomain.binaryNaturals_width] using region)
   have advanceTrace := StandardTapeCommands.copy_encoded_runs
     (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes targetRow)
     nextTape (dataTape 1) (by decide) width readOnly rfl rfl rfl incremented nextEq
     (incrementTrace.region (dataTape 1)
       (commitTrace.region (dataTape 1) (targetTrace.region (dataTape 1) (regions (dataTape 1)))))
+  simp only [EncodedDomain.binaryNaturals_width] at advanceTrace
   let final := Function.update incremented (dataTape 1)
     (encoded (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes targetRow))
   have preserve (name : TapeName) (notCounter : name ≠ dataTape 1)
@@ -274,12 +277,12 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   refine ⟨targetTicks + ((2 * (domains enumeration workingTape).width sizes + 2) +
     (incrementTicks + (2 * sizes 0 + 2) + 1) + 1) + 1, final, ?_, ?_,
     ⟨within, finalMatrix⟩, Function.update_self _ _ _, ?_⟩
-  · have widthBound := matrixWidthBound sizes
-    change (domains enumeration workingTape).width sizes ≤ MvPolynomial.eval sizes matrixBound at widthBound
-    simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
+  · have matrixWidth : (domains enumeration workingTape).width sizes = MvPolynomial.eval sizes matrixBound := rfl
+    rw [matrixWidth]
+    simp only [matrixBound, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [machine, entry, exit, commit, advance, width, final,
-      EncodedDomain.binaryNaturals] using complete
+      EncodedDomain.binaryNaturals_width] using complete
   · intro name writable
     by_cases isCounter : name = dataTape 1
     · subst name

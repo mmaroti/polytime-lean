@@ -34,7 +34,7 @@ abbrev TapeName := Sum (Fin 3) (Fin 9)
 abbrev Alphabet := CallingConvention.Alphabet TapeName
 abbrev State := Sum StandardSizeRead.State MultiplyAdd.State
 
-def domains : TapeName → EncodedDomain (Fin 3)
+noncomputable def domains : TapeName → EncodedDomain (Fin 3)
   | .inl parameter => EncodedDomain.unary parameter
   | .inr name => if name = 4 ∨ name = 8 then EncodedDomain.booleans
       else EncodedDomain.binaryNaturals 0
@@ -112,7 +112,17 @@ theorem runs (sizes : Fin 3 → ℕ) (row column : List Bool)
     oldColumns oldShifted columnsLength shiftedLength
   have readTrace := sizeTrace.wire_of_eq sizeWiring
     (fun name => (domains name).width sizes) readOnly
-    (by intro name; fin_cases name <;> rfl)
+    (by
+      intro name
+      fin_cases name
+      · change (domains (.inl 2)).width sizes = _
+        simp [domains, StandardSizeRead.widths, EncodedDomain.unary, EncodedDomain.ofCodec]
+      · change (domains (.inl 0)).width sizes = _
+        simp [domains, StandardSizeRead.widths, EncodedDomain.unary, EncodedDomain.ofCodec]
+      · change (domains (.inr 5)).width sizes = _
+        simp [domains, StandardSizeRead.widths, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec]
+      · change (domains (.inr 2)).width sizes = _
+        simp [domains, StandardSizeRead.widths, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec])
     (by intro name premise; fin_cases name <;> exact premise)
     (frame sizes row column oldProduct oldShifted oldNext oldColumns oldResult multiplyFlag addFlag)
     (frame sizes row column oldProduct (word scratch) oldNext (word (columnBits sizes)) oldResult multiplyFlag addFlag)
