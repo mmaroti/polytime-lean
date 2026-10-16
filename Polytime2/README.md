@@ -304,15 +304,82 @@ Implementation changes require no downstream proof edits when specifications
 and realizability statements stay unchanged. Lean may rebuild dependent modules;
 executable implementations are not a requirement.
 
-## Limits and next steps
+## Next steps (remove completed steps)
 
-- Simplify nested tape names, wiring, and alphabet-compatibility proofs.
-- Add quotient production, signed arithmetic, and the remaining bit arithmetic
-  for integer matrices. Extend polynomial reparameterization of subprogram
-  calls.
+For consolidation work, identify the implementations to replace before adding
+an abstraction, and measure net lines removed, including the new machinery.
 
-The simulator's raw transport certificate is internal. Higher-level algorithm
-notation, the SMP targets, and Smith normal form remain future work.
+### Array access
+
+Migrate indexed maps and matrix access off the old fixed-width array stack.
+Reuse generic array computations or runtime-width primitives, extract the shared
+counter machinery, and remove the superseded controllers and contracts.
+
+### Size substitution
+
+Generalize polynomial reparameterization of domains, computations, and runtime
+bounds. Prepare derived unary size headers privately, sharing machinery with
+`withComputedWidth`, and replace the hard-coded `withInternalSize` substitution
+and specialized unary-sum preparation.
+
+### Finite tables
+
+Implement one finite-table construction for arbitrary finite input and output
+families, allowing different fixed widths. Make binary tables, predicates, and
+row combination specializations of it while preserving their existing codecs.
+
+### Tape layouts
+
+Extend the generic layout adapter to place named public roles and allocate the
+remaining tapes privately. Derive width and encoding compatibility from domain
+equality, simplify nested tape names and alphabet proofs, and consolidate
+specialized execution and wiring adapters.
+
+### Composed algorithms
+
+Express indexed maps, catalogue maps, matrix coordinate access, and compound
+arithmetic through certified mathematical composition. Add a specification
+congruence rule where needed, then delete their separate controller proofs.
+Assess additional copying and private storage when replacing shared workspaces.
+
+### Loop workspaces
+
+Generalize loops to immutable context and finite families of state variables.
+Build reusable initialization plans from copy, constant, and size-reading
+commands, using `Pipeline.updates_runs`. Require valid encodings only for live
+mathematical variables, then migrate matrix and elimination controllers while
+retaining their mathematical correctness proofs.
+
+### Scanning
+
+Consolidate forward scanning, boundary handling, rewinding, and head restoration
+under a finite-memory scanner with configurable tape roles and termination
+actions. Start with a small pair of controllers and verify a net reduction;
+retain the distinction between blank termination and explicit slice widths.
+
+### Domain views
+
+Use one generic transport mechanism for carrier changes, matrix flattening,
+widths, encodings, and contracts. Specialize unary domains from `unaryOfLength`
+and improve transport and simplification lemmas while retaining exact polynomial
+widths.
+
+### Integer arithmetic
+
+Add quotient production, signed arithmetic, and the remaining bit arithmetic
+needed for integer matrices, reusing generic arithmetic machinery.
+
+### Algorithm notation
+
+Develop higher-level algorithm notation over the certified mathematical
+composition rules, keeping machine witnesses and scratch layouts internal.
+
+### Algebra targets
+
+Implement the SMP targets and Smith normal form using the shared computation
+framework and generic integer-matrix operations.
+
+The simulator's raw transport certificate remains internal.
 
 Build from the repository root with `lake build Polytime2`, and use
 `import Polytime2`. See [GOAL.md](../GOAL.md) for the shared specification and
