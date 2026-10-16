@@ -129,6 +129,11 @@ A multi-tape implementation of polynomial-time algorithms.
 - Generic standalone TM0 output extraction erases every working track and
   boundary marker, leaving canonical binary output with the head at its start.
   Its polynomial bound includes extraction; empty output leaves a blank tape.
+- Generic delimited input preparation initializes every input track and blank
+  output/scratch track in one sweep, without evaluating domain widths.
+  `Computation.Realizable.tm0` exports every realized computation to a finite
+  TM0 machine, including preparation, simulation, extraction, and startup in
+  its polynomial bound. Empty blocks and absent size or input tapes are covered.
 
 Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
@@ -136,8 +141,11 @@ All algorithmic dependencies are defined within this implementation.
 
 `CallingConvention.Realizes.tm0` retains track frames;
 `CallingConvention.Realizes.tm0_output` extracts a declared binary output.
-Both start from a padded simulator track encoding. Construction of that encoding
-from an external size header and canonical input bits is not yet certified.
+Both lower-level adapters start from a padded simulator track encoding.
+`CallingConvention.Realizes.tm0_delimited` prepares ordinary delimited input
+blocks and extracts a selected output;
+`Computation.Realizable.tm0` hides all implementation witnesses behind the
+public `Computation.TM0Realizable` predicate.
 
 For gcd, size parameter `b` fixes the binary width of both separate operands
 and the result. A separate immutable tape stores `b` in unary. The contract
@@ -221,6 +229,18 @@ read-only inputs, not from existing output contents. The realization proof
 establishes the exact written width; an encoded domain need not supply a
 separately certified executable width evaluator.
 
+The generic TM0 export serializes unary sizes first, then encoded arguments,
+in a specialization-fixed order. Five distinct nonblank letters encode binary
+zero, binary one, a separator, and two framing delimiters:
+
+```text
+begin # size_1 # ... # size_s # input_1 # ... # input_m # end
+```
+
+Empty blocks retain their separators. With no public inputs the word is
+`begin # end`. Output contains only binary result letters; all framing and
+working storage are erased, and the head returns to the output's start.
+
 ## Mathematical specifications and implementations
 
 - `Computation` specifies finitely many named input encoded domains, one output
@@ -260,6 +280,11 @@ and Gauss–Jordan elimination.
 The arithmetic, gcd, countdown, indexed-copy, catalogue, finite-field row, and
 elimination examples use these rules without implementation fields.
 
+The public Gauss–Jordan computation has only row and column size parameters,
+with every rectangular matrix admissible. Its counter capacity is private;
+the library constructs its unary header and includes that work in the
+polynomial runtime bound in the two public dimensions.
+
 Implementation changes require no downstream proof edits when specifications
 and realizability statements stay unchanged. Lean may rebuild dependent modules;
 executable implementations are not a requirement.
@@ -267,8 +292,6 @@ executable implementations are not a requirement.
 ## Limits and next steps
 
 - Simplify nested tape names, wiring, and alphabet-compatibility proofs.
-- Certify external input preparation and compose it with simulation and output
-  extraction.
 - Add quotient production, signed arithmetic, and the remaining bit arithmetic
   for integer matrices. Extend polynomial reparameterization of subprogram
   calls.

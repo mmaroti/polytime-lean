@@ -16,13 +16,14 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
+import Polytime2.Computation.InternalSize
 import Polytime2.StandardGaussJordanEliminationAlgorithm
 
 /-! # Gauss–Jordan elimination as a mathematical computation
 
-The specialization fixes the finite field enumeration. The three sizes are
-binary counter capacity, row count, and column count; the mathematical argument
-and result are ordinary matrices of that rectangular shape.
+The specialization fixes the finite field enumeration. The only public sizes
+are row and column counts; the mathematical argument and result are ordinary
+matrices of that shape. Counter capacity and its unary header are private.
 -/
 
 namespace Polytime2.Computation
@@ -31,7 +32,7 @@ open MultiTape CallingConvention Realizable StandardMatrixRows
 
 variable {Scalar : Type} [Field Scalar] [DecidableEq Scalar] {cardinality : ℕ}
 
-noncomputable def gaussJordan (enumeration : Scalar ≃ Fin cardinality) : Computation (Fin 3) Unit where
+private noncomputable def gaussJordanWithCapacity (enumeration : Scalar ≃ Fin cardinality) : Computation (Fin 3) Unit where
   inputDomains _ := matrixDomain (FieldRow.scalarDomain enumeration)
   outputDomain := matrixDomain (FieldRow.scalarDomain enumeration)
   precondition sizes _ := sizes 1 < 2 ^ sizes 0 ∧ sizes 2 < 2 ^ sizes 0 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0
@@ -44,16 +45,16 @@ private abbrev EliminationTape := StandardGaussJordanElimination.TapeName
 /-- Public roles map to the standard interface; all other source tapes remain
 private. Extra unused private tapes have no mathematical validity requirement. -/
 private noncomputable def eliminationLayoutFunction (enumeration : Scalar ≃ Fin cardinality) :
-    EliminationTape → TapeName (gaussJordan enumeration) EliminationTape
+    EliminationTape → TapeName (gaussJordanWithCapacity enumeration) EliminationTape
   | .inl (.inl (.inl (.inl (.inl (.inl (.inl (.inl (.inl (.inl (parameter)))))))))) => .inl parameter
-  | .inr 0 => inputTape (gaussJordan enumeration) ()
-  | .inl (.inl (.inr 1)) => outputTape (gaussJordan enumeration)
-  | name => scratchTape (gaussJordan enumeration) name
+  | .inr 0 => inputTape (gaussJordanWithCapacity enumeration) ()
+  | .inl (.inl (.inr 1)) => outputTape (gaussJordanWithCapacity enumeration)
+  | name => scratchTape (gaussJordanWithCapacity enumeration) name
 
 private noncomputable def eliminationLayout (enumeration : Scalar ≃ Fin cardinality) :
-    EliminationTape ↪ TapeName (gaussJordan enumeration) EliminationTape := by
+    EliminationTape ↪ TapeName (gaussJordanWithCapacity enumeration) EliminationTape := by
   refine ⟨eliminationLayoutFunction enumeration, ?_⟩
-  let recover : TapeName (gaussJordan enumeration) EliminationTape → EliminationTape
+  let recover : TapeName (gaussJordanWithCapacity enumeration) EliminationTape → EliminationTape
     | .inl parameter => StandardGaussJordanElimination.sizeTape parameter
     | .inr (.inl _) => StandardGaussJordanElimination.inputTape
     | .inr (.inr (.inl _)) => StandardGaussJordanElimination.workingTape
@@ -70,7 +71,7 @@ private noncomputable def eliminationPresentation (enumeration : Scalar ≃ Fin 
   else StandardGaussJordanElimination.domains enumeration name
 
 private theorem eliminationDomains (enumeration : Scalar ≃ Fin cardinality) (name : EliminationTape) :
-    domains (gaussJordan enumeration) (StandardGaussJordanElimination.domains enumeration)
+    domains (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration)
       (eliminationLayout enumeration name) = eliminationPresentation enumeration name := by
   fin_cases name <;> rfl
 
@@ -90,7 +91,7 @@ private noncomputable def eliminationPresentationValues (enumeration : Scalar �
 
 private noncomputable def eliminationValues (enumeration : Scalar ≃ Fin cardinality)
     (name : EliminationTape) (sizes : Fin 3 → ℕ) :
-    (domains (gaussJordan enumeration) (StandardGaussJordanElimination.domains enumeration)
+    (domains (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration)
       (eliminationLayout enumeration name)).Carrier sizes ≃
       (StandardGaussJordanElimination.domains enumeration name).Carrier sizes :=
   (Equiv.cast (congrArg (fun domain => domain.Carrier sizes) (eliminationDomains enumeration name))).trans
@@ -100,10 +101,10 @@ end Realizable.Internal
 
 open Realizable.Internal in
 /-- The public certificate contains neither workspace names nor runtime bounds. -/
-theorem gaussJordan_realizable (enumeration : Scalar ≃ Fin cardinality) :
-    (gaussJordan enumeration).Realizable := by
+private theorem gaussJordanWithCapacity_realizable (enumeration : Scalar ≃ Fin cardinality) :
+    (gaussJordanWithCapacity enumeration).Realizable := by
   classical
-  refine ofLayout (gaussJordan enumeration) (StandardGaussJordanElimination.domains enumeration)
+  refine ofLayout (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration)
     (StandardGaussJordanElimination.domains enumeration) StandardGaussJordanElimination.readOnly
     StandardGaussJordanElimination.sizeTapes StandardGaussJordanElimination.outputTapes
     (StandardGaussJordanElimination.algorithm enumeration)
@@ -126,23 +127,52 @@ theorem gaussJordan_realizable (enumeration : Scalar ≃ Fin cardinality) :
     change (matrixEquiv (Carrier := Scalar) sizes).symm (output ()) =
       GaussJordan.eliminate (Scalar := Scalar)
         ((matrixEquiv (Carrier := Scalar) sizes).symm
-          (matrixEquiv sizes (arguments (gaussJordan enumeration)
+          (matrixEquiv sizes (arguments (gaussJordanWithCapacity enumeration)
             (StandardGaussJordanElimination.domains enumeration) sizes input ()))) at correct
     have roundtrip := (matrixEquiv (Carrier := Scalar) sizes).symm_apply_apply
-      (arguments (gaussJordan enumeration) (StandardGaussJordanElimination.domains enumeration) sizes input ())
+      (arguments (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration) sizes input ())
     have mathematical := correct.trans (congrArg (GaussJordan.eliminate (Scalar := Scalar)) roundtrip)
     have equality := ((matrixEquiv (Carrier := Scalar) sizes).apply_symm_apply (output ())).symm.trans
       (congrArg (matrixEquiv (Carrier := Scalar) sizes) mathematical)
     exact congrArg (encoded _ sizes) equality
 
+private theorem gaussJordan_capacity_fits (sizes : Fin 2 → ℕ) :
+    sizes 0 < 2 ^ (sizes 0 + sizes 1 + 1) ∧
+      sizes 1 < 2 ^ (sizes 0 + sizes 1 + 1) ∧
+      sizes 0 * sizes 1 ≤ 2 ^ (sizes 0 + sizes 1 + 1) := by
+  have rows := (sizes 0).lt_two_pow_self
+  have columns := (sizes 1).lt_two_pow_self
+  have rowsPower : 2 ^ sizes 0 ≤ 2 ^ (sizes 0 + sizes 1 + 1) :=
+    pow_le_pow_right₀ (by decide) (by omega)
+  have columnsPower : 2 ^ sizes 1 ≤ 2 ^ (sizes 0 + sizes 1 + 1) :=
+    pow_le_pow_right₀ (by decide) (by omega)
+  refine ⟨rows.trans_le rowsPower, columns.trans_le columnsPower, ?_⟩
+  calc
+    sizes 0 * sizes 1 ≤ 2 ^ sizes 0 * 2 ^ sizes 1 := Nat.mul_le_mul rows.le columns.le
+    _ = 2 ^ (sizes 0 + sizes 1) := (pow_add _ _ _).symm
+    _ ≤ 2 ^ (sizes 0 + sizes 1 + 1) := pow_le_pow_right₀ (by decide) (by omega)
+
+/-- Finite-field elimination has just two public sizes, rows and columns.
+Counter capacity is constructed privately; every rectangular matrix is admissible. -/
+noncomputable def gaussJordan (enumeration : Scalar ≃ Fin cardinality) : Computation (Fin 2) Unit :=
+  ((gaussJordanWithCapacity enumeration).withInternalSize).withPrecondition
+    (fun _ _ => True) (fun sizes _ _ => gaussJordan_capacity_fits sizes)
+
+/-- One finite algorithm works for every pair of dimensions. Its private size
+header, scratch tapes, controllers, and polynomial bound remain existential. -/
+theorem gaussJordan_realizable (enumeration : Scalar ≃ Fin cardinality) :
+    (gaussJordan enumeration).Realizable :=
+  ((gaussJordanWithCapacity_realizable enumeration).withInternalSize).withPrecondition
+    (fun _ _ => True) (fun sizes _ _ => gaussJordan_capacity_fits sizes)
+
 /-- Elimination preserves the row space and returns reduced row-echelon form. -/
-theorem gaussJordan_correct (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3 → ℕ)
+theorem gaussJordan_correct (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 2 → ℕ)
     (arguments : (gaussJordan enumeration).Arguments sizes)
     (valid : (gaussJordan enumeration).precondition sizes arguments) :
-    Matrix.RowEquivalent (R := Scalar) (arguments () : Matrix (Fin (sizes 1)) (Fin (sizes 2)) Scalar)
+    Matrix.RowEquivalent (R := Scalar) (arguments () : Matrix (Fin (sizes 0)) (Fin (sizes 1)) Scalar)
       ((gaussJordan enumeration).compute sizes ⟨arguments, valid⟩) ∧
       Matrix.IsReducedRowEchelon (R := Scalar)
-        ((gaussJordan enumeration).compute sizes ⟨arguments, valid⟩ : Matrix (Fin (sizes 1)) (Fin (sizes 2)) Scalar) :=
+        ((gaussJordan enumeration).compute sizes ⟨arguments, valid⟩ : Matrix (Fin (sizes 0)) (Fin (sizes 1)) Scalar) :=
   ⟨GaussJordan.rowEquivalent (Scalar := Scalar) _, GaussJordan.reducedRowEchelon (Scalar := Scalar) _⟩
 
 end Polytime2.Computation

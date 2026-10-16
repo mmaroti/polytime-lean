@@ -18,6 +18,7 @@ limitations under the License.
 import Polytime2.Machine
 import Polytime2.Computation
 import Polytime2.Computation.Realizable
+import Polytime2.Computation.TM0
 import Polytime2.Computation.Composition
 import Polytime2.Computation.Arguments
 import Polytime2.Computation.Branch
@@ -40,6 +41,7 @@ import Polytime2.Examples.MatrixAccess
 import Polytime2.Computations.Gcd
 import Polytime2.Computations.GaussJordan
 import Polytime2.Examples.GaussJordan
+import Polytime2.Examples.TM0
 import Polytime2.Examples.Computation
 import Polytime2.EncodedDomain
 import Polytime2.CallingConvention

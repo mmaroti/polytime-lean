@@ -32,13 +32,12 @@ open Polytime2.Computation
 noncomputable section MathematicalExamples
 
 private abbrev enumeration := (ZMod.finEquiv 2).toEquiv.symm
-private abbrev sizes : Fin 3 → ℕ := ![3, 2, 3]
+private abbrev sizes : Fin 2 → ℕ := ![2, 3]
 private def original : Matrix (Fin 2) (Fin 3) (ZMod 2) := ![![1, 1, 0], ![1, 0, 1]]
 private def expected : Matrix (Fin 2) (Fin 3) (ZMod 2) := ![![1, 0, 1], ![0, 1, 1]]
 private def arguments : (gaussJordan enumeration).Arguments sizes := fun _ => original
 private theorem admissible : (gaussJordan enumeration).precondition sizes arguments := by
-  change 2 < 8 ∧ 3 < 8 ∧ 2 * 3 ≤ 8
-  decide
+  trivial
 
 example : (gaussJordan enumeration).Realizable := gaussJordan_realizable enumeration
 
@@ -58,7 +57,7 @@ example : Matrix.RowEquivalent (R := ZMod 2) original
   gaussJordan_correct enumeration sizes arguments admissible
 
 /-- A downstream proof depends only on the mathematical result domain. -/
-def copiedElimination : Polytime2.Computation (Fin 3) Unit :=
+def copiedElimination : Polytime2.Computation (Fin 2) Unit :=
   (gaussJordan enumeration).followedBy (copy (gaussJordan enumeration).outputDomain) rfl
     (by intro sizes arguments valid; trivial)
 
