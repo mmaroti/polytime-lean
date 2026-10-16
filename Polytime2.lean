@@ -44,6 +44,8 @@ import Polytime2.Examples.GaussJordan
 import Polytime2.Examples.TM0
 import Polytime2.Examples.Computation
 import Polytime2.EncodedDomain
+import Polytime2.PolynomialEvaluator
+import Polytime2.Examples.PolynomialEvaluator
 import Polytime2.CallingConvention
 import Polytime2.CallingConventionSimulation
 import Polytime2.CallingConventionOutput

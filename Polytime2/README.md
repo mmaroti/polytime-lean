@@ -9,8 +9,13 @@ A multi-tape implementation of polynomial-time algorithms.
   and partial decoding, and round-trip laws. Fixed finite presentations supply
   the existing scalar codecs; examples cover tagged carriers and runtime bit
   widths.
-  Encoding and decoding remain mathematical specifications. Routines that
-  evaluate widths on tape still need machine certificates.
+  Encoding and decoding remain mathematical specifications.
+- Every fixed width polynomial has a certified finite unary evaluator. It
+  receives one immutable unary size tape per parameter, prepares its private
+  copies, and returns exactly that many unary ones with restored public heads.
+  Its polynomial runtime bound includes preparation and output restoration.
+  `EncodedDomain.width_computable` supplies this evaluator for every domain,
+  including arrays with runtime-dependent element widths.
 - Deterministic transitions over Mathlib's two-sided tapes, with separate
   alphabets, writes, and head movements for each tape.
 - Counted execution, controller embedding, and sequential composition with one
