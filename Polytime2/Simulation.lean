@@ -183,7 +183,7 @@ theorem realizes_steps {Parameter : Type parameterLevel} [Fintype Parameter]
     {source : Machine Alphabet State} {sourceEntry sourceExit : State}
     {precondition : (Parameter → ℕ) → Tapes Alphabet → Prop}
     {postcondition : (Parameter → ℕ) → Tapes Alphabet → Tapes Alphabet → Prop}
-    (certificate : Realizes source sourceEntry sourceExit precondition postcondition)
+    (certificate : MultiTape.Internal.Realizes source sourceEntry sourceExit precondition postcondition)
     (rowCapacity : MvPolynomial Parameter ℕ) :
     ∃ timeBound rowBound : MvPolynomial Parameter ℕ,
       ∀ assignment initial, precondition assignment initial →
@@ -240,7 +240,7 @@ theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter]
     {source : Machine Alphabet State} {sourceEntry sourceExit : State}
     {precondition : (Parameter → ℕ) → Tapes Alphabet → Prop}
     {postcondition : (Parameter → ℕ) → Tapes Alphabet → Tapes Alphabet → Prop}
-    (certificate : Realizes source sourceEntry sourceExit precondition postcondition)
+    (certificate : MultiTape.Internal.Realizes source sourceEntry sourceExit precondition postcondition)
     (rowCapacity : MvPolynomial Parameter ℕ) :
     ∃ timeBound rowBound : MvPolynomial Parameter ℕ,
       ∀ assignment initial, precondition assignment initial →

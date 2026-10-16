@@ -66,11 +66,11 @@ theorem coincident_rows (scalar : EncodedDomain.{0, 0} Empty) (value : scalar.Ca
   have represented : Entry (domains scalar) readOnly ![1, 1, 1] (input scalar value) (initial scalar value) := by
     constructor
     · intro name readonly
-      simp only [initial, dif_pos readonly]
+      simp only [initial, dite_eq_left readonly]
     · intro name writable
       refine ⟨List.replicate ((domains scalar name).width ![1, 1, 1]) 2, List.length_replicate, ?_⟩
       simp only [initial, writable, Bool.false_eq_true, ↓reduceDIte]
-  obtain ⟨sizeReadonly, halts, bound, execute⟩ := contract true scalar
+  obtain ⟨sizeReadonly, outputsWritable, halts, bound, execute⟩ := contract true scalar
     (fun sizes _ source target => (changeValue sizes source, target))
   obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
     execute ![1, 1, 1] (input scalar value) (initial scalar value)
@@ -83,11 +83,12 @@ theorem coincident_rows (scalar : EncodedDomain.{0, 0} Empty) (value : scalar.Ca
         exact encoded_unary parameter ![1, 1, 1])
   obtain ⟨sourceWithin, targetWithin, resultEq⟩ := correct
   dsimp only at resultEq
-  change output ⟨.inr 5, rfl⟩ = Function.update
+  change output () = Function.update
     (Function.update (fun _ => value) ⟨0, sourceWithin⟩ (changeValue Empty.elim value)) ⟨0, targetWithin⟩ value at resultEq
   rw [Function.update_idem, Function.update_eq_self] at resultEq
   refine ⟨ticks, final, trace, ?_⟩
-  rw [canonical (.inr 5) rfl, resultEq]
+  change final (outputTapes ()) = _
+  rw [canonical (), resultEq]
   rfl
 
 -- A real source change: true becomes false, then the coincident target write

@@ -112,38 +112,29 @@ theorem readColumns_runs (enumeration : Scalar ≃ Fin cardinality) :
         final limitTape = encoded (EncodedDomain.binaryNaturals 0) sizes ⟨sizes 2, fits⟩ ∧
         (∃ value : Fin (2 ^ sizes 0), final differenceTape = encoded (EncodedDomain.binaryNaturals 0) sizes value) ∧
         (∀ name, name ≠ limitTape → name ≠ differenceTape → final name = initial name) := by
-  obtain ⟨bound, execute⟩ := StandardSizeRead.contract.wired_runs columnLimitWiring
-  let parameter : Bool → Fin 3 := fun name => if name then 0 else 2
-  refine ⟨MvPolynomial.rename parameter bound, ?_⟩
+  refine ⟨4 * MvPolynomial.X 0 + MvPolynomial.X 2 * (4 * MvPolynomial.X 0 + 8) + 11, ?_⟩
   intro sizes initial fits headers limitRegion scratchRegion
-  let localSizes : Bool → ℕ := fun name => sizes (parameter name)
-  let input : Inputs StandardSizeRead.domains StandardSizeRead.argumentReadOnly localSizes := fun name => by
-    rcases name with ⟨name, readonly⟩
-    cases name with
-    | inl name => exact PUnit.unit
-    | inr name => contradiction
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute localSizes input (fun name => (domains enumeration name).width sizes) readOnly initial
+  let localSizes : Bool → ℕ := fun name => if name then sizes 0 else sizes 2
+  obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
+    StandardSizeRead.Internal.runs_wired columnLimitWiring localSizes
+      (fun name => (domains enumeration name).width sizes) readOnly initial
       (by intro name; fin_cases name <;> rfl)
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      fits
-      (by
-        intro name readonly
-        cases name with
-        | inl name =>
-          change initial (columnLimitWiring (.inl name)) = encoded (EncodedDomain.unary name) localSizes PUnit.unit
-          rw [encoded_unary]
-          cases name <;> exact headers _
-        | inr name => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact limitRegion | exact scratchRegion)
-      (by intro name; cases name <;> exact headers _)
-  refine ⟨ticks, final, ?_, trace, ?_, ?_, ?_⟩
-  · simpa only [MvPolynomial.eval_rename, Function.comp_def, localSizes] using cost
-  · have valueEq : output ⟨.inr false, rfl⟩ = (⟨sizes 2, fits⟩ : Fin (2 ^ sizes 0)) := Fin.ext correct
-    have result := canonical (.inr false) rfl
-    rw [valueEq] at result
-    exact result
-  · exact ⟨output ⟨.inr true, rfl⟩, canonical (.inr true) rfl⟩
+      (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
+  let resultBits := StandardSizeRead.advanceBits (sizes 2) (List.replicate (sizes 0) false)
+  have resultLength : resultBits.length = sizes 0 := by simp [resultBits]
+  have resultValue : Binary.value resultBits = sizes 2 := by
+    simp [resultBits, StandardSizeRead.advanceBits_value, Nat.mod_eq_of_lt fits]
+  have resultEncoding := encoded_binaryNaturals (0 : Fin 3) sizes resultBits resultLength
+  have naturalEq : (⟨Binary.value resultBits, by
+      simpa only [resultLength] using Binary.value_lt_pow_length resultBits⟩ : Fin (2 ^ sizes 0)) =
+      ⟨sizes 2, fits⟩ := Fin.ext resultValue
+  rw [naturalEq] at resultEncoding
+  let scratchValue : Fin (2 ^ sizes 0) := ⟨Binary.value scratch, by
+    simpa only [show scratch.length = sizes 0 from scratchLength] using Binary.value_lt_pow_length scratch⟩
+  refine ⟨_, final, ?_, trace, resultEq.trans resultEncoding.symm,
+    ⟨scratchValue, scratchEq.trans (encoded_binaryNaturals 0 sizes scratch scratchLength).symm⟩, ?_⟩
+  · simp [localSizes]
   · intro name notLimit notDifference
     apply preserved_of_wiring columnLimitWiring StandardSizeRead.argumentReadOnly initial final outside immutable
     intro localName equal

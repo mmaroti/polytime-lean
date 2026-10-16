@@ -16,7 +16,6 @@ limitations under the License.
 -/
 
 import Polytime2.StandardGaussJordanClearAlgorithm
-import Polytime2.StandardMatrixRowField
 
 /-! # Standard-convention swap-normalize-clear pivot controller
 
@@ -240,8 +239,8 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
           | true => contradiction)
       (by intro name writable; exact regions (lookupWiring name)) headers
   obtain ⟨otherWithin, valueEq⟩ := correct
-  change output ⟨.inr true, rfl⟩ = matrix ⟨candidate.val * sizes 2 + column.val, otherWithin⟩ at valueEq
-  have result := canonical (.inr true) rfl
+  change output () = matrix ⟨candidate.val * sizes 2 + column.val, otherWithin⟩ at valueEq
+  have result := canonical ()
   rw [valueEq] at result
   exact ⟨ticks, final, cost, trace, result, outside, immutable⟩
 

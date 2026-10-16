@@ -612,24 +612,26 @@ theorem runs (elementWidth : ℕ) (index before block after replacement : List B
       word, Binary.tape,
       List.map_append, List.append_assoc, List.length_append, Nat.add_assoc] using complete
 
+def outputTapesSized : Unit ↪ Sum Parameter (Fin 7) := oneTape (.inr 3)
+
 /-- An in-range update returns the mathematical array with that coordinate
-replaced. Every private counter and flag is a valid encoded value on return. -/
+replaced. Private counters and flags have no validity obligation on return. -/
 theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     (elementWidth : ℕ) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ)
     (fixedWidth : ∀ assignment, element.width assignment = elementWidth) :
     CallingConvention.Realizes (domainsSized element indexCapacity length)
-      argumentReadOnlySized sizeTapesSized (algorithmSized elementWidth)
+      argumentReadOnlySized sizeTapesSized outputTapesSized (algorithmSized elementWidth)
       (entry elementWidth) (exit elementWidth)
       (fun assignment input =>
         (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment indexCapacity)).val <
           MvPolynomial.eval assignment length)
       (fun assignment input output =>
         ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-          output ⟨.inr 3, rfl⟩ =
+          output () =
             Function.update (input ⟨.inr 1, rfl⟩)
               ⟨(input ⟨.inr 0, rfl⟩).val, within⟩ (input ⟨.inr 2, rfl⟩)) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithmSized,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithmSized,
     machine, exit, MultiTape.sequence, restore, MultiTape.wire,
     StandardHead.BlankReturn.machine]),
     length *
@@ -769,34 +771,8 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
         simp [readOnly, nameEq])
     initial (fun _ => 0)
   rw [inputEq, initialPositions] at trace
-  let zeroValue : Fin (2 ^ assignment indexCapacity) :=
-    ⟨value (List.replicate (assignment indexCapacity) false), by
-      simpa only [List.length_replicate] using
-        Binary.value_lt_pow_length (List.replicate (assignment indexCapacity) false)⟩
-  let output : Outputs (domainsSized element indexCapacity length)
-      argumentReadOnlySized assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases isResult : name = 3
-      · subst name
-        exact resultValue
-      · by_cases isCounter : name = 4
-        · subst name
-          exact zeroValue
-        · by_cases isScratch : name = 5
-          · subst name
-            exact zeroValue
-          · by_cases isFlag : name = 6
-            · subst name
-              exact false
-            · have low : name.val < 3 := by omega
-              have readOnlyInput :
-                  argumentReadOnlySized (Parameter := Parameter) (.inr name) = true := by
-                simp [argumentReadOnlySized, low]
-              rw [readOnlyInput] at writable
-              cases writable
+  let output : Outputs (domainsSized element indexCapacity length) outputTapesSized assignment :=
+    fun _ => resultValue
   let final := install dataTapesSized
     (frame index (buffer (word (before ++ block ++ after))) (word replacementBits)
       (buffer (word (before ++ replacementBits ++ after)))
@@ -851,97 +827,30 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
         (⟨indexValue.val, withinInput⟩ : Fin arrayLength) :=
       Fin.ext indexValueEq
     exact congrArg (fun selected => Function.update arrayValue selected replacement) equalIndex
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases isResult : name = 3
-      · subst name
-        change install dataTapesSized
-          (frame index (buffer (word (before ++ block ++ after)))
-            (word replacementBits)
-            (buffer (word (before ++ replacementBits ++ after)))
-            (List.replicate index.length false)
-            (word (List.replicate index.length false)) (data false))
-          initial (dataTapesSized 3) = _
-        rw [install_at]
-        change buffer (word (before ++ replacementBits ++ after)) =
-          encoded (domainsSized element indexCapacity length (Sum.inr 3)) assignment
-            (output ⟨Sum.inr 3, writable⟩)
-        simp only [output, domainsSized, EncodedDomain.arrayOfLength]
-        change buffer (word (before ++ replacementBits ++ after)) =
-          buffer (word (EncodedDomain.ArrayEncoding.bits
-            (EncodedDomain.ArrayEncoding.encode (element.encode assignment)
-              arrayLength resultValue)))
-        congr 1
-        exact (congrArg (List.map data) updatedDecomposition).symm
-      · by_cases isCounter : name = 4
-        · subst name
-          change install dataTapesSized
-              (frame index (buffer (word (before ++ block ++ after)))
-                (word replacementBits)
-                (buffer (word (before ++ replacementBits ++ after)))
-                (List.replicate index.length false)
-                (word (List.replicate index.length false)) (data false))
-              initial (dataTapesSized 4) = _
-          rw [install_at]
-          change buffer (word (List.replicate index.length false)) =
-            encoded (domainsSized element indexCapacity length (Sum.inr 4)) assignment
-              (output ⟨Sum.inr 4, writable⟩)
-          simp only [output, domainsSized]
-          rw [indexLength]
-          exact (encoded_binaryNaturals indexCapacity assignment
-            (List.replicate (assignment indexCapacity) false) List.length_replicate).symm
-        · by_cases isScratch : name = 5
-          · subst name
-            change install dataTapesSized
-              (frame index (buffer (word (before ++ block ++ after)))
-                (word replacementBits)
-                (buffer (word (before ++ replacementBits ++ after)))
-                (List.replicate index.length false)
-                (word (List.replicate index.length false)) (data false))
-              initial (dataTapesSized 5) = _
-            rw [install_at]
-            change buffer (word (List.replicate index.length false)) =
-              encoded (domainsSized element indexCapacity length (Sum.inr 5)) assignment
-                (output ⟨Sum.inr 5, writable⟩)
-            simp only [output, domainsSized]
-            rw [indexLength]
-            exact (encoded_binaryNaturals indexCapacity assignment
-              (List.replicate (assignment indexCapacity) false) List.length_replicate).symm
-          · by_cases isFlag : name = 6
-            · subst name
-              change install dataTapesSized
-                (frame index (buffer (word (before ++ block ++ after)))
-                  (word replacementBits)
-                  (buffer (word (before ++ replacementBits ++ after)))
-                  (List.replicate index.length false)
-                  (word (List.replicate index.length false)) (data false))
-                initial (dataTapesSized 6) = _
-              rw [install_at]
-              change buffer (word [false]) =
-                encoded (domainsSized element indexCapacity length (Sum.inr 6)) assignment
-                  (output ⟨Sum.inr 6, writable⟩)
-              simp only [output, domainsSized]
-              exact (encoded_booleans assignment false).symm
-            · have low : name.val < 3 := by omega
-              have inputReadOnly :
-                  argumentReadOnlySized (Parameter := Parameter) (.inr name) = true := by
-                simp [argumentReadOnlySized, low]
-              rw [inputReadOnly] at writable
-              cases writable
+  · intro name
+    cases name
+    change install dataTapesSized _ initial (dataTapesSized 3) = _
+    rw [install_at]
+    change buffer (word (before ++ replacementBits ++ after)) =
+      encoded (domainsSized element indexCapacity length (Sum.inr 3)) assignment (output ())
+    simp only [output, domainsSized, EncodedDomain.arrayOfLength]
+    change buffer (word (before ++ replacementBits ++ after)) =
+      buffer (word (EncodedDomain.ArrayEncoding.bits
+        (EncodedDomain.ArrayEncoding.encode (element.encode assignment) arrayLength resultValue)))
+    congr 1
+    exact (congrArg (List.map data) updatedDecomposition).symm
 
 /- The two-size-parameter specialization keeps the original update API. -/
 theorem contract (element : EncodedDomain.{0, 0} Bool) (elementWidth : ℕ)
     (fixedWidth : ∀ assignment, element.width assignment = elementWidth) :
-    CallingConvention.Realizes (domains element) argumentReadOnly sizeTapes
+    CallingConvention.Realizes (domains element) argumentReadOnly sizeTapes (oneTape (.inr 3))
       (algorithm elementWidth) (entry elementWidth) (exit elementWidth)
       (fun assignment input => (input ⟨.inr 0, rfl⟩).val <
         MvPolynomial.eval assignment (MvPolynomial.X true))
       (fun assignment input output =>
         ∃ within : (input ⟨.inr 0, rfl⟩).val <
             MvPolynomial.eval assignment (MvPolynomial.X true),
-          output ⟨.inr 3, rfl⟩ =
+          output () =
             Function.update (input ⟨.inr 1, rfl⟩)
               ⟨(input ⟨.inr 0, rfl⟩).val, within⟩ (input ⟨.inr 2, rfl⟩)) := by
   exact contractSized element elementWidth false (MvPolynomial.X true) fixedWidth

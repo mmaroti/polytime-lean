@@ -65,7 +65,7 @@ def algorithmExit (initWidth loopWidth : ℕ) : AlgorithmState initWidth loopWid
       (algorithmExit (defaultBits scalar defaultValue).length (scalar.width Empty.elim)) symbols = none := rfl
 
 /-! The workspace preparation, unary row-limit read, and bounded search are one
-  caller-facing routine. Outputs and scratch may begin with arbitrary contents. -/
+  caller-facing routine. Writable regions may begin with arbitrary contents. -/
 theorem runs (scalar : EncodedDomain.{0, 0} Empty)
     (isZero : ∀ assignment, scalar.Carrier assignment → Bool)
     (defaultValue : scalar.Carrier Empty.elim) :
@@ -180,83 +180,5 @@ theorem runs (scalar : EncodedDomain.{0, 0} Empty)
           (initBound + readBound + loopBound + MvPolynomial.C (2 : ℕ)) := by
         simp [MvPolynomial.eval_C]
   · simpa only [algorithm, algorithmEntry, algorithmExit] using complete
-
-/-- The standard pivot search is an ordinary caller-facing routine: its input
-matrix, starting row, column, and unary dimensions are immutable. The returned
-candidate is the first nonzero row at or after the start, or the row-count
-sentinel when no such row exists. -/
-theorem algorithm_contract (scalar : EncodedDomain.{0, 0} Empty)
-    (isZero : ∀ assignment, scalar.Carrier assignment → Bool)
-    (defaultValue : scalar.Carrier Empty.elim) :
-    CallingConvention.Realizes (domains scalar) readOnly sizeTapes
-      (algorithm scalar isZero defaultValue)
-      (algorithmEntry (defaultBits scalar defaultValue).length (scalar.width Empty.elim))
-      (algorithmExit (defaultBits scalar defaultValue).length (scalar.width Empty.elim))
-      (fun sizes input =>
-        let start : Fin (2 ^ sizes 0) := input ⟨startTape, rfl⟩
-        let column : Fin (2 ^ sizes 0) := input ⟨counterTape 6, rfl⟩
-        start.val ≤ sizes 1 ∧ column.val < sizes 2 ∧
-          sizes 1 < 2 ^ sizes 0 ∧ sizes 2 < 2 ^ sizes 0 ∧
-          sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
-      (fun sizes input output =>
-        let start : Fin (2 ^ sizes 0) := input ⟨startTape, rfl⟩
-        let column : Fin (2 ^ sizes 0) := input ⟨counterTape 6, rfl⟩
-        let matrix := input ⟨matrixTape, rfl⟩
-        let resultCount : Fin (2 ^ sizes 0) := output ⟨counterTape 1, by decide⟩
-        ∃ columnValid : column.val < sizes 2,
-          (start.val ≤ resultCount.val ∧ resultCount.val ≤ sizes 1) ∧
-          (∀ row : Fin (sizes 1), start.val ≤ row.val →
-            row.val < resultCount.val →
-            zeroAt scalar isZero sizes matrix column columnValid row = true) ∧
-          (resultCount.val = sizes 1 ∨
-            ∃ row : Fin (sizes 1), row.val = resultCount.val ∧
-              zeroAt scalar isZero sizes matrix column columnValid row = false) ∧
-          output ⟨continueTape, by decide⟩ = false) := by
-  classical
-  obtain ⟨bound, execute⟩ := runs scalar isZero defaultValue
-  refine ⟨(by intro parameter; rfl), algorithm_halt scalar isZero defaultValue,
-    bound, ?_⟩
-  intro sizes input initial valid represented headers
-  let start : Fin (2 ^ sizes 0) := input ⟨startTape, rfl⟩
-  let column : Fin (2 ^ sizes 0) := input ⟨counterTape 6, rfl⟩
-  let matrix := input ⟨matrixTape, rfl⟩
-  have startBound : start.val ≤ sizes 1 := valid.1
-  have columnBound : column.val < sizes 2 := valid.2.1
-  have rowFits : sizes 1 < 2 ^ sizes 0 := valid.2.2.1
-  have columnsFit : sizes 2 < 2 ^ sizes 0 := valid.2.2.2.1
-  have capacity : sizes 1 * sizes 2 ≤ 2 ^ sizes 0 := valid.2.2.2.2
-  obtain ⟨ticks, final, cost, trace, resultData, finalCanonical⟩ :=
-    execute sizes initial start column matrix startBound columnBound rowFits
-      columnsFit capacity (represented.1 startTape rfl)
-      (represented.1 (counterTape 6) rfl) (represented.1 matrixTape rfl)
-      headers represented.region
-  let resultCount : Fin (2 ^ sizes 0) := resultData
-  obtain ⟨resultBound, resultEq, resultPrefix, resultStop, finalFound, finalFlag,
-      finalCanonical⟩ := finalCanonical
-  let output : Outputs (domains scalar) readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    by_cases isCount : name = counterTape 1
-    · subst name
-      exact resultCount
-    · by_cases isFlag : name = continueTape
-      · subst name
-        exact false
-      · exact Classical.choose (finalCanonical name writable)
-  refine ⟨ticks, output, final, cost, trace,
-    ⟨columnBound, resultBound, ?_, ?_⟩, ?_⟩
-  · intro row startLe resultLt
-    exact resultPrefix row startLe resultLt
-  · exact ⟨resultStop, rfl⟩
-  · intro name writable
-    by_cases isCount : name = counterTape 1
-    · subst name
-      simpa [output, domains, counterTape, StandardMatrixEntry.domains,
-        StandardMatrixAddress.domains] using resultEq
-    · by_cases isFlag : name = continueTape
-      · subst name
-        simpa [output, domains, continueTape, counterTape,
-          StandardMatrixEntry.domains, StandardMatrixAddress.domains] using finalFlag
-      · simpa [output, isCount, isFlag] using Classical.choose_spec
-          (finalCanonical name writable)
 
 end Polytime2.StandardPivotSearch

@@ -111,8 +111,8 @@ theorem increment_runs (enumeration : Scalar ≃ Fin cardinality) :
           | true => contradiction)
       (by intro name writable; fin_cases name <;> first | contradiction | exact region) headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
-  · have result := canonical (.inr true) rfl
-    change output ⟨.inr true, rfl⟩ = StandardBinaryIncrement.next 0 sizes columnIndex at correct
+  · have result := canonical ()
+    change output () = StandardBinaryIncrement.next 0 sizes columnIndex at correct
     rw [correct] at result
     exact result
   · intro name notNext
@@ -176,11 +176,11 @@ theorem guard_runs (enumeration : Scalar ≃ Fin cardinality) :
       (by intro parameter; cases parameter; exact header)
   refine ⟨ticks, final, ?_, trace, ?_, ?_, ?_⟩
   · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
-  · have flag := canonical (.inr 3) rfl
-    change output ⟨.inr 3, rfl⟩ = decide (columnIndex.val < limit.val) at correct
+  · have flag := canonical true
+    change output true = decide (columnIndex.val < limit.val) at correct
     rw [correct] at flag
     exact flag
-  · exact ⟨output ⟨.inr 2, rfl⟩, canonical (.inr 2) rfl⟩
+  · exact ⟨output false, canonical false⟩
   · intro name notDifference notGuard
     apply preserved_of_wiring guardWiring BinarySubtraction.argumentReadOnly initial final outside immutable
     intro localName equal

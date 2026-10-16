@@ -71,9 +71,7 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
             (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final ∧
         final workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
-          (GaussJordan.eliminate (Scalar := Scalar) matrix) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
+          (GaussJordan.eliminate (Scalar := Scalar) matrix) := by
   obtain ⟨initBound, executeInit⟩ := initialization_runs enumeration
   obtain ⟨loopBound, executeLoop⟩ := mathematical_loop_runs enumeration
   refine ⟨initBound + loopBound + 1, ?_⟩
@@ -82,7 +80,7 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
     executeInit sizes initial matrix columnsFit inputEq headers regions
   let zero : Fin (2 ^ sizes 0) := ⟨0, by positivity⟩
   obtain ⟨loopTicks, final, finalPivot, loopCost, loopTrace, resultEq, finalPivotEq,
-      finalPivotValue, finalColumnEq, finalCanonical⟩ :=
+      finalPivotValue, finalColumnEq, _finalCanonical⟩ :=
     executeLoop sizes prepared zero matrix (by simp [zero]) rowsFit columnsFit capacity
       pivotEq columnEq matrixEq limitEq
       (fun parameter => (initTrace.readOnly_tape (sizeTape parameter)
@@ -93,16 +91,20 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim))
     (initialization_halt enumeration) loopTrace
-  refine ⟨initTicks + loopTicks + 1, final, ?_, ?_, ?_, finalCanonical⟩
+  refine ⟨initTicks + loopTicks + 1, final, ?_, ?_, ?_⟩
   · simp only [map_add, map_one]
     omega
   · simpa only [algorithm, entry, exit] using complete
   · simpa only [GaussJordan.eliminate, zero] using resultEq
 
+/-- The working matrix is the sole declared result; every other writable tape
+is private and has no encoding obligation at return. -/
+def outputTapes : Unit ↪ TapeName := MultiTape.oneTape workingTape
+
 /-- Immutable unary sizes and a separate immutable input matrix suffice.
 All output and private tapes may initially contain arbitrary symbols. -/
 theorem contract [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
-    CallingConvention.Realizes (domains enumeration) readOnly sizeTapes (algorithm enumeration)
+    CallingConvention.Realizes (domains enumeration) readOnly sizeTapes outputTapes (algorithm enumeration)
       (entry (StandardGaussJordanClear.zeroBits enumeration).length
         (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
         ((FieldRow.scalarDomain enumeration).width Empty.elim))
@@ -111,12 +113,12 @@ theorem contract [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality)
         ((FieldRow.scalarDomain enumeration).width Empty.elim))
       (fun sizes _ => sizes 1 < 2 ^ sizes 0 ∧ sizes 2 < 2 ^ sizes 0 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
       (fun sizes input output =>
-        (matrixEquiv (Carrier := Scalar) sizes).symm (output ⟨workingTape, by decide⟩) =
+        (matrixEquiv (Carrier := Scalar) sizes).symm (output ()) =
           GaussJordan.eliminate (Scalar := Scalar)
             ((matrixEquiv (Carrier := Scalar) sizes).symm (input ⟨inputTape, rfl⟩))) := by
   classical
   obtain ⟨bound, execute⟩ := runs enumeration
-  refine ⟨(by intro parameter; fin_cases parameter <;> rfl), halt enumeration, bound, ?_⟩
+  refine ⟨(by intro parameter; fin_cases parameter <;> rfl), (by intro name; cases name; decide), halt enumeration, bound, ?_⟩
   intro sizes input initial valid represented headers
   let matrix := (matrixEquiv (Carrier := Scalar) sizes).symm (input ⟨inputTape, rfl⟩)
   have matrixEq : initial inputTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes matrix := by
@@ -124,21 +126,15 @@ theorem contract [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality)
     exact (represented.1 inputTape rfl).trans
       (congrArg (encoded (domains enumeration inputTape) sizes)
         ((matrixEquiv (Carrier := Scalar) sizes).apply_symm_apply (input ⟨inputTape, rfl⟩))).symm
-  obtain ⟨ticks, final, cost, trace, resultEq, canonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, resultEq⟩ :=
     execute sizes initial matrix valid.1 valid.2.1 valid.2.2 matrixEq headers represented.region
-  let output : Outputs (domains enumeration) readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    by_cases isResult : name = workingTape
-    · subst name
-      exact matrixEquiv (Carrier := Scalar) sizes (GaussJordan.eliminate (Scalar := Scalar) matrix)
-    · exact Classical.choose (canonical name writable)
+  let output : Outputs (domains enumeration) outputTapes sizes := fun _ =>
+    matrixEquiv (Carrier := Scalar) sizes (GaussJordan.eliminate (Scalar := Scalar) matrix)
   refine ⟨ticks, output, final, cost, trace,
     Equiv.symm_apply_apply (matrixEquiv (Carrier := Scalar) sizes)
       (GaussJordan.eliminate (Scalar := Scalar) matrix), ?_⟩
-  intro name writable
-  by_cases isResult : name = workingTape
-  · subst name
-    exact resultEq
-  · simpa only [output, isResult, ↓reduceDIte] using Classical.choose_spec (canonical name writable)
+  intro name
+  cases name
+  exact resultEq
 
 end Polytime2.StandardGaussJordanElimination

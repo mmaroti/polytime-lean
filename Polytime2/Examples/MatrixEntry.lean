@@ -15,43 +15,35 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardMatrixEntryContract
+import Polytime2.Computations.MatrixEntry
 
-/-! # Matrix lookup with arbitrary initial output and scratch contents -/
+/-! # Mathematical matrix lookup by row and column -/
 
 namespace Polytime2.Examples.MatrixEntry
 
-open Polytime2.StandardMatrixEntry CallingConvention
+open Polytime2.Computation
 
--- Row 1, column 2 in a two-by-three Boolean matrix selects its last entry.
--- Output, counters, and flags start with arbitrary contents.
-example : ∃ ticks final, Runs (fun name => (domains EncodedDomain.booleans name).width ![3, 2, 3])
-    readOnly (machine 1) ticks (entry 1) (fun _ => 0)
-    (frame ![3, 2, 3] [true, false, false] [false, true, false]
-      (encoded (EncodedDomain.booleans.arrayOfLength length) ![3, 2, 3]
-        (fun index => decide (index.val = 5)))
-      [2] [0, 2, 0] [2, 0, 0] [0, 0, 2] [2, 2, 0] [0, 2, 2] 2 2)
-    (exit 1) (fun _ => 0) final ∧ final (.inr true) = tape [true] := by
-  obtain ⟨ticks, addressBits, addressLength, addressValue, cost, trace⟩ :=
-    runs EncodedDomain.booleans ![3, 2, 3] [true, false, false] [false, true, false] rfl rfl
-      (fun index => decide (index.val = 5))
-      [2] [0, 2, 0] [2, 0, 0] [0, 0, 2] [2, 2, 0] [0, 2, 2] rfl rfl rfl rfl rfl rfl 2 2
-      (by decide) (by decide) (by norm_num [length, Binary.value])
-  exact ⟨ticks, _, trace, rfl⟩
+noncomputable section CoordinateExamples
 
--- A singleton scalar has zero-bit width. The same routine still restores
--- every head and writes a valid element into its empty output region.
-example : ∃ ticks final, Runs
-    (fun name => (domains (EncodedDomain.fixed (Equiv.refl (Fin 1))) name).width ![1, 1, 1])
-    readOnly (machine 0) ticks (entry 0) (fun _ => 0)
-    (frame ![1, 1, 1] [false] [false]
-      (encoded ((EncodedDomain.fixed (Equiv.refl (Fin 1))).arrayOfLength length) ![1, 1, 1]
-        (fun _ => (0 : Fin 1))) [] [2] [0] [2] [0] [2] 2 2)
-    (exit 0) (fun _ => 0) final ∧ final (.inr true) = tape [] := by
-  obtain ⟨ticks, addressBits, addressLength, addressValue, cost, trace⟩ :=
-    runs (EncodedDomain.fixed (Equiv.refl (Fin 1))) ![1, 1, 1] [false] [false] rfl rfl
-      (fun _ => (0 : Fin 1)) [] [2] [0] [2] [0] [2] rfl rfl rfl rfl rfl rfl 2 2
-      (by decide) (by decide) (by norm_num [length, Binary.value])
-  exact ⟨ticks, _, trace, rfl⟩
+private def scalar : EncodedDomain Empty := EncodedDomain.booleans
+private def sizes : Fin 3 → ℕ := ![3, 2, 3]
+private def original : Matrix (Fin 2) (Fin 3) Bool :=
+  ![![false, false, false], ![false, false, true]]
+private def lookup := matrixEntry scalar
+private def arguments : lookup.Arguments sizes
+  | 0 => (1 : Fin 8)
+  | 1 => (2 : Fin 8)
+  | 2 => original
+private theorem admissible : lookup.precondition sizes arguments := by
+  change 3 < 2 ^ 3 ∧ 1 < 2 ∧ 2 < 3 ∧ 2 * 3 ≤ 2 ^ 3
+  decide
 
+example : lookup.Realizable := matrixEntry_realizable scalar
+example : lookup.compute sizes ⟨arguments, admissible⟩ = true := rfl
+
+-- Singleton scalars and the complete matrix occupy zero bits.
+example : (matrixEntry (EncodedDomain.fixed (Equiv.refl (Fin 1)))).Realizable :=
+  matrixEntry_realizable _
+
+end CoordinateExamples
 end Polytime2.Examples.MatrixEntry

@@ -105,8 +105,8 @@ theorem advance_runs (scalar : EncodedDomain.{0, 0} Empty) :
   have resultEq : incremented nextTape =
       encoded (EncodedDomain.binaryNaturals 0) sizes
         (⟨candidate.val + 1, candidateValue⟩ : Fin (2 ^ sizes 0)) := by
-    have valid := incrementCanonical (.inr true) rfl
-    change incrementOutput ⟨.inr true, rfl⟩ =
+    have valid := incrementCanonical ()
+    change incrementOutput () =
       StandardBinaryIncrement.next 0 sizes candidate at incrementCorrect
     rw [incrementCorrect, incrementValue] at valid
     exact valid

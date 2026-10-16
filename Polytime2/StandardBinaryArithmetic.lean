@@ -53,6 +53,12 @@ def argumentReadOnly : Sum Unit (Fin 4) → Bool
 def sizeTapes : Unit ↪ Sum Unit (Fin 4) :=
   ⟨Sum.inl, by intro first second equal; cases first; cases second; rfl⟩
 
+/-- False names the low result and true the carry or borrow. -/
+def outputTapes : Bool ↪ Sum Unit (Fin 4) :=
+  ⟨(fun | false => .inr 2 | true => .inr 3), by
+    intro first second equal
+    cases first <;> cases second <;> first | rfl | cases equal⟩
+
 def dataTapes : Fin 4 ↪ Sum Unit (Fin 4) :=
   ⟨Sum.inr, by intro first second equal; cases equal; rfl⟩
 
@@ -451,23 +457,23 @@ theorem runs (previous : Bool) (left right : List Bool) (sameLength : right.leng
 /-- Two immutable binary operands produce their fixed-width ripple result and
 carry on separate output tapes. -/
 theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Bool) :
-    CallingConvention.Realizes domains argumentReadOnly sizeTapes
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes
       (algorithm digit carry) (entry previous) exit
       (fun _assignment _input => True)
       (fun assignment input output =>
-        (output ⟨.inr 2, rfl⟩ : Fin (2 ^ assignment ())).val =
+        (output false : Fin (2 ^ assignment ())).val =
           value (ripple digit carry previous
             (List.ofFn (fun index : Fin (assignment ()) =>
               (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
             (List.ofFn (fun index : Fin (assignment ()) =>
               (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
-        output ⟨.inr 3, rfl⟩ =
+        output true =
           (ripple digit carry previous
             (List.ofFn (fun index : Fin (assignment ()) =>
               (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
             (List.ofFn (fun index : Fin (assignment ()) =>
               (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).2) := by
-  refine ⟨(by intro parameter; cases parameter; rfl), ?_,
+  refine ⟨(by intro parameter; cases parameter; rfl), (by intro name; cases name <;> rfl), ?_,
     2 * MvPolynomial.X () + MvPolynomial.C 3, ?_⟩
   · intro symbols
     simp [algorithm, exit, MultiTape.wire, MultiTape.withExit]
@@ -528,37 +534,9 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
           (BinaryRipple.ripple_length digit carry previous left right
             (rightLength.trans leftLength.symm)).trans leftLength
         simpa only [resultLength] using Binary.value_lt_pow_length computed.1⟩
-    let output : Outputs domains argumentReadOnly assignment := fun name => by
-      rcases name with ⟨name, writable⟩
-      cases name with
-      | inl parameter => contradiction
-      | inr name =>
-        by_cases carryTape : name.val = 3
-        · have nameEq : name = ⟨3, by decide⟩ := Fin.ext carryTape
-          subst name
-          exact computed.2
-        · have resultTape : name.val = 2 := by
-            have writableValue : ¬ name.val < 2 := by
-              intro below
-              have cases : name.val = 0 ∨ name.val = 1 := by omega
-              rcases cases with first | second
-              · have nameEq : name = 0 := Fin.ext first
-                have readonly : argumentReadOnly (.inr name) = true := by
-                  rw [nameEq]
-                  rfl
-                rw [readonly] at writable
-                contradiction
-              · have nameEq : name = 1 := Fin.ext second
-                have readonly : argumentReadOnly (.inr name) = true := by
-                  rw [nameEq]
-                  rfl
-                rw [readonly] at writable
-                contradiction
-            have nameBound := name.isLt
-            omega
-          have nameEq : name = ⟨2, by decide⟩ := Fin.ext resultTape
-          subst name
-          exact outputWord
+    let output : Outputs domains outputTapes assignment
+      | false => outputWord
+      | true => computed.2
     have localTrace := runs digit carry previous left right
       (rightLength.trans leftLength.symm) oldOutput
       (by simpa [leftLength] using oldOutputLength) oldFlag
@@ -599,51 +577,22 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
     · constructor
       · rfl
       · rfl
-    · intro name writable
+    · intro name
       cases name with
-      | inl parameter => contradiction
-      | inr name =>
-        change install dataTapes _ initial (dataTapes name) = _
+      | false =>
+        change install dataTapes _ initial (dataTapes 2) = _
         rw [install_at]
-        by_cases carryTape : name.val = 3
-        · have nameEq : name = ⟨3, by decide⟩ := Fin.ext carryTape
-          subst name
-          change Turing.Tape.mk₁ [data computed.2] =
-            encoded (EncodedDomain.booleans) assignment computed.2
-          simpa [CallingConvention.Alphabet, CallingConvention.buffer] using
-            (encoded_booleans assignment computed.2).symm
-        · have resultTape : name.val = 2 := by
-            have writableValue : ¬ name.val < 2 := by
-              intro below
-              have cases : name.val = 0 ∨ name.val = 1 := by omega
-              rcases cases with first | second
-              · have nameEq : name = 0 := Fin.ext first
-                have readonly : argumentReadOnly (.inr name) = true := by
-                  rw [nameEq]
-                  rfl
-                rw [readonly] at writable
-                contradiction
-              · have nameEq : name = 1 := Fin.ext second
-                have readonly : argumentReadOnly (.inr name) = true := by
-                  rw [nameEq]
-                  rfl
-                rw [readonly] at writable
-                contradiction
-            have nameBound := name.isLt
-            omega
-          have nameEq : name = ⟨2, by decide⟩ := Fin.ext resultTape
-          subst name
-          change Turing.Tape.mk' (Turing.ListBlank.mk [0])
-            (Turing.ListBlank.mk (word computed.1 ++ [0])) =
+        change Turing.Tape.mk' (Turing.ListBlank.mk [0])
+          (Turing.ListBlank.mk (word computed.1 ++ [0])) =
             encoded (EncodedDomain.binaryNaturals ()) assignment outputWord
-          calc
-            Turing.Tape.mk' (Turing.ListBlank.mk [0])
-                (Turing.ListBlank.mk (word computed.1 ++ [0])) = buffer (word computed.1) :=
-              buffer_padding (word computed.1)
-            _ = encoded (EncodedDomain.binaryNaturals ()) assignment outputWord := by
-              simpa [outputWord] using
-                (encoded_binaryNaturals () assignment computed.1
-                  ((BinaryRipple.ripple_length digit carry previous left right
-                    (rightLength.trans leftLength.symm)).trans leftLength)).symm
+        exact (buffer_padding (word computed.1)).trans (by
+          simpa only [outputWord] using
+            (encoded_binaryNaturals () assignment computed.1
+              ((BinaryRipple.ripple_length digit carry previous left right
+                (rightLength.trans leftLength.symm)).trans leftLength)).symm)
+      | true =>
+        change install dataTapes _ initial (dataTapes 3) = _
+        rw [install_at]
+        exact (encoded_booleans assignment computed.2).symm
 
 end Polytime2.StandardBinaryArithmetic

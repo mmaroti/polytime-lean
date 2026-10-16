@@ -15,67 +15,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardFinitePredicate
+import Polytime2.Computations.FiniteTable
 
-/-! # Finite scalar tests with an internal zero-bit tape -/
+/-! # Fixed finite predicates through their public mathematical specifications -/
 
 namespace Polytime2.Examples.FinitePredicate
 
-open MultiTape CallingConvention StandardFinitePredicate
+open Polytime2.Computation
 
-private noncomputable def initial (domain : EncodedDomain.{0, 0} Empty) (value : domain.Carrier Empty.elim)
-    (oldFlag : Binary.Symbol) : Tapes Alphabet := fun name =>
-  if name = 0 then encoded domain Empty.elim value else if name = 1 then buffer [] else buffer [oldFlag]
+private def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
-private theorem execute_predicate (domain : EncodedDomain.{0, 0} Empty) (value : domain.Carrier Empty.elim)
-    (predicate : ∀ assignment, domain.Carrier assignment → Bool) (oldFlag : Binary.Symbol) :
-    ∃ ticks final,
-      Runs (fun name => (domains domain name).width Empty.elim) readOnly (machine domain predicate) ticks
-        StandardFiniteTable.entry (fun _ => 0) (initial domain value oldFlag)
-        StandardFiniteTable.exit (fun _ => 0) final ∧
-      final 2 = encoded EncodedDomain.booleans Empty.elim (predicate Empty.elim value) := by
-  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := contract domain predicate
-  let input : Inputs (domains domain) readOnly Empty.elim := fun name => by
-    rcases name with ⟨name, readonly⟩
-    have argument : name = 0 := of_decide_eq_true readonly
-    subst name
-    exact value
-  have represented : Entry (domains domain) readOnly Empty.elim input (initial domain value oldFlag) := by
-    refine ⟨?_, ?_⟩
-    · intro name readonly
-      have argument : name = 0 := of_decide_eq_true readonly
-      subst name
-      rfl
-    · intro name writable
-      fin_cases name
-      · contradiction
-      · exact ⟨[], rfl, rfl⟩
-      · exact ⟨[oldFlag], rfl, rfl⟩
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
-    execute Empty.elim input (initial domain value oldFlag) trivial represented (by intro parameter; cases parameter)
-  change output ⟨2, rfl⟩ = predicate Empty.elim value at correct
-  exact ⟨ticks, final, trace, (canonical 2 rfl).trans (congrArg (encoded EncodedDomain.booleans Empty.elim) correct)⟩
+def isZero : Polytime2.Computation Empty Unit :=
+  finitePredicate threeElements (fun _ (value : Fin 3) => decide (value = 0))
 
-/-- The Boolean test overwrites a blank result symbol. -/
-example : ∃ ticks final,
-    Runs (fun name => (domains (EncodedDomain.booleans (Parameter := Empty)) name).width Empty.elim) readOnly
-      (machine (EncodedDomain.booleans (Parameter := Empty)) (fun _ (value : Bool) => !value)) ticks
-      StandardFiniteTable.entry (fun _ => 0) (initial EncodedDomain.booleans true 0)
-      StandardFiniteTable.exit (fun _ => 0) final ∧
-    final 2 = encoded EncodedDomain.booleans Empty.elim false :=
-  execute_predicate EncodedDomain.booleans true (fun _ (value : Bool) => !value) 0
+example : isZero.Realizable := finitePredicate_realizable threeElements _
+example : (isZero.compute Empty.elim
+    ⟨(fun _ => (0 : Fin 3)), True.intro⟩ : Bool) = true := rfl
+example : (isZero.compute Empty.elim
+    ⟨(fun _ => (2 : Fin 3)), True.intro⟩ : Bool) = false := rfl
 
-/-- Both scalar and private singleton have zero bits; the blank Boolean output
-is still written and both empty argument heads return to their starts. -/
-example :
-    let domain := EncodedDomain.fixed (Parameter := Empty) (Equiv.refl (Fin 1))
-    ∃ ticks final,
-      Runs (fun name => (domains domain name).width Empty.elim) readOnly
-        (machine domain (fun _ (_value : Fin 1) => true)) ticks
-        StandardFiniteTable.entry (fun _ => 0) (initial domain (0 : Fin 1) 0)
-        StandardFiniteTable.exit (fun _ => 0) final ∧
-      final 2 = encoded EncodedDomain.booleans Empty.elim true := by
-  intro domain
-  exact execute_predicate domain (0 : Fin 1) (fun _ (_value : Fin 1) => true) 0
+-- The input may have zero width while the Boolean output still has one bit.
+example : (finitePredicate (EncodedDomain.fixed (Equiv.refl (Fin 1)))
+    (fun _ _ => true)).Realizable := finitePredicate_realizable _ _
 
 end Polytime2.Examples.FinitePredicate

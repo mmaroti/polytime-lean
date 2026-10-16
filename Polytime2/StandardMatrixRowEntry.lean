@@ -188,15 +188,15 @@ theorem combine_runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (by intro parameter; cases parameter)
   have firstOutput := congrArg Prod.fst correct
   have secondOutput := congrArg Prod.snd correct
-  change output ⟨3, rfl⟩ =
+  change output false =
     (effectiveOperation writeSource scalar operation Empty.elim coefficient source target).1 at firstOutput
-  change output ⟨4, rfl⟩ =
+  change output true =
     (effectiveOperation writeSource scalar operation Empty.elim coefficient source target).2 at secondOutput
   refine ⟨ticks, final, cost, trace, ?_, ?_, outside, immutable⟩
-  · have result := canonical 3 rfl
+  · have result := canonical false
     rw [firstOutput] at result
     exact result
-  · have result := canonical 4 rfl
+  · have result := canonical true
     rw [secondOutput] at result
     exact result
 

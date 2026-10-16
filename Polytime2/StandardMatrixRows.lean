@@ -142,11 +142,11 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty) :
       (by intro parameter; cases parameter; exact header)
   refine ⟨ticks, final, ?_, trace, ?_, ?_, ?_⟩
   · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
-  · have flag := canonical (.inr 3) rfl
-    change output ⟨.inr 3, rfl⟩ = decide (column.val < limit.val) at correct
+  · have flag := canonical true
+    change output true = decide (column.val < limit.val) at correct
     rw [correct] at flag
     exact flag
-  · exact ⟨output ⟨.inr 2, rfl⟩, canonical (.inr 2) rfl⟩
+  · exact ⟨output false, canonical false⟩
   · intro name notDifference notGuard
     apply preserved_of_wiring guardWiring BinarySubtraction.argumentReadOnly initial final outside immutable
     intro localName equal

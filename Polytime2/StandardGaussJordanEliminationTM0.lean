@@ -30,14 +30,14 @@ variable {Scalar : Type} [Field Scalar] [DecidableEq Scalar] {cardinality : ℕ}
 with polynomial time and storage and the mathematical row-equivalence contract.
 No prepared scratch or source-tape markers are required. -/
 theorem realizes_tm0 (enumeration : Scalar ≃ Fin cardinality) :
-    CallingConvention.TM0Realizes (domains enumeration) readOnly sizeTapes (algorithm enumeration)
+    CallingConvention.TM0Realizes (domains enumeration) readOnly sizeTapes outputTapes (algorithm enumeration)
       (entry (StandardGaussJordanClear.zeroBits enumeration).length
         (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
         ((FieldRow.scalarDomain enumeration).width Empty.elim))
       (fun sizes _ => sizes 1 < 2 ^ sizes 0 ∧ sizes 2 < 2 ^ sizes 0 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
       (fun sizes input output =>
         let matrix := (matrixEquiv (Carrier := Scalar) sizes).symm (input ⟨inputTape, rfl⟩)
-        let result := (matrixEquiv (Carrier := Scalar) sizes).symm (output ⟨workingTape, by decide⟩)
+        let result := (matrixEquiv (Carrier := Scalar) sizes).symm (output ())
         result = GaussJordan.eliminate matrix ∧
           Matrix.RowEquivalent matrix result ∧ Matrix.IsReducedRowEchelon result) := by
   apply CallingConvention.Realizes.tm0

@@ -145,8 +145,8 @@ theorem increment_runs (scalar : EncodedDomain.{0, 0} Empty) :
       (by intro name writable; fin_cases name <;> first | contradiction | exact region)
       headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
-  · have result := canonical (.inr true) rfl
-    change output ⟨.inr true, rfl⟩ = StandardBinaryIncrement.next 0 sizes column at correct
+  · have result := canonical ()
+    change output () = StandardBinaryIncrement.next 0 sizes column at correct
     rw [correct] at result
     exact result
   · intro name different

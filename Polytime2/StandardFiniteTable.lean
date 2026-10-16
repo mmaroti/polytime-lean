@@ -221,6 +221,9 @@ def domains (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLe
   | 1 => secondDomain
   | 2 => outputDomain
 
+/-- The table returns one result; its argument tapes remain immutable. -/
+def outputTapes : Unit ↪ Fin 3 := oneTape 2
+
 def sizeTapes : Empty ↪ Fin 3 := ⟨Empty.elim, by intro parameter; cases parameter⟩
 
 noncomputable def algorithm
@@ -238,11 +241,11 @@ theorem contract (firstDomain secondDomain outputDomain : EncodedDomain.{0, carr
     (operation : ∀ assignment, firstDomain.Carrier assignment →
       secondDomain.Carrier assignment → outputDomain.Carrier assignment) :
     CallingConvention.Realizes (domains firstDomain secondDomain outputDomain)
-      readOnly sizeTapes (algorithm firstDomain secondDomain outputDomain operation) entry exit
+      readOnly sizeTapes outputTapes (algorithm firstDomain secondDomain outputDomain operation) entry exit
       (fun _ _ => True)
-      (fun assignment input output => output ⟨2, rfl⟩ =
+      (fun assignment input output => output () =
         operation assignment (input ⟨0, rfl⟩) (input ⟨1, rfl⟩)) := by
-  refine ⟨(by intro parameter; cases parameter), (by intro symbols; rfl),
+  refine ⟨(by intro parameter; cases parameter), (by intro name; rfl), (by intro symbols; rfl),
     MvPolynomial.C (2 * (firstDomain.width Empty.elim + secondDomain.width Empty.elim +
       outputDomain.width Empty.elim) + 6), ?_⟩
   intro assignment input initial valid represented sizes
@@ -281,16 +284,8 @@ theorem contract (firstDomain secondDomain outputDomain : EncodedDomain.{0, carr
     · exact represented.1 0 rfl
     · exact represented.1 1 rfl
     · exact oldEq
-  let output : Outputs (domains firstDomain secondDomain outputDomain) readOnly Empty.elim :=
-    fun name => by
-      rcases name with ⟨name, writable⟩
-      have selected : name = 2 := by
-        apply Fin.ext
-        have bounded := name.isLt
-        simp only [readOnly, decide_eq_false_iff_not] at writable
-        omega
-      subst name
-      exact result
+  let output : Outputs (domains firstDomain secondDomain outputDomain) outputTapes Empty.elim :=
+    fun _ => result
   have trace := runs (encodedTable firstDomain secondDomain outputDomain operation)
     firstBits secondBits List.length_ofFn List.length_ofFn old oldLength
   dsimp only at trace
@@ -307,10 +302,8 @@ theorem contract (firstDomain secondDomain outputDomain : EncodedDomain.{0, carr
     frame firstBits secondBits (word resultBits), by simp, ?_, rfl, ?_⟩
   · rw [initialEq, domainWidths]
     exact trace
-  · intro name writable
-    fin_cases name
-    · contradiction
-    · contradiction
-    · rfl
+  · intro name
+    cases name
+    rfl
 
 end Polytime2.StandardFiniteTable

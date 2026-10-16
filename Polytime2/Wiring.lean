@@ -242,32 +242,4 @@ theorem wire_steps_of_eq (wiring : Source ↪ Target)
     · exact (install_outside wiring final enclosing name located).trans (preserved name located).symm
   simpa only [installed] using wire_steps wiring machine trace enclosing input
 
-namespace Realizes
-
--- parameterLevel: names of runtime size parameters.
-universe parameterLevel
-
-/-- Static tape wiring preserves the very same polynomial transition bound. -/
-theorem wire {Parameter : Type parameterLevel} [Fintype Parameter]
-    [Fintype Source] [Fintype Target] [∀ name, Fintype (Alphabet name)] [Fintype State]
-    (wiring : Source ↪ Target)
-    {machine : Machine (fun name => Alphabet (wiring name)) State} {entry exit : State}
-    {precondition : (Parameter → ℕ) → Tapes (fun name => Alphabet (wiring name)) → Prop}
-    {postcondition : (Parameter → ℕ) → Tapes (fun name => Alphabet (wiring name)) →
-      Tapes (fun name => Alphabet (wiring name)) → Prop}
-    (realization : Realizes machine entry exit precondition postcondition) :
-    Realizes (MultiTape.wire wiring machine) entry exit
-      (fun assignment tapes => precondition assignment (fun name => tapes (wiring name)))
-      (fun assignment initial final => ∃ localFinal,
-        postcondition assignment (fun name => initial (wiring name)) localFinal ∧
-          final = install wiring localFinal initial) := by
-  obtain ⟨halt, bound, runs⟩ := realization
-  refine ⟨?_, bound, ?_⟩
-  · intro symbols; simp [MultiTape.wire, halt]
-  · intro assignment initial valid
-    obtain ⟨ticks, localFinal, cost, trace, correct⟩ := runs assignment _ valid
-    exact ⟨ticks, install wiring localFinal initial, cost,
-      wire_steps wiring machine trace initial (by intro name; rfl), localFinal, correct, rfl⟩
-
-end Realizes
 end Polytime2.MultiTape

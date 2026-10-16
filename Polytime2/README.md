@@ -18,15 +18,13 @@ A multi-tape implementation of polynomial-time algorithms.
   tapes, including their head positions.
 - Finite-machine polynomial certificates under mathematical preconditions,
   closed under wiring, sequencing, branching, and guarded while loops.
-- Raw mathematical map contracts with relational representations and existential
-  scratch, sequential composition, and guarded fold, while, and search rules.
 - Explicit preserved caller context, with composition and wiring rules that
   expose preservation of unwired tapes and their head positions.
 - Executable mathematical gcd with correctness, capacity preservation, and an
   iteration bound in binary capacity. A standard-convention gcd machine composes
   a zero guard, binary remainder, scratch clearing, and operand copies.
   It preserves both binary operands, accepts arbitrary writable contents, and
-  returns valid output and scratch encodings.
+  returns a valid output encoding.
 - Two fixed catalogue maps at runtime-selected active coordinates, sharing array
   and scalar scratch, preserving both indices, the active count, and inactive
   data. Binary-encoded scalars use fixed finite tables; each map writes a
@@ -41,10 +39,9 @@ A multi-tape implementation of polynomial-time algorithms.
   bound, preserved operands, restored heads, and fixed-width scratch. A shift
   and subtraction followed by selection process each dividend bit once, using
   separate result tapes and finite carry or borrow memory.
-- Fixed-width multiplication with a polynomial transition bound in both
-  operand digit counts. `AddMultiply.contract` composes addition and
-  multiplication on shared tapes and computes `(left + right) * multiplier`.
-  Both accept arbitrary writable contents and return valid scratch encodings.
+- Fixed-width multiplication and compound `(left + right) * multiplier` and
+  `factor * multiplier + addend` computations with immutable operands and
+  arbitrary initial writable contents.
 - Fixed finite pipelines hide controller injections and handovers behind stage
   contracts, preserving the standard tape convention at every transition.
 - Fixed-width element copying in exactly `2 * width + 1` transitions, preserving
@@ -56,14 +53,13 @@ A multi-tape implementation of polynomial-time algorithms.
 - Binary decrement with a polynomial digit-cost certificate, fixed controller,
   unchanged digit capacity, and restored head position.
 - Binary-indexed lookup/update with polynomial bounds in array length and index
-  digit capacity, preserved arguments, restored heads, and zeroed scratch.
-- Lookup followed by update with separate index tapes, a shared source array,
-  and an internal element tape. Its mathematical contract proves indexed copy,
-  immutable arguments, arbitrary initial writable contents, valid scratch,
-  restored heads, and polynomial time with one handover transition.
+  digit capacity, preserved arguments, and restored heads. Only declared results
+  require valid encodings on return.
+- Indexed copy derived from public lookup and update composition rules, with
+  separate indices and a shared immutable source array.
 - Standard array lookup/update certificates transferred to Mathlib's `TM0.init`
-  through the generic `CallingConvention.Realizes.tm0` theorem, with polynomial
-  input storage, time, and simulator space.
+  through the internal simulation theorem, with polynomial input storage, time,
+  and simulator space.
 - Storage bounds at every counted execution prefix, derived from input capacity
   and time; each transition adds at most two cells per tape.
 - Exact translation of one-tape routines to Mathlib's TM0, with two transitions
@@ -109,10 +105,10 @@ A multi-tape implementation of polynomial-time algorithms.
 - Complete matrix row traversal initializes all nineteen writable tapes from
   immutable inputs, reads the unary column count into a binary limit, and runs
   the guarded column loop. Its polynomial contract includes zero columns,
-  arbitrary initial writable contents, valid scratch values, and restored
-  heads. A matrix-valued contract computes the ordinary mathematical row
-  transform. Scaling, normalization, addition, and swapping reuse the shared
-  field identities. Gauss–Jordan's standard controllers use this traversal.
+  arbitrary initial writable contents and restored heads. A matrix-valued
+  contract specifies only the result matrix. Scaling, normalization, addition,
+  and swapping reuse the shared field identities. Gauss–Jordan's standard
+  controllers use this traversal.
 - Standard-convention matrix lookup and replacement compute a binary address
   from separate row and column inputs and the unary column-size tape, then
   access the encoded array. Replacement writes a separate result matrix.
@@ -139,7 +135,7 @@ runtime size assignments. Loop progress measures are proof data, not fuel.
 All algorithmic dependencies are defined within this implementation.
 
 `CallingConvention.Realizes.tm0` retains track frames;
-`CallingConvention.Realizes.tm0_output` extracts standalone binary words.
+`CallingConvention.Realizes.tm0_output` extracts a declared binary output.
 Both start from a padded simulator track encoding. Construction of that encoding
 from an external size header and canonical input bits is not yet certified.
 
@@ -158,7 +154,7 @@ reads the symbols under all heads and selects a new state, symbols to write, and
 left, right, or stationary movements. Machine execution counts these
 transitions.
 
-Subroutines specify named tape roles, entry and exit states, valid encodings,
+Internal subroutines specify tape roles, entry and exit states, valid encodings,
 boundaries, head positions, scratch requirements, and preservation contracts.
 Sequential composition uses the disjoint union of controller states; a
 handover transition enters the next routine without changing tapes or heads.
@@ -213,9 +209,11 @@ contents, fixed regions, restored heads, and preservation at every transition.
   region before and after execution. For an empty region, this is the same
   designated blank cell on entry and exit.
 - Private scratch tapes also have encoded domains and fixed regions. Their
-  contents may temporarily be invalid. `CallingConvention.Realizes` requires
-  valid encodings on all writable tapes on return, including scratch, and
-  restores their heads. Its output family includes every writable tape.
+  contents need not be valid, even on return. Only declared outputs must contain
+  valid encodings. Validity is required only when a value is exposed as an
+  output or consumed as a mathematical input, including a subroutine argument.
+  Scratch has no independent validity obligation; its fixed region and restored
+  head are still required.
 
 No separate output prefill is required: the same routine handles fresh blank
 and reused output regions. Execution determines its write extent from the
@@ -242,13 +240,25 @@ Witness handling belongs exclusively to foundational library proofs in
 `Computation.Realizable.Internal` and the implementations of certified rules.
 
 `Computation.Realizable.followedBy` feeds a result to a single-argument
-computation. Its proof combines hidden implementations with disjoint scratch
-and a private intermediate tape. Callers prove domain and precondition
-compatibility mathematically. `withPrecondition` reuses an implementation under
-a stronger hypothesis. Public certificates cover copying, counter increment,
-and finite tables with two separately encoded arguments of possibly different
-types. `Examples.Computation` demonstrates nested composition and nontrivial
-preconditions without accessing implementation fields.
+computation. `letThen` retains the original arguments alongside that result for
+the continuation; nested bindings describe DAGs. `withArguments` selects inputs
+injectively from a larger context. Callers prove domain and precondition
+compatibility mathematically. `withPrecondition` restricts admissible inputs.
+`reindexDomains` changes mathematical carriers through equivalences with the
+same widths and encoded bits. Matrix access reuses array computations this way.
+`choose` reads a Boolean argument and requires only the selected branch's
+precondition; uncalled branch scratch stays arbitrary.
+`whileLoop` uses a mathematical invariant, decreasing measure, and existential
+polynomial bound. Its conserved answer equals the state when the guard stops;
+the library handles state copies, scratch, and all execution costs.
+Public certificates cover constants, unary-size reading, counter initialization,
+copying, increment/decrement, nonzero tests, comparison, bounded arithmetic,
+compound arithmetic, remainder, gcd, finite tables and predicates, array
+lookup/update and mapping, indexed finite operations, catalogue maps, matrix
+address calculation, access by flat index or row and column, row transforms,
+and Gauss–Jordan elimination.
+The arithmetic, gcd, countdown, indexed-copy, catalogue, finite-field row, and
+elimination examples use these rules without implementation fields.
 
 Implementation changes require no downstream proof edits when specifications
 and realizability statements stay unchanged. Lean may rebuild dependent modules;
@@ -256,12 +266,6 @@ executable implementations are not a requirement.
 
 ## Limits and next steps
 
-- The next goal is to migrate all existing Polytime2 algorithm interfaces and
-  callers to `Computation` and `Computation.Realizable`. Extend composition
-  and loop rules as needed so application proofs never unpack realizations.
-  Preserve low-level machine and simulation proofs as internal infrastructure.
-- Adapt the raw mathematical fold, while, and search rules to
-  `CallingConvention.Runs`; current safe algorithm proofs handle this manually.
 - Simplify nested tape names, wiring, and alphabet-compatibility proofs.
 - Certify external input preparation and compose it with simulation and output
   extraction.
@@ -269,9 +273,8 @@ executable implementations are not a requirement.
   for integer matrices. Extend polynomial reparameterization of subprogram
   calls.
 
-`MultiTape.Realizes`, `MultiTape.Computes`, `Copy.realizes`, and `Move.realizes`
-remain raw interfaces without the standard calling convention. Higher-level
-algorithm notation, the SMP targets, and Smith normal form remain future work.
+The simulator's raw transport certificate is internal. Higher-level algorithm
+notation, the SMP targets, and Smith normal form remain future work.
 
 Build from the repository root with `lake build Polytime2`, and use
 `import Polytime2`. See [GOAL.md](../GOAL.md) for the shared specification and

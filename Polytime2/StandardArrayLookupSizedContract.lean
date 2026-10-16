@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardArrayLookupContract
+import Polytime2.StandardArrayLookup
 
 /-! # Polynomial-length encoded array lookup
 
@@ -32,7 +32,7 @@ open Binary (Symbol word data value)
 universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
-/-- Every tape carries a mathematical encoded value, including private scratch. -/
+/-- Encoded domains determine fixed tape widths, including private scratch. -/
 def domainsSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
     Sum Parameter (Fin 6) → EncodedDomain.{parameterLevel, 0} Parameter
@@ -52,26 +52,28 @@ def sizeTapes : Parameter ↪ Sum Parameter (Fin 6) :=
 def dataTapes : Fin 6 ↪ Sum Parameter (Fin 6) :=
   ⟨Sum.inr, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Parameter (Fin 6) := oneTape (.inr 2)
+
 noncomputable def algorithmSized (elementWidth : ℕ) :
     Machine (CallingConvention.Alphabet (Sum Parameter (Fin 6)))
       (StandardArrayLookup.State elementWidth) :=
   MultiTape.wire dataTapes (StandardArrayLookup.machine elementWidth)
 
 /-- An in-range binary index returns the corresponding mathematical element.
-All scratch domains are valid on return, including for zero-bit elements. -/
+Private scratch need not encode valid values on return. -/
 theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     (elementWidth : ℕ) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ)
     (fixedWidth : ∀ assignment, element.width assignment = elementWidth) :
     CallingConvention.Realizes (domainsSized element indexCapacity length)
-      argumentReadOnly sizeTapes (algorithmSized elementWidth)
+      argumentReadOnly sizeTapes outputTapes (algorithmSized elementWidth)
       (StandardArrayLookup.entry elementWidth) (StandardArrayLookup.exit elementWidth)
       (fun assignment input =>
         (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment indexCapacity)).val <
           MvPolynomial.eval assignment length)
       (fun assignment input output => ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-        output ⟨.inr 2, rfl⟩ = input ⟨.inr 1, rfl⟩ ⟨(input ⟨.inr 0, rfl⟩).val, within⟩) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithmSized,
+        output () = input ⟨.inr 1, rfl⟩ ⟨(input ⟨.inr 0, rfl⟩).val, within⟩) := by
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithmSized,
     MultiTape.wire, StandardArrayLookup.halt]),
     length * (6 * MvPolynomial.X indexCapacity + MvPolynomial.C (2 * elementWidth + 11)) +
       6 * MvPolynomial.X indexCapacity + MvPolynomial.C (2 * elementWidth + 15), ?_⟩
@@ -129,25 +131,8 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
       (fun _ : Sum Parameter (Fin 6) => (0 : ℤ)) = fun _ => 0 := install_self dataTapes _
   rw [start, positions] at trace
   let selected := array ⟨value index, within⟩
-  let zeroValue : Fin (2 ^ assignment indexCapacity) :=
-    ⟨value (List.replicate (assignment indexCapacity) false),
-    by simpa only [List.length_replicate] using
-      Binary.value_lt_pow_length (List.replicate (assignment indexCapacity) false)⟩
-  let output : Outputs (domainsSized element indexCapacity length)
-      argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases arrayTape : name = 1
-      · subst name; contradiction
-      · by_cases resultTape : name = 2
-        · subst name; exact selected
-        · by_cases flagTape : name = 5
-          · subst name; exact false
-          · change (domainsSized element indexCapacity length (.inr name)).Carrier assignment
-            simp only [domainsSized, arrayTape, resultTape, flagTape, ite_false]
-            exact zeroValue
+  let output : Outputs (domainsSized element indexCapacity length) outputTapes assignment :=
+    fun _ => selected
   refine ⟨ticks, output, _, ?_, trace, ?_, ?_⟩
   · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X, MvPolynomial.eval_C]
     simpa only [indexLength, Nat.add_assoc] using cost
@@ -155,28 +140,10 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     have equalIndex : (⟨value index, within⟩ : Fin (MvPolynomial.eval assignment length)) =
         ⟨indexValue.val, valid⟩ := Fin.ext indexValueEq
     exact congrArg array equalIndex
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change install dataTapes _ initial (dataTapes name) = _
-      rw [install_at]
-      fin_cases name
-      · contradiction
-      · contradiction
-      · rfl
-      · simp only [frame]
-        change buffer (word (List.replicate index.length false)) =
-          encoded (EncodedDomain.binaryNaturals indexCapacity) assignment zeroValue
-        rw [indexLength]
-        exact (encoded_binaryNaturals indexCapacity assignment
-          (List.replicate (assignment indexCapacity) false) List.length_replicate).symm
-      · simp only [frame]
-        change buffer (word (List.replicate index.length false)) =
-          encoded (EncodedDomain.binaryNaturals indexCapacity) assignment zeroValue
-        rw [indexLength]
-        exact (encoded_binaryNaturals indexCapacity assignment
-          (List.replicate (assignment indexCapacity) false) List.length_replicate).symm
-      · exact (encoded_booleans assignment false).symm
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes 2) = _
+    rw [install_at]
+    rfl
 
 end Polytime2.StandardArrayLookupSized

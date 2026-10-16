@@ -112,7 +112,7 @@ theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter]
     {precondition : (Parameter → ℕ) → Tapes (fun _ : Unit => Symbol) → Prop}
     {postcondition : (Parameter → ℕ) → Tapes (fun _ : Unit => Symbol) →
       Tapes (fun _ : Unit => Symbol) → Prop}
-    (certificate : Realizes machine entry exit precondition postcondition) :
+    (certificate : MultiTape.Internal.Realizes machine entry exit precondition postcondition) :
     ∃ bound : MvPolynomial Parameter ℕ,
       ∀ assignment initial, precondition assignment initial →
         ∃ ticks final, ticks ≤ MvPolynomial.eval assignment bound ∧

@@ -15,97 +15,130 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.AddMultiply
-import Polytime2.BinarySubtraction
-import Polytime2.StandardBinaryDecrement
-import Polytime2.StandardBinaryIncrement
-import Polytime2.StandardCounterZero
+import Polytime2.Computation.Branch
+import Polytime2.Computation.Composition
+import Polytime2.Computations.Arithmetic
+import Polytime2.Computations.Counter
 
-/-! # Composed arithmetic boundary cases
-
-Separate immutable operands share a fixed-capacity intermediate sum. Output
-and scratch regions may initially be blank or contain arbitrary old symbols.
--/
+/-! # Arithmetic through mathematical specifications and existential certificates -/
 
 namespace Polytime2.Examples.Arithmetic
 
-#guard Binary.value (AddMultiply.product
-  [true, true, true, false, false, false, false]
-  [true, false, false, false, false, false, false] [true, false, true, true]
-  (List.replicate 7 0) (List.replicate 7 0) 2) = 104
+open Polytime2.Computation
 
--- The final subtraction bit is the borrow; lower bits retain their capacity.
-#guard BinarySubtraction.subtract [true, true, false] [true, false, true] =
-  [false, true, true, true]
-#guard BinarySubtraction.subtract [true, false, true] [true, true, false] =
-  [false, true, false, false]
-#guard BinarySubtraction.subtract [true, false, true] [true, false, true] =
-  [false, false, false, false]
-#guard BinarySubtraction.subtract [] [] = [false]
+/-- Subtract the original second argument from the preceding sum. -/
+private def subtractOriginal : Polytime2.Computation Unit (Bool ⊕ Unit) :=
+  binarySubtract.withArguments (fun _ => EncodedDomain.binaryNaturals ())
+    ⟨(fun | false => .inr () | true => .inl true), by
+      intro first second equal
+      cases first <;> cases second <;> first | rfl | cases equal⟩
+    (fun _ => rfl)
 
--- The complete composition accepts blank output and an arbitrary old carry.
-example :
-    let left := [true, true, true, false, false, false, false]
-    let right := [true, false, false, false, false, false, false]
-    let multiplier := [true, false, true, true]
-    let empty : List Binary.Symbol := List.replicate 7 0
-    CallingConvention.Runs (AddMultiply.widths 7 4) AddMultiply.readOnly AddMultiply.machine
-      297 AddMultiply.entry (fun _ => 0)
-      (AddMultiply.frame left right multiplier empty empty empty empty 2 2)
-      AddMultiply.exit (fun _ => 0)
-      (AddMultiply.frame left right multiplier
-        (Binary.word (AddMultiply.product left right multiplier empty empty 2))
-        (Binary.word (AddMultiply.sum left right))
-        (Binary.word (List.replicate 7 false)) (Binary.word (List.replicate 7 false))
-        (Binary.data false) (Binary.data false)) := by
-  exact AddMultiply.runs [true, true, true, false, false, false, false]
-    [true, false, false, false, false, false, false] [true, false, true, true] rfl
-    (List.replicate 7 0) (List.replicate 7 0) (List.replicate 7 0) (List.replicate 7 0)
-    rfl rfl rfl rfl 2 2 (by decide)
+/-- Compute a sum, then reuse one original argument in the next call. -/
+def addThenCancel : Polytime2.Computation Unit Bool :=
+  binaryAdd.letThen subtractOriginal (fun _ => rfl) rfl (by
+    intro sizes arguments valid
+    change (arguments true).val ≤ (arguments false).val + (arguments true).val
+    omega)
 
--- Zero-width words still initialize both flags and all scratch.
-example : CallingConvention.Runs (AddMultiply.widths 0 0) AddMultiply.readOnly AddMultiply.machine
-    17 AddMultiply.entry (fun _ => 0) (AddMultiply.frame [] [] [] [] [] [] [] 2 2)
-    AddMultiply.exit (fun _ => 0)
-    (AddMultiply.frame [] [] [] [] [] [] [] (Binary.data false) (Binary.data false)) :=
-  AddMultiply.runs [] [] [] rfl [] [] [] [] rfl rfl rfl rfl 2 2 (by decide)
+theorem addThenCancel_realizable : addThenCancel.Realizable := by
+  apply Computation.Realizable.letThen binaryAdd_realizable
+  exact binarySubtract_realizable.withArguments _ _ _
 
--- Decrement writes through blank digits and propagates a borrow across zeros.
-example : CallingConvention.Runs (fun _ : Bool => 4) (fun name => !name)
-    StandardBinaryDecrement.machine 11 StandardBinaryDecrement.entry (fun _ => 0)
-    (Copy.frame [0] (Binary.word [false, false, false, true] ++ [0]) [0] [0, 2, 0, 0, 0])
-    StandardBinaryDecrement.exit (fun _ => 0)
-    (Copy.frame [0] (Binary.word [false, false, false, true] ++ [0]) [0]
-      (Binary.word [true, true, true, false] ++ [0])) :=
-  StandardBinaryDecrement.runs [false, false, false, true] [0, 2, 0, 0] rfl
+/-- The result is independent of every private implementation choice. -/
+theorem addThenCancel_correct (sizes : Unit → ℕ) (arguments : addThenCancel.Arguments sizes)
+    (valid : addThenCancel.precondition sizes arguments) :
+    addThenCancel.compute sizes ⟨arguments, valid⟩ = arguments false := by
+  apply Fin.ext
+  change (arguments false).val + (arguments true).val - (arguments true).val = (arguments false).val
+  omega
 
-example : CallingConvention.Runs (fun _ : Bool => 0) (fun name => !name)
-    StandardBinaryDecrement.machine 3 StandardBinaryDecrement.entry (fun _ => 0)
-    (Copy.frame [0] [0] [0] [0]) StandardBinaryDecrement.exit (fun _ => 0)
-    (Copy.frame [0] [0] [0] [0]) := StandardBinaryDecrement.runs [] [] rfl
+example : (addThenCancel.compute (fun _ => 4)
+    ⟨(fun | false => (7 : Fin 16) | true => (5 : Fin 16)), by change 7 + 5 < 16; decide⟩ : Fin 16) = (7 : Fin 16) := rfl
 
-example : Fintype AddMultiply.State := inferInstance
+-- Zero-bit operands remain admissible for exact bounded addition and subtraction.
+example : (binaryAdd.compute (fun _ => 0)
+    ⟨(fun _ => (0 : Fin 1)), by change 0 + 0 < 1; decide⟩ : Fin 1) = (0 : Fin 1) := rfl
+example : (binarySubtract.compute (fun _ => 0)
+    ⟨(fun _ => (0 : Fin 1)), by change 0 ≤ 0; decide⟩ : Fin 1) = (0 : Fin 1) := rfl
 
--- Fixed constants overwrite arbitrary old contents without a source.
-example : CallingConvention.Runs (fun _ : Unit => 2) (fun _ => false)
-    (StandardConstant.machine [false, true]) 5 (false, 2) (fun _ => 0)
-    (fun _ => CallingConvention.buffer [0, 2]) (true, 0) (fun _ => 0)
-    (fun _ => CallingConvention.buffer (Binary.word [false, true])) :=
-  StandardConstant.runs [false, true] [0, 2] rfl
+-- Modular increment keeps its capacity, including overflow and zero-bit inputs.
+example : (counterIncrement ()).compute (fun _ => 3)
+    ⟨(fun _ => (7 : Fin 8)), True.intro⟩ = (0 : Fin 8) := rfl
+example : (counterIncrement ()).compute (fun _ => 0)
+    ⟨(fun _ => (0 : Fin 1)), True.intro⟩ = (0 : Fin 1) := rfl
 
--- An empty encoded constant needs no data cells and still has a restoring exit.
-example : CallingConvention.Runs (fun _ : Unit => 0) (fun _ => false)
-    (StandardConstant.machine []) 1 (false, 0) (fun _ => 0)
-    (fun _ => CallingConvention.buffer []) (true, 0) (fun _ => 0)
-    (fun _ => CallingConvention.buffer []) := StandardConstant.runs [] [] rfl
+/-- The zero case needs no proof that the decrement routine accepts zero. -/
+def saturatingDecrement : Polytime2.Computation Unit Unit :=
+  counterNonzero.letThen
+    ((counterDecrement ()).choose (copy (EncodedDomain.binaryNaturals ()))
+      (fun _ => rfl) rfl)
+    (fun _ => rfl) rfl (by
+      intro sizes arguments valid
+      dsimp only [choose, counterNonzero, counterDecrement, copy]
+      split
+      · rename_i selected
+        exact of_decide_eq_true selected
+      · trivial)
 
--- Counter capacity is retained on overflow; no digit is appended.
-#guard BinaryScan.run BinaryScan.increment true [true, true, true] =
-  (true, [false, false, false])
-#guard BinaryScan.run BinaryScan.increment true [false, false, true] =
-  (false, [true, false, true])
-#guard BinaryScan.run BinaryScan.increment true [] = (true, [])
-#guard StandardBinaryIncrement.next () (fun _ => 3) (7 : Fin 8) = 0
-#guard StandardBinaryIncrement.next () (fun _ => 0) (0 : Fin 1) = 0
+theorem saturatingDecrement_realizable : saturatingDecrement.Realizable := by
+  apply Computation.Realizable.letThen counterNonzero_realizable
+  exact (counterDecrement_realizable ()).choose
+    (copy_realizable (EncodedDomain.binaryNaturals ())) _ _
+
+example : (saturatingDecrement.compute (fun _ => 3)
+    ⟨(fun _ => (5 : Fin 8)), True.intro⟩ : Fin 8) = (4 : Fin 8) := rfl
+example : (saturatingDecrement.compute (fun _ => 0)
+    ⟨(fun _ => (0 : Fin 1)), True.intro⟩ : Fin 1) = (0 : Fin 1) := rfl
+
+example : binaryLess.Realizable := binaryLess_realizable
+example : binaryLess.compute (fun _ => 3)
+    ⟨(fun | false => (3 : Fin 8) | true => (5 : Fin 8)), True.intro⟩ = true := rfl
+example : binaryLess.compute (fun _ => 3)
+    ⟨(fun _ => (5 : Fin 8)), True.intro⟩ = false := rfl
+example : binaryLess.compute (fun _ => 0)
+    ⟨(fun _ => (0 : Fin 1)), True.intro⟩ = false := rfl
+
+private def operandSelection (which : Bool) : Unit ↪ Bool :=
+  ⟨(fun _ => which), by intro first second _; cases first; cases second; rfl⟩
+
+private def selectOperand (which : Bool) : Polytime2.Computation Unit Bool :=
+  (copy (EncodedDomain.binaryNaturals ())).withArguments
+    (fun _ => EncodedDomain.binaryNaturals ()) (operandSelection which) (fun _ => rfl)
+
+private theorem selectOperand_realizable (which : Bool) : (selectOperand which).Realizable :=
+  (copy_realizable (EncodedDomain.binaryNaturals ())).withArguments _ _ _
+
+/-- Comparison chooses an operand while retaining both original arguments. -/
+def minimum : Polytime2.Computation Unit Bool := binaryLess.letThen
+  ((selectOperand false).choose (selectOperand true) (fun _ => rfl) rfl)
+  (fun _ => rfl) rfl (by
+    intro sizes arguments valid
+    dsimp only [choose, selectOperand, withArguments, copy]
+    split <;> trivial)
+
+theorem minimum_realizable : minimum.Realizable := by
+  apply Computation.Realizable.letThen binaryLess_realizable
+  exact (selectOperand_realizable false).choose (selectOperand_realizable true) _ _
+
+example : (minimum.compute (fun _ => 3)
+    ⟨(fun | false => (5 : Fin 8) | true => (3 : Fin 8)), True.intro⟩ : Fin 8) = (3 : Fin 8) := rfl
+example : (minimum.compute (fun _ => 3)
+    ⟨(fun | false => (3 : Fin 8) | true => (5 : Fin 8)), True.intro⟩ : Fin 8) = (3 : Fin 8) := rfl
+
+example : binaryMultiply.Realizable := binaryMultiply_realizable
+example : binaryRemainder.Realizable := binaryRemainder_realizable
+
+-- Multiplication allows independent factor/result and multiplier capacities.
+example : (binaryMultiply.compute (fun | false => 7 | true => 4)
+    ⟨(fun | false => (8 : Fin 128) | true => (13 : Fin 16)),
+      by change 8 * 13 < 128; decide⟩ : Fin 128) = (104 : Fin 128) := rfl
+example : (binaryMultiply.compute (fun | false => 0 | true => 3)
+    ⟨(fun | false => (0 : Fin 1) | true => (7 : Fin 8)),
+      by change 0 * 7 < 1; decide⟩ : Fin 1) = (0 : Fin 1) := rfl
+
+example : (binaryRemainder.compute (fun _ => 4)
+    ⟨(fun | false => (13 : Fin 16) | true => (5 : Fin 16)),
+      by change 0 < 5 ∧ 2 * 5 ≤ 16; decide⟩ : Fin 16) = (3 : Fin 16) := rfl
 
 end Polytime2.Examples.Arithmetic

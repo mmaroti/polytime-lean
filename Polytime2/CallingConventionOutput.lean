@@ -69,23 +69,26 @@ theorem extract_runs (name : TapeName) (domain : EncodedDomain.{parameterLevel, 
   exact TrackOutput.steps _ _ _ before current after bits unmarked marked payload
 
 -- stateLevel: the finite controller of the routine being simulated.
-universe stateLevel
+-- outputNameLevel: names of declared mathematical outputs.
+universe stateLevel outputNameLevel
+variable {OutputName : Type outputNameLevel}
 variable {State : Type stateLevel} [Fintype State] [Fintype TapeName]
 
 /-- Realize a standard routine and extract one output as a standalone binary
 word. Simulation, extraction, erasure, and startup all count toward the bound.
-The mathematical input and all private results remain representation witnesses.
+Only the mathematical inputs and declared outputs are representation witnesses.
 -/
 theorem Realizes.tm0_output
     {domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter}
     {readOnly : TapeName → Bool} {sizeTapes : Parameter ↪ TapeName}
+    {outputTapes : OutputName ↪ TapeName}
     {source : Machine (Alphabet TapeName) State} {sourceEntry sourceExit : State}
     {hypothesis : ∀ assignment, Inputs domains readOnly assignment → Prop}
-    {contract : ∀ assignment, Inputs domains readOnly assignment → Outputs domains readOnly assignment → Prop}
-    (certificate : Realizes domains readOnly sizeTapes source sourceEntry sourceExit hypothesis contract)
-    (resultTape : TapeName) (writable : readOnly resultTape = false) :
+    {contract : ∀ assignment, Inputs domains readOnly assignment → Outputs domains outputTapes assignment → Prop}
+    (certificate : Realizes domains readOnly sizeTapes outputTapes source sourceEntry sourceExit hypothesis contract)
+    (resultName : OutputName) :
     let names := (Finset.univ : Finset TapeName).toList
-    let combined := MultiTape.sequence (Simulation.machine names source) (extract resultTape) 0
+    let combined := MultiTape.sequence (Simulation.machine names source) (extract (outputTapes resultName)) 0
     let program := TM0Input.machine (SingleTape.compile combined)
       (.inl (.inl (Simulation.entry names sourceEntry)))
     ∃ inputCapacity timeBound : MvPolynomial Parameter ℕ, ∀ assignment initial,
@@ -94,21 +97,21 @@ theorem Realizes.tm0_output
       ∃ ticks input output final,
         ticks ≤ MvPolynomial.eval assignment timeBound ∧
         hypothesis assignment input ∧ Entry domains readOnly assignment input initial ∧
-        contract assignment input output ∧ Exit domains readOnly assignment output final ∧
+        contract assignment input output ∧ Exit domains outputTapes assignment output final ∧
         (∀ name, readOnly name = true → final name = initial name) ∧
         (fun current => current.bind (Turing.TM0.step program))^[ticks]
           (some (Turing.TM0.init (Sweep.leftMarker ::
             ((Tracks.initialRows (MvPolynomial.eval assignment inputCapacity) initial).map Sweep.row ++
               [Sweep.rightMarker])))) =
           some (TM0Input.embed (SingleTape.configuration (.inr 7, Sweep.tape []
-            (TrackOutput.word (outputLetter resultTape)
-              (List.ofFn (fun index : Fin ((domains resultTape).width assignment) =>
-                ((domains resultTape).encode assignment (output ⟨resultTape, writable⟩)).getLsbD index.val)))))) ∧
+            (TrackOutput.word (outputLetter (outputTapes resultName))
+              (List.ofFn (fun index : Fin ((domains (outputTapes resultName)).width assignment) =>
+                ((domains (outputTapes resultName)).encode assignment (output resultName)).getLsbD index.val)))))) ∧
         Turing.TM0.step program
           (TM0Input.embed (SingleTape.configuration (.inr 7, Sweep.tape []
-            (TrackOutput.word (outputLetter resultTape)
-              (List.ofFn (fun index : Fin ((domains resultTape).width assignment) =>
-                ((domains resultTape).encode assignment (output ⟨resultTape, writable⟩)).getLsbD index.val)))))) = none := by
+            (TrackOutput.word (outputLetter (outputTapes resultName))
+              (List.ofFn (fun index : Fin ((domains (outputTapes resultName)).width assignment) =>
+                ((domains (outputTapes resultName)).encode assignment (output resultName)).getLsbD index.val)))))) = none := by
   classical
   intro names combined program
   let precondition := fun assignment initial => ∃ input,
@@ -116,10 +119,10 @@ theorem Realizes.tm0_output
       ∀ parameter, initial (sizeTapes parameter) = unary (assignment parameter)
   let postcondition := fun assignment initial final => ∃ input output,
     hypothesis assignment input ∧ Entry domains readOnly assignment input initial ∧
-      contract assignment input output ∧ Exit domains readOnly assignment output final ∧
+      contract assignment input output ∧ Exit domains outputTapes assignment output final ∧
         ∀ name, readOnly name = true → final name = initial name
-  have physical : MultiTape.Realizes source sourceEntry sourceExit precondition postcondition := by
-    obtain ⟨sizeReadOnly, halted, bound, execute⟩ := certificate
+  have physical : MultiTape.Internal.Realizes source sourceEntry sourceExit precondition postcondition := by
+    obtain ⟨sizeReadOnly, outputsWritable, halted, bound, execute⟩ := certificate
     refine ⟨halted, bound, ?_⟩
     intro assignment initial valid
     obtain ⟨input, validInput, represented, headers⟩ := valid
@@ -153,12 +156,12 @@ theorem Realizes.tm0_output
       (Tracks.initialRows_represents _ _ (inputFits assignment initial valid))
       (by simp only [Tracks.initialRows_length, rowCapacity, map_add, map_mul, map_ofNat, map_one, le_refl])
   obtain ⟨input, output, validInput, inputEq, outputCorrect, returned, immutable⟩ := correct
-  have outputRepresentation := represented resultTape
-  rw [returned resultTape writable] at outputRepresentation
+  have outputRepresentation := represented (outputTapes resultName)
+  rw [returned resultName] at outputRepresentation
   obtain ⟨extractTicks, extractCost, extracted⟩ :=
-    extract_runs resultTape (domains resultTape) assignment (output ⟨resultTape, writable⟩)
+    extract_runs (outputTapes resultName) (domains (outputTapes resultName)) assignment (output resultName)
       finalRows outputRepresentation
-  have complete := MultiTape.sequence_steps (Simulation.machine names source) (extract resultTape) 0
+  have complete := MultiTape.sequence_steps (Simulation.machine names source) (extract (outputTapes resultName)) 0
     simulated (by intro symbols; rfl) extracted
   refine ⟨2 * (simulationTicks + extractTicks + 1) + 1, input, output, final, ?_,
     validInput, inputEq, outputCorrect, returned, immutable,

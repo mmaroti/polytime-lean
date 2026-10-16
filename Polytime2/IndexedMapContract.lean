@@ -39,46 +39,36 @@ private theorem lookup_outside (name : Fin 12)
       rcases outside with rfl | rfl | rfl | rfl | rfl | rfl <;>
         simp [lookupWiring, lookupData] at equal
 
-omit [Fintype Parameter] in
-private theorem update_outside (name : Fin 12)
-    (outside : name = 2 ∨ name = 4 ∨ name = 6 ∨ name = 7 ∨ name = 8) :
-    Sum.inr name ∉ Set.range (updateWiring (Parameter := Parameter)) := by
-  rintro ⟨localName, equal⟩
-  cases localName with
-  | inl parameter => cases equal
-  | inr localName =>
-    fin_cases localName <;>
-      rcases outside with rfl | rfl | rfl | rfl | rfl <;>
-        simp [updateWiring, updateData] at equal
+def outputTapes : Unit ↪ Sum Parameter (Fin 12) := oneTape (.inr 3)
 
 set_option maxHeartbeats 800000 in
 /-- Lookup, a fixed scalar operation, and update compose with immutable inputs,
-arbitrary initial writable contents, and valid scratch on return. -/
+arbitrary initial writable contents, and a canonical public result. -/
 theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
     (operation : ∀ assignment, parameterDomain.Carrier assignment →
       elementDomain.Carrier assignment → elementDomain.Carrier assignment) :
     CallingConvention.Realizes (domains parameterDomain elementDomain indexCapacity length)
-      argumentReadOnly sizeTapes (algorithm parameterDomain elementDomain operation)
+      argumentReadOnly sizeTapes outputTapes (algorithm parameterDomain elementDomain operation)
       (entry (parameterDomain.width Empty.elim) (elementDomain.width Empty.elim))
       (exit (parameterDomain.width Empty.elim) (elementDomain.width Empty.elim))
       (fun assignment input => (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length)
       (fun assignment input output =>
         ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-          output ⟨.inr 3, rfl⟩ = Function.update (input ⟨.inr 1, rfl⟩)
+          output () = Function.update (input ⟨.inr 1, rfl⟩)
             ⟨(input ⟨.inr 0, rfl⟩).val, within⟩
             (operation Empty.elim (input ⟨.inr 2, rfl⟩)
               (input ⟨.inr 1, rfl⟩ ⟨(input ⟨.inr 0, rfl⟩).val, within⟩))) := by
   classical
   let element : EncodedDomain Parameter := elementDomain.constant
   let elementWidth := elementDomain.width Empty.elim
-  obtain ⟨lookupSizes, lookupHalt, lookupBound, lookupRun⟩ :=
+  obtain ⟨lookupSizes, lookupOutputsWritable, lookupHalt, lookupBound, lookupRun⟩ :=
     StandardArrayLookupSized.contractSized element elementWidth indexCapacity length (by intro assignment; rfl)
-  obtain ⟨tableSizes, tableHalt, tableBound, tableRun⟩ :=
+  obtain ⟨tableSizes, tableOutputsWritable, tableHalt, tableBound, tableRun⟩ :=
     StandardFiniteTable.contract parameterDomain elementDomain elementDomain operation
-  obtain ⟨updateSizes, updateHalt, updateBound, updateRun⟩ :=
+  obtain ⟨updateSizes, updateOutputsWritable, updateHalt, updateBound, updateRun⟩ :=
     StandardArrayUpdate.contractSized element elementWidth indexCapacity length (by intro assignment; rfl)
-  refine ⟨(by intro parameter; rfl), ?_,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), ?_,
     lookupBound + MvPolynomial.C (MvPolynomial.eval Empty.elim tableBound) + updateBound + 2, ?_⟩
   · intro symbols
     simp [algorithm, exit, MultiTape.sequence, MultiTape.wire,
@@ -133,20 +123,17 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
       afterLookup (lookupWiring name) = lookupInitial name := by
     rw [show afterLookup (lookupWiring name) = lookupFinal name from install_at _ _ _ _]
     exact lookupTrace.readOnly_tape name immutable
-  have lookupReturned (name : Sum Parameter (Fin 6))
-      (writable : StandardArrayLookupSized.argumentReadOnly name = false) :
-      afterLookup (lookupWiring name) =
-        encoded (StandardArrayLookupSized.domainsSized element indexCapacity length name)
-          assignment (lookupOutput ⟨name, writable⟩) := by
-    rw [show afterLookup (lookupWiring name) = lookupFinal name from install_at _ _ _ _]
-    exact lookupExit name writable
+  have lookupReturned : afterLookup (lookupWiring (.inr 2)) =
+      encoded element assignment (lookupOutput ()) := by
+    rw [show afterLookup (lookupWiring (.inr 2)) = lookupFinal (.inr 2) from install_at _ _ _ _]
+    exact lookupExit ()
   let tableDomains := StandardFiniteTable.domains parameterDomain elementDomain elementDomain
   let tableInput : Inputs tableDomains StandardFiniteTable.readOnly Empty.elim := fun name => by
     rcases name with ⟨name, immutable⟩
     by_cases parameterTape : name = 0
     · subst name; exact input ⟨.inr 2, rfl⟩
     · by_cases elementTape : name = 1
-      · subst name; exact lookupOutput ⟨.inr 2, rfl⟩
+      · subst name; exact lookupOutput ()
       · have invalid : name.val ≥ 2 := by
           have bounded := name.isLt
           have first : name.val ≠ 0 := fun equal => parameterTape (Fin.ext equal)
@@ -163,7 +150,7 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
       · change afterLookup (.inr 2) = _
         rw [lookupOutside 2 (Or.inl rfl)]
         exact represented.1 (.inr 2) rfl
-      · exact lookupReturned (.inr 2) rfl
+      · exact lookupReturned
       · contradiction
     · intro name writable
       fin_cases name
@@ -195,9 +182,9 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     rw [show afterTable (tableWiring name) = tableFinal name from install_at _ _ _ _]
     exact tableTrace.readOnly_tape name immutable
   have tableReturned : afterTable (tableWiring 2) =
-      encoded elementDomain Empty.elim (tableOutput ⟨2, rfl⟩) := by
+      encoded elementDomain Empty.elim (tableOutput ()) := by
     rw [show afterTable (tableWiring 2) = tableFinal 2 from install_at _ _ _ _]
-    exact tableExit 2 rfl
+    exact tableExit ()
   let updateInput : Inputs (StandardArrayUpdate.domainsSized element indexCapacity length)
       StandardArrayUpdate.argumentReadOnlySized assignment := fun name => by
     rcases name with ⟨name, immutable⟩
@@ -209,7 +196,7 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
       · by_cases arrayTape : name = 1
         · subst name; exact input ⟨.inr 1, rfl⟩
         · by_cases elementTape : name = 2
-          · subst name; exact tableOutput ⟨2, rfl⟩
+          · subst name; exact tableOutput ()
           · have remaining : 3 ≤ name.val := by
               have bound := name.isLt
               have first : name.val ≠ 0 := fun equal => indexTape (Fin.ext equal)
@@ -300,32 +287,7 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
   have complete := sequence_runs parameterDomain elementDomain operation _ _
     wiredLookup wiredTable wiredUpdate
   let output : Outputs (domains parameterDomain elementDomain indexCapacity length)
-      argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases resultTape : name = 3
-      · subst name; exact updateOutput ⟨.inr 3, rfl⟩
-      · by_cases selectedTape : name = 4
-        · subst name; exact lookupOutput ⟨.inr 2, rfl⟩
-        · by_cases transformedTape : name = 5
-          · subst name; exact tableOutput ⟨2, rfl⟩
-          · by_cases lookupCounter : name = 6
-            · subst name; exact lookupOutput ⟨.inr 3, rfl⟩
-            · by_cases lookupScratch : name = 7
-              · subst name; exact lookupOutput ⟨.inr 4, rfl⟩
-              · by_cases lookupFlag : name = 8
-                · subst name; exact lookupOutput ⟨.inr 5, rfl⟩
-                · by_cases updateCounter : name = 9
-                  · subst name; exact updateOutput ⟨.inr 4, rfl⟩
-                  · by_cases updateScratch : name = 10
-                    · subst name; exact updateOutput ⟨.inr 5, rfl⟩
-                    · by_cases updateFlag : name = 11
-                      · subst name; exact updateOutput ⟨.inr 6, rfl⟩
-                      · have invalid : name.val < 3 := by
-                          fin_cases name <;> first | decide | contradiction
-                        simp [argumentReadOnly, invalid] at writable
+      outputTapes assignment := fun _ => updateOutput ()
   refine ⟨lookupTicks + tableTicks + updateTicks + 2, output, final, ?_, complete, ?_, ?_⟩
   · simp only [map_add, MvPolynomial.eval_C, map_ofNat]
     omega
@@ -335,43 +297,9 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     dsimp [lookupInput, tableInput, updateInput, output] at selected tableCorrect updated ⊢
     rw [tableCorrect, selected] at updated
     exact updated
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      fin_cases name
-      · contradiction
-      · contradiction
-      · contradiction
-      · exact (show final (updateWiring (.inr 3)) = updateFinal (.inr 3) from
-          install_at _ _ _ _).trans (updateExit (.inr 3) rfl)
-      · change final (.inr 4) = _
-        rw [show final (.inr 4) = afterTable (.inr 4) from
-          install_outside _ _ _ _ (update_outside 4 (by simp))]
-        change afterTable (tableWiring 1) = _
-        rw [tableInputPreserved 1 rfl]
-        exact lookupReturned (.inr 2) rfl
-      · change final (updateWiring (.inr 2)) = _
-        rw [show final (updateWiring (.inr 2)) = updateFinal (.inr 2) from install_at _ _ _ _]
-        rw [updateTrace.readOnly_tape (.inr 2) rfl]
-        exact tableReturned
-      · change final (.inr 6) = _
-        rw [show final (.inr 6) = afterTable (.inr 6) from
-          install_outside _ _ _ _ (update_outside 6 (by simp)), tableOutside 6 (by decide)]
-        exact lookupReturned (.inr 3) rfl
-      · change final (.inr 7) = _
-        rw [show final (.inr 7) = afterTable (.inr 7) from
-          install_outside _ _ _ _ (update_outside 7 (by simp)), tableOutside 7 (by decide)]
-        exact lookupReturned (.inr 4) rfl
-      · change final (.inr 8) = _
-        rw [show final (.inr 8) = afterTable (.inr 8) from
-          install_outside _ _ _ _ (update_outside 8 (by simp)), tableOutside 8 (by decide)]
-        exact lookupReturned (.inr 5) rfl
-      · exact (show final (updateWiring (.inr 4)) = updateFinal (.inr 4) from
-          install_at _ _ _ _).trans (updateExit (.inr 4) rfl)
-      · exact (show final (updateWiring (.inr 5)) = updateFinal (.inr 5) from
-          install_at _ _ _ _).trans (updateExit (.inr 5) rfl)
-      · exact (show final (updateWiring (.inr 6)) = updateFinal (.inr 6) from
-          install_at _ _ _ _).trans (updateExit (.inr 6) rfl)
+  · intro name
+    cases name
+    exact (show final (updateWiring (.inr 3)) = updateFinal (.inr 3) from
+      install_at _ _ _ _).trans (updateExit ())
 
 end Polytime2.IndexedMap

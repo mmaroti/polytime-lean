@@ -39,22 +39,24 @@ def dataTapes : Fin 9 ↪ Sum Bool (Fin 9) :=
 def sizeTapes : Bool ↪ Sum Bool (Fin 9) :=
   ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Bool (Fin 9) := oneTape (.inr 7)
+
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Bool (Fin 9))) State :=
   MultiTape.wire dataTapes machine
 
 /-- A row-major address is computed with immutable operands, arbitrary writable
-contents, and valid private scratch on return. The bound is inferred internally. -/
-theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+contents, and a canonical result. The bound is inferred internally. -/
+theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes algorithm entry exit
     (fun assignment input =>
       (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment false)).val *
         (input ⟨.inr 5, rfl⟩ : Fin (2 ^ assignment true)).val +
         (input ⟨.inr 6, rfl⟩ : Fin (2 ^ assignment false)).val < 2 ^ assignment false)
     (fun assignment input output =>
-      (output ⟨.inr 7, rfl⟩ : Fin (2 ^ assignment false)).val =
+      (output () : Fin (2 ^ assignment false)).val =
         (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment false)).val *
           (input ⟨.inr 5, rfl⟩ : Fin (2 ^ assignment true)).val +
           (input ⟨.inr 6, rfl⟩ : Fin (2 ^ assignment false)).val) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire]),
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire]),
     MvPolynomial.X true * (6 * MvPolynomial.X false + 14) + 8 * MvPolynomial.X false + 17, ?_⟩
   intro assignment input initial valid represented sizes
   let factor := List.ofFn (fun index : Fin (assignment false) =>
@@ -127,33 +129,11 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   rw [start, positions] at trace
   let productBits := product factor multiplier oldShifted oldNext multiplyFlag
   let resultBits := result factor multiplier addend oldShifted oldNext multiplyFlag
-  have productBitsLength : productBits.length = assignment false :=
-    (product_length factor multiplier oldShifted oldNext multiplyFlag shiftedFits nextFits).trans factorLength
   have resultBitsLength : resultBits.length = assignment false :=
     (result_length factor multiplier addend oldShifted oldNext multiplyFlag sameLength shiftedFits nextFits).trans factorLength
-  let productNatural : Fin (2 ^ assignment false) := ⟨value productBits,
-    by simpa only [productBitsLength] using Binary.value_lt_pow_length productBits⟩
   let resultNatural : Fin (2 ^ assignment false) := ⟨value resultBits,
     by simpa only [resultBitsLength] using Binary.value_lt_pow_length resultBits⟩
-  let zeroNatural : Fin (2 ^ assignment false) := ⟨value (List.replicate (assignment false) false),
-    by simpa only [List.length_replicate] using Binary.value_lt_pow_length (List.replicate (assignment false) false)⟩
-  let output : Outputs domains argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases flag : name = 4 ∨ name = 8
-      · change (if name = 4 ∨ name = 8 then EncodedDomain.booleans
-          else EncodedDomain.binaryNaturals (decide (name = 5))).Carrier assignment
-        rw [ite_eq_left flag]
-        exact false
-      · by_cases source : name = 5
-        · subst name; contradiction
-        · change (if name = 4 ∨ name = 8 then EncodedDomain.booleans
-            else EncodedDomain.binaryNaturals (decide (name = 5))).Carrier assignment
-          rw [ite_eq_right flag]
-          simp only [source, decide_false]
-          exact if name = 0 then productNatural else if name = 7 then resultNatural else zeroNatural
+  let output : Outputs domains outputTapes assignment := fun _ => resultNatural
   refine ⟨multiplier.length * (6 * factor.length + 14) + 8 * factor.length + 17, output,
     install dataTapes (frame factor multiplier addend (word productBits)
       (word (List.replicate factor.length false)) (word (List.replicate factor.length false))
@@ -163,27 +143,10 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   · change value resultBits = _
     simpa only [factorValue, multiplierValue, addendValue] using result_value factor multiplier addend
       oldShifted oldNext multiplyFlag sameLength shiftedFits nextFits capacity
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change install dataTapes _ initial (dataTapes name) = _
-      rw [install_at]
-      fin_cases name
-      · exact (encoded_binaryNaturals false assignment productBits productBitsLength).symm
-      · contradiction
-      · change buffer (word (List.replicate factor.length false)) =
-          encoded (EncodedDomain.binaryNaturals false) assignment zeroNatural
-        rw [factorLength]
-        exact (encoded_binaryNaturals false assignment (List.replicate (assignment false) false) List.length_replicate).symm
-      · change buffer (word (List.replicate factor.length false)) =
-          encoded (EncodedDomain.binaryNaturals false) assignment zeroNatural
-        rw [factorLength]
-        exact (encoded_binaryNaturals false assignment (List.replicate (assignment false) false) List.length_replicate).symm
-      · exact (encoded_booleans assignment false).symm
-      · contradiction
-      · contradiction
-      · exact (encoded_binaryNaturals false assignment resultBits resultBitsLength).symm
-      · exact (encoded_booleans assignment false).symm
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes 7) = _
+    rw [install_at]
+    exact (encoded_binaryNaturals false assignment resultBits resultBitsLength).symm
 
 end Polytime2.MultiplyAdd

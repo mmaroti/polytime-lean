@@ -117,13 +117,15 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     omega
   · simpa only [machine, entry, exit] using complete
 
+def outputTapes : Unit ↪ TapeName := oneTape (dataTape 5)
+
 /-- The public arguments are immutable indices, coefficient, and original
 matrix, alongside the unary sizes. The separate result and all private tapes
-start arbitrary and return valid encoded values with their heads restored. -/
+start arbitrary; only the result must return a valid encoding. Heads are restored. -/
 theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment →
       scalar.Carrier assignment → scalar.Carrier assignment × scalar.Carrier assignment) :
-    CallingConvention.Realizes (domains scalar) readOnly sizeTapes (machine writeSource scalar operation)
+    CallingConvention.Realizes (domains scalar) readOnly sizeTapes outputTapes (machine writeSource scalar operation)
       (entry (scalar.width Empty.elim)) (exit (scalar.width Empty.elim))
       (fun sizes input => (input ⟨dataTape 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
         (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
@@ -131,12 +133,12 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (fun sizes input output => ∃
         (sourceValid : (input ⟨dataTape 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1)
         (targetValid : (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1),
-        output ⟨dataTape 5, rfl⟩ = processed writeSource scalar operation sizes
+        output () = processed writeSource scalar operation sizes
           (input ⟨dataTape 0, rfl⟩) (input ⟨dataTape 1, rfl⟩) sourceValid targetValid
           (input ⟨dataTape 3, rfl⟩) (input ⟨inputTape, rfl⟩) (sizes 2)) := by
   classical
   obtain ⟨bound, execute⟩ := runs writeSource scalar operation
-  refine ⟨(by intro parameter; rfl), halt writeSource scalar operation, bound, ?_⟩
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), halt writeSource scalar operation, bound, ?_⟩
   intro sizes input initial valid represented headers
   let resultArray := processed writeSource scalar operation sizes (input ⟨dataTape 0, rfl⟩)
     (input ⟨dataTape 1, rfl⟩) valid.1 valid.2.1 (input ⟨dataTape 3, rfl⟩) (input ⟨inputTape, rfl⟩) (sizes 2)
@@ -145,17 +147,10 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (input ⟨dataTape 3, rfl⟩) (input ⟨inputTape, rfl⟩) valid.2.2.1 valid.2.2.2
       (represented.1 (dataTape 0) rfl) (represented.1 (dataTape 1) rfl)
       (represented.1 (dataTape 3) rfl) (represented.1 inputTape rfl) headers represented.region
-  let output : Outputs (domains scalar) readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    by_cases isResult : name = dataTape 5
-    · subst name
-      exact resultArray
-    · exact Classical.choose (canonical name writable)
+  let output : Outputs (domains scalar) outputTapes sizes := fun _ => resultArray
   refine ⟨ticks, output, final, cost, trace, ⟨valid.1, valid.2.1, rfl⟩, ?_⟩
-  intro name writable
-  by_cases isResult : name = dataTape 5
-  · subst name
-    exact resultEq
-  · simpa only [output, isResult, ↓reduceDIte] using Classical.choose_spec (canonical name writable)
+  intro name
+  cases name
+  exact resultEq
 
 end Polytime2.StandardMatrixRows

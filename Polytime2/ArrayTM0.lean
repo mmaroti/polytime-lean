@@ -32,7 +32,7 @@ universe parameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter] [DecidableEq Parameter]
 
 /-- Lookup's mathematical contract transfers to `TM0.init`, including immutable
-arguments and valid scratch on return. -/
+arguments and its declared result. -/
 theorem lookup_realizes_tm0
     (element : EncodedDomain.{parameterLevel, 0} Parameter) (elementWidth : ℕ)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
@@ -40,15 +40,17 @@ theorem lookup_realizes_tm0
     CallingConvention.TM0Realizes
       (StandardArrayLookupSized.domainsSized element indexCapacity length)
       StandardArrayLookupSized.argumentReadOnly StandardArrayLookupSized.sizeTapes
+      (MultiTape.oneTape (.inr 2))
       (StandardArrayLookupSized.algorithmSized elementWidth)
       (StandardArrayLookup.entry elementWidth)
       (fun assignment input => (input ⟨.inr 0, rfl⟩).val <
         MvPolynomial.eval assignment length)
       (fun assignment input output =>
         ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-          output ⟨.inr 2, rfl⟩ = input ⟨.inr 1, rfl⟩
-            ⟨(input ⟨.inr 0, rfl⟩).val, within⟩) :=
-  (StandardArrayLookupSized.contractSized element elementWidth indexCapacity length fixedWidth).tm0
+          output () = input ⟨.inr 1, rfl⟩
+            ⟨(input ⟨.inr 0, rfl⟩).val, within⟩) := by
+  apply CallingConvention.Realizes.tm0
+  exact StandardArrayLookupSized.contractSized element elementWidth indexCapacity length fixedWidth
 
 /-- Update overwrites its complete fresh result, including when it initially
 contains blanks, and the same mathematical update is realized on TM0. -/
@@ -59,14 +61,16 @@ theorem update_realizes_tm0
     CallingConvention.TM0Realizes
       (StandardArrayUpdate.domainsSized element indexCapacity length)
       StandardArrayUpdate.argumentReadOnlySized StandardArrayUpdate.sizeTapesSized
+      (MultiTape.oneTape (.inr 3))
       (StandardArrayUpdate.algorithmSized elementWidth)
       (StandardArrayUpdate.entry elementWidth)
       (fun assignment input => (input ⟨.inr 0, rfl⟩).val <
         MvPolynomial.eval assignment length)
       (fun assignment input output =>
         ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-          output ⟨.inr 3, rfl⟩ = Function.update (input ⟨.inr 1, rfl⟩)
-            ⟨(input ⟨.inr 0, rfl⟩).val, within⟩ (input ⟨.inr 2, rfl⟩)) :=
-  (StandardArrayUpdate.contractSized element elementWidth indexCapacity length fixedWidth).tm0
+          output () = Function.update (input ⟨.inr 1, rfl⟩)
+            ⟨(input ⟨.inr 0, rfl⟩).val, within⟩ (input ⟨.inr 2, rfl⟩)) := by
+  apply CallingConvention.Realizes.tm0
+  exact StandardArrayUpdate.contractSized element elementWidth indexCapacity length fixedWidth
 
 end Polytime2.Array

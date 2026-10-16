@@ -136,16 +136,16 @@ def exit := StandardBinaryArithmetic.exit
 
 /-- The standard interface returns the low difference and final borrow. -/
 theorem contract :
-    CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes StandardBinaryArithmetic.outputTapes algorithm entry exit
       (fun _ _ => True)
       (fun assignment input output =>
-        (output ⟨.inr 2, rfl⟩ : Fin (2 ^ assignment ())).val =
+        (output false : Fin (2 ^ assignment ())).val =
             value (ripple false
               (List.ofFn (fun index : Fin (assignment ()) =>
                 (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
               (List.ofFn (fun index : Fin (assignment ()) =>
                 (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
-          output ⟨.inr 3, rfl⟩ =
+          output true =
             (ripple false
               (List.ofFn (fun index : Fin (assignment ()) =>
                 (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
@@ -156,13 +156,13 @@ theorem contract :
 /-- Loop guards can use the borrow output directly as unsigned comparison;
 the low difference remains a valid fixed-width scratch result. -/
 theorem comparison_contract :
-    CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes StandardBinaryArithmetic.outputTapes algorithm entry exit
       (fun _ _ => True)
-      (fun assignment input output => output ⟨.inr 3, rfl⟩ =
+      (fun assignment input output => output true =
         decide ((input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment ())).val <
           (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val)) := by
-  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := contract
-  refine ⟨sizeReadOnly, halts, bound, ?_⟩
+  obtain ⟨sizeReadOnly, outputsWritable, halts, bound, execute⟩ := contract
+  refine ⟨sizeReadOnly, outputsWritable, halts, bound, ?_⟩
   intro assignment input initial valid represented headers
   obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
     execute assignment input initial valid represented headers

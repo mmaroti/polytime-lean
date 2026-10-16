@@ -222,11 +222,11 @@ theorem contract (domain : EncodedDomain.{0, carrierLevel} Empty)
     let assignment : Empty → ℕ := Empty.elim
     let bits := List.ofFn (fun index : Fin (domain.width assignment) =>
       (domain.encode assignment (constant assignment)).getLsbD index.val)
-    CallingConvention.Realizes (fun _ : Unit => domain) (fun _ => false) sizeTapes
+    CallingConvention.Realizes (fun _ : Unit => domain) (fun _ => false) sizeTapes (Function.Embedding.refl Unit)
       (machine bits) (false, Fin.last bits.length) (true, 0)
-      (fun _ _ => True) (fun assignment _ output => output ⟨(), rfl⟩ = constant assignment) := by
+      (fun _ _ => True) (fun assignment _ output => output () = constant assignment) := by
   intro defaultAssignment bits
-  refine ⟨(by intro parameter; cases parameter),
+  refine ⟨(by intro parameter; cases parameter), (by intro name; rfl),
     (by intro symbols; simp [machine, machineSized]), MvPolynomial.C (2 * bits.length + 1), ?_⟩
   intro assignment input initial valid represented sizes
   have sameAssignment : assignment = defaultAssignment := Subsingleton.elim _ _
@@ -242,7 +242,7 @@ theorem contract (domain : EncodedDomain.{0, carrierLevel} Empty)
   · rw [initialEq]
     have trace := runs bits old (oldLength.trans length.symm)
     simpa only [length] using trace
-  · intro name writable
+  · intro name
     cases name
     rfl
 

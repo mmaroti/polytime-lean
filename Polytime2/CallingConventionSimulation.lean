@@ -30,10 +30,12 @@ open MultiTape
 
 -- tapeLevel: tape roles; stateLevel: finite source controller states.
 -- parameterLevel: unary size names; carrierLevel: mathematical tape values.
-universe tapeLevel stateLevel parameterLevel carrierLevel
+-- outputNameLevel: names of declared mathematical outputs.
+universe tapeLevel stateLevel parameterLevel carrierLevel outputNameLevel
 variable {TapeName : Type tapeLevel} [Fintype TapeName] [DecidableEq TapeName]
 variable {State : Type stateLevel} [Fintype State]
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
+variable {OutputName : Type outputNameLevel}
 
 /-- A standard routine's mathematical contract, realized from `TM0.init` via
 finite tracks. Representation witnesses tie the contract to the initial tape.
@@ -41,10 +43,11 @@ finite tracks. Representation witnesses tie the contract to the initial tape.
 def TM0Realizes
     (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (readOnly : TapeName → Bool) (sizeTapes : Parameter ↪ TapeName)
+    (outputTapes : OutputName ↪ TapeName)
     (source : Machine (Alphabet TapeName) State) (sourceEntry : State)
     (hypothesis : ∀ assignment, Inputs domains readOnly assignment → Prop)
     (contract : ∀ assignment, Inputs domains readOnly assignment →
-      Outputs domains readOnly assignment → Prop) : Prop :=
+      Outputs domains outputTapes assignment → Prop) : Prop :=
   let names := (Finset.univ : Finset TapeName).toList
   let program := TM0Input.machine (SingleTape.compile (Simulation.machine names source))
     (.inl (Simulation.entry names sourceEntry))
@@ -59,7 +62,7 @@ def TM0Realizes
         (∃ input output, hypothesis assignment input ∧
           Entry domains readOnly assignment input initial ∧
           contract assignment input output ∧
-          Exit domains readOnly assignment output final ∧
+          Exit domains outputTapes assignment output final ∧
           ∀ name, readOnly name = true → final name = initial name) ∧
         Tracks.Represents finalRows final ∧
         (fun current => current.bind (Turing.TM0.step program))^[ticks]
@@ -72,29 +75,30 @@ def TM0Realizes
           (TM0Input.embed (SingleTape.configuration (.inr (.inr ()),
             Sweep.tape [Sweep.leftMarker] (finalRows.map Sweep.row ++ [Sweep.rightMarker])))) = none
 
-/-- The existing polynomial simulator also accepts the stronger fixed-region
-contract; no source marker or initialized scratch assumption is introduced.
+/-- Fixed-region execution transfers to the polynomial simulator without
+source markers or an initialized scratch assumption.
 -/
 theorem Realizes.tm0
     {domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter}
     {readOnly : TapeName → Bool} {sizeTapes : Parameter ↪ TapeName}
+    {outputTapes : OutputName ↪ TapeName}
     {source : Machine (Alphabet TapeName) State} {sourceEntry sourceExit : State}
     {hypothesis : ∀ assignment, Inputs domains readOnly assignment → Prop}
     {contract : ∀ assignment, Inputs domains readOnly assignment →
-      Outputs domains readOnly assignment → Prop}
-    (certificate : Realizes domains readOnly sizeTapes source sourceEntry sourceExit
+      Outputs domains outputTapes assignment → Prop}
+    (certificate : Realizes domains readOnly sizeTapes outputTapes source sourceEntry sourceExit
       hypothesis contract) :
-    TM0Realizes domains readOnly sizeTapes source sourceEntry hypothesis contract := by
+    TM0Realizes domains readOnly sizeTapes outputTapes source sourceEntry hypothesis contract := by
   classical
   let precondition := fun assignment initial => ∃ input,
     hypothesis assignment input ∧ Entry domains readOnly assignment input initial ∧
       ∀ parameter, initial (sizeTapes parameter) = unary (assignment parameter)
   let postcondition := fun assignment initial final => ∃ input output,
     hypothesis assignment input ∧ Entry domains readOnly assignment input initial ∧
-      contract assignment input output ∧ Exit domains readOnly assignment output final ∧
+      contract assignment input output ∧ Exit domains outputTapes assignment output final ∧
         ∀ name, readOnly name = true → final name = initial name
-  have physical : MultiTape.Realizes source sourceEntry sourceExit precondition postcondition := by
-    obtain ⟨sizeReadOnly, halted, bound, run⟩ := certificate
+  have physical : MultiTape.Internal.Realizes source sourceEntry sourceExit precondition postcondition := by
+    obtain ⟨sizeReadOnly, outputsWritable, halted, bound, run⟩ := certificate
     refine ⟨halted, bound, ?_⟩
     intro assignment initial valid
     obtain ⟨input, hypothesis, represented, sizes⟩ := valid

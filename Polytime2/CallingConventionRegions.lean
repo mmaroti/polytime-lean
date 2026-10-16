@@ -135,10 +135,11 @@ preservation, so callers need not track their previous contents. -/
 theorem Realizes.wired_runs
     {domains : LocalTape → EncodedDomain.{parameterLevel, carrierLevel} Parameter}
     {localReadOnly : LocalTape → Bool} {sizeTapes : Parameter ↪ LocalTape}
+    {OutputName : Type} {outputTapes : OutputName ↪ LocalTape}
     {machine : Machine (Alphabet LocalTape) State} {entry exit : State}
     {hypothesis : ∀ sizes, Inputs domains localReadOnly sizes → Prop}
-    {postcondition : ∀ sizes, Inputs domains localReadOnly sizes → Outputs domains localReadOnly sizes → Prop}
-    (realizes : Realizes domains localReadOnly sizeTapes machine entry exit hypothesis postcondition)
+    {postcondition : ∀ sizes, Inputs domains localReadOnly sizes → Outputs domains outputTapes sizes → Prop}
+    (realizes : Realizes domains localReadOnly sizeTapes outputTapes machine entry exit hypothesis postcondition)
     (wiring : LocalTape ↪ TapeName) :
     ∃ bound : MvPolynomial Parameter ℕ,
       ∀ (sizes : Parameter → ℕ) (input : Inputs domains localReadOnly sizes)
@@ -154,11 +155,11 @@ theorem Realizes.wired_runs
           ticks ≤ MvPolynomial.eval sizes bound ∧
           Runs width readOnly (MultiTape.wire wiring machine) ticks entry (fun _ => 0) initial exit (fun _ => 0) final ∧
           postcondition sizes input output ∧
-          (∀ name (writable : localReadOnly name = false),
-            final (wiring name) = encoded (domains name) sizes (output ⟨name, writable⟩)) ∧
+          (∀ name, final (wiring (outputTapes name)) =
+            encoded (domains (outputTapes name)) sizes (output name)) ∧
           (∀ name, name ∉ Set.range wiring → final name = initial name) ∧
           (∀ name, localReadOnly name = true → final (wiring name) = initial (wiring name)) := by
-  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := realizes
+  obtain ⟨sizeReadOnly, outputsWritable, halts, bound, execute⟩ := realizes
   refine ⟨bound, ?_⟩
   intro sizes input width readOnly initial widthMatches readOnlyMatches valid encodedInputs regions sizeHeaders
   let localInitial : Tapes (Alphabet LocalTape) := fun name => initial (wiring name)
@@ -175,9 +176,9 @@ theorem Realizes.wired_runs
       fun _ => 0 := install_self wiring _
   rw [initialEq, positions] at trace
   refine ⟨ticks, output, install wiring localFinal initial, cost, trace, correct, ?_, ?_, ?_⟩
-  · intro name writable
+  · intro name
     rw [install_at]
-    exact localExit name writable
+    exact localExit name
   · intro name outside
     exact install_outside wiring localFinal initial name outside
   · intro name immutable

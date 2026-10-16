@@ -57,10 +57,10 @@ without first packing them into an array of scalar pairs. -/
 theorem combine_contract (enumeration : Scalar ≃ Fin cardinality)
     (operation : Scalar → Scalar → Scalar → Scalar × Scalar) :
     CallingConvention.Realizes (StandardRowCombine.domains (scalarDomain enumeration))
-      StandardRowCombine.readOnly StandardRowCombine.sizeTapes
+      StandardRowCombine.readOnly StandardRowCombine.sizeTapes StandardRowCombine.outputTapes
       (StandardRowCombine.algorithm (scalarDomain enumeration) (fun _ => operation))
       StandardRowCombine.entry StandardRowCombine.exit (fun _ _ => True)
-      (fun _ input output => (output ⟨3, rfl⟩, output ⟨4, rfl⟩) =
+      (fun _ input output => (output false, output true) =
         operation (input ⟨0, rfl⟩) (input ⟨1, rfl⟩) (input ⟨2, rfl⟩)) :=
   StandardRowCombine.contract (scalarDomain enumeration) (fun _ => operation)
 
@@ -69,10 +69,10 @@ theorem scale_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     let domain := scalarDomain enumeration
     CallingConvention.Realizes (StandardArrayMap.domains domain domain length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
       (StandardArrayMap.algorithm domain domain (fun _ => scale (Scalar := Scalar)))
       StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+      (fun _ input output => output () =
         fun index => scale (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
   StandardArrayMap.contract (scalarDomain enumeration) (scalarDomain enumeration) length (fun _ => scale (Scalar := Scalar))
 
@@ -82,10 +82,10 @@ theorem normalize_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     let domain := scalarDomain enumeration
     CallingConvention.Realizes (StandardArrayMap.domains domain domain length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
       (StandardArrayMap.algorithm domain domain (fun _ => normalize (Scalar := Scalar)))
       StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+      (fun _ input output => output () =
         fun index => normalize (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
   StandardArrayMap.contract (scalarDomain enumeration) (scalarDomain enumeration) length (fun _ => normalize (Scalar := Scalar))
 
@@ -94,10 +94,10 @@ theorem add_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     CallingConvention.Realizes
       (StandardArrayMap.domains (scalarDomain enumeration) (pairDomain enumeration) length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
       (StandardArrayMap.algorithm (scalarDomain enumeration) (pairDomain enumeration) (fun _ => add (Scalar := Scalar)))
       StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+      (fun _ input output => output () =
         fun index => add (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
   StandardArrayMap.contract (scalarDomain enumeration) (pairDomain enumeration) length (fun _ => add (Scalar := Scalar))
 
@@ -108,10 +108,10 @@ theorem swap_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     CallingConvention.Realizes
       (StandardArrayMap.domains (scalarDomain enumeration) (pairDomain enumeration) length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes
+      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
       (StandardArrayMap.algorithm (scalarDomain enumeration) (pairDomain enumeration) (fun _ => swap (Scalar := Scalar)))
       StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+      (fun _ input output => output () =
         fun index => swap (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
   StandardArrayMap.contract (scalarDomain enumeration) (pairDomain enumeration) length (fun _ => swap (Scalar := Scalar))
 

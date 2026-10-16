@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Computation.Composition
 import Polytime2.Computations.Counter
+import Polytime2.Computations.Constant
 import Polytime2.Computations.FiniteTable
 
 /-! # Public specifications compose without exposing implementation witnesses -/
@@ -83,5 +84,22 @@ example : (conditionalIncrement.followedBy (copy threeElements) rfl
 
 example : (conditionalIncrement.compute Empty.elim
     ⟨(fun | false => (2 : Fin 3) | true => true), True.intro⟩ : Fin 3) = (0 : Fin 3) := rfl
+
+/-- No mathematical arguments are needed to initialize and increment a counter. -/
+def initializedIncrement : Polytime2.Computation Unit Empty :=
+  (counterZero ()).followedBy (counterIncrement ()) rfl
+    (by intro sizes arguments valid; trivial)
+
+theorem initializedIncrement_realizable : initializedIncrement.Realizable :=
+  (counterZero_realizable ()).followedBy (counterIncrement_realizable ()) rfl
+    (by intro sizes arguments valid; trivial)
+
+example : (initializedIncrement.compute (fun _ => 3)
+    ⟨(fun argument => nomatch argument), True.intro⟩ : Fin 8) = (1 : Fin 8) := rfl
+example : (initializedIncrement.compute (fun _ => 0)
+    ⟨(fun argument => nomatch argument), True.intro⟩ : Fin 1) = (0 : Fin 1) := rfl
+
+example : (constant threeElements (fun _ => (2 : Fin 3))).Realizable :=
+  constant_realizable threeElements (fun _ => (2 : Fin 3))
 
 end Polytime2.Examples.Computation

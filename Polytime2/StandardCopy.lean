@@ -121,40 +121,4 @@ theorem slice_runs (width : ℕ) (bits : List Bool) (old : List Symbol)
     · exact fits)
   simpa only [zero_add] using enclosed
 
-/-- No runtime size parameter is needed for a specialization-fixed width. -/
-def sizeTapes : Empty ↪ Bool := ⟨Empty.elim, by intro name; cases name⟩
-
--- carrierLevel: mathematical elements of the copied domain.
-universe carrierLevel
-
-/-- Copy any specialization-fixed encoded domain, overwriting arbitrary output
-contents and preserving the complete input throughout execution. -/
-theorem contract (domain : EncodedDomain.{0, carrierLevel} Empty) (width : ℕ)
-    (fixedWidth : ∀ assignment, domain.width assignment = width) :
-    CallingConvention.Realizes (fun _ : Bool => domain) readOnly sizeTapes
-      (Copy.machine width) (false, Fin.last width) (true, 0)
-      (fun _ _ => True)
-      (fun _ input output => output ⟨true, rfl⟩ = input ⟨false, rfl⟩) := by
-  refine ⟨(by intro parameter; cases parameter), (by intro symbols; simp [Copy.machine]),
-    MvPolynomial.C (2 * width + 1), ?_⟩
-  intro assignment input initial valid represented sizes
-  let bits := List.ofFn (fun index : Fin (domain.width assignment) =>
-    (domain.encode assignment (input ⟨false, rfl⟩)).getLsbD index.val)
-  obtain ⟨old, oldLength, target⟩ := represented.2 true rfl
-  have source := represented.1 false rfl
-  have initialEq : initial = Copy.frame [] (word bits) [] old := by
-    funext name
-    cases name with
-    | false => exact source
-    | true => exact target
-  subst initial
-  let output : Outputs (fun _ : Bool => domain) readOnly assignment := fun _ => input ⟨false, rfl⟩
-  refine ⟨2 * width + 1, output, Copy.frame [] (word bits) [] (word bits), by simp, ?_, rfl, ?_⟩
-  · simpa only [fixedWidth assignment] using
-      runs width bits old (by simp [bits, fixedWidth]) (oldLength.trans (fixedWidth assignment))
-  · intro name writable
-    cases name with
-    | false => contradiction
-    | true => rfl
-
 end Polytime2.StandardCopy

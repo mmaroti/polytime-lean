@@ -15,36 +15,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardRowCombineContract
+import Polytime2.Computations.FiniteTable
 
-/-! # Separate-entry row combination, including zero-bit scalars -/
+/-! # Three separate scalar arguments with a mathematical result -/
 
 namespace Polytime2.Examples.RowCombine
 
-open Polytime2.StandardRowCombine CallingConvention
+open Polytime2.Computation
 
--- Binary row addition: 1 + 1 * 1 = 0. Both result tapes start with arbitrary contents.
-example : Runs (fun _ => 1) readOnly
-    (machine (fun coefficient source target =>
-      (if source 0 then 1#1 else 0#1,
-        if target 0 != (coefficient 0 && source 0) then 1#1 else 0#1)))
-    20 entry (fun _ => 0) (frame [true] [true] [true] [2] [0])
-    exit (fun _ => 0) (frame [true] [true] [true] (Binary.word [true]) (Binary.word [false])) := by
-  exact runs (fun coefficient source target =>
-    (if source 0 then 1#1 else 0#1,
-      if target 0 != (coefficient 0 && source 0) then 1#1 else 0#1))
-    [true] [true] [true] rfl rfl rfl [2] [0] rfl rfl
+private def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
-example : Runs (fun _ => 0) readOnly (machine (fun _ _ _ => (0#0, 0#0)))
-    10 entry (fun _ => 0) (frame [] [] [] [] []) exit (fun _ => 0) (frame [] [] [] [] []) := by
-  exact runs (fun _ _ _ => (0#0, 0#0)) [] [] [] rfl rfl rfl [] [] rfl rfl
+def linearCombination : Polytime2.Computation Empty (Fin 3) :=
+  finiteTernary threeElements (fun _ (coefficient source target : Fin 3) => coefficient * source + target)
 
--- Three-element scalar presentations have an unused binary label. Decoding
--- valid inputs and encoding both outputs go through the domain certificate.
-example : encodedTable (EncodedDomain.fixed (Equiv.refl (Fin 3)))
-    (fun _ (coefficient source target : Fin 3) =>
-      (source, (⟨(target.val + coefficient.val * source.val) % 3, Nat.mod_lt _ (by decide)⟩ : Fin 3)))
-    (fun index => decide (index.val = 1)) (fun index => decide (index.val = 0)) (fun _ => false) =
-      (1#2, 2#2) := by rfl
+theorem linearCombination_realizable : linearCombination.Realizable := finiteTernary_realizable _ _
+
+example : (linearCombination.compute Empty.elim
+    ⟨![ (2 : Fin 3), (1 : Fin 3), (1 : Fin 3) ], True.intro⟩ : Fin 3) = (0 : Fin 3) := rfl
+
+example : (finiteTernary (EncodedDomain.fixed (Equiv.refl (Fin 1)))
+    (fun _ first _ _ => first)).Realizable := finiteTernary_realizable _ _
 
 end Polytime2.Examples.RowCombine

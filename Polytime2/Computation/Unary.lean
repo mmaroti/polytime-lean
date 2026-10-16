@@ -34,11 +34,11 @@ theorem ofUnaryRealizes (computation : Computation.{carrierLevel} Parameter Unit
     (machine : Machine (Alphabet (Parameter ⊕ Bool)) State) (entry exit : State)
     (certificate : CallingConvention.Realizes
       (StandardBinaryScan.domains (computation.inputDomains ()) computation.outputDomain)
-      StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes machine entry exit
+      StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes machine entry exit
       (fun sizes input => computation.precondition sizes (fun _ => input ⟨.inr false, rfl⟩))
       (fun sizes input output => ∃ valid : computation.precondition sizes
           (fun _ => input ⟨.inr false, rfl⟩),
-        output ⟨.inr true, rfl⟩ = computation.compute sizes
+        output () = computation.compute sizes
           ⟨(fun _ => input ⟨.inr false, rfl⟩), valid⟩)) : computation.Realizable := by
   classical
   let wiring : Parameter ⊕ Bool ↪ Internal.TapeName computation Empty :=
@@ -57,7 +57,7 @@ theorem ofUnaryRealizes (computation : Computation.{carrierLevel} Parameter Unit
     MultiTape.wire (Alphabet := Alphabet (Internal.TapeName computation Empty)) wiring machine,
     entry, exit, ?_⟩
   obtain ⟨bound, execute⟩ := certificate.wired_runs wiring
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [MultiTape.wire, certificate.2.1]), bound, ?_⟩
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [MultiTape.wire, certificate.2.2.1]), bound, ?_⟩
   intro sizes input initial valid represented headers
   let arguments := Internal.arguments computation scratchDomains sizes input
   let localInput : Inputs
@@ -86,21 +86,14 @@ theorem ofUnaryRealizes (computation : Computation.{carrierLevel} Parameter Unit
           · contradiction)
       (by intro name writable; exact represented.region (wiring name)) headers
   obtain ⟨good, result⟩ := correct
-  have outputValue : localOutput ⟨.inr true, rfl⟩ = computation.compute sizes ⟨arguments, valid⟩ := by
+  have outputValue : localOutput () = computation.compute sizes ⟨arguments, valid⟩ := by
     simpa only [sameArguments] using result
-  let output : Outputs (Internal.domains computation scratchDomains) (Internal.readOnly computation) sizes :=
-    fun name => match name with
-      | ⟨.inl _, impossible⟩ => False.elim (Bool.noConfusion impossible)
-      | ⟨.inr (.inl _), impossible⟩ => False.elim (Bool.noConfusion impossible)
-      | ⟨.inr (.inr (.inl _)), _⟩ => computation.compute sizes ⟨arguments, valid⟩
-      | ⟨.inr (.inr (.inr scratch)), _⟩ => Empty.elim scratch
+  let output : Outputs (Internal.domains computation scratchDomains)
+      (Internal.outputTapes computation Empty) sizes :=
+    fun _ => computation.compute sizes ⟨arguments, valid⟩
   refine ⟨ticks, output, final, cost, trace, ⟨valid, rfl⟩, ?_⟩
-  intro name writable
-  rcases name with parameter | argument | resultName | scratch
-  · contradiction
-  · contradiction
-  · cases resultName
-    exact (canonical (.inr true) rfl).trans (congrArg (encoded computation.outputDomain sizes) outputValue)
-  · exact Empty.elim scratch
+  intro name
+  cases name
+  exact (canonical ()).trans (congrArg (encoded computation.outputDomain sizes) outputValue)
 
 end Polytime2.Computation.Realizable.Internal

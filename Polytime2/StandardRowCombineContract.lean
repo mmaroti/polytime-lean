@@ -45,6 +45,12 @@ def domains (domain : EncodedDomain.{0, carrierLevel} Empty) : Fin 5 → Encoded
 
 def sizeTapes : Empty ↪ Fin 5 := ⟨Empty.elim, by intro parameter; cases parameter⟩
 
+/-- False and true name the first and second scalar results. -/
+def outputTapes : Bool ↪ Fin 5 :=
+  ⟨(fun | false => 3 | true => 4), by
+    intro first second equal
+    cases first <;> cases second <;> first | rfl | cases equal⟩
+
 noncomputable def algorithm (domain : EncodedDomain.{0, carrierLevel} Empty)
     (operation : ∀ sizes, domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes →
       domain.Carrier sizes × domain.Carrier sizes) : Machine Alphabet (State (domain.width Empty.elim)) :=
@@ -55,11 +61,11 @@ Both outputs start arbitrary and are valid encoded scalars on return. -/
 theorem contract (domain : EncodedDomain.{0, carrierLevel} Empty)
     (operation : ∀ sizes, domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes →
       domain.Carrier sizes × domain.Carrier sizes) :
-    CallingConvention.Realizes (domains domain) readOnly sizeTapes (algorithm domain operation) entry exit
+    CallingConvention.Realizes (domains domain) readOnly sizeTapes outputTapes (algorithm domain operation) entry exit
       (fun _ _ => True)
-      (fun sizes input output => (output ⟨3, rfl⟩, output ⟨4, rfl⟩) =
+      (fun sizes input output => (output false, output true) =
         operation sizes (input ⟨0, rfl⟩) (input ⟨1, rfl⟩) (input ⟨2, rfl⟩)) := by
-  refine ⟨(by intro parameter; cases parameter), (by intro symbols; rfl),
+  refine ⟨(by intro parameter; cases parameter), (by intro name; cases name <;> rfl), (by intro symbols; rfl),
     MvPolynomial.C (10 * domain.width Empty.elim + 10), ?_⟩
   intro sizes input initial valid represented sizeHeaders
   have sameSizes : sizes = (Empty.elim : Empty → ℕ) := Subsingleton.elim _ _
@@ -105,8 +111,9 @@ theorem contract (domain : EncodedDomain.{0, carrierLevel} Empty)
     · exact represented.1 2 rfl
     · exact firstEq
     · exact secondEq
-  let output : Outputs (domains domain) readOnly Empty.elim := fun name =>
-    if name.val = 3 then result.1 else result.2
+  let output : Outputs (domains domain) outputTapes Empty.elim
+    | false => result.1
+    | true => result.2
   have trace := runs (encodedTable domain operation) coefficientBits sourceBits targetBits
     List.length_ofFn List.length_ofFn List.length_ofFn oldFirst oldSecond firstLength secondLength
   dsimp only at trace
@@ -119,12 +126,7 @@ theorem contract (domain : EncodedDomain.{0, carrierLevel} Empty)
         (domain.encode Empty.elim result.2).getLsbD index.val))), by simp, ?_, rfl, ?_⟩
   · rw [initialEq]
     exact trace
-  · intro name writable
-    fin_cases name
-    · contradiction
-    · contradiction
-    · contradiction
-    · rfl
-    · rfl
+  · intro name
+    cases name <;> rfl
 
 end Polytime2.StandardRowCombine

@@ -262,8 +262,8 @@ theorem advancePivot_runs (enumeration : Scalar ≃ Fin cardinality) :
           | true => contradiction)
       (by intro name writable; fin_cases name <;> first | contradiction | exact region) headers
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
-  · have result := canonical (.inr true) rfl
-    change output ⟨.inr true, rfl⟩ = StandardBinaryIncrement.next 0 sizes pivotRow at correct
+  · have result := canonical ()
+    change output () = StandardBinaryIncrement.next 0 sizes pivotRow at correct
     rw [correct] at result
     exact result
   · intro name notNext

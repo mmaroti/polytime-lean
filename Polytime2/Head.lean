@@ -69,16 +69,4 @@ theorem right_list {Symbol : Type symbolLevel} [Inhabited Symbol]
       Turing.ListBlank.tail_mk, List.tail_cons, Turing.ListBlank.cons_mk]
     simpa [List.reverse_cons, List.append_assoc] using hypothesis (symbol :: left)
 
--- parameterLevel: size names of any caller of this fixed movement routine.
-universe parameterLevel
-
-theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter] [Fintype TapeName]
-    [∀ name, Fintype (Alphabet name)] (count : ℕ) (direction : Turing.Dir) :
-    Realizes (machine (Alphabet := Alphabet) count direction) (Fin.last count) 0
-      (fun (_assignment : Parameter → ℕ) _ => True)
-      (fun _ initial final => final = fun name => (Turing.Tape.move direction)^[count] (initial name)) := by
-  refine ⟨by intro symbols; simp [machine], MvPolynomial.C count, ?_⟩
-  intro assignment initial _valid
-  exact ⟨count, _, by simp, steps count direction initial, rfl⟩
-
 end Polytime2.Move

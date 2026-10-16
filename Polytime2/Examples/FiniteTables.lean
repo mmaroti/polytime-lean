@@ -15,49 +15,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardFiniteTable
+import Polytime2.Computations.FiniteTable
 
-/-! # Finite tables overwrite arbitrary fixed regions -/
+/-! # Finite tables through mathematical specifications -/
 
 namespace Polytime2.Examples.FiniteTables
 
-open CallingConvention StandardFiniteTable
+open Polytime2.Computation
 
--- The output contains blanks and old binary data before the call.
-example : Runs (widths 1 1 2) readOnly
-    (machine (firstWidth := 1) (secondWidth := 1) (fun first second => if first 0 && second 0 then 2#2 else 1#2))
-    14 entry (fun _ => 0) (frame [true] [true] [0, 2])
-    exit (fun _ => 0) (frame [true] [true] (Binary.word [false, true])) := by
-  simpa [Binary.word] using runs (firstWidth := 1) (secondWidth := 1) (fun first second => if first 0 && second 0 then 2#2 else 1#2)
-    [true] [true] rfl rfl [0, 2] rfl
+private def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
--- An internal scalar block can have other array elements on both sides.
-example (left right : Fin 3 → List Binary.Symbol) :
-    Runs (widths 1 1 2) readOnly
-      (machine (firstWidth := 1) (secondWidth := 1)
-        (fun first second => if first 0 && second 0 then 2#2 else 1#2))
-      14 entry (fun _ => 0) (frameWithContext [true] [true] [0, 2] left right)
-      exit (fun _ => 0)
-      (frameWithContext [true] [true] (Binary.word [false, true]) left right) := by
-  simpa [Binary.word] using runsWithContext (firstWidth := 1) (secondWidth := 1)
-    (fun first second => if first 0 && second 0 then 2#2 else 1#2)
-    [true] [true] rfl rfl [0, 2] rfl left right
-
--- Empty arguments and result still preserve both inputs and restore every head.
-example : Runs (widths 0 0 0) readOnly (machine (firstWidth := 0) (secondWidth := 0) (fun _ _ => 0#0))
-    6 entry (fun _ => 0) (frame [] [] [])
-    exit (fun _ => 0) (frame [] [] []) := by
-  simpa [Binary.word] using runs (firstWidth := 0) (secondWidth := 0) (fun _ _ => 0#0) [] [] rfl rfl [] rfl
-
--- The mathematical contract works with a non-power-of-two scalar carrier.
-example :
-    let domain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
-    CallingConvention.Realizes (domains domain domain domain) readOnly sizeTapes
-      (algorithm domain domain domain (fun _ (first : Fin 3) (second : Fin 3) => first + second))
-      entry exit (fun _ _ => True)
-      (fun _ input output => output ⟨2, rfl⟩ = ((fun (a b : Fin 3) => a + b) (input ⟨0, rfl⟩) (input ⟨1, rfl⟩))) :=
-  StandardFiniteTable.contract (EncodedDomain.fixed (Equiv.refl (Fin 3)))
-    (EncodedDomain.fixed (Equiv.refl (Fin 3))) (EncodedDomain.fixed (Equiv.refl (Fin 3)))
+def addition : Polytime2.Computation Empty Bool :=
+  finiteTable threeElements threeElements threeElements
     (fun _ (first : Fin 3) (second : Fin 3) => first + second)
+
+example : addition.Realizable := finiteTable_realizable threeElements threeElements threeElements _
+example : (addition.compute Empty.elim
+    ⟨(fun | false => (1 : Fin 3) | true => (2 : Fin 3)), True.intro⟩ : Fin 3) = (0 : Fin 3) := rfl
+
+-- Singleton domains have zero-bit arguments and results.
+example : (finiteTable (EncodedDomain.fixed (Equiv.refl (Fin 1)))
+    (EncodedDomain.fixed (Equiv.refl (Fin 1))) (EncodedDomain.fixed (Equiv.refl (Fin 1)))
+    (fun _ first _ => first)).Realizable := finiteTable_realizable _ _ _ _
 
 end Polytime2.Examples.FiniteTables

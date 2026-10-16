@@ -24,7 +24,7 @@ namespace Polytime2.StandardMatrixRowEntry
 open MultiTape CallingConvention
 
 /-- Read either row's current entry using the common arithmetic scratch.
-The returned canonical witnesses cover every scratch tape touched by the call. -/
+Internal frame witnesses record the scratch tapes touched by this machine. -/
 theorem access_runs (target : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
       (row column : Fin (2 ^ sizes 0))
@@ -46,15 +46,15 @@ theorem access_runs (target : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
             final (accessWiring target name) = encoded (domains scalar (accessWiring target name)) sizes value) ∧
         (∀ name, name ∉ Set.range (accessWiring target) → final name = initial name) ∧
         (∀ name, StandardMatrixEntry.readOnly name = true → final (accessWiring target name) = initial (accessWiring target name)) := by
-  obtain ⟨bound, execute⟩ := (StandardMatrixEntry.contract scalar.constant (scalar.width Empty.elim)
-    (fun _ => rfl)).wired_runs (accessWiring target)
+  obtain ⟨bound, execute⟩ := StandardMatrixEntry.Internal.wired_runs scalar.constant (scalar.width Empty.elim)
+    (fun _ => rfl) (accessWiring target)
   refine ⟨bound, ?_⟩
   intro sizes initial row column array within columnsFit rowValid columnValid capacity rowEq columnEq arrayEq headers regions
   let input := StandardMatrixEntry.inputValues scalar.constant sizes row column array
   have sameDomain : ∀ name, domains scalar (accessWiring target name) = StandardMatrixEntry.domains scalar.constant name := by
     intro name
     cases target <;> fin_cases name <;> rfl
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical, privateFrame, outside, immutable⟩ :=
     execute sizes input (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; rw [sameDomain name])
       (by
@@ -89,13 +89,13 @@ theorem access_runs (target : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
       (by intro name writable; exact regions (accessWiring target name))
       headers
   obtain ⟨otherWithin, valueEq⟩ := correct
-  change output ⟨.inr true, rfl⟩ = array ⟨row.val * sizes 2 + column.val, otherWithin⟩ at valueEq
+  change output () = array ⟨row.val * sizes 2 + column.val, otherWithin⟩ at valueEq
   refine ⟨ticks, final, cost, trace, ?_, ?_, outside, immutable⟩
-  · have result := canonical (.inr true) rfl
+  · have result := canonical ()
     rw [valueEq] at result
     exact result
   · intro name writable
     rw [sameDomain name]
-    exact ⟨output ⟨name, writable⟩, canonical name writable⟩
+    exact privateFrame name writable
 
 end Polytime2.StandardMatrixRowEntry

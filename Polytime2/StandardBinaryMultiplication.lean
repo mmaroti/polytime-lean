@@ -369,7 +369,7 @@ def initialFrame (input factor : List Bool) (old shifted result : List Symbol) (
       (frame (buffer (word input)) factor (List.replicate factor.length false, shifted, result, flag)) 0 (buffer old)
 
 /-- Complete multiplication initializes its own result, restores every head,
-and returns valid scratch from arbitrary writable contents. -/
+from arbitrary writable contents. The concrete trace also records scratch. -/
 theorem runs (input factor : List Bool) (old shifted result : List Symbol)
     (oldLength : old.length = factor.length) (shiftedLength : shifted.length = factor.length)
     (resultLength : result.length = factor.length) (flag : Symbol) :
@@ -417,20 +417,22 @@ def dataTapes : Fin 6 ↪ Sum Bool (Fin 6) :=
 def sizeTapes : Bool ↪ Sum Bool (Fin 6) :=
   ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Bool (Fin 6) := oneTape (.inr 0)
+
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Bool (Fin 6))) State :=
   MultiTape.wire dataTapes machine
 
 /-- The two immutable operands produce their exact product on a separate tape,
-provided its fixed capacity suffices. Every private scratch domain is valid. -/
-theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+provided its fixed capacity suffices. Private scratch has no return contract. -/
+theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes algorithm entry exit
     (fun assignment input =>
       (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment false)).val *
         (input ⟨.inr 5, rfl⟩ : Fin (2 ^ assignment true)).val < 2 ^ assignment false)
     (fun assignment input output =>
-      (output ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment false)).val =
+      (output () : Fin (2 ^ assignment false)).val =
         (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment false)).val *
           (input ⟨.inr 5, rfl⟩ : Fin (2 ^ assignment true)).val) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
     machine, exit, MultiTape.sequence, cleanup, cleanupExit, StandardTapeCommands.setBoolean,
     StandardTapeCommands.booleanMachine]),
     MvPolynomial.X true * (6 * MvPolynomial.X false + 14) + 6 * MvPolynomial.X false + 14, ?_⟩
@@ -492,23 +494,7 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   rw [start, positions] at trace
   let productValue : Fin (2 ^ assignment false) := ⟨value product,
     by simpa only [productLength] using Binary.value_lt_pow_length product⟩
-  let zeroValue : Fin (2 ^ assignment false) := ⟨value (List.replicate (assignment false) false),
-    by simpa only [List.length_replicate] using
-      Binary.value_lt_pow_length (List.replicate (assignment false) false)⟩
-  let output : Outputs domains argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases flag : name = 4
-      · subst name
-        exact false
-      · by_cases source : name = 5
-        · subst name; contradiction
-        · change (if name = 4 then EncodedDomain.booleans else EncodedDomain.binaryNaturals (decide (name = 5))).Carrier assignment
-          rw [ite_eq_right flag]
-          simp only [source, decide_false]
-          exact if name = 0 then productValue else zeroValue
+  let output : Outputs domains outputTapes assignment := fun _ => productValue
   refine ⟨multiplier.length * (6 * factor.length + 14) + 6 * factor.length + 14, output,
     install dataTapes (frame (buffer (word multiplier)) factor
       (product, word (List.replicate factor.length false), word (List.replicate factor.length false), data false)) initial,
@@ -517,26 +503,10 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
     exact le_rfl
   · change value product = _
     simpa only [factorValue, multiplierValue] using correct
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change install dataTapes _ initial (dataTapes name) = _
-      rw [install_at]
-      fin_cases name
-      · exact (encoded_binaryNaturals false assignment product productLength).symm
-      · contradiction
-      · change buffer (word (List.replicate factor.length false)) =
-          encoded (EncodedDomain.binaryNaturals false) assignment zeroValue
-        rw [factorLength]
-        exact (encoded_binaryNaturals false assignment
-          (List.replicate (assignment false) false) List.length_replicate).symm
-      · change buffer (word (List.replicate factor.length false)) =
-          encoded (EncodedDomain.binaryNaturals false) assignment zeroValue
-        rw [factorLength]
-        exact (encoded_binaryNaturals false assignment
-          (List.replicate (assignment false) false) List.length_replicate).symm
-      · exact (encoded_booleans assignment false).symm
-      · contradiction
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes 0) = _
+    rw [install_at]
+    exact (encoded_binaryNaturals false assignment product productLength).symm
 
 end Polytime2.StandardBinaryMultiplication

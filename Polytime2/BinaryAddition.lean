@@ -134,16 +134,16 @@ def exit := StandardBinaryArithmetic.exit
 
 /-- The standard interface returns the ripple result and final carry. -/
 theorem contract :
-    CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes StandardBinaryArithmetic.outputTapes algorithm entry exit
       (fun _ _ => True)
       (fun assignment input output =>
-        (output ⟨.inr 2, rfl⟩ : Fin (2 ^ assignment ())).val =
+        (output false : Fin (2 ^ assignment ())).val =
             value (ripple false
               (List.ofFn (fun index : Fin (assignment ()) =>
                 (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
               (List.ofFn (fun index : Fin (assignment ()) =>
                 (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
-          output ⟨.inr 3, rfl⟩ =
+          output true =
             (ripple false
               (List.ofFn (fun index : Fin (assignment ()) =>
                 (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))

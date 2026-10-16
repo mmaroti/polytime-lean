@@ -265,10 +265,10 @@ noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Unit Bool
 
 /-- A polynomial-time nonzero test on a canonical bounded natural argument. -/
 theorem contract : CallingConvention.Realizes domains StandardTerminatedCopy.readOnly
-    StandardTerminatedCopy.sizeTapes algorithm (false, 0) (false, 2)
+    StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes algorithm (false, 0) (false, 2)
     (fun _ _ => True) (fun assignment input output =>
-      output ⟨.inr true, rfl⟩ = decide (0 < (input ⟨.inr false, rfl⟩ : Fin (2 ^ assignment ())).val)) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine]),
+      output () = decide (0 < (input ⟨.inr false, rfl⟩ : Fin (2 ^ assignment ())).val)) := by
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine]),
     2 * MvPolynomial.X () + 2, ?_⟩
   intro assignment input initial valid represented sizes
   let bits := List.ofFn (fun index : Fin (assignment ()) =>
@@ -305,13 +305,7 @@ theorem contract : CallingConvention.Realizes domains StandardTerminatedCopy.rea
   have positions : install StandardTerminatedCopy.dataTapes (fun _ : Bool => (0 : ℤ))
       (fun _ : Sum Unit Bool => (0 : ℤ)) = fun _ => 0 := install_self StandardTerminatedCopy.dataTapes _
   rw [positions, start] at trace
-  let output : Outputs domains StandardTerminatedCopy.readOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name => cases name with
-      | false => contradiction
-      | true => exact bits.any id
+  let output : Outputs domains StandardTerminatedCopy.outputTapes assignment := fun _ => bits.any id
   refine ⟨2 * bits.length + 2, output,
     install StandardTerminatedCopy.dataTapes
       (frame [0] (word bits ++ [0]) [0] [data (bits.any id), 0]) initial,
@@ -321,14 +315,10 @@ theorem contract : CallingConvention.Realizes domains StandardTerminatedCopy.rea
   · change bits.any id = decide (0 < _)
     apply Bool.eq_iff_iff.mpr
     simpa only [decide_eq_true_eq, bitsValue] using Binary.any_iff_positive bits
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name => cases name with
-      | false => contradiction
-      | true =>
-        change install StandardTerminatedCopy.dataTapes _ _ (StandardTerminatedCopy.dataTapes true) = _
-        rw [install_at]
-        exact (buffer_padding [data (bits.any id)]).trans (encoded_booleans assignment (bits.any id)).symm
+  · intro name
+    cases name
+    change install StandardTerminatedCopy.dataTapes _ _ (StandardTerminatedCopy.dataTapes true) = _
+    rw [install_at]
+    exact (buffer_padding [data (bits.any id)]).trans (encoded_booleans assignment (bits.any id)).symm
 
 end Polytime2.StandardBinaryGuard

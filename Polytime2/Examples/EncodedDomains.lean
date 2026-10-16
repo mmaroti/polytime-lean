@@ -39,19 +39,6 @@ abbrev binaryNaturals : EncodedDomain Unit := EncodedDomain.binaryNaturals ()
 example : binaryNaturals.decode (fun _ => 0) 0#0 = some (0 : Fin 1) := rfl
 example : binaryNaturals.encode (fun _ => 3) (5 : Fin 8) = 5#3 := rfl
 
-/-- Clearing a runtime-width counter preserves its input and writes zero to
-an arbitrary output region, with a separate immutable unary size argument. -/
-example : CallingConvention.Realizes (StandardBinaryScan.domains binaryNaturals binaryNaturals)
-    StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes
-    (StandardBinaryScan.algorithm BinaryScan.clear) (.inl (.inl ())) (.inr ())
-    (fun _ _ => True) (fun assignment _ output =>
-      output ⟨.inr true, rfl⟩ = (⟨0, by positivity⟩ : Fin (2 ^ assignment ()))) := by
-  apply StandardBinaryScan.contract BinaryScan.clear () binaryNaturals binaryNaturals
-    (fun _ => rfl) (fun _ _ => True)
-    (fun assignment _ => (⟨0, by positivity⟩ : Fin (2 ^ assignment ())))
-  intro assignment value valid
-  simp [binaryNaturals, EncodedDomain.binaryNaturals, BinaryScan.clear_run]
-
 -- Empty and singleton carriers share zero-bit width but have different decoders.
 #guard (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 0))).decode
   (fun _ => 0) 0#0 = none

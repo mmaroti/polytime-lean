@@ -265,9 +265,9 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
           | true => contradiction)
       (by intro name writable; exact regions (lookupWiring name)) headers
   obtain ⟨otherWithin, valueEq⟩ := correct
-  change output ⟨.inr true, rfl⟩ =
+  change output () =
     matrix ⟨targetRow.val * sizes 2 + column.val, otherWithin⟩ at valueEq
-  have result := canonical (.inr true) rfl
+  have result := canonical ()
   rw [valueEq] at result
   refine ⟨ticks, final, cost, trace, ?_, outside, immutable⟩
   exact result
@@ -322,8 +322,8 @@ theorem negate_runs (enumeration : Scalar ≃ Fin cardinality) :
         · contradiction)
       (by intro name writable; exact regions (tableWiring name))
       (by intro parameter; cases parameter)
-  change output ⟨2, rfl⟩ = -value at correct
-  have result := canonical 2 rfl
+  change output () = -value at correct
+  have result := canonical ()
   rw [correct] at result
   exact ⟨ticks, final, cost, trace, result, outside, immutable⟩
 
@@ -513,62 +513,5 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     algorithm enumeration
       (exit ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := by
   simp [algorithm, exit, MultiTape.sequence]
-
-/-- The complete target-row update exposes only immutable mathematical inputs,
-with arbitrary initial outputs and valid scratch on return. -/
-theorem contract (enumeration : Scalar ≃ Fin cardinality) :
-    CallingConvention.Realizes (domains enumeration) readOnly sizeTapes
-      (algorithm enumeration)
-      (entry ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim))
-      (exit ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim))
-      (fun sizes input =>
-        (input ⟨dataTape 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
-        (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
-        sizes 2 < 2 ^ sizes 0 ∧
-        (input ⟨columnTape, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 2 ∧
-        sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
-      (fun sizes input output => ∃
-        (sourceValid : (input ⟨dataTape 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1)
-        (targetValid : (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1)
-        (within : (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
-          (input ⟨columnTape, rfl⟩ : Fin (2 ^ sizes 0)).val <
-            MvPolynomial.eval sizes StandardMatrixEntry.length),
-        output ⟨dataTape 5, rfl⟩ = StandardMatrixRows.processed false
-          (Polytime2.FieldRow.scalarDomain enumeration) (additionOperation enumeration)
-          sizes (input ⟨dataTape 0, rfl⟩) (input ⟨dataTape 1, rfl⟩)
-          sourceValid targetValid
-          (Neg.neg (α := Scalar) ((input ⟨inputTape, rfl⟩)
-            ⟨(input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
-              (input ⟨columnTape, rfl⟩ : Fin (2 ^ sizes 0)).val, within⟩ : Scalar))
-          (input ⟨inputTape, rfl⟩) (sizes 2)) := by
-  classical
-  obtain ⟨bound, execute⟩ := runs enumeration
-  refine ⟨(by intro parameter; rfl), halt enumeration, bound, ?_⟩
-  intro sizes input initial valid represented headers
-  obtain ⟨ticks, final, cost, trace, ⟨within, resultEq⟩, canonical⟩ :=
-    execute sizes initial (input ⟨dataTape 0, rfl⟩) (input ⟨dataTape 1, rfl⟩)
-      (input ⟨columnTape, rfl⟩) valid.1 valid.2.1 (input ⟨inputTape, rfl⟩)
-      valid.2.2.1 valid.2.2.2.1 valid.2.2.2.2
-      (represented.1 (dataTape 0) rfl) (represented.1 (dataTape 1) rfl)
-      (represented.1 columnTape rfl) (represented.1 inputTape rfl) headers represented.region
-  let resultArray := StandardMatrixRows.processed false
-    (Polytime2.FieldRow.scalarDomain enumeration) (additionOperation enumeration)
-    sizes (input ⟨dataTape 0, rfl⟩) (input ⟨dataTape 1, rfl⟩) valid.1 valid.2.1
-    (Neg.neg (α := Scalar) ((input ⟨inputTape, rfl⟩)
-      ⟨(input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
-        (input ⟨columnTape, rfl⟩ : Fin (2 ^ sizes 0)).val, within⟩ : Scalar))
-    (input ⟨inputTape, rfl⟩) (sizes 2)
-  let output : Outputs (domains enumeration) readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    by_cases isResult : name = dataTape 5
-    · subst name
-      exact resultArray
-    · exact Classical.choose (canonical name writable)
-  refine ⟨ticks, output, final, cost, trace, ⟨valid.1, valid.2.1, within, rfl⟩, ?_⟩
-  intro name writable
-  by_cases isResult : name = dataTape 5
-  · subst name
-    exact resultEq
-  · simpa only [output, isResult, ↓reduceDIte] using Classical.choose_spec (canonical name writable)
 
 end Polytime2.StandardGaussJordanClearTarget

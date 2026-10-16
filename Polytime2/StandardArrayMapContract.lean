@@ -42,6 +42,8 @@ def argumentReadOnly : Sum Parameter (Fin 3) → Bool
 def sizeTapes : Parameter ↪ Sum Parameter (Fin 3) :=
   ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Parameter (Fin 3) := oneTape (.inr 2)
+
 def dataTapes : Fin 3 ↪ Sum Parameter (Fin 3) :=
   ⟨Sum.inr, by intro first second equal; cases equal; rfl⟩
 
@@ -75,13 +77,13 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
     (operation : ∀ assignment, parameterDomain.Carrier assignment →
       elementDomain.Carrier assignment → elementDomain.Carrier assignment) :
     CallingConvention.Realizes (domains parameterDomain elementDomain length)
-      argumentReadOnly sizeTapes (algorithm parameterDomain elementDomain operation)
+      argumentReadOnly sizeTapes outputTapes (algorithm parameterDomain elementDomain operation)
       entry exit (fun _ _ => True)
-      (fun _ input output => output ⟨.inr 2, rfl⟩ =
+      (fun _ input output => output () =
         fun index => operation Empty.elim (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) := by
   let parameterWidth := parameterDomain.width Empty.elim
   let elementWidth := elementDomain.width Empty.elim
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire]),
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire]),
     length * MvPolynomial.C (2 * (parameterWidth + elementWidth + elementWidth) +
       elementWidth + 9 + 2 * elementWidth) + 9, ?_⟩
   intro assignment input initial valid represented sizes
@@ -146,29 +148,17 @@ theorem contract (parameterDomain elementDomain : EncodedDomain Empty)
   have positions : install dataTapes (fun _ : Fin 3 => (0 : ℤ))
       (fun _ : Sum Parameter (Fin 3) => (0 : ℤ)) = fun _ => 0 := install_self _ _
   rw [start, positions] at trace
-  let output : Outputs (domains parameterDomain elementDomain length) argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      have isResult : name = 2 := by fin_cases name <;> first | rfl | contradiction
-      subst name
-      exact result
+  let output : Outputs (domains parameterDomain elementDomain length) outputTapes assignment := fun _ => result
   refine ⟨ticks, output, _, ?_, trace, rfl, ?_⟩
   · simp only [map_add, map_mul, MvPolynomial.eval_C, map_ofNat]
     simp only [bits_length, count] at cost
     exact cost.trans_eq (by ring)
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      fin_cases name
-      · contradiction
-      · contradiction
-      · change install dataTapes _ initial (dataTapes 2) = _
-        rw [install_at]
-        change buffer (word (bits (mapped table parameterRegister registers))) = _
-        rw [mappedCorrect]
-        exact (arrayBits elementDomain length assignment result).symm
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes 2) = _
+    rw [install_at]
+    change buffer (word (bits (mapped table parameterRegister registers))) = _
+    rw [mappedCorrect]
+    exact (arrayBits elementDomain length assignment result).symm
 
 end Polytime2.StandardArrayMap

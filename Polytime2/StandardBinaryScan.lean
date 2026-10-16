@@ -372,12 +372,12 @@ theorem contract [Fintype Memory] (memory : Memory)
       List.ofFn (fun index : Fin (outputDomain.width assignment) =>
         (outputDomain.encode assignment (compute assignment value)).getLsbD index.val)) :
     CallingConvention.Realizes (domains inputDomain outputDomain) StandardTerminatedCopy.readOnly
-      StandardTerminatedCopy.sizeTapes (algorithm update) (.inl (.inl memory)) (.inr ())
+      StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes (algorithm update) (.inl (.inl memory)) (.inr ())
       (fun assignment input => hypothesis assignment (input ⟨.inr false, rfl⟩))
       (fun assignment input output =>
-        output ⟨.inr true, rfl⟩ = compute assignment (input ⟨.inr false, rfl⟩)) := by
+        output () = compute assignment (input ⟨.inr false, rfl⟩)) := by
   obtain ⟨bound, widthBound⟩ := inputDomain.polynomial_width
-  refine ⟨(by intro parameter; rfl),
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl),
     (by intro symbols; simp [algorithm, MultiTape.wire, MultiTape.withExit]), 2 * bound + 3, ?_⟩
   intro assignment input initial valid represented sizes
   let bits := List.ofFn (fun index : Fin (inputDomain.width assignment) =>
@@ -420,33 +420,21 @@ theorem contract [Fintype Memory] (memory : Memory)
       (fun _ : Sum Parameter Bool => (0 : ℤ)) = fun _ => 0 :=
     install_self wiring (fun _ : Sum Parameter Bool => (0 : ℤ))
   rw [start, positions] at trace
-  let output : Outputs (domains inputDomain outputDomain) StandardTerminatedCopy.readOnly assignment :=
-    fun name => by
-      rcases name with ⟨name, writable⟩
-      cases name with
-      | inl parameter => contradiction
-      | inr name =>
-        cases name with
-        | false => contradiction
-        | true => exact compute assignment (input ⟨.inr false, rfl⟩)
+  let output : Outputs (domains inputDomain outputDomain) StandardTerminatedCopy.outputTapes assignment :=
+    fun _ => compute assignment (input ⟨.inr false, rfl⟩)
   refine ⟨2 * bits.length + 2 + 1, output,
     install wiring (frame [0] (word bits ++ [0]) [0] (word (run update memory bits).2 ++ [0])) initial,
     ?_, trace, rfl, ?_⟩
   · have bounded := widthBound assignment
     simp only [map_add, map_mul, map_ofNat]
     omega
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      cases name with
-      | false => contradiction
-      | true =>
-        change install wiring _ initial (wiring true) = encoded outputDomain assignment _
-        rw [install_at]
-        change Turing.Tape.mk' _ _ = encoded outputDomain assignment _
-        rw [buffer_padding]
-        change buffer (word (run update memory bits).2) = buffer (word _)
-        rw [correct assignment _ valid]
+  · intro name
+    cases name
+    change install wiring _ initial (wiring true) = encoded outputDomain assignment _
+    rw [install_at]
+    change Turing.Tape.mk' _ _ = encoded outputDomain assignment _
+    rw [buffer_padding]
+    change buffer (word (run update memory bits).2) = buffer (word _)
+    rw [correct assignment _ valid]
 
 end Polytime2.StandardBinaryScan

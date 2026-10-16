@@ -58,6 +58,11 @@ abbrev inputTape (computation : Computation.{carrierLevel} Parameter InputName)
 abbrev outputTape (computation : Computation.{carrierLevel} Parameter InputName)
     {ScratchName : Type} : Internal.TapeName computation ScratchName := .inr (.inr (.inl ()))
 
+/-- Select the sole public output; private writable tapes are excluded. -/
+def outputTapes (computation : Computation.{carrierLevel} Parameter InputName)
+    (ScratchName : Type) : Unit ↪ Internal.TapeName computation ScratchName :=
+  ⟨fun _ => Internal.outputTape computation, by intro first second _; cases first; cases second; rfl⟩
+
 abbrev scratchTape (computation : Computation.{carrierLevel} Parameter InputName)
     {ScratchName : Type} (name : ScratchName) : Internal.TapeName computation ScratchName := .inr (.inr (.inr name))
 
@@ -67,26 +72,26 @@ def arguments (computation : Computation.{carrierLevel} Parameter InputName)
     (input : Inputs (Internal.domains computation scratchDomains) (Internal.readOnly computation) sizes) :
     computation.Arguments sizes := fun name => input ⟨Internal.inputTape computation name, rfl⟩
 
-/-- Only the public result is specified; scratch values remain existential in Realizes. -/
+/-- Only the public result is specified; scratch contents are not interpreted. -/
 def resultCorrect (computation : Computation.{carrierLevel} Parameter InputName)
     {ScratchName : Type} (scratchDomains : ScratchName → EncodedDomain.{0, carrierLevel} Parameter)
     (sizes : Parameter → ℕ)
     (input : Inputs (Internal.domains computation scratchDomains) (Internal.readOnly computation) sizes)
-    (output : Outputs (Internal.domains computation scratchDomains) (Internal.readOnly computation) sizes) : Prop :=
+    (output : Outputs (Internal.domains computation scratchDomains) (Internal.outputTapes computation ScratchName) sizes) : Prop :=
   ∃ valid : computation.precondition sizes (Internal.arguments computation scratchDomains sizes input),
-    output ⟨(Internal.outputTape computation), rfl⟩ = computation.compute sizes
+    output () = computation.compute sizes
       ⟨Internal.arguments computation scratchDomains sizes input, valid⟩
 
 variable {computation : Computation.{carrierLevel} Parameter InputName}
 
 /-- Use the implementation certificate with ordinary named mathematical arguments.
-Scratch values are returned only as existential proof witnesses. -/
+Private scratch has no mathematical validity requirement on return. -/
 theorem runs {ScratchName State : Type} [Fintype ScratchName] [Fintype State]
     (scratchDomains : ScratchName → EncodedDomain.{0, carrierLevel} Parameter)
     (machine : Machine (Alphabet (Internal.TapeName computation ScratchName)) State)
     (entry exit : State)
     (certificate : CallingConvention.Realizes (Internal.domains computation scratchDomains)
-      (Internal.readOnly computation) (Internal.sizeTapes computation ScratchName) machine entry exit
+      (Internal.readOnly computation) (Internal.sizeTapes computation ScratchName) (Internal.outputTapes computation ScratchName) machine entry exit
       (fun sizes input => computation.precondition sizes (Internal.arguments computation scratchDomains sizes input))
       (Internal.resultCorrect computation scratchDomains)) :
     ∃ bound : MvPolynomial Parameter ℕ,
@@ -97,16 +102,14 @@ theorem runs {ScratchName State : Type} [Fintype ScratchName] [Fintype State]
         (∀ name, initial (Internal.inputTape computation name) =
           encoded (computation.inputDomains name) sizes (arguments name)) →
         (∀ name, Region ((Internal.domains computation scratchDomains name).width sizes) 0 (initial name)) →
-        ∃ ticks final, ∃ scratch : ∀ name, (scratchDomains name).Carrier sizes,
+        ∃ ticks final,
           ticks ≤ MvPolynomial.eval sizes bound ∧
           Runs (fun name => (Internal.domains computation scratchDomains name).width sizes)
             (Internal.readOnly computation) machine ticks entry (fun _ => 0) initial
             exit (fun _ => 0) final ∧
           final (Internal.outputTape computation) = encoded computation.outputDomain sizes
-            (computation.compute sizes ⟨arguments, valid⟩) ∧
-          ∀ name, final (Internal.scratchTape computation name) =
-            encoded (scratchDomains name) sizes (scratch name) := by
-  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := certificate
+            (computation.compute sizes ⟨arguments, valid⟩) := by
+  obtain ⟨sizeReadOnly, outputsWritable, halts, bound, execute⟩ := certificate
   refine ⟨bound, ?_⟩
   intro sizes arguments valid initial headers inputs regions
   let input : Inputs (Internal.domains computation scratchDomains) (Internal.readOnly computation) sizes :=
@@ -128,10 +131,60 @@ theorem runs {ScratchName State : Type} [Fintype ScratchName] [Fintype State]
   obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
     execute sizes input initial valid represented headers
   obtain ⟨good, result⟩ := correct
-  refine ⟨ticks, final, (fun name => output ⟨Internal.scratchTape computation name, rfl⟩),
-    cost, trace, ?_, fun name => canonical (Internal.scratchTape computation name) rfl⟩
-  rw [canonical (Internal.outputTape computation) rfl, result]
-  rfl
+  refine ⟨ticks, final, cost, trace, ?_⟩
+  exact (canonical ()).trans (by rw [result]; rfl)
+
+/-- Execute a hidden realization inside a larger tape collection. Only its
+public result is interpreted; all other writable contents stay arbitrary. -/
+theorem wiredRuns {ScratchName State TargetTape : Type}
+    [Fintype ScratchName] [Fintype State]
+    (scratchDomains : ScratchName → EncodedDomain.{0, carrierLevel} Parameter)
+    (machine : Machine (Alphabet (Internal.TapeName computation ScratchName)) State)
+    (entry exit : State)
+    (certificate : CallingConvention.Realizes (Internal.domains computation scratchDomains)
+      (Internal.readOnly computation) (Internal.sizeTapes computation ScratchName)
+      (Internal.outputTapes computation ScratchName) machine entry exit
+      (fun sizes input => computation.precondition sizes
+        (Internal.arguments computation scratchDomains sizes input))
+      (Internal.resultCorrect computation scratchDomains))
+    (wiring : Internal.TapeName computation ScratchName ↪ TargetTape) :
+    ∃ bound : MvPolynomial Parameter ℕ,
+      ∀ (sizes : Parameter → ℕ) (arguments : computation.Arguments sizes)
+        (valid : computation.precondition sizes arguments)
+        (width : TargetTape → ℕ) (readOnly : TargetTape → Bool)
+        (initial : Tapes (Alphabet TargetTape)),
+        (∀ name, width (wiring name) = (Internal.domains computation scratchDomains name).width sizes) →
+        (∀ name, readOnly (wiring name) = true → Internal.readOnly computation name = true) →
+        (∀ parameter, initial (wiring (.inl parameter)) = unary (sizes parameter)) →
+        (∀ name, initial (wiring (Internal.inputTape computation name)) =
+          encoded (computation.inputDomains name) sizes (arguments name)) →
+        (∀ name, Region (width (wiring name)) 0 (initial (wiring name))) →
+        ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
+          Runs width readOnly (MultiTape.wire wiring machine) ticks entry (fun _ => 0)
+            initial exit (fun _ => 0) final ∧
+          final (wiring (Internal.outputTape computation)) = encoded computation.outputDomain sizes
+            (computation.compute sizes ⟨arguments, valid⟩) ∧
+          (∀ name, name ∉ Set.range wiring → final name = initial name) ∧
+          (∀ name, Internal.readOnly computation name = true →
+            final (wiring name) = initial (wiring name)) := by
+  obtain ⟨bound, execute⟩ := runs scratchDomains machine entry exit certificate
+  refine ⟨bound, ?_⟩
+  intro sizes arguments valid width readOnly initial widths readonly headers inputs regions
+  obtain ⟨ticks, localFinal, cost, trace, correct⟩ := execute sizes arguments valid
+    (fun name => initial (wiring name)) headers inputs
+    (by intro name; rw [← widths]; exact regions name)
+  have lifted := trace.wire wiring width readOnly widths readonly initial (fun _ => 0)
+  have start : install wiring (fun name => initial (wiring name)) initial = initial :=
+    install_self wiring initial
+  have positions : install wiring (fun _ => (0 : ℤ)) (fun _ => (0 : ℤ)) = fun _ => 0 :=
+    install_self wiring (fun _ => (0 : ℤ))
+  rw [start, positions] at lifted
+  refine ⟨ticks, install wiring localFinal initial, cost, lifted, ?_, ?_, ?_⟩
+  · exact (install_at wiring localFinal initial _).trans correct
+  · intro name outside
+    exact install_outside wiring localFinal initial name outside
+  · intro name immutable
+    exact (install_at wiring localFinal initial _).trans (trace.readOnly_tape name immutable)
 
 end Computation.Realizable.Internal
 
@@ -161,7 +214,7 @@ def Computation.Realizable (computation : Computation.{carrierLevel} Parameter I
             let _stateFiniteInstance : Fintype State := finiteStates
             CallingConvention.Realizes (Internal.domains computation scratchDomains)
               (Internal.readOnly computation) (Internal.sizeTapes computation ScratchName)
-              machine entry exit
+              (Internal.outputTapes computation ScratchName) machine entry exit
               (fun sizes input => computation.precondition sizes
                 (Internal.arguments computation scratchDomains sizes input))
               (Internal.resultCorrect computation scratchDomains)
@@ -180,8 +233,8 @@ theorem Computation.Realizable.withPrecondition
   let stateFiniteInstance : Fintype State := finiteStates
   refine ⟨ScratchName, finiteScratch, scratchDomains, State, finiteStates,
     machine, entry, exit, ?_⟩
-  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := certificate
-  refine ⟨sizeReadOnly, halts, bound, ?_⟩
+  obtain ⟨sizeReadOnly, outputsWritable, halts, bound, execute⟩ := certificate
+  refine ⟨sizeReadOnly, outputsWritable, halts, bound, ?_⟩
   intro sizes input initial valid represented headers
   obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
     execute sizes input initial (implies sizes _ valid) represented headers

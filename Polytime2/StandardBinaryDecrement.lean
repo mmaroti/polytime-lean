@@ -74,10 +74,10 @@ def compute (parameter : Parameter) (assignment : Parameter → ℕ)
 theorem contract (parameter : Parameter) :
     CallingConvention.Realizes
       (StandardBinaryScan.domains (EncodedDomain.binaryNaturals parameter) (EncodedDomain.binaryNaturals parameter))
-      StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes
+      StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes
       (StandardBinaryScan.algorithm update) entry exit
       (fun assignment input => 0 < (input ⟨.inr false, rfl⟩ : Fin (2 ^ assignment parameter)).val)
-      (fun assignment input output => output ⟨.inr true, rfl⟩ = compute parameter assignment (input ⟨.inr false, rfl⟩)) := by
+      (fun assignment input output => output () = compute parameter assignment (input ⟨.inr false, rfl⟩)) := by
   apply StandardBinaryScan.contract update true
     (EncodedDomain.binaryNaturals parameter) (EncodedDomain.binaryNaturals parameter)
     (by intro assignment; rfl) (fun _ number => 0 < number.val) (compute parameter)

@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Complexity
-import Polytime2.Context
+import Polytime2.Wiring
 import Polytime2.BinaryAddition
 
 /-! # Arithmetic with arbitrary preserved caller tapes

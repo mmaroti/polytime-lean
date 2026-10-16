@@ -44,12 +44,74 @@ def wiring : Fin 4 ↪ Sum Bool Bool :=
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Bool Bool)) State :=
   MultiTape.wire wiring machine
 
+/-- Concrete execution evidence for internal controller proofs. The physical
+scratch word is recorded here; it is not a public output or validity obligation. -/
+theorem Internal.runs_wired {TargetTape : Type} [Fintype TargetTape]
+    (targetWiring : Sum Bool Bool ↪ TargetTape) (assignment : Bool → ℕ)
+    (width : TargetTape → ℕ) (targetReadOnly : TargetTape → Bool)
+    (initial : Tapes (CallingConvention.Alphabet TargetTape))
+    (widthsMatch : ∀ name, width (targetWiring name) = (domains name).width assignment)
+    (readOnlyMatch : ∀ name, targetReadOnly (targetWiring name) = true → argumentReadOnly name = true)
+    (headers : ∀ parameter, initial (targetWiring (.inl parameter)) = unary (assignment parameter))
+    (resultRegion : Region (assignment true) 0 (initial (targetWiring (.inr false))))
+    (scratchRegion : Region (assignment true) 0 (initial (targetWiring (.inr true)))) :
+    ∃ scratch : List Bool, scratch.length = assignment true ∧ ∃ final,
+      Runs width targetReadOnly (MultiTape.wire targetWiring algorithm)
+        (4 * assignment true + assignment false * (4 * assignment true + 8) + 11)
+        entry (fun _ => 0) initial exit (fun _ => 0) final ∧
+      final (targetWiring (.inr false)) = buffer
+        (word (advanceBits (assignment false) (List.replicate (assignment true) false))) ∧
+      final (targetWiring (.inr true)) = buffer (word scratch) ∧
+      (∀ name, name ∉ Set.range targetWiring → final name = initial name) ∧
+      (∀ name, argumentReadOnly name = true →
+        final (targetWiring name) = initial (targetWiring name)) := by
+  obtain ⟨oldResult, resultLength, resultEq⟩ := resultRegion.exists_buffer
+  obtain ⟨oldScratch, scratchLength, scratchEq⟩ := scratchRegion.exists_buffer
+  obtain ⟨scratch, scratchLength, rawTrace⟩ := runs (assignment false) (assignment true)
+    oldResult oldScratch resultLength scratchLength
+  let localInitial := fun name => initial (targetWiring name)
+  have trace := rawTrace.wire wiring (fun name => (domains name).width assignment)
+    argumentReadOnly (by intro name; fin_cases name <;> rfl)
+    (by intro name premise; fin_cases name <;> exact premise) localInitial (fun _ => 0)
+  have initialMatches : (fun name => localInitial (wiring name)) =
+      entryFrame (assignment false) (assignment true) oldResult oldScratch := by
+    funext name
+    fin_cases name
+    · exact headers false
+    · exact headers true
+    · exact resultEq
+    · exact scratchEq
+  have start : install wiring (entryFrame (assignment false) (assignment true) oldResult oldScratch)
+      localInitial = localInitial := by rw [← initialMatches, install_self]
+  have positions : install wiring (fun _ : Fin 4 => (0 : ℤ))
+      (fun _ : Sum Bool Bool => (0 : ℤ)) = fun _ => 0 := install_self _ _
+  rw [start, positions] at trace
+  have complete := trace.wire targetWiring width targetReadOnly widthsMatch readOnlyMatch initial (fun _ => 0)
+  rw [show install targetWiring localInitial initial = initial from install_self _ _,
+    show install targetWiring (fun _ => (0 : ℤ)) (fun _ => (0 : ℤ)) = fun _ => 0 from install_self _ _] at complete
+  refine ⟨scratch, scratchLength, _, complete, ?_, ?_, ?_, ?_⟩
+  · rw [install_at]
+    change install wiring _ localInitial (wiring 2) = _
+    rw [install_at]
+    rfl
+  · rw [install_at]
+    change install wiring _ localInitial (wiring 3) = _
+    rw [install_at]
+    rfl
+  · intro name outside
+    exact install_outside _ _ _ _ outside
+  · intro name immutable
+    rw [install_at]
+    exact trace.readOnly_tape name immutable
+
+def outputTapes : Unit ↪ Sum Bool Bool := oneTape (.inr false)
+
 /-- A size can be read as an ordinary natural whenever it fits the declared
-binary capacity. Both unary sizes remain unchanged and scratch is canonical. -/
-theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+binary capacity. Both unary sizes remain unchanged; only the result is exposed. -/
+theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes algorithm entry exit
     (fun assignment _ => assignment false < 2 ^ assignment true)
-    (fun assignment _ output => (output ⟨.inr false, rfl⟩).val = assignment false) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire]),
+    (fun assignment _ output => (output ()).val = assignment false) := by
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire]),
     4 * MvPolynomial.X true + MvPolynomial.X false * (4 * MvPolynomial.X true + 8) + 11, ?_⟩
   intro assignment input initial valid represented sizes
   obtain ⟨oldResult, resultLength, resultEq⟩ := represented.2 (.inr false) rfl
@@ -63,8 +125,6 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   have resultBound : Binary.value result < 2 ^ assignment true :=
     resultValue.symm ▸ valid
   let resultNatural : Fin (2 ^ assignment true) := ⟨Binary.value result, resultBound⟩
-  let scratchNatural : Fin (2 ^ assignment true) :=
-    ⟨Binary.value finalScratch, by simpa [finalLength] using Binary.value_lt_pow_length finalScratch⟩
   let localFinal := entryFrame (assignment false) (assignment true) (word result) (word finalScratch)
   have trace := localTrace.wire wiring
     (fun name => (domains name).width assignment) argumentReadOnly
@@ -83,26 +143,13 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   have positions : install wiring (fun _ : Fin 4 => (0 : ℤ)) (fun _ : Sum Bool Bool => (0 : ℤ)) =
       fun _ => 0 := install_self _ _
   rw [start, positions] at trace
-  let output : Outputs domains argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name => cases name with
-      | false => exact resultNatural
-      | true => exact scratchNatural
+  let output : Outputs domains outputTapes assignment := fun _ => resultNatural
   refine ⟨_, output, _, ?_, trace, resultValue, ?_⟩
   · simp
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name => cases name with
-      | false =>
-        change install wiring _ initial (wiring 2) = _
-        rw [install_at]
-        exact (encoded_binaryNaturals true assignment result resultLength).symm
-      | true =>
-        change install wiring _ initial (wiring 3) = _
-        rw [install_at]
-        exact (encoded_binaryNaturals true assignment finalScratch finalLength).symm
+  · intro name
+    cases name
+    change install wiring _ initial (wiring 2) = _
+    rw [install_at]
+    exact (encoded_binaryNaturals true assignment result resultLength).symm
 
 end Polytime2.StandardSizeRead

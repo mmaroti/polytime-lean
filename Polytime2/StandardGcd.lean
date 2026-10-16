@@ -179,17 +179,20 @@ def sizeTapes : Unit ↪ Sum Unit (Fin 12) :=
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Unit (Fin 12))) State :=
   MultiTape.wire dataTapes machine
 
+/-- Only the gcd result is exposed; all working tapes are private. -/
+def outputTapes : Unit ↪ Sum Unit (Fin 12) := oneTape (.inr 11)
+
 /-- The public GCD interface preserves separate input tapes and writes a
 separate result. Its capacity hypothesis reserves the division shift bit. -/
-theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes algorithm entry exit
     (fun assignment input =>
       2 * (input ⟨.inr 10, rfl⟩ : Fin (2 ^ assignment ())).val ≤ 2 ^ assignment ())
     (fun assignment input output =>
-      (output ⟨.inr 11, rfl⟩ : Fin (2 ^ assignment ())).val =
+      (output () : Fin (2 ^ assignment ())).val =
         Nat.gcd (input ⟨.inr 9, rfl⟩ : Fin (2 ^ assignment ())).val
           (input ⟨.inr 10, rfl⟩ : Fin (2 ^ assignment ())).val) := by
   classical
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
     machine, exit, MultiTape.sequence, extract, StandardTapeCommands.copy,
     StandardTerminatedCopy.machine]),
     16 * MvPolynomial.X () ^ 3 + 70 * MvPolynomial.X () ^ 2 + 108 * MvPolynomial.X () + 65, ?_⟩
@@ -232,81 +235,16 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   have positions : install dataTapes (fun _ : Fin 12 => (0 : ℤ))
       (fun _ : Sum Unit (Fin 12) => (0 : ℤ)) = fun _ => 0 := install_self dataTapes _
   rw [start, positions] at wired
-  let resultBits : Fin 12 → List Bool := fun name =>
-    if name = 6 ∨ name = 11 then finalLeft else if name = 1 then finalRight
-      else List.replicate (assignment ()) false
-  have resultLength (name : Fin 12) : (resultBits name).length = assignment () := by
-    dsimp only [resultBits]
-    split
-    · exact finalLeftLength.trans rightLength
-    · split
-      · exact finalRightLength.trans rightLength
-      · exact List.length_replicate
-  let output : Outputs domains argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases flag : name = 4 ∨ name = 8
-      · change (if name = 4 ∨ name = 8 then EncodedDomain.booleans else EncodedDomain.binaryNaturals ()).Carrier assignment
-        rw [ite_eq_left flag]
-        exact false
-      · change (if name = 4 ∨ name = 8 then EncodedDomain.booleans else EncodedDomain.binaryNaturals ()).Carrier assignment
-        rw [ite_eq_right flag]
-        exact ⟨value (resultBits name), by
-          simpa only [resultLength name] using Binary.value_lt_pow_length (resultBits name)⟩
+  let output : Outputs domains outputTapes assignment := fun _ =>
+    ⟨value finalLeft, by simpa only [finalLeftLength.trans rightLength] using Binary.value_lt_pow_length finalLeft⟩
   refine ⟨ticks, output, install dataTapes final initial, ?_, wired, ?_, ?_⟩
   · simpa only [map_add, map_mul, map_pow, map_ofNat, MvPolynomial.eval_X, rightLength] using cost
-  · change value (resultBits 11) = _
-    simpa [resultBits, leftValue, rightValue] using correct
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change install dataTapes final initial (dataTapes name) = _
-      rw [install_at]
-      fin_cases name
-      · change final 0 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value (List.replicate (assignment ()) false), _⟩
-        have field := scratchEq 0
-        change final 0 = buffer (word (List.replicate right.length false)) at field
-        rw [rightLength] at field
-        exact field.trans (encoded_binaryNaturals () assignment (List.replicate (assignment ()) false) (List.length_replicate)).symm
-      · change final 1 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value finalRight, _⟩
-        have field := scratchEq 1
-        change final 1 = buffer (word finalRight) at field
-        exact field.trans (encoded_binaryNaturals () assignment finalRight (finalRightLength.trans rightLength)).symm
-      · change final 2 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value (List.replicate (assignment ()) false), _⟩
-        have field := scratchEq 2
-        change final 2 = buffer (word (List.replicate right.length false)) at field
-        rw [rightLength] at field
-        exact field.trans (encoded_binaryNaturals () assignment (List.replicate (assignment ()) false) (List.length_replicate)).symm
-      · change final 3 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value (List.replicate (assignment ()) false), _⟩
-        have field := scratchEq 3
-        change final 3 = buffer (word (List.replicate right.length false)) at field
-        rw [rightLength] at field
-        exact field.trans (encoded_binaryNaturals () assignment (List.replicate (assignment ()) false) (List.length_replicate)).symm
-      · change final 4 = encoded EncodedDomain.booleans assignment false
-        exact (scratchEq 4).trans (encoded_booleans assignment false).symm
-      · change final 5 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value (List.replicate (assignment ()) false), _⟩
-        have field := scratchEq 5
-        change final 5 = buffer (word (List.replicate right.length false)) at field
-        rw [rightLength] at field
-        exact field.trans (encoded_binaryNaturals () assignment (List.replicate (assignment ()) false) (List.length_replicate)).symm
-      · change final 6 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value finalLeft, _⟩
-        have field := scratchEq 6
-        change final 6 = buffer (word finalLeft) at field
-        exact field.trans (encoded_binaryNaturals () assignment finalLeft (finalLeftLength.trans rightLength)).symm
-      · change final 7 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value (List.replicate (assignment ()) false), _⟩
-        have field := scratchEq 7
-        change final 7 = buffer (word (List.replicate right.length false)) at field
-        rw [rightLength] at field
-        exact field.trans (encoded_binaryNaturals () assignment (List.replicate (assignment ()) false) (List.length_replicate)).symm
-      · change final 8 = encoded EncodedDomain.booleans assignment false
-        exact (scratchEq 8).trans (encoded_booleans assignment false).symm
-      · contradiction
-      · contradiction
-      · change final 11 = encoded (EncodedDomain.binaryNaturals ()) assignment ⟨value finalLeft, _⟩
-        exact resultEq.trans (encoded_binaryNaturals () assignment finalLeft
-          (finalLeftLength.trans rightLength)).symm
+  · simpa only [leftValue, rightValue] using correct
+  · intro name
+    cases name
+    change install dataTapes final initial (dataTapes 11) = _
+    rw [install_at]
+    exact resultEq.trans (encoded_binaryNaturals () assignment finalLeft
+      (finalLeftLength.trans rightLength)).symm
 
 end Polytime2.StandardGcd

@@ -138,32 +138,4 @@ theorem steps (width : ℕ) (payload old : List Symbol)
   have trace := copied.trans (Steps.next handover restored)
   convert trace using 1 <;> first | omega | rfl
 
-/-- Mathematical copying contract, including unchanged neighboring cells and heads. -/
-def Contract (width : ℕ) (initial final : Tapes (fun _ : Bool => Symbol)) : Prop :=
-  ∃ sourceLeft sourceRight targetLeft targetRight payload old,
-    payload.length = width ∧ old.length = width ∧
-      initial = frame sourceLeft (payload ++ sourceRight) targetLeft (old ++ targetRight) ∧
-      final = frame sourceLeft (payload ++ sourceRight) targetLeft (payload ++ targetRight)
-
--- parameterLevel: size names of any program calling fixed-width element transfer.
-universe parameterLevel
-
-/-- Constant (hence polynomial) cost for each fixed element width and finite alphabet. -/
-theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter] [Fintype Symbol]
-    (width : ℕ) :
-    Realizes (machine (Symbol := Symbol) width) (false, Fin.last width) (true, 0)
-      (fun (_assignment : Parameter → ℕ) initial =>
-        ∃ sourceLeft sourceRight targetLeft targetRight payload old,
-          payload.length = width ∧ old.length = width ∧
-            initial = frame sourceLeft (payload ++ sourceRight) targetLeft (old ++ targetRight))
-      (fun _ initial final => Contract width initial final) := by
-  refine ⟨by intro symbols; simp [machine], MvPolynomial.C (2 * width + 1), ?_⟩
-  intro assignment initial valid
-  obtain ⟨sourceLeft, sourceRight, targetLeft, targetRight, payload, old,
-    payloadLength, oldLength, rfl⟩ := valid
-  refine ⟨2 * width + 1,
-    frame sourceLeft (payload ++ sourceRight) targetLeft (payload ++ targetRight), by simp,
-    steps width payload old payloadLength oldLength sourceLeft sourceRight targetLeft targetRight,
-    sourceLeft, sourceRight, targetLeft, targetRight, payload, old, payloadLength, oldLength, rfl, rfl⟩
-
 end Polytime2.Copy

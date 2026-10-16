@@ -24,17 +24,19 @@ namespace Polytime2.StandardMatrixAddress
 open MultiTape CallingConvention
 open Binary (word value)
 
+def outputTapes : Unit ↪ Sum (Fin 3) (Fin 9) := oneTape (.inr 7)
+
 /-- The column dimension comes from its unary size tape. The row and column
-indices remain unchanged, and every private word is valid on return. -/
-theorem contract : CallingConvention.Realizes domains readOnly sizeTapes machine entry exit
+indices remain unchanged; only the address must be a valid encoding on return. -/
+theorem contract : CallingConvention.Realizes domains readOnly sizeTapes outputTapes machine entry exit
     (fun sizes input => sizes 2 < 2 ^ sizes 0 ∧
       (input ⟨.inr 1, rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
         (input ⟨.inr 6, rfl⟩ : Fin (2 ^ sizes 0)).val < 2 ^ sizes 0)
     (fun sizes input output =>
-      (output ⟨.inr 7, rfl⟩ : Fin (2 ^ sizes 0)).val =
+      (output () : Fin (2 ^ sizes 0)).val =
         (input ⟨.inr 1, rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
           (input ⟨.inr 6, rfl⟩ : Fin (2 ^ sizes 0)).val) := by
-  refine ⟨(by intro parameter; rfl), halt,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), halt,
     MvPolynomial.X 2 * (4 * MvPolynomial.X 0 + 8) +
       MvPolynomial.X 0 * (6 * MvPolynomial.X 0 + 14) + 12 * MvPolynomial.X 0 + 29, ?_⟩
   intro sizes input initial valid represented sizeHeaders
@@ -87,35 +89,13 @@ theorem contract : CallingConvention.Realizes domains readOnly sizeTapes machine
   have scratchFits : (word scratch).length = row.length := by simp [word, scratchLength, rowLength]
   have nextFits : oldNext.length = row.length := nextLength.trans rowLength.symm
   have sameLength : column.length = row.length := columnLength.trans rowLength.symm
-  let productBits := MultiplyAdd.product row (columnBits sizes) (word scratch) oldNext multiplyFlag
   let resultBits := MultiplyAdd.result row (columnBits sizes) column (word scratch) oldNext multiplyFlag
-  have productBitsLength : productBits.length = sizes 0 :=
-    (MultiplyAdd.product_length row (columnBits sizes) (word scratch) oldNext multiplyFlag
-      scratchFits nextFits).trans rowLength
   have resultBitsLength : resultBits.length = sizes 0 :=
     (MultiplyAdd.result_length row (columnBits sizes) column (word scratch) oldNext multiplyFlag
       sameLength scratchFits nextFits).trans rowLength
-  let productNatural : Fin (2 ^ sizes 0) := ⟨value productBits,
-    by simpa only [productBitsLength] using Binary.value_lt_pow_length productBits⟩
   let resultNatural : Fin (2 ^ sizes 0) := ⟨value resultBits,
     by simpa only [resultBitsLength] using Binary.value_lt_pow_length resultBits⟩
-  let columnsNatural : Fin (2 ^ sizes 0) := ⟨value (columnBits sizes),
-    by simpa only [columnBits_length] using Binary.value_lt_pow_length (columnBits sizes)⟩
-  let zeroNatural : Fin (2 ^ sizes 0) := ⟨value (List.replicate (sizes 0) false),
-    by simpa only [List.length_replicate] using Binary.value_lt_pow_length (List.replicate (sizes 0) false)⟩
-  let output : Outputs domains readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change (if name = 4 ∨ name = 8 then EncodedDomain.booleans
-        else EncodedDomain.binaryNaturals 0).Carrier sizes
-      by_cases flag : name = 4 ∨ name = 8
-      · rw [ite_eq_left flag]
-        exact false
-      · rw [ite_eq_right flag]
-        exact if name = 0 then productNatural else if name = 5 then columnsNatural
-          else if name = 7 then resultNatural else zeroNatural
+  let output : Outputs domains outputTapes sizes := fun _ => resultNatural
   refine ⟨_, output, _, ?_, trace, ?_, ?_⟩
   · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     exact le_rfl
@@ -125,19 +105,8 @@ theorem contract : CallingConvention.Realizes domains readOnly sizeTapes machine
     simpa only [rowValue, columnValue, columnBits_value sizes valid.1] using
       MultiplyAdd.result_value row (columnBits sizes) column (word scratch) oldNext multiplyFlag
         sameLength scratchFits nextFits fits
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      fin_cases name
-      · exact (encoded_binaryNaturals 0 sizes productBits productBitsLength).symm
-      · contradiction
-      · exact (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm
-      · exact (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm
-      · exact (encoded_booleans sizes false).symm
-      · exact (encoded_binaryNaturals 0 sizes (columnBits sizes) (columnBits_length sizes)).symm
-      · contradiction
-      · exact (encoded_binaryNaturals 0 sizes resultBits resultBitsLength).symm
-      · exact (encoded_booleans sizes false).symm
+  · intro name
+    cases name
+    exact (encoded_binaryNaturals 0 sizes resultBits resultBitsLength).symm
 
 end Polytime2.StandardMatrixAddress

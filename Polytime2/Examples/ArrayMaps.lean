@@ -15,55 +15,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardArrayMapContract
+import Polytime2.Computations.Array
 import Polytime2.FieldRow
 
-/-! # Binary array maps and finite-field row scaling -/
+/-! # Mathematical array maps and finite-field row scaling -/
 
 namespace Polytime2.Examples.ArrayMaps
 
-open CallingConvention StandardArrayMap
+open Polytime2.Computation
 
--- A Boolean parameter flips two one-bit entries. The old output is blank
--- or contains old bits, so this also checks that traversal ignores old output symbols.
-example : ∃ ticks, ticks ≤ 45 ∧
-    Runs (widths 1 2) readOnly
-      (machine (parameterWidth := 1) (elementWidth := 1)
-        (fun parameter value => if parameter 0 != value 0 then 1#1 else 0#1))
-      ticks entry (fun _ => 0)
-      (frame (parameterWidth := 1) (fun _ => true) [] [true, false] [] [0, 2])
-      exit (fun _ => 0)
-      (StandardFiniteTable.frame [true] [true, false] (Binary.word [false, true])) := by
-  simpa [bits, mapped, List.ofFn_succ, List.ofFn_zero] using
-    runs (parameterWidth := 1) (elementWidth := 1)
-      (fun parameter value => if parameter 0 != value 0 then 1#1 else 0#1)
-      (fun _ => true) [fun _ => true, fun _ => false] [0, 2] rfl
-
--- A nonempty array of zero-bit elements has no data cells to initialize.
-example : ∃ ticks, ticks ≤ 36 ∧
-    Runs (widths 0 0) readOnly
-      (machine (parameterWidth := 0) (elementWidth := 0) (fun _ _ => 0#0))
-      ticks entry (fun _ => 0) (frame Fin.elim0 [] [] [] [])
-      exit (fun _ => 0) (StandardFiniteTable.frame [] [] []) := by
-  simpa [bits, mapped, Binary.word] using
-    runs (parameterWidth := 0) (elementWidth := 0) (fun _ _ => 0#0)
-      Fin.elim0 [Fin.elim0, Fin.elim0, Fin.elim0] [] rfl
-
--- Scalar: a specialization-fixed finite field; Parameter: unary size names.
--- The array can be a matrix row whose length is any size polynomial.
-universe parameterLevel
-variable {Parameter : Type parameterLevel} [Fintype Parameter]
+-- Parameter: runtime size names; Scalar: the specialization-fixed finite field.
+variable {Parameter : Type} [Fintype Parameter]
 variable {Scalar : Type} [Field Scalar] [Fintype Scalar]
 
+noncomputable def scaledRow (length : MvPolynomial Parameter ℕ) : Polytime2.Computation Parameter Bool :=
+  arrayMap (FieldRow.scalarDomain (Fintype.equivFin Scalar))
+    (FieldRow.scalarDomain (Fintype.equivFin Scalar)) length
+    (fun _ (coefficient value : Scalar) => coefficient * value)
+
+theorem scaledRow_realizable (length : MvPolynomial Parameter ℕ) :
+    (scaledRow (Scalar := Scalar) length).Realizable := arrayMap_realizable _ _ _ _
+
+theorem scaledRow_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (scaledRow (Scalar := Scalar) length).Arguments sizes)
+    (valid : (scaledRow (Scalar := Scalar) length).precondition sizes arguments) :
+    (scaledRow (Scalar := Scalar) length).compute sizes ⟨arguments, valid⟩ =
+      fun index => (fun (coefficient value : Scalar) => coefficient * value)
+        (arguments false) (arguments true index) := rfl
+
+-- Mapping also covers empty arrays and arrays of zero-bit singleton elements.
 example (length : MvPolynomial Parameter ℕ) :
-    let domain := FieldRow.scalarDomain (Fintype.equivFin Scalar)
-    CallingConvention.Realizes (domains domain domain length)
-      argumentReadOnly sizeTapes
-      (algorithm domain domain (fun _ (coefficient value : Scalar) => coefficient * value))
-      entry exit (fun _ _ => True)
-      (fun _ input output => output ⟨.inr 2, rfl⟩ = fun index =>
-        (fun (coefficient value : Scalar) => coefficient * value)
-          (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
-  FieldRow.scale_contract (Fintype.equivFin Scalar) length
+    (arrayMap (EncodedDomain.fixed (Equiv.refl (Fin 1)))
+      (EncodedDomain.fixed (Equiv.refl (Fin 1))) length (fun _ _ value => value)).Realizable :=
+  arrayMap_realizable _ _ _ _
 
 end Polytime2.Examples.ArrayMaps

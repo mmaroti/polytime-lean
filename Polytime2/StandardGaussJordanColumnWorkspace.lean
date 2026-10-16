@@ -19,7 +19,7 @@ import Polytime2.StandardGaussJordanColumnAlgorithm
 
 /-! # Preparing column scratch without executing a column
 
-Outer elimination needs valid scratch even when the matrix has no columns.
+The internal loop invariant tracks initialized scratch, including for zero columns.
 Preparation uses no matrix lookup and imposes no dimension hypotheses.
 -/
 

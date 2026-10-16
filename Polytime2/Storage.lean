@@ -94,37 +94,4 @@ theorem Steps.fits {machine : Machine Alphabet State} {ticks : ℕ}
       intro name
       convert finalFits name using 1; omega
 
-namespace Realizes
-
--- parameterLevel: runtime size names.
-universe parameterLevel
-variable {Parameter : Type parameterLevel} [Fintype Parameter] [Fintype TapeName]
-variable [∀ name, Fintype (Alphabet name)] [Fintype State]
-
-/-- Polynomial input capacities and runtime yield polynomial output capacities.
-The same trace bound controls intermediate configurations through `Steps.fits`. -/
-theorem storage {machine : Machine Alphabet State} {entry exit : State}
-    {precondition : (Parameter → ℕ) → Tapes Alphabet → Prop}
-    {postcondition : (Parameter → ℕ) → Tapes Alphabet → Tapes Alphabet → Prop}
-    (realization : Realizes machine entry exit precondition postcondition)
-    (inputBound : TapeName → MvPolynomial Parameter ℕ)
-    (inputFits : ∀ assignment initial, precondition assignment initial →
-      ∀ name, Fits (MvPolynomial.eval assignment (inputBound name)) (initial name)) :
-    ∃ outputBound : TapeName → MvPolynomial Parameter ℕ,
-      Realizes machine entry exit precondition (fun assignment initial final =>
-        postcondition assignment initial final ∧
-          ∀ name, Fits (MvPolynomial.eval assignment (outputBound name)) (final name)) := by
-  obtain ⟨halt, timeBound, runs⟩ := realization
-  refine ⟨fun name => inputBound name + 2 * timeBound, halt, timeBound, ?_⟩
-  intro assignment initial valid
-  obtain ⟨ticks, final, cost, trace, correct⟩ := runs assignment initial valid
-  refine ⟨ticks, final, cost, trace, correct, ?_⟩
-  intro name
-  have capacity := trace.fits (fun name => MvPolynomial.eval assignment (inputBound name))
-    (inputFits assignment initial valid) name
-  apply capacity.mono
-  simp only [map_add, map_mul, map_ofNat]
-  omega
-
-end Realizes
 end Polytime2.MultiTape

@@ -17,6 +17,8 @@ limitations under the License.
 
 import Polytime2.Computation.Unary
 import Polytime2.StandardBinaryIncrement
+import Polytime2.StandardBinaryDecrement
+import Polytime2.StandardBinaryGuard
 
 /-! # Public computations for copying and fixed-capacity increment -/
 
@@ -47,7 +49,7 @@ theorem copy_realizable (domain : EncodedDomain.{0, carrierLevel} Parameter) :
   refine CallingConvention.realizes_reindex equivalence
     (by intro name sizes; cases name with | inl _ => rfl | inr flag => cases flag <;> rfl)
     (by intro name sizes value; cases name with | inl _ => rfl | inr flag => cases flag <;> rfl)
-    StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes
+    StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes
     StandardTerminatedCopy.algorithm 0 2 _ _ _ _
     (by intro sizes input valid; trivial) ?_ (StandardTerminatedCopy.contract domain)
   intro sizes input output equal
@@ -65,6 +67,35 @@ theorem counterIncrement_realizable (capacity : Parameter) :
   refine Realizable.Internal.ofUnaryRealizes (counterIncrement capacity)
     (StandardBinaryScan.algorithm BinaryScan.increment) (.inl (.inl true)) (.inr ()) ?_
   apply (StandardBinaryIncrement.contract capacity).postcondition
+  intro sizes input output equal
+  exact ⟨True.intro, equal⟩
+
+/-- The predecessor is specified only for positive inputs. -/
+def counterDecrement (capacity : Parameter) : Computation Parameter Unit where
+  inputDomains _ := EncodedDomain.binaryNaturals capacity
+  outputDomain := EncodedDomain.binaryNaturals capacity
+  precondition _ arguments := 0 < (arguments ()).val
+  compute sizes arguments := StandardBinaryDecrement.compute capacity sizes (arguments.val ())
+
+theorem counterDecrement_realizable (capacity : Parameter) :
+    (counterDecrement capacity).Realizable := by
+  refine Realizable.Internal.ofUnaryRealizes (counterDecrement capacity)
+    (StandardBinaryScan.algorithm StandardBinaryDecrement.update)
+    StandardBinaryDecrement.entry StandardBinaryDecrement.exit ?_
+  apply (StandardBinaryDecrement.contract capacity).postconditionWithHypothesis
+  intro sizes input output valid equal
+  exact ⟨valid, equal⟩
+
+def counterNonzero : Computation Unit Unit where
+  inputDomains _ := EncodedDomain.binaryNaturals ()
+  outputDomain := EncodedDomain.booleans
+  precondition _ _ := True
+  compute _ arguments := decide (0 < (arguments.val ()).val)
+
+theorem counterNonzero_realizable : counterNonzero.Realizable := by
+  refine Realizable.Internal.ofUnaryRealizes counterNonzero
+    StandardBinaryGuard.algorithm (false, 0) (false, 2) ?_
+  apply StandardBinaryGuard.contract.postcondition
   intro sizes input output equal
   exact ⟨True.intro, equal⟩
 

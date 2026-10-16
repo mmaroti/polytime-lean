@@ -43,16 +43,18 @@ def readOnly : Sum Parameter Unit → Bool
 def sizeTapes : Parameter ↪ Sum Parameter Unit :=
   ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Parameter Unit := oneTape (.inr ())
+
 noncomputable def algorithm (capacity : Parameter) :
     Machine (CallingConvention.Alphabet (Sum Parameter Unit)) (StandardBinaryScan.State Unit) :=
   StandardTapeCommands.clear (.inl capacity) (.inr ()) (by simp)
 
 /-- No prefill is required, and all unary size inputs remain unchanged. -/
 theorem contract (capacity : Parameter) :
-    CallingConvention.Realizes (domains capacity) readOnly sizeTapes (algorithm capacity)
+    CallingConvention.Realizes (domains capacity) readOnly sizeTapes outputTapes (algorithm capacity)
       (.inl ()) (.inr ((), true)) (fun _ _ => True)
-      (fun _ _ output => (output ⟨.inr (), rfl⟩).val = 0) := by
-  refine ⟨(by intro parameter; rfl), (by
+      (fun _ _ output => (output ()).val = 0) := by
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by
     intro symbols
     simp [algorithm, StandardTapeCommands.clear, MultiTape.wire, StandardBinaryScan.machine]),
     2 * MvPolynomial.X capacity + 2, ?_⟩
@@ -73,25 +75,18 @@ theorem contract (capacity : Parameter) :
       simp
     simpa only [zero] using encoded_binaryNaturals capacity assignment
       (List.replicate (assignment capacity) false) (by simp)
-  let output : Outputs (domains capacity) readOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr outputTape => exact ⟨0, by positivity⟩
+  let output : Outputs (domains capacity) outputTapes assignment := fun _ => ⟨0, by positivity⟩
   refine ⟨2 * assignment capacity + 2, output,
     Function.update initial (.inr ()) (buffer (word (List.replicate (assignment capacity) false))),
     ?_, ?_, rfl, ?_⟩
   · simp
   · simpa only [List.length_replicate, algorithm] using trace
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr outputTape =>
-      cases outputTape
-      change Function.update initial (.inr ())
-        (buffer (word (List.replicate (assignment capacity) false))) (.inr ()) =
-          encoded (EncodedDomain.binaryNaturals capacity) assignment ⟨0, _⟩
-      rw [Function.update_self]
-      exact encodedZero.symm
+  · intro name
+    cases name
+    change Function.update initial (.inr ())
+      (buffer (word (List.replicate (assignment capacity) false))) (.inr ()) =
+        encoded (EncodedDomain.binaryNaturals capacity) assignment ⟨0, _⟩
+    rw [Function.update_self]
+    exact encodedZero.symm
 
 end Polytime2.StandardCounterZero

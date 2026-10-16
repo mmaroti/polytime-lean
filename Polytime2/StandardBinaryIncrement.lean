@@ -39,10 +39,10 @@ def next (capacity : Parameter) (assignment : Parameter → ℕ)
 theorem contract (capacity : Parameter) :
     let domain := EncodedDomain.binaryNaturals capacity
     CallingConvention.Realizes (StandardBinaryScan.domains domain domain)
-      StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes
+      StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes
       (StandardBinaryScan.algorithm BinaryScan.increment)
       (.inl (.inl true)) (.inr ()) (fun _ _ => True)
-      (fun assignment input output => output ⟨.inr true, rfl⟩ =
+      (fun assignment input output => output () =
         next capacity assignment (input ⟨.inr false, rfl⟩)) := by
   apply StandardBinaryScan.contract BinaryScan.increment true
     (EncodedDomain.binaryNaturals capacity) (EncodedDomain.binaryNaturals capacity)

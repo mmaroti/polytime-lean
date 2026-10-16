@@ -285,28 +285,6 @@ theorem runs (bits : List Bool) (old : List Symbol) (sameLength : old.length = b
 -- parameterLevel: size names bounding the runtime number of copied bits.
 universe parameterLevel
 
-/-- A polynomial width gives a polynomial execution certificate. The output
-contents are arbitrary and do not determine the extent of the copy. -/
-theorem realizes {Parameter : Type parameterLevel} [Fintype Parameter]
-    (capacity : MvPolynomial Parameter ℕ) :
-    Realizes machine 0 2
-      (fun assignment initial => ∃ bits old,
-        bits.length ≤ MvPolynomial.eval assignment capacity ∧
-        old.length = bits.length ∧
-        initial = frame [0] (word bits ++ [0]) [0] (old ++ [0]))
-      (fun _ initial final => ∃ bits old,
-        old.length = bits.length ∧
-        initial = frame [0] (word bits ++ [0]) [0] (old ++ [0]) ∧
-        final = frame [0] (word bits ++ [0]) [0] (word bits ++ [0])) := by
-  refine ⟨by intro symbols; rfl, 2 * capacity + 2, ?_⟩
-  intro assignment initial valid
-  obtain ⟨bits, old, fits, length, rfl⟩ := valid
-  refine ⟨2 * bits.length + 2,
-    frame [0] (word bits ++ [0]) [0] (word bits ++ [0]), ?_,
-    steps bits old length [] [] [] [], bits, old, length, rfl, rfl⟩
-  simp only [map_add, map_mul, map_ofNat]
-  omega
-
 -- carrierLevel: mathematical elements copied by the routine.
 universe carrierLevel
 
@@ -329,6 +307,9 @@ def sizeTapes : Parameter ↪ Sum Parameter Bool :=
 def dataTapes : Bool ↪ Sum Parameter Bool :=
   ⟨Sum.inr, by intro first second equal; cases equal; rfl⟩
 
+/-- Only the result tape is a public output. -/
+def outputTapes : Unit ↪ Sum Parameter Bool := oneTape (.inr true)
+
 /-- The controller is independent of the runtime width. Size inputs are idle. -/
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Parameter Bool)) (Fin 3) :=
   MultiTape.wire dataTapes machine
@@ -336,11 +317,11 @@ noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Parameter
 /-- Copy any polynomial-width encoded domain, including its immutable unary
 size inputs, with arbitrary initial output contents and restored heads. -/
 theorem contract (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
-    CallingConvention.Realizes (domains domain) readOnly sizeTapes algorithm 0 2
+    CallingConvention.Realizes (domains domain) readOnly sizeTapes outputTapes algorithm 0 2
       (fun _ _ => True)
-      (fun _ input output => output ⟨.inr true, rfl⟩ = input ⟨.inr false, rfl⟩) := by
+      (fun _ input output => output () = input ⟨.inr false, rfl⟩) := by
   obtain ⟨bound, widthBound⟩ := domain.polynomial_width
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine]),
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine]),
     2 * bound + 2, ?_⟩
   intro assignment input initial valid represented sizes
   let bits := List.ofFn (fun index : Fin (domain.width assignment) =>
@@ -375,11 +356,7 @@ theorem contract (domain : EncodedDomain.{parameterLevel, carrierLevel} Paramete
       (fun _ : Sum Parameter Bool => (0 : ℤ)) = fun _ => 0 := by
     exact install_self dataTapes (fun _ : Sum Parameter Bool => (0 : ℤ))
   rw [start, positions] at trace
-  let output : Outputs (domains domain) readOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name => exact input ⟨.inr false, rfl⟩
+  let output : Outputs (domains domain) outputTapes assignment := fun _ => input ⟨.inr false, rfl⟩
   refine ⟨2 * bits.length + 2, output,
     install dataTapes (frame [0] (word bits ++ [0]) [0] (word bits ++ [0])) initial,
     ?_, ?_, rfl, ?_⟩
@@ -387,15 +364,10 @@ theorem contract (domain : EncodedDomain.{parameterLevel, carrierLevel} Paramete
     simp only [map_add, map_mul, map_ofNat]
     omega
   · exact trace
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      cases name with
-      | false => contradiction
-      | true =>
-        change install dataTapes _ initial (dataTapes true) = encoded domain assignment _
-        rw [install_at]
-        exact buffer_padding (word bits)
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes true) = encoded domain assignment _
+    rw [install_at]
+    exact buffer_padding (word bits)
 
 end Polytime2.StandardTerminatedCopy

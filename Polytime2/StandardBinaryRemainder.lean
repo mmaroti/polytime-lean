@@ -378,20 +378,6 @@ theorem result_value (input divisor : List Bool) (shifted difference result : Li
     (by simpa only [zeroValue] using positive) capacity
   simpa only [zeroValue, Binary.prefixValue_reverse, Nat.mul_zero, Nat.add_zero] using correct
 
-theorem finish_canonical (bits divisor : List Bool) (work : Workspace)
-    (nonempty : bits ≠ []) :
-    ∃ remainder shifted difference result : List Bool, ∃ flag : Bool,
-      finish divisor bits work = (remainder, word shifted, word difference, word result, data flag) := by
-  induction bits generalizing work with
-  | nil => contradiction
-  | cons bit bits hypothesis =>
-    cases bits with
-    | nil =>
-      dsimp only [finish, advance]
-      exact ⟨_, _, _, _, _, rfl⟩
-    | cons other rest =>
-      exact hypothesis (advance bit divisor work) (by simp)
-
 /-- The dividend and divisor are separate inputs, with unary digit capacity.
 All five writable tapes have bounded mathematical domains, including scratch. -/
 def domains : Sum Unit (Fin 7) → EncodedDomain Unit
@@ -408,20 +394,22 @@ def dataTapes : Fin 7 ↪ Sum Unit (Fin 7) :=
 def sizeTapes : Unit ↪ Sum Unit (Fin 7) :=
   ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Unit (Fin 7) := oneTape (.inr 0)
+
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Unit (Fin 7))) State :=
   MultiTape.wire dataTapes machine
 
 /-- Polynomial-time remainder under the standard convention. A positive
 divisor reserves one shift-capacity bit; zero divisors are outside the hypothesis. -/
-theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes algorithm entry exit
     (fun assignment input =>
       0 < (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val ∧
       2 * (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val ≤ 2 ^ assignment ())
     (fun assignment input output =>
-      (output ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment ())).val =
+      (output () : Fin (2 ^ assignment ())).val =
         (input ⟨.inr 6, rfl⟩ : Fin (2 ^ assignment ())).val %
         (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine, exit, MultiTape.sequence, loopMachine,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire, machine, exit, MultiTape.sequence, loopMachine,
       StandardBitFold.machine, StandardBitFold.exit]),
     8 * MvPolynomial.X () ^ 2 + 19 * MvPolynomial.X () + 6, ?_⟩
   intro assignment input initial valid represented sizes
@@ -480,79 +468,29 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   have positions : install dataTapes (fun _ : Fin 7 => (0 : ℤ))
       (fun _ : Sum Unit (Fin 7) => (0 : ℤ)) = fun _ => 0 := install_self dataTapes _
   rw [start, positions] at trace
-  have positiveWidth : 0 < assignment () := by
-    have divisorBound := (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).isLt
-    by_contra notPositive
-    have zeroWidth : assignment () = 0 := by omega
-    simp only [zeroWidth, pow_zero] at divisorBound
-    omega
-  have nonempty : dividend.reverse ≠ [] := by
-    intro empty
-    have lengthZero := congrArg List.length empty
-    simp only [List.length_reverse, List.length_nil, dividendLength] at lengthZero
-    omega
-  obtain ⟨remainder, shifted, difference, result, flag, canonical⟩ :=
-    finish_canonical dividend.reverse divisor work nonempty
-  have finalFits := finish_fits dividend.reverse divisor work fits
-  rw [canonical] at finalFits
-  have remainderFits : remainder.length = assignment () := finalFits.1.trans divisorLength
-  have shiftedFits' : shifted.length = assignment () := by
-    simpa only [word, List.length_map] using finalFits.2.1.trans divisorLength
-  have differenceFits' : difference.length = assignment () := by
-    simpa only [word, List.length_map] using finalFits.2.2.1.trans divisorLength
-  have resultFits' : result.length = assignment () := by
-    simpa only [word, List.length_map] using finalFits.2.2.2.trans divisorLength
+  let remainder := (finish divisor dividend.reverse work).1
+  have remainderFits : remainder.length = assignment () :=
+    (finish_fits dividend.reverse divisor work fits).1.trans divisorLength
   have positive : 0 < value divisor := by rw [divisorValue]; exact valid.1
   have capacity : 2 * value divisor ≤ 2 ^ divisor.length := by
     rw [divisorValue, divisorLength]
     exact valid.2
   have correct := result_value dividend divisor oldShifted oldDifference oldResult oldFlag
     shiftedFits differenceFits resultFits positive capacity
-  change value (finish divisor dividend.reverse work).1 = _ at correct
-  rw [canonical] at correct
-  change finish divisor dividend.reverse work = _ at canonical
-  rw [canonical] at trace
   let remainderValue : Fin (2 ^ assignment ()) := ⟨value remainder,
     by simpa only [remainderFits] using Binary.value_lt_pow_length remainder⟩
-  let shiftedValue : Fin (2 ^ assignment ()) := ⟨value shifted,
-    by simpa only [shiftedFits'] using Binary.value_lt_pow_length shifted⟩
-  let differenceValue : Fin (2 ^ assignment ()) := ⟨value difference,
-    by simpa only [differenceFits'] using Binary.value_lt_pow_length difference⟩
-  let resultValue : Fin (2 ^ assignment ()) := ⟨value result,
-    by simpa only [resultFits'] using Binary.value_lt_pow_length result⟩
-  let output : Outputs domains argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases isFlag : name = 4
-      · subst name
-        exact flag
-      · change (if name = 4 then EncodedDomain.booleans else EncodedDomain.binaryNaturals ()).Carrier assignment
-        rw [ite_eq_right (by exact isFlag)]
-        exact if name = 0 then remainderValue else if name = 2 then shiftedValue
-          else if name = 3 then differenceValue else resultValue
+  let output : Outputs domains outputTapes assignment := fun _ => remainderValue
   refine ⟨dividend.length * (8 * divisor.length + 17) + 2 * divisor.length + 6, output,
-    install dataTapes (frame (buffer (word dividend)) divisor
-      (remainder, word shifted, word difference, word result, data flag)) initial, ?_, trace, ?_, ?_⟩
+    install dataTapes (frame (buffer (word dividend)) divisor (finish divisor dividend.reverse work)) initial,
+    ?_, trace, ?_, ?_⟩
   · simp only [map_add, map_mul, map_pow, map_ofNat, MvPolynomial.eval_X]
     rw [dividendLength, divisorLength]
     nlinarith
-  · change value remainder = _
-    simpa only [dividendValue, divisorValue] using correct
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change install dataTapes _ initial (dataTapes name) = _
-      rw [install_at]
-      fin_cases name
-      · exact (encoded_binaryNaturals () assignment remainder remainderFits).symm
-      · contradiction
-      · exact (encoded_binaryNaturals () assignment shifted shiftedFits').symm
-      · exact (encoded_binaryNaturals () assignment difference differenceFits').symm
-      · exact (encoded_booleans assignment flag).symm
-      · exact (encoded_binaryNaturals () assignment result resultFits').symm
-      · contradiction
+  · simpa only [dividendValue, divisorValue] using correct
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes 0) = _
+    rw [install_at]
+    exact (encoded_binaryNaturals () assignment remainder remainderFits).symm
 
 end Polytime2.StandardBinaryRemainder

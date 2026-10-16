@@ -83,8 +83,8 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
             final (replaceWiring source name) = encoded (domains scalar (replaceWiring source name)) sizes value) ∧
         (∀ name, name ∉ Set.range (replaceWiring source) → final name = initial name) ∧
         (∀ name, StandardMatrixReplace.readOnly name = true → final (replaceWiring source name) = initial (replaceWiring source name)) := by
-  obtain ⟨bound, execute⟩ := (StandardMatrixReplace.contract scalar.constant (scalar.width Empty.elim)
-    (fun _ => rfl)).wired_runs (replaceWiring source)
+  obtain ⟨bound, execute⟩ := StandardMatrixReplace.Internal.wired_runs scalar.constant (scalar.width Empty.elim)
+    (fun _ => rfl) (replaceWiring source)
   refine ⟨bound, ?_⟩
   intro sizes initial row column array replacement within columnsFit rowValid columnValid capacity
     rowEq columnEq arrayEq replacementEq headers regions
@@ -92,7 +92,7 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
   have sameDomain : ∀ name, domains scalar (replaceWiring source name) = StandardMatrixReplace.domains scalar.constant name := by
     intro name
     cases source <;> fin_cases name <;> rfl
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical, privateFrame, outside, immutable⟩ :=
     execute sizes input (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; rw [sameDomain name])
       (by
@@ -133,13 +133,13 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
               contradiction)
       (by intro name writable; exact regions (replaceWiring source name)) headers
   obtain ⟨otherWithin, valueEq⟩ := correct
-  change output ⟨.inr 2, rfl⟩ = Function.update array ⟨row.val * sizes 2 + column.val, otherWithin⟩ replacement at valueEq
+  change output () = Function.update array ⟨row.val * sizes 2 + column.val, otherWithin⟩ replacement at valueEq
   refine ⟨ticks, final, cost, trace, ?_, ?_, outside, immutable⟩
-  · have result := canonical (.inr 2) rfl
+  · have result := canonical ()
     rw [valueEq] at result
     exact result
   · intro name writable
     rw [sameDomain name]
-    exact ⟨output ⟨name, writable⟩, canonical name writable⟩
+    exact privateFrame name writable
 
 end Polytime2.StandardMatrixRowEntry

@@ -15,32 +15,42 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.MultiplyAddContract
+import Polytime2.Computations.Arithmetic
 
-/-! # Binary row-major address arithmetic -/
+/-! # Compound arithmetic through existential computation certificates -/
 
 namespace Polytime2.Examples.MultiplyAdd
 
-open CallingConvention
-open Polytime2.MultiplyAdd
+open Polytime2.Computation
 
--- Row 2, width 3, column 1 give address 7. Every writable cell starts
--- blank or contains old bits; both arithmetic flags hold arbitrary values.
-example : Runs (widths 3 2) readOnly machine 105 entry (fun _ => 0)
-    (frame [false, true, false] [true, true] [true, false, false]
-      [0, 2, 0] [2, 0, 0] [0, 0, 2] [2, 2, 0] 2 2)
-    exit (fun _ => 0)
-    (frame [false, true, false] [true, true] [true, false, false]
-      (Binary.word [false, true, true]) (Binary.word [false, false, false])
-      (Binary.word [false, false, false]) (Binary.word [true, true, true])
-      (Binary.data false) (Binary.data false)) := by
-  exact runs [false, true, false] [true, true] [true, false, false] rfl
-    [0, 2, 0] [2, 0, 0] [0, 0, 2] [2, 2, 0] rfl rfl rfl rfl 2 2 (by decide)
+example : binaryMultiplyAdd.Realizable := binaryMultiplyAdd_realizable
+example : binaryAddMultiply.Realizable := binaryAddMultiply_realizable
 
--- Zero-bit words still initialize both flags and restore all heads.
-example : Runs (widths 0 0) readOnly machine 17 entry (fun _ => 0)
-    (frame [] [] [] [] [] [] [] 2 2) exit (fun _ => 0)
-    (frame [] [] [] [] [] [] [] (Binary.data false) (Binary.data false)) :=
-  runs [] [] [] rfl [] [] [] [] rfl rfl rfl rfl 2 2 (by decide)
+-- Row 2, width 3, and column 1 give row-major address 7.
+private def sizes (parameter : Bool) : ℕ := if parameter then 2 else 3
+private def arguments : binaryMultiplyAdd.Arguments sizes :=
+  fun name => ⟨![2, 3, 1] name, by fin_cases name <;> decide⟩
+private theorem admissible : binaryMultiplyAdd.precondition sizes arguments := by
+  change 2 * 3 + 1 < 2 ^ 3
+  decide
+
+example : (binaryMultiplyAdd.compute sizes ⟨arguments, admissible⟩).val = 7 := rfl
+
+-- The intermediate sum and final product fit a three-bit result.
+private def sumArguments : binaryAddMultiply.Arguments sizes :=
+  fun name => ⟨![1, 2, 2] name, by fin_cases name <;> decide⟩
+private theorem sumAdmissible : binaryAddMultiply.precondition sizes sumArguments := by
+  change 1 + 2 < 2 ^ 3 ∧ (1 + 2) * 2 < 2 ^ 3
+  decide
+
+example : (binaryAddMultiply.compute sizes ⟨sumArguments, sumAdmissible⟩).val = 6 := rfl
+
+-- Zero-bit operands still admit a valid zero result.
+example : binaryMultiplyAdd.precondition (fun _ => 0) (fun _ => ⟨0, by decide +revert⟩) := by
+  change 0 * 0 + 0 < 2 ^ 0
+  decide
+example : binaryAddMultiply.precondition (fun _ => 0) (fun _ => ⟨0, by decide +revert⟩) := by
+  change 0 + 0 < 2 ^ 0 ∧ (0 + 0) * 0 < 2 ^ 0
+  decide
 
 end Polytime2.Examples.MultiplyAdd

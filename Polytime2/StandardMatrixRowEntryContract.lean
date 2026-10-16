@@ -23,13 +23,15 @@ namespace Polytime2.StandardMatrixRowEntry
 
 open MultiTape CallingConvention
 
+def outputTapes : Unit ↪ TapeName := oneTape (.inr 5)
+
 /-- Combine the two original entries, optionally replace the source entry,
 and replace the target entry in a separate result matrix. The specialization
 chooses the finite scalar operation; dimensions and indices are runtime inputs. -/
 theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment → scalar.Carrier assignment →
       scalar.Carrier assignment × scalar.Carrier assignment) :
-    CallingConvention.Realizes (domains scalar) readOnly sizeTapes (machine writeSource scalar operation)
+    CallingConvention.Realizes (domains scalar) readOnly sizeTapes outputTapes (machine writeSource scalar operation)
       (entry (scalar.width Empty.elim)) (exit (scalar.width Empty.elim))
       (fun sizes input => sizes 2 < 2 ^ sizes 0 ∧
         (input ⟨.inr 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
@@ -45,10 +47,10 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
         let array := input ⟨.inr 4, rfl⟩
         let result := effectiveOperation writeSource scalar operation Empty.elim
           (input ⟨.inr 3, rfl⟩) (array sourceIndex) (array targetIndex)
-        output ⟨.inr 5, rfl⟩ = Function.update (Function.update array sourceIndex result.1) targetIndex result.2) := by
+        output () = Function.update (Function.update array sourceIndex result.1) targetIndex result.2) := by
   classical
   obtain ⟨bound, execute⟩ := runs writeSource scalar operation
-  refine ⟨(by intro parameter; rfl), halt writeSource scalar operation, bound, ?_⟩
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), halt writeSource scalar operation, bound, ?_⟩
   intro sizes input initial valid represented headers
   let sourceRow : Fin (2 ^ sizes 0) := input ⟨.inr 0, rfl⟩
   let targetRow : Fin (2 ^ sizes 0) := input ⟨.inr 1, rfl⟩
@@ -76,19 +78,11 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       valid.1 valid.2.1 valid.2.2.1 valid.2.2.2.1 valid.2.2.2.2
       (represented.1 (.inr 0) rfl) (represented.1 (.inr 1) rfl) (represented.1 (.inr 2) rfl)
       (represented.1 (.inr 3) rfl) (represented.1 (.inr 4) rfl) headers represented.region
-  let output : Outputs (domains scalar) readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    by_cases isResult : name = .inr 5
-    · subst name
-      exact resultArray
-    · exact Classical.choose (canonical name writable)
+  let output : Outputs (domains scalar) outputTapes sizes := fun _ => resultArray
   refine ⟨ticks, output, final, cost, trace, ?_, ?_⟩
   · exact ⟨sourceWithin, targetWithin, by rfl⟩
-  · intro name writable
-    by_cases isResult : name = .inr 5
-    · subst name
-      change final (.inr 5) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes resultArray
-      exact resultEq
-    · simpa only [output, isResult, ↓reduceDIte] using Classical.choose_spec (canonical name writable)
+  · intro name
+    cases name
+    exact resultEq
 
 end Polytime2.StandardMatrixRowEntry

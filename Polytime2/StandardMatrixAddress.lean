@@ -22,7 +22,7 @@ import Polytime2.MultiplyAddContract
 
 Size names 0, 1, and 2 specify bit capacity, rows, and columns. The immutable
 row and column indices are binary words. Column-size reading and multiply-add
-reuse one scratch word, with a separate final address and canonical scratch.
+reuse one scratch word, with a separate final address.
 -/
 
 namespace Polytime2.StandardMatrixAddress

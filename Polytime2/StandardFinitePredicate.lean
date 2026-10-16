@@ -41,16 +41,16 @@ noncomputable def machine (domain : EncodedDomain.{0, 0} Empty)
     (predicate : ∀ assignment, domain.Carrier assignment → Bool) : Machine Alphabet (State (domain.width Empty.elim)) :=
   StandardFiniteTable.algorithm domain unitDomain EncodedDomain.booleans (fun assignment value _ => predicate assignment value)
 
-/-- Only the scalar argument is public input. The private singleton and the
-Boolean output are valid on return, with arbitrary initial writable contents. -/
+/-- Only the scalar is a public input and only the Boolean is a public output.
+The private singleton needs no validity guarantee on return. -/
 theorem contract (domain : EncodedDomain.{0, 0} Empty)
     (predicate : ∀ assignment, domain.Carrier assignment → Bool) :
-    CallingConvention.Realizes (domains domain) readOnly StandardFiniteTable.sizeTapes (machine domain predicate)
+    CallingConvention.Realizes (domains domain) readOnly StandardFiniteTable.sizeTapes StandardFiniteTable.outputTapes (machine domain predicate)
       StandardFiniteTable.entry StandardFiniteTable.exit (fun _ _ => True)
-      (fun assignment input output => output ⟨2, rfl⟩ = predicate assignment (input ⟨0, rfl⟩)) := by
+      (fun assignment input output => output () = predicate assignment (input ⟨0, rfl⟩)) := by
   obtain ⟨bound, execute⟩ := (StandardFiniteTable.contract domain unitDomain EncodedDomain.booleans
     (fun assignment value _ => predicate assignment value)).wired_runs (Function.Embedding.refl (Fin 3))
-  refine ⟨(by intro parameter; cases parameter), (by intro symbols; rfl), bound, ?_⟩
+  refine ⟨(by intro parameter; cases parameter), (by intro name; rfl), (by intro symbols; rfl), bound, ?_⟩
   intro assignment input initial valid represented headers
   have sameAssignment : assignment = (Empty.elim : Empty → ℕ) := Subsingleton.elim _ _
   subst assignment
@@ -77,24 +77,13 @@ theorem contract (domain : EncodedDomain.{0, 0} Empty)
       (by intro name readonly; fin_cases name <;> first | exact represented.1 0 rfl | exact unitCanonical | contradiction)
       (by intro name writable; exact represented.region name)
       (by intro parameter; cases parameter)
-  let output : Outputs (domains domain) readOnly Empty.elim := fun name => by
-    rcases name with ⟨name, writable⟩
-    by_cases singleton : name = 1
-    · subst name; exact (0 : Fin 1)
-    · have flag : name = 2 := by
-        have bound := name.isLt
-        have nonzero : name ≠ 0 := by intro equal; subst name; contradiction
-        apply Fin.ext
-        omega
-      subst name
-      exact localOutput ⟨2, rfl⟩
+  let output : Outputs (domains domain) StandardFiniteTable.outputTapes Empty.elim :=
+    fun _ => localOutput ()
   refine ⟨ticks, output, final, cost, ?_, correct, ?_⟩
   · rw [MultiTape.wire_refl] at trace
     exact trace
-  · intro name writable
-    fin_cases name
-    · contradiction
-    · exact (immutable 1 rfl).trans unitCanonical
-    · exact canonical 2 rfl
+  · intro name
+    cases name
+    exact canonical ()
 
 end Polytime2.StandardFinitePredicate

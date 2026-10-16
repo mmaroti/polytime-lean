@@ -62,11 +62,11 @@ private theorem mathematical_encoding (scalar : EncodedDomain.{0, 0} Empty) (nam
 
 /-- The same finite machine computes the ordinary pointwise row transform on
 mathematical matrices. Reindexing does not add transitions or change the tape
-convention, the shape hypotheses, or the validity guarantees for private values. -/
+convention or the shape hypotheses; private scratch has no validity obligation. -/
 theorem mathematical_contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment →
       scalar.Carrier assignment → scalar.Carrier assignment × scalar.Carrier assignment) :
-    CallingConvention.Realizes (mathematicalDomains scalar) readOnly sizeTapes (machine writeSource scalar operation)
+    CallingConvention.Realizes (mathematicalDomains scalar) readOnly sizeTapes outputTapes (machine writeSource scalar operation)
       (entry (scalar.width Empty.elim)) (exit (scalar.width Empty.elim))
       (fun sizes input => (input ⟨dataTape 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
         (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
@@ -74,11 +74,11 @@ theorem mathematical_contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0
       (fun sizes input output => ∃
         (sourceValid : (input ⟨dataTape 0, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1)
         (targetValid : (input ⟨dataTape 1, rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1),
-        output ⟨dataTape 5, rfl⟩ = MatrixRows.transform writeSource (operation Empty.elim)
+        output () = MatrixRows.transform writeSource (operation Empty.elim)
           (input ⟨dataTape 3, rfl⟩) (input ⟨inputTape, rfl⟩)
           ⟨(input ⟨dataTape 0, rfl⟩).val, sourceValid⟩ ⟨(input ⟨dataTape 1, rfl⟩).val, targetValid⟩) := by
   refine CallingConvention.realizes_reindex (mathematicalEquivalence scalar)
-    (mathematical_widths scalar) (mathematical_encoding scalar) readOnly sizeTapes
+    (mathematical_widths scalar) (mathematical_encoding scalar) readOnly sizeTapes outputTapes
     (machine writeSource scalar operation) (entry (scalar.width Empty.elim)) (exit (scalar.width Empty.elim))
     _ _ _ _ ?_ ?_ (contract writeSource scalar operation)
   · intro sizes input valid
@@ -94,7 +94,7 @@ theorem mathematical_contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0
       (⟨(input ⟨dataTape 0, rfl⟩).val, sourceValid⟩ : Fin (sizes 1))
       (⟨(input ⟨dataTape 1, rfl⟩).val, targetValid⟩ : Fin (sizes 1))
     have flatResult := correct.trans (computed.trans (congrArg (matrixEquiv sizes) complete))
-    change (matrixEquiv (Carrier := scalar.Carrier Empty.elim) sizes).symm (output ⟨dataTape 5, rfl⟩) = _
+    change (matrixEquiv (Carrier := scalar.Carrier Empty.elim) sizes).symm (output ()) = _
     simpa only [Equiv.symm_apply_apply] using
       congrArg (matrixEquiv (Carrier := scalar.Carrier Empty.elim) sizes).symm flatResult
 

@@ -24,23 +24,34 @@ namespace Polytime2.StandardMatrixReplace
 open MultiTape CallingConvention
 open Binary (word value)
 
-/-- Replacement preserves the source matrix and writes a separate result.
-Dimensions are unary size inputs and indices are separate binary arguments. -/
-theorem contract (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
+def outputTapes : Unit ↪ TapeName := oneTape (.inr 2)
+
+/-- Concrete execution facts used only inside the matrix controllers.
+Private encodings describe this machine's final frame, not its public contract. -/
+theorem Internal.execute (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
     (fixedWidth : ∀ sizes, element.width sizes = elementWidth) :
-    CallingConvention.Realizes (domains element) readOnly sizeTapes (machine elementWidth)
-      (entry elementWidth) (exit elementWidth)
-      (fun sizes input => sizes 2 < 2 ^ sizes 0 ∧
+    ∃ bound : MvPolynomial (Fin 3) ℕ,
+      ∀ sizes (input : Inputs (domains element) readOnly sizes) initial,
+        sizes 2 < 2 ^ sizes 0 ∧
         (input ⟨.inl (.inr 1), rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
         (input ⟨.inl (.inr 6), rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 2 ∧
-        sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
-      (fun sizes input output => ∃ within :
+        sizes 1 * sizes 2 ≤ 2 ^ sizes 0 →
+        Entry (domains element) readOnly sizes input initial →
+        (∀ parameter, initial (sizeTapes parameter) = unary (sizes parameter)) →
+        ∃ ticks, ∃ output : Outputs (domains element) outputTapes sizes, ∃ final,
+          ticks ≤ MvPolynomial.eval sizes bound ∧
+          Runs (fun name => (domains element name).width sizes) readOnly (machine elementWidth)
+            ticks (entry elementWidth) (fun _ => 0) initial (exit elementWidth) (fun _ => 0) final ∧
+          (∃ within :
         (input ⟨.inl (.inr 1), rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
           (input ⟨.inl (.inr 6), rfl⟩ : Fin (2 ^ sizes 0)).val < MvPolynomial.eval sizes StandardMatrixEntry.length,
-        output ⟨.inr 2, rfl⟩ = Function.update (input ⟨.inr 0, rfl⟩)
+        output () = Function.update (input ⟨.inr 0, rfl⟩)
           ⟨(input ⟨.inl (.inr 1), rfl⟩).val * sizes 2 +
-            (input ⟨.inl (.inr 6), rfl⟩).val, within⟩ (input ⟨.inr 1, rfl⟩)) := by
-  refine ⟨(by intro parameter; rfl), halt elementWidth,
+            (input ⟨.inl (.inr 6), rfl⟩).val, within⟩ (input ⟨.inr 1, rfl⟩)) ∧
+          Exit (domains element) outputTapes sizes output final ∧
+          (∀ name, readOnly name = false → ∃ value : (domains element name).Carrier sizes,
+            final name = encoded (domains element name) sizes value) := by
+  refine ⟨
     MvPolynomial.X 2 * (4 * MvPolynomial.X 0 + 8) +
       MvPolynomial.X 0 * (6 * MvPolynomial.X 0 + 14) + 12 * MvPolynomial.X 0 + 30 +
       StandardMatrixEntry.length * (6 * MvPolynomial.X 0 + MvPolynomial.C (4 * elementWidth + 11)) +
@@ -112,38 +123,11 @@ theorem contract (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
       · exact replacementEq.symm
       · exact outputEq.symm
   rw [initialEq] at trace
-  let addressNatural : Fin (2 ^ sizes 0) := ⟨value addressBits,
-    by simpa only [addressBitsLength] using Binary.value_lt_pow_length addressBits⟩
-  let columnsNatural : Fin (2 ^ sizes 0) := ⟨value (StandardMatrixAddress.columnBits sizes),
-    by simpa only [StandardMatrixAddress.columnBits_length] using
-      Binary.value_lt_pow_length (StandardMatrixAddress.columnBits sizes)⟩
-  let zeroNatural : Fin (2 ^ sizes 0) := ⟨value (List.replicate (sizes 0) false),
-    by simpa only [List.length_replicate] using Binary.value_lt_pow_length (List.replicate (sizes 0) false)⟩
   let updated := Function.update array ⟨value row * sizes 2 + value column, within⟩ replacement
-  let output : Outputs (domains element) readOnly sizes := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl name =>
-      cases name with
-      | inl parameter => contradiction
-      | inr name =>
-        change (if name = 4 ∨ name = 8 then EncodedDomain.booleans
-          else EncodedDomain.binaryNaturals 0).Carrier sizes
-        by_cases flag : name = 4 ∨ name = 8
-        · rw [ite_eq_left flag]
-          exact false
-        · rw [ite_eq_right flag]
-          exact if name = 5 then columnsNatural else if name = 7 then addressNatural else zeroNatural
-    | inr name =>
-      by_cases result : name = 2
-      · subst name
-        exact updated
-      · have inputTape : readOnly (.inr name) = true := by simpa [readOnly] using result
-        rw [inputTape] at writable
-        contradiction
+  let output : Outputs (domains element) outputTapes sizes := fun _ => updated
   have chosenWidth := fixedWidth sizes
   subst elementWidth
-  refine ⟨ticks, output, _, ?_, trace, ?_, ?_⟩
+  refine ⟨ticks, output, _, ?_, trace, ?_, ?_, ?_⟩
   · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X, MvPolynomial.eval_C]
     simpa only [Nat.add_assoc] using cost
   · refine ⟨?_, ?_⟩
@@ -152,6 +136,9 @@ theorem contract (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
       apply congrArg (fun index => Function.update array index replacement)
       apply Fin.ext
       simp only [rowValue, columnValue]
+  · intro name
+    cases name
+    rfl
   · intro name writable
     cases name with
     | inl name =>
@@ -159,20 +146,106 @@ theorem contract (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
       | inl parameter => contradiction
       | inr name =>
         fin_cases name
-        · exact (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm
+        · exact ⟨_, (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm⟩
         · contradiction
-        · exact (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm
-        · exact (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm
-        · exact (encoded_booleans sizes false).symm
-        · exact (encoded_binaryNaturals 0 sizes (StandardMatrixAddress.columnBits sizes)
-            (StandardMatrixAddress.columnBits_length sizes)).symm
+        · exact ⟨_, (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm⟩
+        · exact ⟨_, (encoded_binaryNaturals 0 sizes (List.replicate (sizes 0) false) List.length_replicate).symm⟩
+        · exact ⟨_, (encoded_booleans sizes false).symm⟩
+        · exact ⟨_, (encoded_binaryNaturals 0 sizes (StandardMatrixAddress.columnBits sizes)
+            (StandardMatrixAddress.columnBits_length sizes)).symm⟩
         · contradiction
-        · exact (encoded_binaryNaturals 0 sizes addressBits addressBitsLength).symm
-        · exact (encoded_booleans sizes false).symm
+        · exact ⟨_, (encoded_binaryNaturals 0 sizes addressBits addressBitsLength).symm⟩
+        · exact ⟨_, (encoded_booleans sizes false).symm⟩
     | inr name =>
       fin_cases name
       · contradiction
       · contradiction
-      · rfl
+      · exact ⟨updated, rfl⟩
+
+/-- Replacement preserves the source matrix and writes a separate result.
+Dimensions are unary size inputs and indices are separate binary arguments. -/
+theorem contract (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
+    (fixedWidth : ∀ sizes, element.width sizes = elementWidth) :
+    CallingConvention.Realizes (domains element) readOnly sizeTapes outputTapes (machine elementWidth)
+      (entry elementWidth) (exit elementWidth)
+      (fun sizes input => sizes 2 < 2 ^ sizes 0 ∧
+        (input ⟨.inl (.inr 1), rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
+        (input ⟨.inl (.inr 6), rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 2 ∧
+        sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
+      (fun sizes input output => ∃ within :
+        (input ⟨.inl (.inr 1), rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
+          (input ⟨.inl (.inr 6), rfl⟩ : Fin (2 ^ sizes 0)).val < MvPolynomial.eval sizes StandardMatrixEntry.length,
+        output () = Function.update (input ⟨.inr 0, rfl⟩)
+          ⟨(input ⟨.inl (.inr 1), rfl⟩).val * sizes 2 +
+            (input ⟨.inl (.inr 6), rfl⟩).val, within⟩ (input ⟨.inr 1, rfl⟩)) := by
+  obtain ⟨bound, execute⟩ := Internal.execute element elementWidth fixedWidth
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), halt elementWidth, bound, ?_⟩
+  intro sizes input initial valid represented headers
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical, _privateFrame⟩ :=
+    execute sizes input initial valid represented headers
+  exact ⟨ticks, output, final, cost, trace, correct, canonical⟩
+
+/-- Wire the concrete execution proof inside an internal controller.
+Applications use the public computation interface instead. -/
+theorem Internal.wired_runs {TargetTape : Type} [Fintype TargetTape]
+    (element : EncodedDomain.{0, 0} (Fin 3)) (elementWidth : ℕ)
+    (fixedWidth : ∀ sizes, element.width sizes = elementWidth)
+    (wiring : TapeName ↪ TargetTape) :
+    ∃ bound : MvPolynomial (Fin 3) ℕ,
+      ∀ sizes (input : Inputs (domains element) readOnly sizes)
+        (width : TargetTape → ℕ) (targetReadOnly : TargetTape → Bool)
+        (initial : Tapes (CallingConvention.Alphabet TargetTape)),
+        (∀ name, width (wiring name) = (domains element name).width sizes) →
+        (∀ name, targetReadOnly (wiring name) = true → readOnly name = true) →
+        sizes 2 < 2 ^ sizes 0 ∧
+        (input ⟨.inl (.inr 1), rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 1 ∧
+        (input ⟨.inl (.inr 6), rfl⟩ : Fin (2 ^ sizes 0)).val < sizes 2 ∧
+        sizes 1 * sizes 2 ≤ 2 ^ sizes 0 →
+        (∀ name (immutable : readOnly name = true),
+          initial (wiring name) = encoded (domains element name) sizes (input ⟨name, immutable⟩)) →
+        (∀ name, readOnly name = false → Region (width (wiring name)) 0 (initial (wiring name))) →
+        (∀ parameter, initial (wiring (sizeTapes parameter)) = unary (sizes parameter)) →
+        ∃ ticks, ∃ output : Outputs (domains element) outputTapes sizes, ∃ final,
+          ticks ≤ MvPolynomial.eval sizes bound ∧
+          Runs width targetReadOnly (MultiTape.wire wiring (machine elementWidth)) ticks
+            (entry elementWidth) (fun _ => 0) initial (exit elementWidth) (fun _ => 0) final ∧
+          (∃ within :
+        (input ⟨.inl (.inr 1), rfl⟩ : Fin (2 ^ sizes 0)).val * sizes 2 +
+          (input ⟨.inl (.inr 6), rfl⟩ : Fin (2 ^ sizes 0)).val < MvPolynomial.eval sizes StandardMatrixEntry.length,
+        output () = Function.update (input ⟨.inr 0, rfl⟩)
+          ⟨(input ⟨.inl (.inr 1), rfl⟩).val * sizes 2 +
+            (input ⟨.inl (.inr 6), rfl⟩).val, within⟩ (input ⟨.inr 1, rfl⟩)) ∧
+          (∀ name, final (wiring (outputTapes name)) =
+            encoded (domains element (outputTapes name)) sizes (output name)) ∧
+          (∀ name, readOnly name = false → ∃ value : (domains element name).Carrier sizes,
+            final (wiring name) = encoded (domains element name) sizes value) ∧
+          (∀ name, name ∉ Set.range wiring → final name = initial name) ∧
+          (∀ name, readOnly name = true → final (wiring name) = initial (wiring name)) := by
+  obtain ⟨bound, execute⟩ := Internal.execute element elementWidth fixedWidth
+  refine ⟨bound, ?_⟩
+  intro sizes input width targetReadOnly initial widths immutable valid inputs regions headers
+  let localInitial := fun name => initial (wiring name)
+  have represented : Entry (domains element) readOnly sizes input localInitial := by
+    refine ⟨inputs, ?_⟩
+    intro name writable
+    obtain ⟨contents, length, equal⟩ := (regions name writable).exists_buffer
+    exact ⟨contents, length.trans (widths name), equal⟩
+  obtain ⟨ticks, output, localFinal, cost, trace, correct, canonical, privateFrame⟩ :=
+    execute sizes input localInitial valid represented headers
+  have wired := trace.wire wiring width targetReadOnly widths immutable initial (fun _ => 0)
+  rw [show install wiring localInitial initial = initial from install_self _ _,
+    show install wiring (fun _ => (0 : ℤ)) (fun _ => (0 : ℤ)) = fun _ => 0 from install_self _ _] at wired
+  refine ⟨ticks, output, _, cost, wired, correct, ?_, ?_, ?_, ?_⟩
+  · intro name
+    rw [install_at]
+    exact canonical name
+  · intro name writable
+    obtain ⟨value, equal⟩ := privateFrame name writable
+    exact ⟨value, (install_at _ _ _ _).trans equal⟩
+  · intro name outside
+    exact install_outside _ _ _ _ outside
+  · intro name readonly
+    rw [install_at]
+    exact trace.readOnly_tape name readonly
 
 end Polytime2.StandardMatrixReplace

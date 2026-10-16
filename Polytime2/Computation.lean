@@ -42,6 +42,16 @@ abbrev Arguments (computation : Computation.{carrierLevel} Parameter InputName)
     (sizes : Parameter → ℕ) :=
   (name : InputName) → (computation.inputDomains name).Carrier sizes
 
+/-- A unary mathematical map, total on its admissible inputs. -/
+def unaryMap (inputDomain outputDomain : EncodedDomain.{0, carrierLevel} Parameter)
+    (precondition : ∀ sizes, inputDomain.Carrier sizes → Prop)
+    (compute : ∀ sizes, {value : inputDomain.Carrier sizes // precondition sizes value} →
+      outputDomain.Carrier sizes) : Computation Parameter Unit where
+  inputDomains _ := inputDomain
+  outputDomain := outputDomain
+  precondition sizes arguments := precondition sizes (arguments ())
+  compute sizes arguments := compute sizes ⟨arguments.val (), arguments.property⟩
+
 /-- A mathematical caller may restrict the admissible inputs without changing
 the computation on those inputs. -/
 def withPrecondition (computation : Computation.{carrierLevel} Parameter InputName)
@@ -53,6 +63,41 @@ def withPrecondition (computation : Computation.{carrierLevel} Parameter InputNa
   precondition := precondition
   compute sizes arguments := computation.compute sizes
     ⟨arguments.val, implies sizes arguments.val arguments.property⟩
+
+/-- Use selected arguments from a larger context, leaving the others unused. -/
+def withArguments {ContextName : Type} [Fintype ContextName]
+    (computation : Computation.{carrierLevel} Parameter InputName)
+    (contextDomains : ContextName → EncodedDomain.{0, carrierLevel} Parameter)
+    (selection : InputName ↪ ContextName)
+    (domainEqual : ∀ name, contextDomains (selection name) = computation.inputDomains name) :
+    Computation Parameter ContextName where
+  inputDomains := contextDomains
+  outputDomain := computation.outputDomain
+  precondition sizes arguments := computation.precondition sizes
+    (fun name => domainEqual name ▸ arguments (selection name))
+  compute sizes arguments := computation.compute sizes
+    ⟨(fun name => domainEqual name ▸ arguments.val (selection name)), arguments.property⟩
+
+/-- Bind a result while retaining all original arguments for the continuation.
+Nested bindings describe a DAG of mathematical computations. -/
+def letThen (first : Computation.{carrierLevel} Parameter InputName)
+    (continuation : Computation.{carrierLevel} Parameter (InputName ⊕ Unit))
+    (inputEqual : ∀ name, continuation.inputDomains (.inl name) = first.inputDomains name)
+    (resultEqual : continuation.inputDomains (.inr ()) = first.outputDomain)
+    (compatible : ∀ sizes (arguments : first.Arguments sizes)
+      (valid : first.precondition sizes arguments),
+      continuation.precondition sizes (fun name => match name with
+        | .inl original => (inputEqual original).symm ▸ arguments original
+        | .inr _ => resultEqual.symm ▸ first.compute sizes ⟨arguments, valid⟩)) :
+    Computation Parameter InputName where
+  inputDomains := first.inputDomains
+  outputDomain := continuation.outputDomain
+  precondition := first.precondition
+  compute sizes arguments := continuation.compute sizes
+    ⟨(fun name => match name with
+      | .inl original => (inputEqual original).symm ▸ arguments.val original
+      | .inr _ => resultEqual.symm ▸ first.compute sizes arguments),
+      compatible sizes arguments.val arguments.property⟩
 
 /-- Feed one computation's result to a single-argument computation. The
 compatibility proof is mathematical and does not refer to either machine. -/

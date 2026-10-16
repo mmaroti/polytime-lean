@@ -673,11 +673,6 @@ abbrev Inputs (domains : TapeName → EncodedDomain.{parameterLevel, carrierLeve
     (readOnly : TapeName → Bool) (assignment : Parameter → ℕ) :=
   (name : {name // readOnly name = true}) → (domains name.val).Carrier assignment
 
-/-- Writable tapes include public results and private scratch values. -/
-abbrev Outputs (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (readOnly : TapeName → Bool) (assignment : Parameter → ℕ) :=
-  (name : {name // readOnly name = false}) → (domains name.val).Carrier assignment
-
 /-- Inputs are canonical; output and scratch regions initially contain anything. -/
 def Entry (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (readOnly : TapeName → Bool) (assignment : Parameter → ℕ)
@@ -686,23 +681,34 @@ def Entry (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} P
     ∀ name, readOnly name = false → ∃ contents : List Symbol,
       contents.length = (domains name).width assignment ∧ tapes name = buffer contents
 
-/-- All writable regions contain valid canonical values on return. -/
-def Exit (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (readOnly : TapeName → Bool) (assignment : Parameter → ℕ)
-    (values : Outputs domains readOnly assignment) (tapes : Tapes (Alphabet TapeName)) : Prop :=
-  ∀ name (writable : readOnly name = false),
-    tapes name = encoded (domains name) assignment (values ⟨name, writable⟩)
+-- outputNameLevel: names of public results, distinct from private writable storage.
+universe outputNameLevel
+variable {OutputName : Type outputNameLevel}
 
-/-- A finite routine obeys the fixed-region convention at every transition.
-Private scratch results may be hidden existentially by the mathematical contract.
-The size tapes are separate, immutable unary inputs. -/
+/-- Only declared public result tapes contribute mathematical output values. -/
+abbrev Outputs (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (outputTapes : OutputName ↪ TapeName) (assignment : Parameter → ℕ) :=
+  (name : OutputName) → (domains (outputTapes name)).Carrier assignment
+
+/-- Public results are canonical on return. Private scratch is not inspected. -/
+def Exit (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (outputTapes : OutputName ↪ TapeName) (assignment : Parameter → ℕ)
+    (values : Outputs domains outputTapes assignment) (tapes : Tapes (Alphabet TapeName)) : Prop :=
+  ∀ name, tapes (outputTapes name) = encoded (domains (outputTapes name)) assignment (values name)
+
+/-- Polynomial execution with canonical public outputs and arbitrary private
+scratch contents. Validity is required only when exposed as an output or consumed
+as a mathematical input, including a subroutine argument. Scratch has NO independent
+validity obligation, even on return; its fixed region and restored head remain required. -/
 def Realizes [Fintype TapeName] [Fintype State]
     (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (readOnly : TapeName → Bool) (sizeTapes : Parameter ↪ TapeName)
+    (outputTapes : OutputName ↪ TapeName)
     (machine : Machine (Alphabet TapeName) State) (entry exit : State)
     (hypothesis : ∀ assignment, Inputs domains readOnly assignment → Prop)
-    (contract : ∀ assignment, Inputs domains readOnly assignment → Outputs domains readOnly assignment → Prop) : Prop :=
+    (contract : ∀ assignment, Inputs domains readOnly assignment → Outputs domains outputTapes assignment → Prop) : Prop :=
   (∀ parameter, readOnly (sizeTapes parameter) = true) ∧
+    (∀ name, readOnly (outputTapes name) = false) ∧
     (∀ symbols, machine exit symbols = none) ∧
       ∃ bound : MvPolynomial Parameter ℕ,
         ∀ assignment input initial, hypothesis assignment input → Entry domains readOnly assignment input initial →
@@ -710,26 +716,42 @@ def Realizes [Fintype TapeName] [Fintype State]
           ∃ ticks output final, ticks ≤ MvPolynomial.eval assignment bound ∧
             Runs (fun name => (domains name).width assignment) readOnly machine ticks
               entry (fun _ => 0) initial exit (fun _ => 0) final ∧
-            contract assignment input output ∧ Exit domains readOnly assignment output final
+            contract assignment input output ∧ Exit domains outputTapes assignment output final
 
-/-- Apply a mathematical consequence to a routine's output contract without
-changing its machine, tape convention, or polynomial execution certificate. -/
-theorem Realizes.postcondition [Fintype TapeName] [Fintype State]
+/-- Derive an output contract using the mathematical input precondition. -/
+theorem Realizes.postconditionWithHypothesis [Fintype TapeName] [Fintype State]
     {domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter}
     {readOnly : TapeName → Bool} {sizeTapes : Parameter ↪ TapeName}
+    {outputTapes : OutputName ↪ TapeName}
     {machine : Machine (Alphabet TapeName) State} {entry exit : State}
     {hypothesis : ∀ assignment, Inputs domains readOnly assignment → Prop}
     {sourceContract targetContract : ∀ assignment, Inputs domains readOnly assignment →
-      Outputs domains readOnly assignment → Prop}
-    (realizes : Realizes domains readOnly sizeTapes machine entry exit hypothesis sourceContract)
-    (implies : ∀ assignment input output, sourceContract assignment input output → targetContract assignment input output) :
-    Realizes domains readOnly sizeTapes machine entry exit hypothesis targetContract := by
-  obtain ⟨sizeReadOnly, halts, bound, execute⟩ := realizes
-  refine ⟨sizeReadOnly, halts, bound, ?_⟩
+      Outputs domains outputTapes assignment → Prop}
+    (realizes : Realizes domains readOnly sizeTapes outputTapes machine entry exit hypothesis sourceContract)
+    (implies : ∀ assignment input output, hypothesis assignment input →
+      sourceContract assignment input output → targetContract assignment input output) :
+    Realizes domains readOnly sizeTapes outputTapes machine entry exit hypothesis targetContract := by
+  obtain ⟨sizeReadOnly, outputsWritable, halts, bound, execute⟩ := realizes
+  refine ⟨sizeReadOnly, outputsWritable, halts, bound, ?_⟩
   intro assignment input initial valid represented headers
   obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
     execute assignment input initial valid represented headers
-  exact ⟨ticks, output, final, cost, trace, implies assignment input output correct, canonical⟩
+  exact ⟨ticks, output, final, cost, trace, implies assignment input output valid correct, canonical⟩
+
+/-- Apply a mathematical consequence without changing execution evidence. -/
+theorem Realizes.postcondition [Fintype TapeName] [Fintype State]
+    {domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter}
+    {readOnly : TapeName → Bool} {sizeTapes : Parameter ↪ TapeName}
+    {outputTapes : OutputName ↪ TapeName}
+    {machine : Machine (Alphabet TapeName) State} {entry exit : State}
+    {hypothesis : ∀ assignment, Inputs domains readOnly assignment → Prop}
+    {sourceContract targetContract : ∀ assignment, Inputs domains readOnly assignment →
+      Outputs domains outputTapes assignment → Prop}
+    (realizes : Realizes domains readOnly sizeTapes outputTapes machine entry exit hypothesis sourceContract)
+    (implies : ∀ assignment input output, sourceContract assignment input output → targetContract assignment input output) :
+    Realizes domains readOnly sizeTapes outputTapes machine entry exit hypothesis targetContract :=
+  realizes.postconditionWithHypothesis (fun assignment input output _ correct =>
+    implies assignment input output correct)
 
 /-- Reindex mathematical tape carriers without changing the encoded machine
 layout. This lets a routine proved on a flat array serve a structured domain. -/
@@ -743,28 +765,29 @@ theorem realizes_reindex [Fintype TapeName] [Fintype State]
       encoded (targetDomains name) assignment value =
         encoded (sourceDomains name) assignment (equivalence name assignment value))
     (readOnly : TapeName → Bool) (sizeTapes : Parameter ↪ TapeName)
+    (outputTapes : OutputName ↪ TapeName)
     (machine : Machine (Alphabet TapeName) State) (entry exit : State)
     (targetHypothesis : ∀ assignment, Inputs targetDomains readOnly assignment → Prop)
     (sourceHypothesis : ∀ assignment, Inputs sourceDomains readOnly assignment → Prop)
     (targetContract : ∀ assignment, Inputs targetDomains readOnly assignment →
-      Outputs targetDomains readOnly assignment → Prop)
+      Outputs targetDomains outputTapes assignment → Prop)
     (sourceContract : ∀ assignment, Inputs sourceDomains readOnly assignment →
-      Outputs sourceDomains readOnly assignment → Prop)
+      Outputs sourceDomains outputTapes assignment → Prop)
     (hypothesisMaps : ∀ assignment (input : Inputs targetDomains readOnly assignment),
       targetHypothesis assignment input →
         sourceHypothesis assignment (fun name => equivalence name.val assignment (input name)))
     (contractMaps : ∀ assignment (input : Inputs targetDomains readOnly assignment)
-      (output : Outputs sourceDomains readOnly assignment),
+      (output : Outputs sourceDomains outputTapes assignment),
       sourceContract assignment
         (fun name => equivalence name.val assignment (input name)) output →
       targetContract assignment input
-        (fun name => (equivalence name.val assignment).symm (output name)))
-    (sourceRealizes : Realizes sourceDomains readOnly sizeTapes machine entry exit
+        (fun name => (equivalence (outputTapes name) assignment).symm (output name)))
+    (sourceRealizes : Realizes sourceDomains readOnly sizeTapes outputTapes machine entry exit
       sourceHypothesis sourceContract) :
-    Realizes targetDomains readOnly sizeTapes machine entry exit
+    Realizes targetDomains readOnly sizeTapes outputTapes machine entry exit
       targetHypothesis targetContract := by
-  obtain ⟨sizeInputsReadOnly, exits, bound, sourceRuns⟩ := sourceRealizes
-  refine ⟨sizeInputsReadOnly, exits, bound, ?_⟩
+  obtain ⟨sizeInputsReadOnly, outputsWritable, exits, bound, sourceRuns⟩ := sourceRealizes
+  refine ⟨sizeInputsReadOnly, outputsWritable, exits, bound, ?_⟩
   intro assignment input initial validInput targetEntry sizeInput
   let sourceInput : Inputs sourceDomains readOnly assignment :=
     fun name => equivalence name.val assignment (input name)
@@ -780,8 +803,8 @@ theorem realizes_reindex [Fintype TapeName] [Fintype State]
   obtain ⟨ticks, sourceOutput, final, cost, trace, correctness, sourceExit⟩ :=
     sourceRuns assignment sourceInput initial (hypothesisMaps assignment input validInput)
       sourceEntry sizeInput
-  let targetOutput : Outputs targetDomains readOnly assignment :=
-    fun name => (equivalence name.val assignment).symm (sourceOutput name)
+  let targetOutput : Outputs targetDomains outputTapes assignment :=
+    fun name => (equivalence (outputTapes name) assignment).symm (sourceOutput name)
   have targetWidths : (fun name => (targetDomains name).width assignment) =
       fun name => (sourceDomains name).width assignment := by
     funext name
@@ -792,12 +815,11 @@ theorem realizes_reindex [Fintype TapeName] [Fintype State]
     exact trace
   refine ⟨ticks, targetOutput, final, cost, targetTrace,
     contractMaps assignment input sourceOutput correctness, ?_⟩
-  intro name writable
-  rw [sourceExit name writable]
-  have outputEqual : equivalence name assignment (targetOutput ⟨name, writable⟩) =
-      sourceOutput ⟨name, writable⟩ := by
-    simp [targetOutput]
-  have encodedEqual := encodingEqual name assignment (targetOutput ⟨name, writable⟩)
+  intro name
+  rw [sourceExit name]
+  have outputEqual : equivalence (outputTapes name) assignment (targetOutput name) =
+      sourceOutput name := by simp [targetOutput]
+  have encodedEqual := encodingEqual (outputTapes name) assignment (targetOutput name)
   rw [outputEqual] at encodedEqual
   exact encodedEqual.symm
 

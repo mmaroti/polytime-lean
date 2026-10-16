@@ -15,13 +15,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardSizeReadContract
+import Polytime2.Computations.Size
 
 /-! # Unary sizes read through arbitrary fixed-width output regions -/
 
 namespace Polytime2.Examples.SizeRead
 
 open CallingConvention StandardSizeRead
+
+example : Computation.readSize.Realizable := Computation.readSize_realizable
+
+-- The public computation exposes only the mathematical count.
+example : (Computation.readSize.compute (fun name => if name then 2 else 3)
+    ⟨(fun name => nomatch name), by change 3 < 2 ^ 2; decide⟩).val = 3 := rfl
 
 -- Read size three into a two-bit counter, overwriting arbitrary old counter contents.
 example : ∃ scratch : List Bool, scratch.length = 2 ∧

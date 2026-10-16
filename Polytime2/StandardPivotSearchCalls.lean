@@ -36,37 +36,29 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
         final rowLimitTape = encoded (EncodedDomain.binaryNaturals 0) sizes ⟨sizes 1, fits⟩ ∧
         (∃ value : Fin (2 ^ sizes 0), final (counterTape 2) = encoded (EncodedDomain.binaryNaturals 0) sizes value) ∧
         (∀ name, name ≠ rowLimitTape → name ≠ counterTape 2 → final name = initial name) := by
-  obtain ⟨bound, execute⟩ := StandardSizeRead.contract.wired_runs limitWiring
-  let parameter : Bool → Fin 3 := fun name => if name then 0 else 1
-  refine ⟨MvPolynomial.rename parameter bound, ?_⟩
+  refine ⟨4 * MvPolynomial.X 0 + MvPolynomial.X 1 * (4 * MvPolynomial.X 0 + 8) + 11, ?_⟩
   intro sizes initial fits headers limitRegion scratchRegion
-  let localSizes : Bool → ℕ := fun name => sizes (parameter name)
-  let input : Inputs StandardSizeRead.domains StandardSizeRead.argumentReadOnly localSizes := fun name => by
-    rcases name with ⟨name, readonly⟩
-    cases name with
-    | inl name => exact PUnit.unit
-    | inr name => contradiction
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute localSizes input (fun name => (domains scalar name).width sizes) readOnly initial
+  let localSizes : Bool → ℕ := fun name => if name then sizes 0 else sizes 1
+  obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
+    StandardSizeRead.Internal.runs_wired limitWiring localSizes
+      (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; fin_cases name <;> rfl)
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      fits
-      (by
-        intro name readonly
-        cases name with
-        | inl name =>
-          change initial (limitWiring (.inl name)) = encoded (EncodedDomain.unary name) localSizes PUnit.unit
-          rw [encoded_unary]
-          cases name <;> exact headers _
-        | inr name => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | exact limitRegion | exact scratchRegion)
-      (by intro name; cases name <;> exact headers _)
-  have valueEq : output ⟨.inr false, rfl⟩ = (⟨sizes 1, fits⟩ : Fin (2 ^ sizes 0)) := Fin.ext correct
-  refine ⟨ticks, final, ?_, trace, ?_, ⟨output ⟨.inr true, rfl⟩, canonical (.inr true) rfl⟩, ?_⟩
-  · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
-  · have result := canonical (.inr false) rfl
-    rw [valueEq] at result
-    exact result
+      (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
+  let resultBits := StandardSizeRead.advanceBits (sizes 1) (List.replicate (sizes 0) false)
+  have resultLength : resultBits.length = sizes 0 := by simp [resultBits]
+  have resultValue : Binary.value resultBits = sizes 1 := by
+    simp [resultBits, StandardSizeRead.advanceBits_value, Nat.mod_eq_of_lt fits]
+  have resultEncoding := encoded_binaryNaturals (0 : Fin 3) sizes resultBits resultLength
+  have naturalEq : (⟨Binary.value resultBits, by
+      simpa only [resultLength] using Binary.value_lt_pow_length resultBits⟩ : Fin (2 ^ sizes 0)) =
+      ⟨sizes 1, fits⟩ := Fin.ext resultValue
+  rw [naturalEq] at resultEncoding
+  let scratchValue : Fin (2 ^ sizes 0) := ⟨Binary.value scratch, by
+    simpa only [show scratch.length = sizes 0 from scratchLength] using Binary.value_lt_pow_length scratch⟩
+  refine ⟨_, final, ?_, trace, resultEq.trans resultEncoding.symm,
+    ⟨scratchValue, scratchEq.trans (encoded_binaryNaturals 0 sizes scratch scratchLength).symm⟩, ?_⟩
+  · simp [localSizes]
   · intro name notLimit notScratch
     apply preserved_of_wiring limitWiring StandardSizeRead.argumentReadOnly initial final outside immutable
     intro localName equal
@@ -123,10 +115,10 @@ theorem compare_runs (scalar : EncodedDomain.{0, 0} Empty) :
         · contradiction)
       (by intro name writable; fin_cases name <;> first | contradiction | exact differenceRegion | exact foundRegion)
       (by intro parameter; cases parameter; exact header)
-  refine ⟨ticks, final, ?_, trace, ?_, ⟨output ⟨.inr 2, rfl⟩, canonical (.inr 2) rfl⟩, ?_⟩
+  refine ⟨ticks, final, ?_, trace, ?_, ⟨output false, canonical false⟩, ?_⟩
   · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
-  · have flag := canonical (.inr 3) rfl
-    change output ⟨.inr 3, rfl⟩ = decide (candidate.val < limit.val) at correct
+  · have flag := canonical true
+    change output true = decide (candidate.val < limit.val) at correct
     rw [correct] at flag
     exact flag
   · intro name notDifference notFound
@@ -158,7 +150,6 @@ theorem zeroTest_runs (scalar : EncodedDomain.{0, 0} Empty)
   obtain ⟨oldUnit, unitLength, unitEq⟩ := unitRegion.exists_buffer
   have empty : oldUnit = [] := List.eq_nil_of_length_eq_zero unitLength
   subst oldUnit
-  have initialUnit : initial unitTape = encoded StandardFinitePredicate.unitDomain Empty.elim (0 : Fin 1) := unitEq
   let input : Inputs (StandardFinitePredicate.domains scalar) StandardFinitePredicate.readOnly Empty.elim := fun name => by
     rcases name with ⟨name, readonly⟩
     have argument : name = 0 := of_decide_eq_true readonly
@@ -172,15 +163,14 @@ theorem zeroTest_runs (scalar : EncodedDomain.{0, 0} Empty)
       (by intro name readonly; fin_cases name <;> first | exact scalarEq | contradiction)
       (by intro name writable; fin_cases name <;> first | contradiction | exact unitRegion | exact continueRegion)
       (by intro parameter; cases parameter)
-  have unitOutput : output ⟨1, rfl⟩ = (0 : Fin 1) := by
-    change (_ : Fin 1) = _
-    exact Subsingleton.elim _ _
   have unitFinal : final unitTape = initial unitTape := by
-    have represented := canonical 1 rfl
-    exact (represented.trans (congrArg (encoded StandardFinitePredicate.unitDomain Empty.elim) unitOutput)).trans initialUnit.symm
+    obtain ⟨contents, length, finalEq⟩ := (trace.region unitTape unitRegion).exists_buffer
+    have empty : contents = [] := List.eq_nil_of_length_eq_zero length
+    subst contents
+    exact finalEq.trans unitEq.symm
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
-  · have result := canonical 2 rfl
-    change output ⟨2, rfl⟩ = isZero Empty.elim value at correct
+  · have result := canonical ()
+    change output () = isZero Empty.elim value at correct
     exact result.trans (congrArg (encoded EncodedDomain.booleans Empty.elim) correct)
   · intro name notContinue
     by_cases isUnit : name = unitTape
@@ -215,12 +205,12 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
         (∀ name, StandardMatrixEntry.readOnly name = false → ∃ value : (domains scalar (.inl name)).Carrier sizes,
           final (.inl name) = encoded (domains scalar (.inl name)) sizes value) ∧
         (∀ name : Fin 7, final (.inr name) = initial (.inr name)) := by
-  obtain ⟨bound, execute⟩ := (StandardMatrixEntry.contract scalar.constant (scalar.width Empty.elim) (fun _ => rfl)).wired_runs
+  obtain ⟨bound, execute⟩ := StandardMatrixEntry.Internal.wired_runs scalar.constant (scalar.width Empty.elim) (fun _ => rfl)
     (Function.Embedding.inl (α := StandardMatrixEntry.TapeName) (β := Fin 7))
   refine ⟨bound, ?_⟩
   intro sizes initial candidate column array within columnsFit candidateValid columnValid capacity candidateEq columnEq arrayEq headers regions
   let input := StandardMatrixEntry.inputValues scalar.constant sizes candidate column array
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical, privateFrame, outside, immutable⟩ :=
     execute sizes input (fun name => (domains scalar name).width sizes) readOnly initial
       (fun _ => rfl)
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
@@ -247,13 +237,13 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
           | true => contradiction)
       (by intro name writable; exact regions (.inl name)) headers
   obtain ⟨otherWithin, valueEq⟩ := correct
-  change output ⟨.inr true, rfl⟩ = array ⟨candidate.val * sizes 2 + column.val, otherWithin⟩ at valueEq
+  change output () = array ⟨candidate.val * sizes 2 + column.val, otherWithin⟩ at valueEq
   refine ⟨ticks, final, cost, trace, ?_, (immutable (.inl (.inr 1)) rfl).trans candidateEq, ?_, ?_⟩
-  · have result := canonical (.inr true) rfl
+  · have result := canonical ()
     rw [valueEq] at result
     exact result
   · intro name writable
-    exact ⟨output ⟨name, writable⟩, canonical name writable⟩
+    exact privateFrame name writable
   · intro name
     apply outside (.inr name)
     rintro ⟨localName, equal⟩

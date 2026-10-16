@@ -205,12 +205,14 @@ def dataTapes : Fin 9 ↪ Sum Bool (Fin 9) :=
 def sizeTapes : Bool ↪ Sum Bool (Fin 9) :=
   ⟨Sum.inl, by intro first second equal; cases equal; rfl⟩
 
+def outputTapes : Unit ↪ Sum Bool (Fin 9) := oneTape (.inr 0)
+
 noncomputable def algorithm : Machine (CallingConvention.Alphabet (Sum Bool (Fin 9))) State :=
   MultiTape.wire dataTapes machine
 
-/-- The ordinary output is the exact mathematical expression. All private
-intermediate and scratch tapes also return valid encoded values. -/
-theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes algorithm entry exit
+/-- The sole public output is the exact mathematical expression. Private
+intermediate and scratch contents have no validity obligation on return. -/
+theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes algorithm entry exit
     (fun assignment input =>
       (input ⟨.inr 6, rfl⟩ : Fin (2 ^ assignment false)).val +
           (input ⟨.inr 7, rfl⟩ : Fin (2 ^ assignment false)).val < 2 ^ assignment false ∧
@@ -218,11 +220,11 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
           (input ⟨.inr 7, rfl⟩ : Fin (2 ^ assignment false)).val) *
         (input ⟨.inr 5, rfl⟩ : Fin (2 ^ assignment true)).val < 2 ^ assignment false)
     (fun assignment input output =>
-      (output ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment false)).val =
+      (output () : Fin (2 ^ assignment false)).val =
         ((input ⟨.inr 6, rfl⟩ : Fin (2 ^ assignment false)).val +
           (input ⟨.inr 7, rfl⟩ : Fin (2 ^ assignment false)).val) *
         (input ⟨.inr 5, rfl⟩ : Fin (2 ^ assignment true)).val) := by
-  refine ⟨(by intro parameter; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
     machine, exit, MultiTape.sequence, second, StandardBinaryMultiplication.machine,
     StandardBinaryMultiplication.exit, StandardBinaryMultiplication.cleanup,
     StandardBinaryMultiplication.cleanupExit, StandardTapeCommands.setBoolean,
@@ -303,31 +305,9 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   let productBits := product left right multiplier oldShifted oldNext multiplyFlag
   have productBitsLength : productBits.length = assignment false :=
     (product_length left right multiplier oldShifted oldNext multiplyFlag sameLength shiftedFits nextFits).trans leftLength
-  have sumBitsLength : (sum left right).length = assignment false :=
-    (sum_length left right sameLength).trans leftLength
   let productValue : Fin (2 ^ assignment false) := ⟨value productBits,
     by simpa only [productBitsLength] using Binary.value_lt_pow_length productBits⟩
-  let sumValue : Fin (2 ^ assignment false) := ⟨value (sum left right),
-    by simpa only [sumBitsLength] using Binary.value_lt_pow_length (sum left right)⟩
-  let zeroValue : Fin (2 ^ assignment false) := ⟨value (List.replicate (assignment false) false),
-    by simpa only [List.length_replicate] using Binary.value_lt_pow_length (List.replicate (assignment false) false)⟩
-  let output : Outputs domains argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases flag : name = 4 ∨ name = 8
-      · change (if name = 4 ∨ name = 8 then EncodedDomain.booleans
-          else EncodedDomain.binaryNaturals (decide (name = 5))).Carrier assignment
-        rw [ite_eq_left flag]
-        exact false
-      · by_cases source : name = 5
-        · subst name; contradiction
-        · change (if name = 4 ∨ name = 8 then EncodedDomain.booleans
-            else EncodedDomain.binaryNaturals (decide (name = 5))).Carrier assignment
-          rw [ite_eq_right flag]
-          simp only [source, decide_false]
-          exact if name = 0 then productValue else if name = 1 then sumValue else zeroValue
+  let output : Outputs domains outputTapes assignment := fun _ => productValue
   refine ⟨multiplier.length * (6 * left.length + 14) + 8 * left.length + 17, output,
     install dataTapes (frame left right multiplier (word productBits) (word (sum left right))
       (word (List.replicate left.length false)) (word (List.replicate left.length false)) (data false) (data false)) initial,
@@ -337,29 +317,10 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   · change value productBits = _
     simpa only [leftValue, rightValue, multiplierValue] using product_value left right multiplier
       oldShifted oldNext multiplyFlag sameLength shiftedFits nextFits sumCapacity productCapacity
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      change install dataTapes _ initial (dataTapes name) = _
-      rw [install_at]
-      fin_cases name
-      · exact (encoded_binaryNaturals false assignment productBits productBitsLength).symm
-      · exact (encoded_binaryNaturals false assignment (sum left right) sumBitsLength).symm
-      · change buffer (word (List.replicate left.length false)) =
-          encoded (EncodedDomain.binaryNaturals false) assignment zeroValue
-        rw [leftLength]
-        exact (encoded_binaryNaturals false assignment
-          (List.replicate (assignment false) false) List.length_replicate).symm
-      · change buffer (word (List.replicate left.length false)) =
-          encoded (EncodedDomain.binaryNaturals false) assignment zeroValue
-        rw [leftLength]
-        exact (encoded_binaryNaturals false assignment
-          (List.replicate (assignment false) false) List.length_replicate).symm
-      · exact (encoded_booleans assignment false).symm
-      · contradiction
-      · contradiction
-      · contradiction
-      · exact (encoded_booleans assignment false).symm
+  · intro name
+    cases name
+    change install dataTapes _ initial (dataTapes 0) = _
+    rw [install_at]
+    exact (encoded_binaryNaturals false assignment productBits productBitsLength).symm
 
 end Polytime2.AddMultiply

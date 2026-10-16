@@ -111,7 +111,7 @@ theorem realizes_input {Parameter : Type parameterLevel} [Fintype Parameter]
     {source : Machine Alphabet State} {sourceEntry sourceExit : State}
     {precondition : (Parameter → ℕ) → Tapes Alphabet → Prop}
     {postcondition : (Parameter → ℕ) → Tapes Alphabet → Tapes Alphabet → Prop}
-    (certificate : Realizes source sourceEntry sourceExit precondition postcondition)
+    (certificate : MultiTape.Internal.Realizes source sourceEntry sourceExit precondition postcondition)
     (inputCapacity : MvPolynomial Parameter ℕ)
     (inputFits : ∀ assignment initial, precondition assignment initial →
       ∀ name, Fits (MvPolynomial.eval assignment inputCapacity) (initial name)) :

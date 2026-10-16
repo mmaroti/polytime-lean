@@ -39,22 +39,17 @@ private theorem first_outside (name : Fin 15)
     fin_cases localName <;> rcases outside with rfl | rfl | rfl <;>
       simp [wiring, data] at equal
 
-private theorem encoded_buffer (domain : EncodedDomain Parameter)
-    (assignment : Parameter → ℕ) (value : domain.Carrier assignment) :
-    ∃ contents : List Symbol, contents.length = domain.width assignment ∧
-      encoded domain assignment value = buffer contents := by
-  exact ⟨word (List.ofFn (fun index : Fin (domain.width assignment) =>
-    (domain.encode assignment value).getLsbD index.val)), by simp [word], rfl⟩
+def outputTapes : Unit ↪ Sum Parameter (Fin 15) := oneTape (.inr 5)
 
 set_option maxHeartbeats 1200000 in
 /-- Both active coordinates are transformed in order. Inputs remain unchanged;
-all private scratch is canonical on return, even from blank initial regions. -/
+private scratch needs only its fixed region, even from blank initial contents. -/
 theorem contract (elementDomain : EncodedDomain Empty)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
     (first second : ∀ assignment,
       elementDomain.Carrier assignment → elementDomain.Carrier assignment) :
     CallingConvention.Realizes (domains elementDomain indexCapacity length)
-      argumentReadOnly sizeTapes (algorithm elementDomain first second)
+      argumentReadOnly sizeTapes outputTapes (algorithm elementDomain first second)
       (entry (elementDomain.width Empty.elim)) (exit (elementDomain.width Empty.elim))
       (fun assignment input =>
         (input ⟨.inr 2, rfl⟩).val ≤ MvPolynomial.eval assignment length ∧
@@ -63,17 +58,17 @@ theorem contract (elementDomain : EncodedDomain Empty)
       (fun assignment input output =>
         ∃ firstWithin : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
         ∃ secondWithin : (input ⟨.inr 1, rfl⟩).val < MvPolynomial.eval assignment length,
-          output ⟨.inr 5, rfl⟩ = compute (first Empty.elim) (second Empty.elim)
+          output () = compute (first Empty.elim) (second Empty.elim)
             (input ⟨.inr 3, rfl⟩)
             ⟨(input ⟨.inr 0, rfl⟩).val, firstWithin⟩
             ⟨(input ⟨.inr 1, rfl⟩).val, secondWithin⟩) := by
   classical
   let localDomains := IndexedMap.domains unitDomain elementDomain indexCapacity length
-  obtain ⟨_, firstHalt, firstBound, firstRun⟩ :=
+  obtain ⟨_, _, firstHalt, firstBound, firstRun⟩ :=
     IndexedMap.contract unitDomain elementDomain indexCapacity length (fun assignment _ => first assignment)
-  obtain ⟨_, secondHalt, secondBound, secondRun⟩ :=
+  obtain ⟨_, _, secondHalt, secondBound, secondRun⟩ :=
     IndexedMap.contract unitDomain elementDomain indexCapacity length (fun assignment _ => second assignment)
-  refine ⟨(by intro parameter; rfl), halt elementDomain first second, firstBound + secondBound + 1, ?_⟩
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), halt elementDomain first second, firstBound + secondBound + 1, ?_⟩
   intro assignment input initial valid represented sizes
   have firstWithin := lt_of_lt_of_le valid.2.1 valid.1
   have secondWithin := lt_of_lt_of_le valid.2.2 valid.1
@@ -131,17 +126,15 @@ theorem contract (elementDomain : EncodedDomain Empty)
       middle (wiring false name) = firstInitial name := by
     rw [show middle (wiring false name) = firstFinal name from install_at _ _ _ _]
     exact firstTrace.readOnly_tape name immutable
-  have firstReturned (name : Sum Parameter (Fin 12))
-      (writable : IndexedMap.argumentReadOnly name = false) :
-      middle (wiring false name) = encoded (localDomains name) assignment (firstOutput ⟨name, writable⟩) := by
-    rw [show middle (wiring false name) = firstFinal name from install_at _ _ _ _]
-    exact firstExit name writable
-  have firstBuffer (name : Sum Parameter (Fin 12))
-      (writable : IndexedMap.argumentReadOnly name = false) :
+  have firstReturned : middle (wiring false (.inr 3)) =
+      encoded (localDomains (.inr 3)) assignment (firstOutput ()) := by
+    rw [show middle (wiring false (.inr 3)) = firstFinal (.inr 3) from install_at _ _ _ _]
+    exact firstExit ()
+  have firstBuffer (name : Sum Parameter (Fin 12)) :
       ∃ contents : List Symbol, contents.length = (localDomains name).width assignment ∧
         middle (wiring false name) = buffer contents := by
-    obtain ⟨contents, width, equal⟩ := encoded_buffer (localDomains name) assignment (firstOutput ⟨name, writable⟩)
-    exact ⟨contents, width, (firstReturned name writable).trans equal⟩
+    rw [show middle (wiring false name) = firstFinal name from install_at _ _ _ _]
+    exact (firstTrace.region name (firstEntry.region name)).exists_buffer
   have outsideFirst (name : Fin 15) (outside : name = 1 ∨ name = 2 ∨ name = 5) :
       middle (.inr name) = initial (.inr name) := install_outside _ _ _ _ (first_outside name outside)
   let secondInput : Inputs localDomains IndexedMap.argumentReadOnly assignment := fun name => by
@@ -152,7 +145,7 @@ theorem contract (elementDomain : EncodedDomain Empty)
       by_cases isIndex : name = 0
       · subst name; exact input ⟨.inr 1, rfl⟩
       · by_cases isArray : name = 1
-        · subst name; exact firstOutput ⟨.inr 3, rfl⟩
+        · subst name; exact firstOutput ()
         · have isUnit : name = 2 := by
             fin_cases name <;> first | rfl | contradiction
           subst name; exact (0 : Fin 1)
@@ -170,7 +163,7 @@ theorem contract (elementDomain : EncodedDomain Empty)
         · change middle (.inr 1) = _
           rw [outsideFirst 1 (by simp)]
           exact represented.1 (.inr 1) rfl
-        · exact firstReturned (.inr 3) rfl
+        · exact firstReturned
         · change middle (wiring false (.inr 2)) = _
           rw [firstPreserved (.inr 2) rfl]
           exact unitInitial
@@ -185,14 +178,14 @@ theorem contract (elementDomain : EncodedDomain Empty)
         · contradiction
         · obtain ⟨contents, width, equal⟩ := represented.2 (.inr 5) rfl
           exact ⟨contents, width, (outsideFirst 5 (by simp)).trans equal⟩
-        · exact firstBuffer (.inr 4) rfl
-        · exact firstBuffer (.inr 5) rfl
-        · exact firstBuffer (.inr 6) rfl
-        · exact firstBuffer (.inr 7) rfl
-        · exact firstBuffer (.inr 8) rfl
-        · exact firstBuffer (.inr 9) rfl
-        · exact firstBuffer (.inr 10) rfl
-        · exact firstBuffer (.inr 11) rfl
+        · exact firstBuffer (.inr 4)
+        · exact firstBuffer (.inr 5)
+        · exact firstBuffer (.inr 6)
+        · exact firstBuffer (.inr 7)
+        · exact firstBuffer (.inr 8)
+        · exact firstBuffer (.inr 9)
+        · exact firstBuffer (.inr 10)
+        · exact firstBuffer (.inr 11)
   have secondSizes (parameter : Parameter) :
       secondInitial (IndexedMap.sizeTapes parameter) = unary (assignment parameter) := by
     change middle (wiring false (.inl parameter)) = _
@@ -201,16 +194,10 @@ theorem contract (elementDomain : EncodedDomain Empty)
   obtain ⟨secondTicks, secondOutput, secondFinal, secondCost, secondTrace, secondCorrect, secondExit⟩ :=
     secondRun assignment secondInput secondInitial secondWithin secondEntry secondSizes
   let final := install (wiring true) secondFinal middle
-  have secondReturned (name : Sum Parameter (Fin 12))
-      (writable : IndexedMap.argumentReadOnly name = false) :
-      final (wiring true name) = encoded (localDomains name) assignment (secondOutput ⟨name, writable⟩) := by
-    rw [show final (wiring true name) = secondFinal name from install_at _ _ _ _]
-    exact secondExit name writable
-  have secondPreserved (name : Sum Parameter (Fin 12))
-      (immutable : IndexedMap.argumentReadOnly name = true) :
-      final (wiring true name) = secondInitial name := by
-    rw [show final (wiring true name) = secondFinal name from install_at _ _ _ _]
-    exact secondTrace.readOnly_tape name immutable
+  have secondReturned : final (wiring true (.inr 3)) =
+      encoded (localDomains (.inr 3)) assignment (secondOutput ()) := by
+    rw [show final (wiring true (.inr 3)) = secondFinal (.inr 3) from install_at _ _ _ _]
+    exact secondExit ()
   have wiredFirst := firstTrace.wire_of_eq (wiring false)
     (fun name => (domains elementDomain indexCapacity length name).width assignment) argumentReadOnly
     (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
@@ -227,47 +214,8 @@ theorem contract (elementDomain : EncodedDomain Empty)
       | inr name => fin_cases name <;> first | rfl | contradiction)
     middle final (by intro name; rfl) (by intro name; exact install_at _ _ _ _)
     (by intro name outside; exact install_outside _ _ _ _ outside)
-  let output : Outputs (domains elementDomain indexCapacity length) argumentReadOnly assignment := fun name => by
-    rcases name with ⟨name, writable⟩
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      by_cases is4 : name = 4
-      · subst name; exact firstOutput ⟨.inr 3, rfl⟩
-      ·
-        by_cases is5 : name = 5
-        · subst name; exact secondOutput ⟨.inr 3, rfl⟩
-        ·
-          by_cases is6 : name = 6
-          · subst name; exact (0 : Fin 1)
-          ·
-            by_cases is7 : name = 7
-            · subst name; exact secondOutput ⟨.inr 4, rfl⟩
-            ·
-              by_cases is8 : name = 8
-              · subst name; exact secondOutput ⟨.inr 5, rfl⟩
-              ·
-                by_cases is9 : name = 9
-                · subst name; exact secondOutput ⟨.inr 6, rfl⟩
-                ·
-                  by_cases is10 : name = 10
-                  · subst name; exact secondOutput ⟨.inr 7, rfl⟩
-                  ·
-                    by_cases is11 : name = 11
-                    · subst name; exact secondOutput ⟨.inr 8, rfl⟩
-                    ·
-                      by_cases is12 : name = 12
-                      · subst name; exact secondOutput ⟨.inr 9, rfl⟩
-                      ·
-                        by_cases is13 : name = 13
-                        · subst name; exact secondOutput ⟨.inr 10, rfl⟩
-                        ·
-                          by_cases is14 : name = 14
-                          · subst name; exact secondOutput ⟨.inr 11, rfl⟩
-                          ·
-                            have invalid : name.val < 4 := by
-                              fin_cases name <;> first | decide | contradiction
-                            simp [argumentReadOnly, invalid] at writable
+  let output : Outputs (domains elementDomain indexCapacity length) outputTapes assignment :=
+    fun _ => secondOutput ()
   refine ⟨firstTicks + secondTicks + 1, output, final, ?_,
     sequence_runs elementDomain first second _ _ wiredFirst wiredSecond, ?_, ?_⟩
   · simp only [map_add, map_one]
@@ -278,31 +226,8 @@ theorem contract (elementDomain : EncodedDomain Empty)
     dsimp [firstInput, secondInput, output] at firstCorrect secondCorrect ⊢
     rw [firstCorrect] at secondCorrect
     exact secondCorrect
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      fin_cases name
-      · contradiction
-      · contradiction
-      · contradiction
-      · contradiction
-      · change final (wiring true (.inr 1)) = _
-        rw [secondPreserved (.inr 1) rfl]
-        exact firstReturned (.inr 3) rfl
-      · exact secondReturned (.inr 3) rfl
-      · change final (wiring true (.inr 2)) = _
-        rw [secondPreserved (.inr 2) rfl]
-        change middle (wiring false (.inr 2)) = _
-        rw [firstPreserved (.inr 2) rfl]
-        exact unitInitial
-      · exact secondReturned (.inr 4) rfl
-      · exact secondReturned (.inr 5) rfl
-      · exact secondReturned (.inr 6) rfl
-      · exact secondReturned (.inr 7) rfl
-      · exact secondReturned (.inr 8) rfl
-      · exact secondReturned (.inr 9) rfl
-      · exact secondReturned (.inr 10) rfl
-      · exact secondReturned (.inr 11) rfl
+  · intro name
+    cases name
+    exact secondReturned
 
 end Polytime2.CatalogueMap

@@ -15,33 +15,52 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardMatrixReplaceContract
+import Polytime2.Computation.Composition
+import Polytime2.Computations.MatrixEntry
 
-/-! # Matrix replacement with a separate, arbitrary initial output -/
+/-! # Matrix replacement followed by lookup through public composition rules -/
 
 namespace Polytime2.Examples.MatrixReplace
 
-open Polytime2.StandardMatrixReplace CallingConvention
+open Polytime2.Computation
 
--- Replace row 1, column 2 by true. The six output cells and all arithmetic
--- scratch may initially contain blanks or unrelated bits.
-example : ∃ ticks final, Runs
-    (fun name => (domains EncodedDomain.booleans name).width ![3, 2, 3])
-    readOnly (machine 1) ticks (entry 1) (fun _ => 0)
-    (frame ![3, 2, 3] [true, false, false] [false, true, false]
-      (encoded (EncodedDomain.booleans.arrayOfLength StandardMatrixEntry.length) ![3, 2, 3] (fun _ => false))
-      (buffer [0, 2, 0, 2, 0, 2]) (Binary.word [true])
-      [0, 2, 0] [2, 0, 0] [0, 0, 2] [2, 2, 0] [0, 2, 2] 2 2)
-    (exit 1) (fun _ => 0) final ∧
-    final (.inr 2) = encoded (EncodedDomain.booleans.arrayOfLength StandardMatrixEntry.length)
-      ![3, 2, 3] (Function.update (fun _ => false) ⟨5, by norm_num [StandardMatrixEntry.length]⟩ true) := by
-  obtain ⟨ticks, addressBits, addressLength, addressValue, cost, trace⟩ :=
-    runs EncodedDomain.booleans ![3, 2, 3] [true, false, false] [false, true, false] rfl rfl
-      (fun _ => false) true [0, 2, 0, 2, 0, 2]
-      [0, 2, 0] [2, 0, 0] [0, 0, 2] [2, 2, 0] [0, 2, 2]
-      (by norm_num [EncodedDomain.arrayOfLength, StandardMatrixEntry.length,
-        EncodedDomain.booleans, EncodedDomain.fixed]) rfl rfl rfl rfl rfl 2 2
-      (by decide) (by decide) (by norm_num [StandardMatrixEntry.length, Binary.value])
-  exact ⟨ticks, _, trace, rfl⟩
+noncomputable section CoordinateExamples
 
+private def scalar : EncodedDomain Empty := EncodedDomain.booleans
+private def sizes : Fin 3 → ℕ := ![3, 2, 3]
+private def replacement := matrixReplace scalar
+private def arguments : replacement.Arguments sizes
+  | 0 => (1 : Fin 8)
+  | 1 => (2 : Fin 8)
+  | 2 => fun _ _ => false
+  | 3 => true
+private theorem admissible : replacement.precondition sizes arguments := by
+  change 3 < 2 ^ 3 ∧ 1 < 2 ∧ 2 < 3 ∧ 2 * 3 ≤ 2 ^ 3
+  decide
+
+example : replacement.Realizable := matrixReplace_realizable scalar
+example : replacement.compute sizes ⟨arguments, admissible⟩ (1 : Fin 2) (2 : Fin 3) = true := rfl
+example : replacement.compute sizes ⟨arguments, admissible⟩ (0 : Fin 2) (0 : Fin 3) = false := rfl
+
+private def contextDomains : Fin 4 ⊕ Unit → EncodedDomain (Fin 3) :=
+  Sum.elim replacement.inputDomains (fun _ => replacement.outputDomain)
+private def lookupSelection : Fin 3 ↪ Fin 4 ⊕ Unit :=
+  ⟨(fun | 0 => .inl 0 | 1 => .inl 1 | 2 => .inr ()), by
+    intro first second equal
+    fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
+private def continuation := (matrixEntry scalar).withArguments contextDomains lookupSelection
+  (by intro name; fin_cases name <;> rfl)
+private def readBack := replacement.letThen continuation (fun _ => rfl) rfl
+  (by intro sizes arguments valid; exact valid)
+
+example : readBack.Realizable := by
+  apply Computation.Realizable.letThen (matrixReplace_realizable scalar)
+  exact (matrixEntry_realizable scalar).withArguments _ _ _
+
+example : readBack.compute sizes ⟨arguments, admissible⟩ = true := rfl
+
+example : (matrixReplace (EncodedDomain.fixed (Equiv.refl (Fin 1)))).Realizable :=
+  matrixReplace_realizable _
+
+end CoordinateExamples
 end Polytime2.Examples.MatrixReplace
