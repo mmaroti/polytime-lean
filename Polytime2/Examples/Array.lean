@@ -66,9 +66,9 @@ def indexedCopy : Polytime2.Computation Bool (Fin 3) :=
 /-- Lookup and update compose without exposing either machine or scratch. -/
 theorem indexedCopy_realizable : indexedCopy.Realizable := by
   apply Computation.Realizable.letThen
-  · exact ((arrayLookup_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])).withArguments
+  · exact ((arrayLookup_realizable element false length).withArguments
       originalDomains sourceSelection _).withPrecondition _ _
-  · exact (arrayUpdate_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])).withArguments
+  · exact (arrayUpdate_realizable element false length).withArguments
       continuationDomains updateSelection _
 
 /-- Equal source and target indices are allowed; lookup finishes before update. -/
@@ -79,15 +79,41 @@ theorem indexedCopy_correct (sizes : Bool → ℕ) (arguments : indexedCopy.Argu
         (arguments 2 ⟨(arguments 0).val, valid.1⟩) := rfl
 
 example : (arrayLookup element false length).Realizable :=
-  arrayLookup_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+  arrayLookup_realizable element false length
 example : (arrayUpdate element false length).Realizable :=
-  arrayUpdate_realizable element false length 2 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+  arrayUpdate_realizable element false length
 
 -- Singleton elements occupy zero bits, but lookup and update remain realizable.
 example : (arrayLookup (EncodedDomain.fixed (Equiv.refl (Fin 1))) false length).Realizable :=
-  arrayLookup_realizable _ _ _ 0 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+  arrayLookup_realizable _ _ _
 example : (arrayUpdate (EncodedDomain.fixed (Equiv.refl (Fin 1))) false length).Realizable :=
-  arrayUpdate_realizable _ _ _ 0 (fun _ => by norm_num [element, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+  arrayUpdate_realizable _ _ _
+
+/-- A row has a runtime-dependent width; outer lookup returns the whole row. -/
+example {Parameter : Type} [Fintype Parameter] (scalar : EncodedDomain Parameter)
+    (capacity : Parameter) (rows columns : MvPolynomial Parameter ℕ) :
+    (arrayLookup (scalar.arrayOfLength columns) capacity rows).Realizable :=
+  arrayLookup_realizable _ _ _
+
+/-- Replacing a row uses the same generic update certificate. -/
+example {Parameter : Type} [Fintype Parameter] (scalar : EncodedDomain Parameter)
+    (capacity : Parameter) (rows columns : MvPolynomial Parameter ℕ) :
+    (arrayUpdate (scalar.arrayOfLength columns) capacity rows).Realizable :=
+  arrayUpdate_realizable _ _ _
+
+/-- Runtime binary element capacities need no fixed-width hypothesis. -/
+example : (arrayLookup (EncodedDomain.binaryNaturals false) false length).Realizable :=
+  arrayLookup_realizable _ _ _
+
+example : (arrayUpdate (EncodedDomain.binaryNaturals false) false length).Realizable :=
+  arrayUpdate_realizable _ _ _
+
+/-- Empty rows are valid zero-width elements of an outer array. -/
+example : (arrayLookup (element.arrayOfLength 0) false length).Realizable :=
+  arrayLookup_realizable _ _ _
+
+example : (arrayUpdate (element.arrayOfLength 0) false length).Realizable :=
+  arrayUpdate_realizable _ _ _
 
 end MathematicalExamples
 end Polytime2.Examples.Array

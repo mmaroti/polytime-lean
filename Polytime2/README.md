@@ -2,6 +2,11 @@
 
 A multi-tape implementation of polynomial-time algorithms.
 
+Encoded domain widths currently use exact polynomials. A possible future
+generalization is a mathematical width function with a certified polynomial-time
+unary evaluator. Avoid requiring only a polynomial upper bound: it does not
+supply the operational width computation needed by generic tape algorithms.
+
 ## Implemented and proved
 
 - Abstract encoded domains combine mathematical carrier families, exact bit
@@ -13,7 +18,8 @@ A multi-tape implementation of polynomial-time algorithms.
 - Every fixed width polynomial has a certified finite unary evaluator. It
   receives one immutable unary size tape per parameter, prepares its private
   copies, and returns exactly that many unary ones with restored public heads.
-  Its polynomial runtime bound includes preparation and output restoration.
+  Its region-preserving certificate accepts arbitrary private contents and
+  includes preparation and output restoration in the polynomial runtime bound.
   `EncodedDomain.width_computable` supplies this evaluator for every domain,
   including arrays with runtime-dependent element widths.
 - Deterministic transitions over Mathlib's two-sided tapes, with separate
@@ -58,14 +64,14 @@ A multi-tape implementation of polynomial-time algorithms.
   without a source tape, in `2 * width + 1` transitions with a restored head.
 - Binary decrement with a polynomial digit-cost certificate, fixed controller,
   unchanged digit capacity, and restored head position.
-- Binary-indexed lookup/update with polynomial bounds in array length and index
-  digit capacity, preserved arguments, and restored heads. Only declared results
-  require valid encodings on return.
+- Binary-indexed lookup/update with polynomial element widths and lengths,
+  preserved arguments, and restored heads. Unary width preparation is internal;
+  only declared results require valid encodings on return.
 - Indexed copy derived from public lookup and update composition rules, with
   separate indices and a shared immutable source array.
-- Standard array lookup/update certificates transferred to Mathlib's `TM0.init`
-  through the internal simulation theorem, with polynomial input storage, time,
-  and simulator space.
+- Array lookup/update exported to Mathlib's `TM0.init` from delimited public
+  inputs, with width preparation and output extraction included in the
+  polynomial runtime bound.
 - Storage bounds at every counted execution prefix, derived from input capacity
   and time; each transition adds at most two cells per tape.
 - Exact translation of one-tape routines to Mathlib's TM0, with two transitions
@@ -189,8 +195,10 @@ equivalences without changing transition counts.
 Lookup takes an immutable binary index and array and writes a separate element.
 Update takes an immutable index, array, and replacement and writes a separate
 result array. Both use temporary tapes, preserve their arguments, and restore
-heads. Element bit width is a specialization constant; array length varies at
-runtime. Runtime-dependent element widths remain unsupported.
+heads. Both element bit width and array length may be polynomial expressions in
+runtime sizes. Width evaluation prepares a private unary header, including from
+arbitrary scratch contents. Nested arrays support extracting and replacing whole
+rows through the same generic lookup and update certificates.
 
 The general `Simulation` theorem transfers multi-tape certificates with
 polynomial input storage to polynomial-time finite TM0 machines. Intermediate

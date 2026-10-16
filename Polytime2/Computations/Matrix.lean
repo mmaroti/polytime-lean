@@ -51,10 +51,9 @@ def matrixLookup (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     (matrixLookupEquivalence element indexCapacity rows columns) (fun _ => Equiv.refl _)
 
 theorem matrixLookup_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
-    (rows columns : MvPolynomial Parameter ℕ) (elementWidth : ℕ)
-    (fixedWidth : ∀ sizes, element.width sizes = elementWidth) :
+    (rows columns : MvPolynomial Parameter ℕ) :
     (matrixLookup element indexCapacity rows columns).Realizable := by
-  exact (arrayLookup_realizable element indexCapacity (rows * columns) elementWidth fixedWidth).reindexDomains
+  exact (arrayLookup_realizable element indexCapacity (rows * columns)).reindexDomains
     _ _ _ _
     (by intro name sizes; cases name <;> rfl)
     (by intro sizes; rfl)
@@ -86,10 +85,9 @@ def matrixUpdate (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     (fun sizes => EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes)
 
 theorem matrixUpdate_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
-    (rows columns : MvPolynomial Parameter ℕ) (elementWidth : ℕ)
-    (fixedWidth : ∀ sizes, element.width sizes = elementWidth) :
+    (rows columns : MvPolynomial Parameter ℕ) :
     (matrixUpdate element indexCapacity rows columns).Realizable := by
-  exact (arrayUpdate_realizable element indexCapacity (rows * columns) elementWidth fixedWidth).reindexDomains
+  exact (arrayUpdate_realizable element indexCapacity (rows * columns)).reindexDomains
     _ _ _ _
     (by intro name sizes; fin_cases name <;> rfl)
     (by intro sizes; rfl)

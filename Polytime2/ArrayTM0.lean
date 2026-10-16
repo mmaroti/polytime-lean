@@ -15,62 +15,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.CallingConventionSimulation
-import Polytime2.StandardArrayLookupSizedContract
-import Polytime2.StandardArrayUpdate
+import Polytime2.Computations.Array
+import Polytime2.Computation.TM0
 
-/-! # Polynomial TM0 realization of standard array access
+/-! # Polynomial TM0 realization of array access
 
-Both access modes use the same finite-track simulator. Canonical inputs and
-arbitrary writable regions satisfy its polynomial input-storage requirement.
+Delimited public inputs contain only the unary sizes and encoded arguments.
+Element widths and all private storage are prepared internally.
 -/
 
 namespace Polytime2.Array
 
--- parameterLevel: names of the caller's unary size parameters.
-universe parameterLevel
-variable {Parameter : Type parameterLevel} [Fintype Parameter] [DecidableEq Parameter]
+variable {Parameter : Type} [Fintype Parameter]
 
-/-- Lookup's mathematical contract transfers to `TM0.init`, including immutable
-arguments and its declared result. -/
-theorem lookup_realizes_tm0
-    (element : EncodedDomain.{parameterLevel, 0} Parameter) (elementWidth : ℕ)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
-    (fixedWidth : ∀ assignment, element.width assignment = elementWidth) :
-    CallingConvention.TM0Realizes
-      (StandardArrayLookupSized.domainsSized element indexCapacity length)
-      StandardArrayLookupSized.argumentReadOnly StandardArrayLookupSized.sizeTapes
-      (MultiTape.oneTape (.inr 2))
-      (StandardArrayLookupSized.algorithmSized elementWidth)
-      (StandardArrayLookup.entry elementWidth)
-      (fun assignment input => (input ⟨.inr 0, rfl⟩).val <
-        MvPolynomial.eval assignment length)
-      (fun assignment input output =>
-        ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-          output () = input ⟨.inr 1, rfl⟩
-            ⟨(input ⟨.inr 0, rfl⟩).val, within⟩) := by
-  apply CallingConvention.Realizes.tm0
-  exact StandardArrayLookupSized.contractSized element elementWidth indexCapacity length fixedWidth
+/-- Lookup with polynomial element width transfers to the public TM0 format. -/
+theorem lookup_realizes_tm0 (element : EncodedDomain Parameter)
+    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
+    (Computation.arrayLookup element indexCapacity length).TM0Realizable :=
+  (Computation.arrayLookup_realizable element indexCapacity length).tm0
 
-/-- Update overwrites its complete fresh result, including when it initially
-contains blanks, and the same mathematical update is realized on TM0. -/
-theorem update_realizes_tm0
-    (element : EncodedDomain.{parameterLevel, 0} Parameter) (elementWidth : ℕ)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
-    (fixedWidth : ∀ assignment, element.width assignment = elementWidth) :
-    CallingConvention.TM0Realizes
-      (StandardArrayUpdate.domainsSized element indexCapacity length)
-      StandardArrayUpdate.argumentReadOnlySized StandardArrayUpdate.sizeTapesSized
-      (MultiTape.oneTape (.inr 3))
-      (StandardArrayUpdate.algorithmSized elementWidth)
-      (StandardArrayUpdate.entry elementWidth)
-      (fun assignment input => (input ⟨.inr 0, rfl⟩).val <
-        MvPolynomial.eval assignment length)
-      (fun assignment input output =>
-        ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-          output () = Function.update (input ⟨.inr 1, rfl⟩)
-            ⟨(input ⟨.inr 0, rfl⟩).val, within⟩ (input ⟨.inr 2, rfl⟩)) := by
-  apply CallingConvention.Realizes.tm0
-  exact StandardArrayUpdate.contractSized element elementWidth indexCapacity length fixedWidth
+/-- Update preserves its arguments and exports only the separate result array. -/
+theorem update_realizes_tm0 (element : EncodedDomain Parameter)
+    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
+    (Computation.arrayUpdate element indexCapacity length).TM0Realizable :=
+  (Computation.arrayUpdate_realizable element indexCapacity length).tm0
 
 end Polytime2.Array

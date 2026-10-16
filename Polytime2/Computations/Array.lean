@@ -16,8 +16,8 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
-import Polytime2.StandardArrayLookupSizedContract
-import Polytime2.StandardArrayUpdate
+import Polytime2.RuntimeArrayLookupContract
+import Polytime2.RuntimeArrayUpdateContract
 import Polytime2.StandardArrayMapContract
 
 /-! # Fixed-length array lookup and update with existential implementations -/
@@ -61,28 +61,49 @@ noncomputable def arrayMap (parameterDomain elementDomain : EncodedDomain Empty)
 
 namespace Realizable.Internal
 
-/-- A static partition: arguments, one result, then three private tapes. -/
+private def widthArguments {InputName : Type} :
+    (InputName ⊕ (Unit ⊕ Fin 3)) ⊕ Unit ≃ (InputName ⊕ Unit) ⊕ (Unit ⊕ Fin 3) where
+  toFun | .inl (.inl argument) => .inl (.inl argument)
+        | .inl (.inr result) => .inr result
+        | .inr _ => .inl (.inr ())
+  invFun | .inl (.inl argument) => .inl (.inl argument)
+         | .inl (.inr _) => .inr ()
+         | .inr result => .inl (.inr result)
+  left_inv name := by
+    rcases name with (argument | result) | marker
+    · rfl
+    · rfl
+    · cases marker; rfl
+  right_inv name := by
+    rcases name with (argument | marker) | result
+    · rfl
+    · cases marker; rfl
+    · rfl
+
+/-- Arguments, result, counters, and the last unary-width argument. -/
 private def arrayLayout {InputName : Type} (arity : ℕ) (enumeration : Fin arity ≃ InputName) :
-    Parameter ⊕ Fin (arity + 4) ≃ Parameter ⊕ (InputName ⊕ (Unit ⊕ Fin 3)) :=
+    Parameter ⊕ Fin (arity + 5) ≃ Parameter ⊕ ((InputName ⊕ Unit) ⊕ (Unit ⊕ Fin 3)) :=
   Equiv.sumCongr (Equiv.refl Parameter)
-    (finSumFinEquiv.symm.trans (Equiv.sumCongr enumeration
-      (finSumFinEquiv.symm.trans (Equiv.sumCongr (Equiv.ofUnique (Fin 1) Unit) (Equiv.refl (Fin 3))))))
+    ((finSumFinEquiv.symm.trans (Equiv.sumCongr
+      (finSumFinEquiv.symm.trans (Equiv.sumCongr enumeration
+        (finSumFinEquiv.symm.trans (Equiv.sumCongr (Equiv.ofUnique (Fin 1) Unit) (Equiv.refl (Fin 3))))))
+      (Equiv.ofUnique (Fin 1) Unit))).trans widthArguments)
 
 private noncomputable def arrayScratch (capacity : Parameter) (name : Fin 3) : EncodedDomain Parameter :=
   if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals capacity
 
 private theorem lookupDomains (element : EncodedDomain Parameter) (capacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) (name : Parameter ⊕ Fin 6) :
-    domains (arrayLookup element capacity length) (arrayScratch capacity)
-      (arrayLayout 2 finTwoEquiv name) = StandardArrayLookupSized.domainsSized element capacity length name := by
+    (length : MvPolynomial Parameter ℕ) (name : Parameter ⊕ Fin 7) :
+    domains ((arrayLookup element capacity length).withUnaryWidth element.widthPolynomial) (arrayScratch capacity)
+      (arrayLayout 2 finTwoEquiv name) = RuntimeArrayLookup.domainsSized element capacity length name := by
   cases name with
   | inl parameter => rfl
   | inr name => fin_cases name <;> rfl
 
 private theorem updateDomains (element : EncodedDomain Parameter) (capacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) (name : Parameter ⊕ Fin 7) :
-    domains (arrayUpdate element capacity length) (arrayScratch capacity)
-      (arrayLayout 3 (Equiv.refl (Fin 3)) name) = StandardArrayUpdate.domainsSized element capacity length name := by
+    (length : MvPolynomial Parameter ℕ) (name : Parameter ⊕ Fin 8) :
+    domains ((arrayUpdate element capacity length).withUnaryWidth element.widthPolynomial) (arrayScratch capacity)
+      (arrayLayout 3 (Equiv.refl (Fin 3)) name) = RuntimeArrayUpdate.domainsSized element capacity length name := by
   cases name with
   | inl parameter => rfl
   | inr name => fin_cases name <;> rfl
@@ -108,25 +129,23 @@ private def mapLayout : Parameter ⊕ Fin 3 ≃ Parameter ⊕ (Bool ⊕ (Unit �
 end Realizable.Internal
 
 open Realizable.Internal in
-/-- Element width is fixed by specialization; length is polynomial in the
-runtime sizes. No scratch or controller names occur in the public certificate. -/
-theorem arrayLookup_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) (elementWidth : ℕ)
-    (fixedWidth : ∀ sizes, element.width sizes = elementWidth) :
-    (arrayLookup element indexCapacity length).Realizable := by
+/-- Lookup using a prepared unary width input. -/
+private theorem arrayLookup_withUnaryWidth_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) :
+    ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial).Realizable := by
   let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes)
     (lookupDomains element indexCapacity length name))
-  have readonly name : StandardArrayLookupSized.argumentReadOnly name =
-      readOnly (arrayLookup element indexCapacity length) (arrayLayout 2 finTwoEquiv name) := by
+  have readonly name : RuntimeArrayLookup.argumentReadOnly name =
+      readOnly ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayLayout 2 finTwoEquiv name) := by
     cases name with
     | inl parameter => rfl
     | inr name => fin_cases name <;> rfl
-  refine ofLayout (arrayLookup element indexCapacity length) (arrayScratch indexCapacity)
-    (StandardArrayLookupSized.domainsSized element indexCapacity length)
-    StandardArrayLookupSized.argumentReadOnly StandardArrayLookupSized.sizeTapes StandardArrayLookupSized.outputTapes
-    (StandardArrayLookupSized.algorithmSized elementWidth) (StandardArrayLookup.entry elementWidth)
-    (StandardArrayLookup.exit elementWidth) _ _
-    (StandardArrayLookupSized.contractSized element elementWidth indexCapacity length fixedWidth)
+  refine ofLayout ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayScratch indexCapacity)
+    (RuntimeArrayLookup.domainsSized element indexCapacity length)
+    RuntimeArrayLookup.argumentReadOnly RuntimeArrayLookup.sizeTapes RuntimeArrayLookup.outputTapes
+    RuntimeArrayLookup.algorithmSized RuntimeArrayLookup.entry
+    RuntimeArrayLookup.exit _ _
+    (RuntimeArrayLookup.contractSized element indexCapacity length)
     (arrayLayout 2 finTwoEquiv).toEmbedding values ?_ ?_ readonly (by intro parameter; rfl)
     () rfl (by intro sizes input valid; exact valid) ?_
   · intro name sizes
@@ -141,23 +160,22 @@ theorem arrayLookup_realizable (element : EncodedDomain Parameter) (indexCapacit
 
 open Realizable.Internal in
 /-- Update overwrites a separate public result array under an in-range hypothesis. -/
-theorem arrayUpdate_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) (elementWidth : ℕ)
-    (fixedWidth : ∀ sizes, element.width sizes = elementWidth) :
-    (arrayUpdate element indexCapacity length).Realizable := by
+private theorem arrayUpdate_withUnaryWidth_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) :
+    ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial).Realizable := by
   let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes)
     (updateDomains element indexCapacity length name))
-  have readonly name : StandardArrayUpdate.argumentReadOnlySized name =
-      readOnly (arrayUpdate element indexCapacity length) (arrayLayout 3 (Equiv.refl (Fin 3)) name) := by
+  have readonly name : RuntimeArrayUpdate.argumentReadOnly name =
+      readOnly ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayLayout 3 (Equiv.refl (Fin 3)) name) := by
     cases name with
     | inl parameter => rfl
     | inr name => fin_cases name <;> rfl
-  refine ofLayout (arrayUpdate element indexCapacity length) (arrayScratch indexCapacity)
-    (StandardArrayUpdate.domainsSized element indexCapacity length)
-    StandardArrayUpdate.argumentReadOnlySized StandardArrayUpdate.sizeTapesSized StandardArrayUpdate.outputTapesSized
-    (StandardArrayUpdate.algorithmSized elementWidth) (StandardArrayUpdate.entry elementWidth)
-    (StandardArrayUpdate.exit elementWidth) _ _
-    (StandardArrayUpdate.contractSized element elementWidth indexCapacity length fixedWidth)
+  refine ofLayout ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayScratch indexCapacity)
+    (RuntimeArrayUpdate.domainsSized element indexCapacity length)
+    RuntimeArrayUpdate.argumentReadOnly RuntimeArrayUpdate.sizeTapes RuntimeArrayUpdate.outputTapes
+    RuntimeArrayUpdate.algorithmSized RuntimeArrayUpdate.entry
+    RuntimeArrayUpdate.exit _ _
+    (RuntimeArrayUpdate.contractSized element indexCapacity length)
     (arrayLayout 3 (Equiv.refl (Fin 3))).toEmbedding values ?_ ?_ readonly (by intro parameter; rfl)
     () rfl (by intro sizes input valid; exact valid) ?_
   · intro name sizes
@@ -169,6 +187,18 @@ theorem arrayUpdate_realizable (element : EncodedDomain Parameter) (indexCapacit
   · intro sizes input valid output correct
     obtain ⟨within, result⟩ := correct
     exact congrArg (encoded (element.arrayOfLength length) sizes) result
+
+/-- Polynomial element widths are computed privately from the size inputs. -/
+theorem arrayLookup_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) : (arrayLookup element indexCapacity length).Realizable :=
+  Realizable.withComputedWidth (arrayLookup element indexCapacity length) element.widthPolynomial
+    (arrayLookup_withUnaryWidth_realizable element indexCapacity length)
+
+/-- Polynomial-width update preserves its original array and replacement. -/
+theorem arrayUpdate_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) : (arrayUpdate element indexCapacity length).Realizable :=
+  Realizable.withComputedWidth (arrayUpdate element indexCapacity length) element.widthPolynomial
+    (arrayUpdate_withUnaryWidth_realizable element indexCapacity length)
 
 open Realizable.Internal in
 theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain Empty)

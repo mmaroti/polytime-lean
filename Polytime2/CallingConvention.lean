@@ -72,6 +72,28 @@ namespace Runs
 variable {width : TapeName → ℕ} {readOnly : TapeName → Bool}
 variable {machine : Machine (Alphabet TapeName) State}
 
+/-- Annotate a known transition with its region and head-position proofs. -/
+theorem next_of_step {ticks state nextState finalState position nextPosition finalPosition
+    tapes nextTapes finalTapes}
+    (transition : step machine (state, tapes) = some (nextState, nextTapes))
+    (safe : ∀ actions, machine state (read tapes) = some (nextState, actions) →
+      Allowed width readOnly position (read tapes) actions ∧
+      nextPosition = fun name => position name + displacement (actions name).2)
+    (rest : Runs width readOnly machine ticks nextState nextPosition nextTapes
+      finalState finalPosition finalTapes) :
+    Runs width readOnly machine (ticks + 1) state position tapes
+      finalState finalPosition finalTapes := by
+  cases instruction : machine state (read tapes) with
+  | none => simp [step, instruction] at transition
+  | some command =>
+    rcases command with ⟨following, actions⟩
+    have equal : following = nextState ∧ act actions tapes = nextTapes := by
+      simpa [step, instruction] using transition
+    rcases equal with ⟨rfl, rfl⟩
+    obtain ⟨allowed, positions⟩ := safe actions instruction
+    rw [positions] at rest
+    exact Runs.next instruction allowed rest
+
 /-- A controller-determined position permits reuse of existing counted traces.
 The positions are proof annotations; they do not enlarge the machine state. -/
 theorem of_steps (position : State → TapeName → ℤ)
@@ -460,6 +482,53 @@ theorem wire {EnclosingTape : Type enclosingTapeLevel}
       (by simpa only [nextPosition, nextTapes] using hypothesis)
     exact advanced
 
+/-- Wire a routine with explicit entry and exit head positions. -/
+theorem wire_at_of_eq {EnclosingTape : Type enclosingTapeLevel}
+    (wiring : TapeName ↪ EnclosingTape)
+    (enclosingWidth : EnclosingTape → ℕ) (enclosingReadOnly : EnclosingTape → Bool)
+    (widthMatches : ∀ name, enclosingWidth (wiring name) = width name)
+    (readOnlyMatches : ∀ name, enclosingReadOnly (wiring name) = true → readOnly name = true)
+    {ticks state finalState localPosition localFinalPosition tapes finalTapes}
+    (trace : Runs width readOnly machine ticks state localPosition tapes
+      finalState localFinalPosition finalTapes)
+    (position finalPosition : EnclosingTape → ℤ)
+    (initial final : Tapes (Alphabet EnclosingTape))
+    (positionMatches : ∀ name, position (wiring name) = localPosition name)
+    (finalPositionMatches : ∀ name, finalPosition (wiring name) = localFinalPosition name)
+    (outsidePositions : ∀ name, name ∉ Set.range wiring → finalPosition name = position name)
+    (initialMatches : ∀ name, initial (wiring name) = tapes name)
+    (finalMatches : ∀ name, final (wiring name) = finalTapes name)
+    (outsideMatches : ∀ name, name ∉ Set.range wiring → final name = initial name) :
+    Runs enclosingWidth enclosingReadOnly (MultiTape.wire wiring machine) ticks
+      state position initial finalState finalPosition final := by
+  classical
+  have initialPositionEq : install wiring localPosition position = position := by
+    funext name
+    by_cases located : name ∈ Set.range wiring
+    · obtain ⟨name, rfl⟩ := located
+      rw [install_at, positionMatches]
+    · exact install_outside _ _ _ _ located
+  have finalPositionEq : install wiring localFinalPosition position = finalPosition := by
+    funext name
+    by_cases located : name ∈ Set.range wiring
+    · obtain ⟨name, rfl⟩ := located
+      rw [install_at, finalPositionMatches]
+    · rw [install_outside _ _ _ _ located, outsidePositions name located]
+  have initialEq : install wiring tapes initial = initial := by
+    funext name
+    by_cases located : name ∈ Set.range wiring
+    · obtain ⟨name, rfl⟩ := located
+      rw [install_at, initialMatches]
+    · exact install_outside _ _ _ _ located
+  have finalEq : install wiring finalTapes initial = final := by
+    funext name
+    by_cases located : name ∈ Set.range wiring
+    · obtain ⟨name, rfl⟩ := located
+      rw [install_at, finalMatches]
+    · rw [install_outside _ _ _ _ located, outsideMatches name located]
+  simpa only [initialPositionEq, finalPositionEq, initialEq, finalEq] using
+    trace.wire wiring enclosingWidth enclosingReadOnly widthMatches readOnlyMatches initial position
+
 /-- Wire a restoring routine using field equalities rather than exposing the
 installation function in each caller's execution theorem. -/
 theorem wire_of_eq {EnclosingTape : Type enclosingTapeLevel}
@@ -476,25 +545,10 @@ theorem wire_of_eq {EnclosingTape : Type enclosingTapeLevel}
     (outsideMatches : ∀ name, name ∉ Set.range wiring → final name = initial name) :
     Runs enclosingWidth enclosingReadOnly (MultiTape.wire wiring machine) ticks
       state (fun _ => 0) initial finalState (fun _ => 0) final := by
-  classical
-  have installedInitial : install wiring tapes initial = initial := by
-    funext name
-    by_cases located : name ∈ Set.range wiring
-    · obtain ⟨localName, rfl⟩ := located
-      rw [install_at, initialMatches]
-    · exact install_outside _ _ _ _ located
-  have installedFinal : install wiring finalTapes initial = final := by
-    funext name
-    by_cases located : name ∈ Set.range wiring
-    · obtain ⟨localName, rfl⟩ := located
-      rw [install_at, finalMatches]
-    · rw [install_outside _ _ _ _ located, outsideMatches name located]
-  have positions : install wiring (fun _ : TapeName => (0 : ℤ))
-      (fun _ : EnclosingTape => (0 : ℤ)) = fun _ => 0 := install_self wiring _
-  have wired := trace.wire wiring enclosingWidth enclosingReadOnly widthMatches readOnlyMatches
-    initial (fun _ => 0)
-  rw [installedInitial, installedFinal, positions] at wired
-  exact wired
+  exact trace.wire_at_of_eq wiring enclosingWidth enclosingReadOnly widthMatches readOnlyMatches
+    (fun _ => 0) (fun _ => 0) initial final
+    (by intro name; rfl) (by intro name; rfl) (by intro name outside; rfl)
+    initialMatches finalMatches outsideMatches
 
 end Runs
 
