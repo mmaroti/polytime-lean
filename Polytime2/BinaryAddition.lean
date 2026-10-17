@@ -97,6 +97,20 @@ theorem add_value (left right : List Bool) (sameLength : right.length = left.len
   simpa [add, value_append, value, ripple_length false left right sameLength] using
     ripple_value false left right sameLength
 
+def lowSum (left right : List Bool) : List Bool := (ripple false left right).1
+
+theorem lowSum_length (left right : List Bool) (sameLength : right.length = left.length) :
+    (lowSum left right).length = left.length := BinaryRipple.ripple_length _ _ _ _ _ sameLength
+
+theorem lowSum_value (left right : List Bool) (sameLength : right.length = left.length)
+    (capacity : value left + value right < 2 ^ left.length) :
+    value (lowSum left right) = value left + value right ∧
+      (ripple false left right).2 = false := by
+  have equation := ripple_value false left right sameLength
+  cases flag : (ripple false left right).2 with
+  | false => simpa [lowSum, flag] using equation
+  | true => simp only [flag, Bool.toNat_true, Nat.mul_one, Bool.toNat_false, Nat.add_zero] at equation; omega
+
 def rippleFrame (leftFirst rightFirst leftSecond rightSecond leftOutput rightOutput : List Symbol) :
     Tapes RippleAlphabet := fun name =>
   if name = 0 then Turing.Tape.mk' (Turing.ListBlank.mk leftFirst) (Turing.ListBlank.mk rightFirst)
@@ -122,8 +136,8 @@ theorem runs (left right : List Bool)
 
 /-- Standard four-tape interface: immutable operands, low result, and carry. -/
 noncomputable abbrev domains := StandardBinaryArithmetic.domains
-abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly
-abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes
+abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly (Parameter := Unit)
+abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes (Parameter := Unit)
 
 noncomputable def algorithm :
     Machine (CallingConvention.Alphabet (Sum Unit (Fin 4))) (Sum StandardBinaryArithmetic.State Unit) :=

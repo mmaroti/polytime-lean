@@ -290,6 +290,12 @@ precondition; uncalled branch scratch stays arbitrary.
 `whileLoop` uses a mathematical invariant, decreasing measure, and existential
 polynomial bound. Its conserved answer equals the state when the guard stops;
 the library handles state copies, scratch, and all execution costs.
+Compound arithmetic composes addition at a named capacity with multiplication.
+It retains one intermediate word and the primitives' scratch: three binary words
+and two flag tapes in total. It adds no operand copies and takes one additional
+transition compared with the former standalone controllers. The matrix-address
+controller retains its shared-workspace lowering pending the loop-workspace
+migration.
 Public certificates cover constants, unary-size reading, counter initialization,
 copying, increment/decrement, nonzero tests, comparison, bounded arithmetic,
 compound arithmetic, remainder, gcd, finite tables and predicates, array
@@ -332,12 +338,6 @@ Extend the generic layout adapter to place named public roles and allocate the
 remaining tapes privately. Derive width and encoding compatibility from domain
 equality, simplify nested tape names and alphabet proofs, and consolidate
 specialized execution and wiring adapters.
-
-### Composed algorithms
-
-Express compound arithmetic through certified mathematical composition, then
-delete its separate controller proofs. Assess additional copying and private
-storage when replacing shared workspaces.
 
 ### Loop workspaces
 

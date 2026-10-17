@@ -15,7 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.AddMultiply
+import Polytime2.BinaryAddition
+import Polytime2.StandardBinaryMultiplication
 
 /-! # A product followed by a sum in one binary workspace
 
@@ -45,7 +46,10 @@ def widths (digits multiplierDigits : ℕ) (name : Fin 9) : ℕ :=
 
 def readOnly (name : Fin 9) : Bool := decide (name = 1 ∨ name = 5 ∨ name = 6)
 
-def multiplicationWiring : Fin 6 ↪ Fin 9 := AddMultiply.multiplicationWiring
+def multiplicationWiring : Fin 6 ↪ Fin 9 :=
+  ⟨(fun name => ⟨name.val, by omega⟩), by
+    intro first second equal
+    exact Fin.ext (congrArg (fun name : Fin 9 => name.val) equal)⟩
 
 def additionWiring : Fin 4 ↪ Fin 9 :=
   ⟨(fun name => match name.val with | 0 => 0 | 1 => 6 | 2 => 7 | _ => 8), by
@@ -74,7 +78,7 @@ def product (factor multiplier : List Bool) (shifted next : List Symbol) (flag :
     (List.replicate factor.length false, shifted, next, flag)).1
 
 def result (factor multiplier addend : List Bool) (shifted next : List Symbol) (flag : Symbol) : List Bool :=
-  AddMultiply.sum (product factor multiplier shifted next flag) addend
+  BinaryAddition.lowSum (product factor multiplier shifted next flag) addend
 
 theorem product_length (factor multiplier : List Bool) (shifted next : List Symbol) (flag : Symbol)
     (shiftedLength : shifted.length = factor.length) (nextLength : next.length = factor.length) :
@@ -88,7 +92,7 @@ theorem result_length (factor multiplier addend : List Bool) (shifted next : Lis
     (shiftedLength : shifted.length = factor.length) (nextLength : next.length = factor.length) :
     (result factor multiplier addend shifted next flag).length = factor.length := by
   have length := product_length factor multiplier shifted next flag shiftedLength nextLength
-  exact (AddMultiply.sum_length _ _ (addendLength.trans length.symm)).trans length
+  exact (BinaryAddition.lowSum_length _ _ (addendLength.trans length.symm)).trans length
 
 /-- The single capacity hypothesis is the ordinary mathematical address bound. -/
 theorem result_value (factor multiplier addend : List Bool) (shifted next : List Symbol) (flag : Symbol)
@@ -99,7 +103,7 @@ theorem result_value (factor multiplier addend : List Bool) (shifted next : List
   have length := product_length factor multiplier shifted next flag shiftedLength nextLength
   have productValue : value (product factor multiplier shifted next flag) = value factor * value multiplier :=
     StandardBinaryMultiplication.result_value multiplier factor shifted next flag shiftedLength nextLength (by omega)
-  exact (AddMultiply.sum_value _ _ (addendLength.trans length.symm)
+  exact (BinaryAddition.lowSum_value _ _ (addendLength.trans length.symm)
     (by simpa [length, productValue] using capacity)).1.trans (by rw [productValue])
 
 /-- All writable regions may initially contain blanks or invalid symbols.
@@ -124,7 +128,7 @@ theorem runs (factor multiplier addend : List Bool) (addendLength : addend.lengt
   have productValue : value productBits = value factor * value multiplier :=
     StandardBinaryMultiplication.result_value multiplier factor oldShifted oldNext multiplyFlag
       shiftedLength nextLength (by omega)
-  have noCarry := (AddMultiply.sum_value productBits addend (addendLength.trans length.symm)
+  have noCarry := (BinaryAddition.lowSum_value productBits addend (addendLength.trans length.symm)
     (by simpa [length, productValue] using capacity)).2
   have multiplied := (StandardBinaryMultiplication.runs multiplier factor oldProduct oldShifted oldNext
     productLength shiftedLength nextLength multiplyFlag).wire_of_eq multiplicationWiring
@@ -156,7 +160,7 @@ theorem runs (factor multiplier addend : List Bool) (addendLength : addend.lengt
     (frame factor multiplier addend (word productBits) (word (List.replicate factor.length false))
       (word (List.replicate factor.length false)) oldResult (data false) addFlag)
     (frame factor multiplier addend (word productBits) (word (List.replicate factor.length false))
-      (word (List.replicate factor.length false)) (word (AddMultiply.sum productBits addend))
+      (word (List.replicate factor.length false)) (word (BinaryAddition.lowSum productBits addend))
       (data false) (data (BinaryAddition.ripple false productBits addend).2))
     (by intro name; fin_cases name <;> first | exact (buffer_padding _).symm | rfl)
     (by intro name; fin_cases name <;> first | exact (buffer_padding _).symm | rfl)

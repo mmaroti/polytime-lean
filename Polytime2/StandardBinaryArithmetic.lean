@@ -36,30 +36,33 @@ abbrev ripple := BinaryRipple.ripple
 
 variable (digit carry : Bool → Bool → Bool → Bool)
 
-noncomputable def domains : Sum Unit (Fin 4) → EncodedDomain Unit
-  | .inl _ => EncodedDomain.unary ()
-  | .inr 0 => EncodedDomain.binaryNaturals ()
-  | .inr 1 => EncodedDomain.binaryNaturals ()
-  | .inr 2 => EncodedDomain.binaryNaturals ()
+@[simp] noncomputable def domainsSized {Parameter : Type} [Fintype Parameter] (capacity : Parameter) :
+    Sum Parameter (Fin 4) → EncodedDomain Parameter
+  | .inl parameter => EncodedDomain.unary parameter
+  | .inr 0 => EncodedDomain.binaryNaturals capacity
+  | .inr 1 => EncodedDomain.binaryNaturals capacity
+  | .inr 2 => EncodedDomain.binaryNaturals capacity
   | .inr 3 => EncodedDomain.booleans
 
-def argumentReadOnly : Sum Unit (Fin 4) → Bool
+noncomputable abbrev domains : Sum Unit (Fin 4) → EncodedDomain Unit := domainsSized ()
+
+def argumentReadOnly {Parameter : Type} : Sum Parameter (Fin 4) → Bool
   | .inl _ => true
   | .inr 0 => true
   | .inr 1 => true
   | .inr 2 => false
   | .inr 3 => false
 
-def sizeTapes : Unit ↪ Sum Unit (Fin 4) :=
-  ⟨Sum.inl, by intro first second equal; cases first; cases second; rfl⟩
+def sizeTapes {Parameter : Type} : Parameter ↪ Sum Parameter (Fin 4) :=
+  ⟨Sum.inl, by intro first second equal; exact Sum.inl.inj equal⟩
 
 /-- False names the low result and true the carry or borrow. -/
-def outputTapes : Bool ↪ Sum Unit (Fin 4) :=
+def outputTapes {Parameter : Type} : Bool ↪ Sum Parameter (Fin 4) :=
   ⟨(fun | false => .inr 2 | true => .inr 3), by
     intro first second equal
     cases first <;> cases second <;> first | rfl | cases equal⟩
 
-def dataTapes : Fin 4 ↪ Sum Unit (Fin 4) :=
+def dataTapes {Parameter : Type} : Fin 4 ↪ Sum Parameter (Fin 4) :=
   ⟨Sum.inr, by intro first second equal; cases equal; rfl⟩
 
 def frame (leftFirst rightFirst leftSecond rightSecond leftOutput rightOutput : List Symbol)
@@ -89,16 +92,16 @@ def machine : Machine Alphabet State
     else some (.inr (memory, false), fun name =>
       (symbols name, if name = 3 then none else some .left))
 
-noncomputable def algorithm (digit carry : Bool → Bool → Bool → Bool) :
-    Machine (CallingConvention.Alphabet (Sum Unit (Fin 4))) (Sum State Unit) :=
+noncomputable def algorithm {Parameter : Type} (digit carry : Bool → Bool → Bool → Bool) :
+    Machine (CallingConvention.Alphabet (Sum Parameter (Fin 4))) (Sum State Unit) :=
   MultiTape.wire dataTapes (MultiTape.withExit (machine digit carry))
 
 def entry (previous : Bool) : Sum State Unit := .inl (.inl previous)
 
 def exit : Sum State Unit := .inr ()
 
-@[simp] theorem algorithm_halt (digit carry : Bool → Bool → Bool → Bool)
-    (symbols : Symbols (CallingConvention.Alphabet (Sum Unit (Fin 4)))) :
+@[simp] theorem algorithm_halt {Parameter : Type} (digit carry : Bool → Bool → Bool → Bool)
+    (symbols : Symbols (CallingConvention.Alphabet (Sum Parameter (Fin 4)))) :
     algorithm digit carry exit symbols = none := by
   simp [algorithm, exit, MultiTape.withExit, MultiTape.wire]
 
@@ -456,60 +459,60 @@ theorem runs (previous : Bool) (left right : List Bool) (sameLength : right.leng
 
 /-- Two immutable binary operands produce their fixed-width ripple result and
 carry on separate output tapes. -/
-theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Bool) :
-    CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes
+theorem contractSized {Parameter : Type} [Fintype Parameter] (capacity : Parameter) (digit carry : Bool → Bool → Bool → Bool) (previous : Bool) :
+    CallingConvention.Realizes (domainsSized capacity) argumentReadOnly sizeTapes outputTapes
       (algorithm digit carry) (entry previous) exit
       (fun _assignment _input => True)
       (fun assignment input output =>
-        (output false : Fin (2 ^ assignment ())).val =
+        (output false : Fin (2 ^ assignment capacity)).val =
           value (ripple digit carry previous
-            (List.ofFn (fun index : Fin (assignment ()) =>
+            (List.ofFn (fun index : Fin (assignment capacity) =>
               (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
-            (List.ofFn (fun index : Fin (assignment ()) =>
+            (List.ofFn (fun index : Fin (assignment capacity) =>
               (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
         output true =
           (ripple digit carry previous
-            (List.ofFn (fun index : Fin (assignment ()) =>
+            (List.ofFn (fun index : Fin (assignment capacity) =>
               (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
-            (List.ofFn (fun index : Fin (assignment ()) =>
+            (List.ofFn (fun index : Fin (assignment capacity) =>
               (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).2) := by
-  refine ⟨(by intro parameter; cases parameter; rfl), (by intro name; cases name <;> rfl), ?_,
-    2 * MvPolynomial.X () + MvPolynomial.C 3, ?_⟩
+  refine ⟨(by intro parameter; rfl), (by intro name; cases name <;> rfl), ?_,
+    2 * MvPolynomial.X capacity + MvPolynomial.C 3, ?_⟩
   · intro symbols
     simp [algorithm, exit, MultiTape.wire, MultiTape.withExit]
   · intro assignment input initial _ represented sizes
-    let left := List.ofFn (fun index : Fin (assignment ()) =>
+    let left := List.ofFn (fun index : Fin (assignment capacity) =>
       (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val)
-    let right := List.ofFn (fun index : Fin (assignment ()) =>
+    let right := List.ofFn (fun index : Fin (assignment capacity) =>
       (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val)
-    have leftLength : left.length = assignment () := List.length_ofFn
-    have rightLength : right.length = assignment () := List.length_ofFn
+    have leftLength : left.length = assignment capacity := List.length_ofFn
+    have rightLength : right.length = assignment capacity := List.length_ofFn
     obtain ⟨oldOutput, oldOutputLength, oldOutputEq⟩ := represented.2 (.inr 2) rfl
     obtain ⟨oldFlagList, oldFlagLength, oldFlagEq⟩ := represented.2 (.inr 3) rfl
-    norm_num [domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at oldFlagLength
+    norm_num [domainsSized, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at oldFlagLength
     obtain ⟨oldFlag, rfl⟩ := List.length_eq_one_iff.mp oldFlagLength
-    simp only [domains, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+    simp only [domainsSized, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
       EncodedDomain.width, MvPolynomial.eval_X] at oldOutputLength
-    have leftValue : value left = (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment ())).val :=
+    have leftValue : value left = (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment capacity)).val :=
       Binary.value_bits (BitVec.ofFin (input ⟨.inr 0, rfl⟩))
-    have rightValue : value right = (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment ())).val :=
+    have rightValue : value right = (input ⟨.inr 1, rfl⟩ : Fin (2 ^ assignment capacity)).val :=
       Binary.value_bits (BitVec.ofFin (input ⟨.inr 1, rfl⟩))
     have leftFin : input ⟨.inr 0, rfl⟩ =
         (⟨value left, by simpa only [leftLength] using Binary.value_lt_pow_length left⟩ :
-          Fin (2 ^ assignment ())) := Fin.ext leftValue.symm
+          Fin (2 ^ assignment capacity)) := Fin.ext leftValue.symm
     have rightFin : input ⟨.inr 1, rfl⟩ =
         (⟨value right, by simpa only [rightLength] using Binary.value_lt_pow_length right⟩ :
-          Fin (2 ^ assignment ())) := Fin.ext rightValue.symm
+          Fin (2 ^ assignment capacity)) := Fin.ext rightValue.symm
     have leftEq : initial (.inr 0) = buffer (word left) := by
       rw [represented.1 (.inr 0) rfl]
-      change encoded (EncodedDomain.binaryNaturals ()) assignment (input ⟨.inr 0, rfl⟩) = _
+      change encoded (EncodedDomain.binaryNaturals capacity) assignment (input ⟨.inr 0, rfl⟩) = _
       rw [leftFin]
-      exact encoded_binaryNaturals () assignment left leftLength
+      exact encoded_binaryNaturals capacity assignment left leftLength
     have rightEq : initial (.inr 1) = buffer (word right) := by
       rw [represented.1 (.inr 1) rfl]
-      change encoded (EncodedDomain.binaryNaturals ()) assignment (input ⟨.inr 1, rfl⟩) = _
+      change encoded (EncodedDomain.binaryNaturals capacity) assignment (input ⟨.inr 1, rfl⟩) = _
       rw [rightFin]
-      exact encoded_binaryNaturals () assignment right rightLength
+      exact encoded_binaryNaturals capacity assignment right rightLength
     have localInitial :
         install dataTapes
           (frame [0] (word left ++ [0]) [0] (word right ++ [0]) [0]
@@ -529,13 +532,13 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
         · change buffer [oldFlag] = initial (.inr 3)
           exact oldFlagEq.symm
     let computed := ripple digit carry previous left right
-    let outputWord : Fin (2 ^ assignment ()) :=
+    let outputWord : Fin (2 ^ assignment capacity) :=
       ⟨value computed.1, by
-        have resultLength : computed.1.length = assignment () :=
+        have resultLength : computed.1.length = assignment capacity :=
           (BinaryRipple.ripple_length digit carry previous left right
             (rightLength.trans leftLength.symm)).trans leftLength
         simpa only [resultLength] using Binary.value_lt_pow_length computed.1⟩
-    let output : Outputs domains outputTapes assignment
+    let output : Outputs (domainsSized capacity) outputTapes assignment
       | false => outputWord
       | true => computed.2
     have localTrace := runs digit carry previous left right
@@ -545,11 +548,11 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
       intro symbols
       simp [machine])
     have wiredTrace := localTrace.wire dataTapes
-      (fun name => (domains name).width assignment) argumentReadOnly
+      (fun name => ((domainsSized capacity) name).width assignment) argumentReadOnly
       (by
         intro name
-        change (domains (.inr name)).width assignment = width left.length name
-        fin_cases name <;> norm_num [domains, dataTapes, width,
+        change ((domainsSized capacity) (.inr name)).width assignment = width left.length name
+        fin_cases name <;> norm_num [domainsSized, dataTapes, width,
           EncodedDomain.binaryNaturals, EncodedDomain.booleans,
           EncodedDomain.fixed, leftLength, Nat.clog])
       (by
@@ -558,17 +561,17 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
       initial (fun _ => 0)
     rw [localInitial] at wiredTrace
     have positions : install dataTapes (fun _ : Fin 4 => (0 : ℤ))
-        (fun _ : Sum Unit (Fin 4) => (0 : ℤ)) = fun _ => 0 :=
+        (fun _ : Sum Parameter (Fin 4) => (0 : ℤ)) = fun _ => 0 :=
       install_self dataTapes _
     rw [positions] at wiredTrace
-    have trace : Runs (fun name => (domains name).width assignment) argumentReadOnly
-        (algorithm digit carry) (2 * assignment () + 3) (entry previous)
+    have trace : Runs (fun name => ((domainsSized capacity) name).width assignment) argumentReadOnly
+        (algorithm digit carry) (2 * assignment capacity + 3) (entry previous)
         (fun _ => 0) initial exit (fun _ => 0)
         (install dataTapes
           (frame [0] (word left ++ [0]) [0] (word right ++ [0]) [0]
             (word computed.1 ++ [0]) (data computed.2)) initial) := by
       simpa [algorithm, entry, exit, computed, leftLength] using wiredTrace
-    refine ⟨2 * assignment () + 3, output,
+    refine ⟨2 * assignment capacity + 3, output,
       install dataTapes
         (frame [0] (word left ++ [0]) [0] (word right ++ [0]) [0]
           (word computed.1 ++ [0]) (data computed.2)) initial, ?_, trace, ?_, ?_⟩
@@ -584,15 +587,35 @@ theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Boo
         rw [install_at]
         change Turing.Tape.mk' (Turing.ListBlank.mk [0])
           (Turing.ListBlank.mk (word computed.1 ++ [0])) =
-            encoded (EncodedDomain.binaryNaturals ()) assignment outputWord
+            encoded (EncodedDomain.binaryNaturals capacity) assignment outputWord
         exact (buffer_padding (word computed.1)).trans (by
           simpa only [outputWord] using
-            (encoded_binaryNaturals () assignment computed.1
+            (encoded_binaryNaturals capacity assignment computed.1
               ((BinaryRipple.ripple_length digit carry previous left right
                 (rightLength.trans leftLength.symm)).trans leftLength)).symm)
       | true =>
         change install dataTapes _ initial (dataTapes 3) = _
         rw [install_at]
         exact (encoded_booleans assignment computed.2).symm
+
+/-- The original single-capacity calling convention is a specialization. -/
+theorem contract (digit carry : Bool → Bool → Bool → Bool) (previous : Bool) :
+    CallingConvention.Realizes domains argumentReadOnly sizeTapes outputTapes
+      (algorithm digit carry) (entry previous) exit
+      (fun _assignment _input => True)
+      (fun assignment input output =>
+        (output false : Fin (2 ^ assignment ())).val =
+          value (ripple digit carry previous
+            (List.ofFn (fun index : Fin (assignment ()) =>
+              (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
+            (List.ofFn (fun index : Fin (assignment ()) =>
+              (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).1 ∧
+        output true =
+          (ripple digit carry previous
+            (List.ofFn (fun index : Fin (assignment ()) =>
+              (BitVec.ofFin (input ⟨.inr 0, rfl⟩)).getLsbD index.val))
+            (List.ofFn (fun index : Fin (assignment ()) =>
+              (BitVec.ofFin (input ⟨.inr 1, rfl⟩)).getLsbD index.val))).2) := by
+  exact contractSized () digit carry previous
 
 end Polytime2.StandardBinaryArithmetic

@@ -107,8 +107,7 @@ import Polytime2.BinaryAddition
 import Polytime2.BinaryRipple
 import Polytime2.BinarySubtraction
 import Polytime2.BinaryScan
-import Polytime2.AddMultiply
-import Polytime2.MultiplyAddContract
+import Polytime2.MultiplyAdd
 import Polytime2.Examples.MultiplyAdd
 import Polytime2.StandardMatrixAddressContract
 import Polytime2.Examples.MatrixAddress

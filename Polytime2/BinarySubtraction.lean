@@ -124,8 +124,8 @@ theorem runs (left right : List Bool)
 
 /-- Standard four-tape interface: immutable operands, low difference, and borrow. -/
 noncomputable abbrev domains := StandardBinaryArithmetic.domains
-abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly
-abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes
+abbrev argumentReadOnly := StandardBinaryArithmetic.argumentReadOnly (Parameter := Unit)
+abbrev sizeTapes := StandardBinaryArithmetic.sizeTapes (Parameter := Unit)
 
 noncomputable def algorithm :
     Machine (CallingConvention.Alphabet (Sum Unit (Fin 4))) (Sum StandardBinaryArithmetic.State Unit) :=

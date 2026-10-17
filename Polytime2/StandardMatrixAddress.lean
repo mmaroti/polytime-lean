@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.StandardSizeReadContract
-import Polytime2.MultiplyAddContract
+import Polytime2.MultiplyAdd
 
 /-! # Binary matrix addresses derived from unary dimensions
 
