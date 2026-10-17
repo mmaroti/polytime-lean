@@ -20,6 +20,7 @@ import Polytime2.Computation
 import Polytime2.Computation.Realizable
 import Polytime2.Computation.TM0
 import Polytime2.Computation.Composition
+import Polytime2.Computation.Constant
 import Polytime2.Computation.Arguments
 import Polytime2.Computation.Branch
 import Polytime2.Computation.While
@@ -73,11 +74,15 @@ import Polytime2.StandardSizeReadContract
 import Polytime2.Examples.SizeRead
 import Polytime2.StandardBinaryDecrement
 import Polytime2.StandardHead
-import Polytime2.StandardArraySeek
-import Polytime2.StandardArrayLookup
+import Polytime2.ArrayCounter
+import Polytime2.ArraySeek
+import Polytime2.ArrayBlockCopy
+import Polytime2.FixedArrayBlockCopy
+import Polytime2.RuntimeArrayBlockCopy
+import Polytime2.FixedArraySeek
+import Polytime2.FixedArrayLookup
 import Polytime2.EncodedArray
-import Polytime2.StandardArrayLookupSizedContract
-import Polytime2.StandardArrayUpdate
+import Polytime2.FixedArrayUpdate
 import Polytime2.Examples.Array
 import Polytime2.Examples.Multiplication
 import Polytime2.Examples.EncodedDomains
@@ -113,8 +118,6 @@ import Polytime2.StandardMatrixReplaceContract
 import Polytime2.Examples.MatrixReplace
 import Polytime2.Pipeline
 import Polytime2.Examples.Arithmetic
-import Polytime2.CatalogueMap
-import Polytime2.CatalogueMapContract
 import Polytime2.Examples.FiniteTables
 import Polytime2.StandardArrayMapContract
 import Polytime2.Examples.ArrayMaps

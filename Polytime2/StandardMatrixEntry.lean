@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.StandardMatrixAddressContract
-import Polytime2.StandardArrayLookupSizedContract
+import Polytime2.FixedArrayLookup
 
 /-! # Matrix entry lookup from separate row and column inputs
 
@@ -32,7 +32,7 @@ open Binary (Symbol word value data)
 
 abbrev TapeName := Sum StandardMatrixAddress.TapeName Bool
 abbrev Alphabet := CallingConvention.Alphabet TapeName
-abbrev State (elementWidth : ℕ) := Sum StandardMatrixAddress.State (StandardArrayLookup.State elementWidth)
+abbrev State (elementWidth : ℕ) := Sum StandardMatrixAddress.State (FixedArrayLookup.State elementWidth)
 
 noncomputable def length : MvPolynomial (Fin 3) ℕ := MvPolynomial.X 1 * MvPolynomial.X 2
 
@@ -61,13 +61,13 @@ def lookupWiring : Fin 6 ↪ TapeName :=
 
 noncomputable def address : Machine Alphabet StandardMatrixAddress.State :=
   MultiTape.wire Function.Embedding.inl StandardMatrixAddress.machine
-noncomputable def lookup (elementWidth : ℕ) : Machine Alphabet (StandardArrayLookup.State elementWidth) :=
-  MultiTape.wire lookupWiring (StandardArrayLookup.machine elementWidth)
+noncomputable def lookup (elementWidth : ℕ) : Machine Alphabet (FixedArrayLookup.State elementWidth) :=
+  MultiTape.wire lookupWiring (FixedArrayLookup.machine elementWidth)
 noncomputable def machine (elementWidth : ℕ) : Machine Alphabet (State elementWidth) :=
-  MultiTape.sequence address (lookup elementWidth) (StandardArrayLookup.entry elementWidth)
+  MultiTape.sequence address (lookup elementWidth) (FixedArrayLookup.entry elementWidth)
 
 def entry (elementWidth : ℕ) : State elementWidth := .inl StandardMatrixAddress.entry
-def exit (elementWidth : ℕ) : State elementWidth := .inr (StandardArrayLookup.exit elementWidth)
+def exit (elementWidth : ℕ) : State elementWidth := .inr (FixedArrayLookup.exit elementWidth)
 
 @[simp] theorem halt (elementWidth : ℕ) (symbols : Symbols Alphabet) :
     machine elementWidth (exit elementWidth) symbols = none := by
@@ -142,7 +142,7 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
     (by intro name outside; cases name with
       | inl name => exact False.elim (outside ⟨name, rfl⟩)
       | inr name => cases name <;> rfl)
-  obtain ⟨ticks, cost, localTrace⟩ := StandardArrayLookup.encoded_runsOfLength element length sizes addressBits
+  obtain ⟨ticks, cost, localTrace⟩ := FixedArrayLookup.encoded_runsOfLength element length sizes addressBits
     inRange array oldElement (word productBits) (word (List.replicate (sizes 0) false)) elementLength
     (by simp [word, productBitsLength, addressBitsLength]) (by simp [word, addressBitsLength]) (data false)
   let final := frame sizes row column (encoded (element.arrayOfLength length) sizes array)
@@ -156,13 +156,13 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
       intro name
       simp only [lookupWiring_apply]
       fin_cases name <;> norm_num [domains, StandardMatrixAddress.domains,
-        StandardArrayLookup.widths, addressBitsLength, EncodedDomain.binaryNaturals,
+        FixedArrayLookup.widths, addressBitsLength, EncodedDomain.binaryNaturals,
         EncodedDomain.booleans, EncodedDomain.fixed])
     (by
       intro name premise
       simp only [lookupWiring_apply] at premise
       fin_cases name <;> norm_num [readOnly, StandardMatrixAddress.readOnly,
-        StandardArrayLookup.readOnly] at *)
+        FixedArrayLookup.readOnly] at *)
     middle final
     (by intro name; fin_cases name <;> rfl)
     (by
@@ -198,7 +198,7 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
       | inr name => cases name with
         | false => exact False.elim (outside ⟨1, rfl⟩)
         | true => exact False.elim (outside ⟨2, rfl⟩))
-  have complete := first.sequence (lookup (element.width sizes)) (StandardArrayLookup.entry (element.width sizes))
+  have complete := first.sequence (lookup (element.width sizes)) (FixedArrayLookup.entry (element.width sizes))
     (by intro symbols; simp [MultiTape.wire]) second
   refine ⟨sizes 2 * (4 * sizes 0 + 8) + sizes 0 * (6 * sizes 0 + 14) +
     12 * sizes 0 + 29 + ticks + 1, addressBits, addressBitsLength, addressValue, ?_, ?_⟩

@@ -37,10 +37,10 @@ supply the operational width computation needed by generic tape algorithms.
   a zero guard, binary remainder, scratch clearing, and operand copies.
   It preserves both binary operands, accepts arbitrary writable contents, and
   returns a valid output encoding.
-- Two fixed catalogue maps at runtime-selected active coordinates, sharing array
-  and scalar scratch, preserving both indices, the active count, and inactive
-  data. Binary-encoded scalars use fixed finite tables; each map writes a
-  separate array, and equal indices apply both maps sequentially.
+- Two fixed catalogue maps at runtime-selected active coordinates, preserving
+  both indices, the active count, and inactive data. Binary-encoded scalars use
+  fixed finite tables; each map writes a separate array, and equal indices apply
+  both maps sequentially.
 - Runtime-width binary addition with a final carry digit, linear transition
   cost, preserved operands and neighboring storage, and restored heads. Its
   mathematical contract states exact natural-number addition.
@@ -199,6 +199,8 @@ heads. Both element bit width and array length may be polynomial expressions in
 runtime sizes. Width evaluation prepares a private unary header, including from
 arbitrary scratch contents. Nested arrays support extracting and replacing whole
 rows through the same generic lookup and update certificates.
+Fixed and unary-width commands share binary navigation and indexed block-copy
+controllers. Replacement adds one array copy before the shared access routine.
 
 The general `Simulation` theorem transfers multi-tape certificates with
 polynomial input storage to polynomial-time finite TM0 machines. Intermediate
@@ -279,6 +281,8 @@ computation. `letThen` retains the original arguments alongside that result for
 the continuation; nested bindings describe DAGs. `withArguments` selects inputs
 injectively from a larger context. Callers prove domain and precondition
 compatibility mathematically. `withPrecondition` restricts admissible inputs.
+`withSpecification` replaces a specification after proving agreement.
+`withConstantSizes` reuses a specialization-fixed computation alongside sizes.
 `reindexDomains` changes mathematical carriers through equivalences with the
 same widths and encoded bits. Matrix access reuses array computations this way.
 `choose` reads a Boolean argument and requires only the selected branch's
@@ -304,16 +308,10 @@ Implementation changes require no downstream proof edits when specifications
 and realizability statements stay unchanged. Lean may rebuild dependent modules;
 executable implementations are not a requirement.
 
-## Next steps (remove completed steps)
+## Limits and next steps (remove completed steps)
 
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
-
-### Array access
-
-Migrate indexed maps and matrix access off the old fixed-width array stack.
-Reuse generic array computations or runtime-width primitives, extract the shared
-counter machinery, and remove the superseded controllers and contracts.
 
 ### Size substitution
 
@@ -337,10 +335,9 @@ specialized execution and wiring adapters.
 
 ### Composed algorithms
 
-Express indexed maps, catalogue maps, matrix coordinate access, and compound
-arithmetic through certified mathematical composition. Add a specification
-congruence rule where needed, then delete their separate controller proofs.
-Assess additional copying and private storage when replacing shared workspaces.
+Express compound arithmetic through certified mathematical composition, then
+delete its separate controller proofs. Assess additional copying and private
+storage when replacing shared workspaces.
 
 ### Loop workspaces
 

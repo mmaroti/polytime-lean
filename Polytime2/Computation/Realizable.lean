@@ -241,4 +241,26 @@ theorem Computation.Realizable.withPrecondition
   obtain ⟨good, result⟩ := correct
   exact ⟨ticks, output, final, cost, trace, ⟨valid, result⟩, canonical⟩
 
+/-- Replace a mathematical specification after proving agreement on its inputs. -/
+theorem Computation.Realizable.withSpecification
+    {computation : Computation.{carrierLevel} Parameter InputName}
+    (realizable : computation.Realizable)
+    (precondition : ∀ sizes, computation.Arguments sizes → Prop)
+    (compute : ∀ sizes, {arguments : computation.Arguments sizes // precondition sizes arguments} →
+      computation.outputDomain.Carrier sizes)
+    (compatible : ∀ sizes arguments, precondition sizes arguments →
+      computation.precondition sizes arguments)
+    (correct : ∀ sizes arguments valid,
+      computation.compute sizes ⟨arguments, compatible sizes arguments valid⟩ =
+        compute sizes ⟨arguments, valid⟩) :
+    (Computation.mk computation.inputDomains computation.outputDomain precondition compute).Realizable := by
+  have restricted := realizable.withPrecondition precondition compatible
+  have equal : computation.withPrecondition precondition compatible =
+      Computation.mk computation.inputDomains computation.outputDomain precondition compute := by
+    change Computation.mk _ _ _ _ = Computation.mk _ _ _ _
+    congr 1
+    funext sizes arguments
+    exact correct sizes arguments.val arguments.property
+  rwa [equal] at restricted
+
 end Polytime2

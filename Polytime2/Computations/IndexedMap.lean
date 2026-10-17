@@ -15,15 +15,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Layout
-import Polytime2.IndexedMapContract
-import Polytime2.CatalogueMapContract
+import Polytime2.Computation.Composition
+import Polytime2.Computation.Constant
+import Polytime2.Computations.Array
+import Polytime2.Computations.FiniteTable
+import Polytime2.Computations.Constant
 
 /-! # Indexed finite operations through mathematical certificates -/
 
 namespace Polytime2.Computation
-
-open MultiTape CallingConvention Realizable
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -58,146 +58,97 @@ def catalogueMaps (elementDomain : EncodedDomain Empty) (indexCapacity : Paramet
   outputDomain := elementDomain.constant.arrayOfLength length
   precondition sizes arguments := (arguments 2).val ≤ MvPolynomial.eval sizes length ∧
     (arguments 0).val < (arguments 2).val ∧ (arguments 1).val < (arguments 2).val
-  compute _ arguments := CatalogueMap.compute (first Empty.elim) (second Empty.elim)
-    (arguments.val 3)
-    ⟨(arguments.val 0).val, lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩
-    ⟨(arguments.val 1).val, lt_of_lt_of_le arguments.property.2.2 arguments.property.1⟩
+  compute _ arguments :=
+    let firstIndex := ⟨(arguments.val 0).val, lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩
+    let secondIndex := ⟨(arguments.val 1).val, lt_of_lt_of_le arguments.property.2.2 arguments.property.1⟩
+    let middle := Function.update (arguments.val 3) firstIndex (first Empty.elim (arguments.val 3 firstIndex))
+    Function.update middle secondIndex (second Empty.elim (middle secondIndex))
 
-namespace Realizable.Internal
-
-private def indexedMapLayout (name : Parameter ⊕ Fin 12) :
-    Parameter ⊕ (Fin 3 ⊕ (Unit ⊕ Fin 12)) :=
-  match name with
-  | .inl parameter => .inl parameter
-  | .inr 0 => .inr (.inl 0)
-  | .inr 1 => .inr (.inl 1)
-  | .inr 2 => .inr (.inl 2)
-  | .inr 3 => .inr (.inr (.inl ()))
-  | .inr privateTape => .inr (.inr (.inr privateTape))
-
-private def indexedMapSource : Parameter ⊕ (Fin 3 ⊕ (Unit ⊕ Fin 12)) → Parameter ⊕ Fin 12
-  | .inl parameter => .inl parameter
-  | .inr (.inl 0) => .inr 0
-  | .inr (.inl 1) => .inr 1
-  | .inr (.inl 2) => .inr 2
-  | .inr (.inr (.inl _)) => .inr 3
-  | .inr (.inr (.inr name)) => .inr name
-
-omit [Fintype Parameter] in
-private theorem indexedMapLayout_leftInverse : Function.LeftInverse
-    (indexedMapSource (Parameter := Parameter)) indexedMapLayout := by
-  intro name
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private def indexedMapEmbedding : Parameter ⊕ Fin 12 ↪ Parameter ⊕ (Fin 3 ⊕ (Unit ⊕ Fin 12)) :=
-  ⟨indexedMapLayout, indexedMapLayout_leftInverse.injective⟩
-
-private def catalogueMapsLayout (name : Parameter ⊕ Fin 15) :
-    Parameter ⊕ (Fin 4 ⊕ (Unit ⊕ Fin 15)) :=
-  match name with
-  | .inl parameter => .inl parameter
-  | .inr 0 => .inr (.inl 0)
-  | .inr 1 => .inr (.inl 1)
-  | .inr 2 => .inr (.inl 2)
-  | .inr 3 => .inr (.inl 3)
-  | .inr 5 => .inr (.inr (.inl ()))
-  | .inr privateTape => .inr (.inr (.inr privateTape))
-
-private def catalogueMapsSource : Parameter ⊕ (Fin 4 ⊕ (Unit ⊕ Fin 15)) → Parameter ⊕ Fin 15
-  | .inl parameter => .inl parameter
-  | .inr (.inl 0) => .inr 0
-  | .inr (.inl 1) => .inr 1
-  | .inr (.inl 2) => .inr 2
-  | .inr (.inl 3) => .inr 3
-  | .inr (.inr (.inl _)) => .inr 5
-  | .inr (.inr (.inr name)) => .inr name
-
-omit [Fintype Parameter] in
-private theorem catalogueMapsLayout_leftInverse : Function.LeftInverse
-    (catalogueMapsSource (Parameter := Parameter)) catalogueMapsLayout := by
-  intro name
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private def catalogueMapsEmbedding : Parameter ⊕ Fin 15 ↪ Parameter ⊕ (Fin 4 ⊕ (Unit ⊕ Fin 15)) :=
-  ⟨catalogueMapsLayout, catalogueMapsLayout_leftInverse.injective⟩
-
-private theorem indexedMapDomains (parameterDomain elementDomain : EncodedDomain Empty)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
-    (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes →
-      elementDomain.Carrier sizes)
-    (name : Parameter ⊕ Fin 12) :
-    domains (indexedMap parameterDomain elementDomain indexCapacity length operation)
-      (fun privateTape => IndexedMap.domains parameterDomain elementDomain indexCapacity length (.inr privateTape))
-      (indexedMapEmbedding name) = IndexedMap.domains parameterDomain elementDomain indexCapacity length name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private theorem catalogueMapsDomains (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
-    (length : MvPolynomial Parameter ℕ)
-    (first second : ∀ sizes, elementDomain.Carrier sizes → elementDomain.Carrier sizes)
-    (name : Parameter ⊕ Fin 15) :
-    domains (catalogueMaps elementDomain indexCapacity length first second)
-      (fun privateTape => CatalogueMap.domains elementDomain indexCapacity length (.inr privateTape))
-      (catalogueMapsEmbedding name) = CatalogueMap.domains elementDomain indexCapacity length name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-end Realizable.Internal
-
-open Realizable.Internal in
 theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Empty)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
     (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes →
       elementDomain.Carrier sizes) :
     (indexedMap parameterDomain elementDomain indexCapacity length operation).Realizable := by
   let computation := indexedMap parameterDomain elementDomain indexCapacity length operation
-  let scratchDomains := fun privateTape => IndexedMap.domains parameterDomain elementDomain indexCapacity length (.inr privateTape)
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (indexedMapDomains parameterDomain elementDomain indexCapacity length operation name))
-  refine ofLayout computation scratchDomains (IndexedMap.domains parameterDomain elementDomain indexCapacity length)
-    IndexedMap.argumentReadOnly IndexedMap.sizeTapes IndexedMap.outputTapes
-    (IndexedMap.algorithm parameterDomain elementDomain operation)
-    (IndexedMap.entry (parameterDomain.width Empty.elim) (elementDomain.width Empty.elim)) (IndexedMap.exit (parameterDomain.width Empty.elim) (elementDomain.width Empty.elim)) _ _
-    (IndexedMap.contract parameterDomain elementDomain indexCapacity length operation) indexedMapEmbedding values
-    (by
-      intro name sizes
-      exact congrArg (fun domain => domain.width sizes) (indexedMapDomains parameterDomain elementDomain indexCapacity length operation name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
-  intro sizes input valid output correct
-  obtain ⟨within, result⟩ := correct
-  exact congrArg (encoded (elementDomain.constant.arrayOfLength length) sizes) result
+  let lookupSelection : Bool ↪ Fin 3 :=
+    ⟨(fun flag => if flag then 1 else 0), by
+      intro first second equal
+      cases first <;> cases second <;> simp_all⟩
+  let lookup := (arrayLookup elementDomain.constant indexCapacity length).withArguments
+    computation.inputDomains lookupSelection (by intro flag; cases flag <;> rfl)
+  let context : Fin 3 ⊕ Unit → EncodedDomain Parameter :=
+    Sum.elim computation.inputDomains (fun _ => elementDomain.constant)
+  let tableSelection : Bool ↪ Fin 3 ⊕ Unit :=
+    ⟨(fun flag => if flag then .inr () else .inl 2), by
+      intro first second equal
+      cases first <;> cases second <;> simp_all⟩
+  let table := (((finiteTable parameterDomain elementDomain elementDomain operation).withConstantSizes).withArguments
+    context tableSelection (by intro flag; cases flag <;> rfl)).withPrecondition
+      (fun sizes arguments => (arguments (.inl 0)).val < MvPolynomial.eval sizes length)
+      (by intro sizes arguments valid; trivial)
+  let updateContext : (Fin 3 ⊕ Unit) ⊕ Unit → EncodedDomain Parameter :=
+    Sum.elim context (fun _ => elementDomain.constant)
+  let updateSelection : Fin 3 ↪ (Fin 3 ⊕ Unit) ⊕ Unit :=
+    ⟨(fun | 0 => .inl (.inl 0) | 1 => .inl (.inl 1) | 2 => .inr ()), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
+  let update := (arrayUpdate elementDomain.constant indexCapacity length).withArguments
+    updateContext updateSelection (by intro name; fin_cases name <;> rfl)
+  have lookupRealizable : lookup.Realizable :=
+    (arrayLookup_realizable elementDomain.constant indexCapacity length).withArguments _ _ _
+  have tableRealizable : table.Realizable :=
+    (((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes).withArguments _ _ _).withPrecondition _ _
+  have updateRealizable : update.Realizable :=
+    (arrayUpdate_realizable elementDomain.constant indexCapacity length).withArguments _ _ _
+  let continuation := table.letThen update (by intro name; rfl) rfl
+    (by intro sizes arguments valid; exact valid)
+  have continuationRealizable : continuation.Realizable :=
+    tableRealizable.letThen updateRealizable _ _ _
+  exact lookupRealizable.letThen continuationRealizable (by intro name; rfl) rfl
+    (by intro sizes arguments valid; exact valid)
 
-open Realizable.Internal in
 theorem catalogueMaps_realizable (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ)
     (first second : ∀ sizes, elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
     (catalogueMaps elementDomain indexCapacity length first second).Realizable := by
   let computation := catalogueMaps elementDomain indexCapacity length first second
-  let scratchDomains := fun privateTape => CatalogueMap.domains elementDomain indexCapacity length (.inr privateTape)
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (catalogueMapsDomains elementDomain indexCapacity length first second name))
-  refine ofLayout computation scratchDomains (CatalogueMap.domains elementDomain indexCapacity length)
-    CatalogueMap.argumentReadOnly CatalogueMap.sizeTapes CatalogueMap.outputTapes
-    (CatalogueMap.algorithm elementDomain first second)
-    (CatalogueMap.entry (elementDomain.width Empty.elim)) (CatalogueMap.exit (elementDomain.width Empty.elim)) _ _
-    (CatalogueMap.contract elementDomain indexCapacity length first second) catalogueMapsEmbedding values
-    (by
-      intro name sizes
-      exact congrArg (fun domain => domain.width sizes) (catalogueMapsDomains elementDomain indexCapacity length first second name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
-  intro sizes input valid output correct
-  obtain ⟨firstWithin, secondWithin, result⟩ := correct
-  exact congrArg (encoded (elementDomain.constant.arrayOfLength length) sizes) result
+  let singleton : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
+  let noArguments : Empty ↪ Fin 4 := ⟨Empty.elim, by intro empty; exact Empty.elim empty⟩
+  let unitValue := (((constant singleton (fun _ => (0 : Fin 1))).withConstantSizes).withArguments
+    computation.inputDomains noArguments (by intro empty; exact Empty.elim empty)).withPrecondition
+      computation.precondition (by intro sizes arguments valid; trivial)
+  let context : Fin 4 ⊕ Unit → EncodedDomain Parameter :=
+    Sum.elim computation.inputDomains (fun _ => singleton.constant)
+  let firstSelection : Fin 3 ↪ Fin 4 ⊕ Unit :=
+    ⟨(fun | 0 => .inl 0 | 1 => .inl 3 | 2 => .inr ()), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
+  let firstCall := ((indexedMap singleton elementDomain indexCapacity length
+    (fun sizes _ value => first sizes value)).withArguments context firstSelection
+      (by intro name; fin_cases name <;> rfl)).withPrecondition
+        (fun sizes arguments => computation.precondition sizes (fun name => arguments (.inl name)))
+        (by intro sizes arguments valid; exact lt_of_lt_of_le valid.2.1 valid.1)
+  let secondContext : (Fin 4 ⊕ Unit) ⊕ Unit → EncodedDomain Parameter :=
+    Sum.elim context (fun _ => elementDomain.constant.arrayOfLength length)
+  let secondSelection : Fin 3 ↪ (Fin 4 ⊕ Unit) ⊕ Unit :=
+    ⟨(fun | 0 => .inl (.inl 1) | 1 => .inr () | 2 => .inl (.inr ())), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
+  let secondCall := (indexedMap singleton elementDomain indexCapacity length
+    (fun sizes _ value => second sizes value)).withArguments secondContext secondSelection
+      (by intro name; fin_cases name <;> rfl)
+  have unitRealizable : unitValue.Realizable :=
+    (((constant_realizable singleton (fun _ => (0 : Fin 1))).withConstantSizes).withArguments _ _ _).withPrecondition _ _
+  have firstRealizable : firstCall.Realizable :=
+    ((indexedMap_realizable singleton elementDomain indexCapacity length _).withArguments _ _ _).withPrecondition _ _
+  have secondRealizable : secondCall.Realizable :=
+    (indexedMap_realizable singleton elementDomain indexCapacity length _).withArguments _ _ _
+  let continuation := firstCall.letThen secondCall (by intro name; rfl) rfl
+    (by intro sizes arguments valid; exact lt_of_lt_of_le valid.2.2 valid.1)
+  have continuationRealizable : continuation.Realizable :=
+    firstRealizable.letThen secondRealizable _ _ _
+  exact unitRealizable.letThen continuationRealizable (by intro name; rfl) rfl
+    (by intro sizes arguments valid; exact valid)
 
 end IndexedComputations
 end Polytime2.Computation

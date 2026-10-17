@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.StandardMatrixEntry
-import Polytime2.StandardArrayUpdateEncodedRuns
+import Polytime2.FixedArrayUpdate
 
 /-! # Separate-output matrix entry replacement
 
@@ -31,7 +31,7 @@ open Binary (Symbol word value data)
 
 abbrev TapeName := Sum StandardMatrixAddress.TapeName (Fin 3)
 abbrev Alphabet := CallingConvention.Alphabet TapeName
-abbrev State (elementWidth : ℕ) := Sum StandardMatrixAddress.State (StandardArrayUpdate.State elementWidth)
+abbrev State (elementWidth : ℕ) := Sum StandardMatrixAddress.State (FixedArrayUpdate.State elementWidth)
 
 noncomputable def domains (element : EncodedDomain.{0, 0} (Fin 3)) : TapeName → EncodedDomain.{0, 0} (Fin 3)
   | .inl name => StandardMatrixAddress.domains name
@@ -57,13 +57,13 @@ def updateWiring : Fin 7 ↪ TapeName :=
 
 noncomputable def address : Machine Alphabet StandardMatrixAddress.State :=
   MultiTape.wire Function.Embedding.inl StandardMatrixAddress.machine
-noncomputable def update (elementWidth : ℕ) : Machine Alphabet (StandardArrayUpdate.State elementWidth) :=
-  MultiTape.wire updateWiring (StandardArrayUpdate.machine elementWidth)
+noncomputable def update (elementWidth : ℕ) : Machine Alphabet (FixedArrayUpdate.State elementWidth) :=
+  MultiTape.wire updateWiring (FixedArrayUpdate.machine elementWidth)
 noncomputable def machine (elementWidth : ℕ) : Machine Alphabet (State elementWidth) :=
-  MultiTape.sequence address (update elementWidth) (StandardArrayUpdate.entry elementWidth)
+  MultiTape.sequence address (update elementWidth) (FixedArrayUpdate.entry elementWidth)
 
 def entry (elementWidth : ℕ) : State elementWidth := .inl StandardMatrixAddress.entry
-def exit (elementWidth : ℕ) : State elementWidth := .inr (StandardArrayUpdate.exit elementWidth)
+def exit (elementWidth : ℕ) : State elementWidth := .inr (FixedArrayUpdate.exit elementWidth)
 
 @[simp] theorem halt (elementWidth : ℕ) (symbols : Symbols Alphabet) :
     machine elementWidth (exit elementWidth) symbols = none := by
@@ -141,7 +141,7 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
     (by intro name outside; cases name with
       | inl name => exact False.elim (outside ⟨name, rfl⟩)
       | inr name => fin_cases name <;> rfl)
-  obtain ⟨ticks, cost, localTrace⟩ := StandardArrayUpdate.encoded_runsOfLength element StandardMatrixEntry.length
+  obtain ⟨ticks, cost, localTrace⟩ := FixedArrayUpdate.encoded_runsOfLength element StandardMatrixEntry.length
     sizes addressBits inRange array replacement oldOutput (word productBits)
     (word (List.replicate (sizes 0) false)) outputLength
     (by simp [word, productBitsLength, addressBitsLength]) (by simp [word, addressBitsLength]) (data false)
@@ -156,13 +156,13 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
       intro name
       simp only [updateWiring_apply]
       fin_cases name <;> norm_num [domains, StandardMatrixAddress.domains,
-        StandardArrayUpdate.widths, addressBitsLength, EncodedDomain.binaryNaturals,
+        FixedArrayUpdate.widths, addressBitsLength, EncodedDomain.binaryNaturals,
         EncodedDomain.booleans, EncodedDomain.fixed])
     (by
       intro name premise
       simp only [updateWiring_apply] at premise
       fin_cases name <;> norm_num [readOnly, StandardMatrixAddress.readOnly,
-        StandardArrayUpdate.readOnly] at *)
+        FixedArrayUpdate.readOnly] at *)
     middle final (by intro name; fin_cases name <;> rfl)
     (by
       intro name
@@ -198,7 +198,7 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
         · exact False.elim (outside ⟨1, rfl⟩)
         · exact False.elim (outside ⟨2, rfl⟩)
         · exact False.elim (outside ⟨3, rfl⟩))
-  have complete := first.sequence (update (element.width sizes)) (StandardArrayUpdate.entry (element.width sizes))
+  have complete := first.sequence (update (element.width sizes)) (FixedArrayUpdate.entry (element.width sizes))
     (by intro symbols; simp [MultiTape.wire]) second
   refine ⟨sizes 2 * (4 * sizes 0 + 8) + sizes 0 * (6 * sizes 0 + 14) +
     12 * sizes 0 + 29 + ticks + 1, addressBits, addressBitsLength, addressValue, ?_, ?_⟩
