@@ -88,13 +88,11 @@ theorem contract : CallingConvention.Realizes domains readOnly sizeTapes outputT
       · exact resultEq.symm
       · exact addFlagEq.symm
   rw [initialEq] at trace
-  have scratchFits : (word scratch).length = row.length := by simp [word, scratchLength, rowLength]
-  have nextFits : oldNext.length = row.length := nextLength.trans rowLength.symm
   have sameLength : column.length = row.length := columnLength.trans rowLength.symm
-  let resultBits := MultiplyAdd.result row (columnBits sizes) column (word scratch) oldNext multiplyFlag
+  let resultBits := MultiplyAdd.result row (columnBits sizes) column
   have resultBitsLength : resultBits.length = sizes 0 :=
-    (MultiplyAdd.result_length row (columnBits sizes) column (word scratch) oldNext multiplyFlag
-      sameLength scratchFits nextFits).trans rowLength
+    (MultiplyAdd.result_length row (columnBits sizes) column
+      sameLength).trans rowLength
   let resultNatural : Fin (2 ^ sizes 0) := ⟨value resultBits,
     by simpa only [resultBitsLength] using Binary.value_lt_pow_length resultBits⟩
   let output : Outputs domains outputTapes sizes := fun _ => resultNatural
@@ -105,8 +103,8 @@ theorem contract : CallingConvention.Realizes domains readOnly sizeTapes outputT
     have fits : value row * value (columnBits sizes) + value column < 2 ^ row.length := by
       rwa [columnBits_value sizes valid.1, rowLength]
     simpa only [rowValue, columnValue, columnBits_value sizes valid.1] using
-      MultiplyAdd.result_value row (columnBits sizes) column (word scratch) oldNext multiplyFlag
-        sameLength scratchFits nextFits fits
+      MultiplyAdd.result_value row (columnBits sizes) column
+        sameLength fits
   · intro name
     cases name
     exact (encoded_binaryNaturals 0 sizes resultBits resultBitsLength).symm

@@ -25,18 +25,17 @@ open StandardBinaryMultiplication
 
 #guard Binary.value (finish [true, false, true, true, false, false, false]
   [true, false, true].reverse
-  (List.replicate 7 false, List.replicate 7 0, List.replicate 7 0, 2)).1 = 65
+  (List.replicate 7 false)) = 65
 
 -- The same finite controller handles different factor and multiplier widths.
 example :
     let factor := [true, false, true, true, false, false, false]
     let input := [true, false, true]
     let empty : List Binary.Symbol := List.replicate 7 0
-    let work : Workspace := (List.replicate 7 false, empty, empty, 2)
     CallingConvention.Runs (widths 3 7) readOnly machine 224 entry (fun _ => 0)
       (initialFrame input factor empty empty empty 2) exit (fun _ => 0)
       (frame (CallingConvention.buffer (Binary.word input)) factor
-        ((finish factor input.reverse work).1, Binary.word (List.replicate 7 false),
+        (finish factor input.reverse (List.replicate 7 false), Binary.word (List.replicate 7 false),
           Binary.word (List.replicate 7 false), Binary.data false)) := by
   exact runs [true, false, true] [true, false, true, true, false, false, false]
     (List.replicate 7 0) (List.replicate 7 0) (List.replicate 7 0) rfl rfl rfl 2

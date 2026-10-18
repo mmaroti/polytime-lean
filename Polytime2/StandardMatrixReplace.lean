@@ -109,23 +109,20 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
   obtain ⟨scratch, scratchLength, addressTrace⟩ := StandardMatrixAddress.runs sizes row column rowLength columnLength
     oldProduct oldShifted oldNext oldColumns oldAddress productLength shiftedLength nextLength columnsLength
     addressLength multiplyFlag addFlag columnsFit addressFit
-  let productBits := MultiplyAdd.product row (StandardMatrixAddress.columnBits sizes) (word scratch) oldNext multiplyFlag
-  let addressBits := MultiplyAdd.result row (StandardMatrixAddress.columnBits sizes) column (word scratch) oldNext multiplyFlag
-  have scratchFits : (word scratch).length = row.length := by simp [word, scratchLength, rowLength]
-  have nextFits : oldNext.length = row.length := nextLength.trans rowLength.symm
+  let productBits := MultiplyAdd.product row (StandardMatrixAddress.columnBits sizes)
+  let addressBits := MultiplyAdd.result row (StandardMatrixAddress.columnBits sizes) column
   have sameLength : column.length = row.length := columnLength.trans rowLength.symm
   have productBitsLength : productBits.length = sizes 0 :=
-    (MultiplyAdd.product_length row (StandardMatrixAddress.columnBits sizes) (word scratch) oldNext multiplyFlag
-      scratchFits nextFits).trans rowLength
+    (MultiplyAdd.product_length row (StandardMatrixAddress.columnBits sizes)).trans rowLength
   have addressBitsLength : addressBits.length = sizes 0 :=
-    (MultiplyAdd.result_length row (StandardMatrixAddress.columnBits sizes) column (word scratch) oldNext multiplyFlag
-      sameLength scratchFits nextFits).trans rowLength
+    (MultiplyAdd.result_length row (StandardMatrixAddress.columnBits sizes) column
+      sameLength).trans rowLength
   have addressValue : value addressBits = value row * sizes 2 + value column := by
     have fits : value row * value (StandardMatrixAddress.columnBits sizes) + value column < 2 ^ row.length := by
       rwa [StandardMatrixAddress.columnBits_value sizes columnsFit, rowLength]
     simpa only [StandardMatrixAddress.columnBits_value sizes columnsFit] using
-      MultiplyAdd.result_value row (StandardMatrixAddress.columnBits sizes) column (word scratch) oldNext multiplyFlag
-        sameLength scratchFits nextFits fits
+      MultiplyAdd.result_value row (StandardMatrixAddress.columnBits sizes) column
+        sameLength fits
   have inRange : value addressBits < MvPolynomial.eval sizes StandardMatrixEntry.length := by rwa [addressValue]
   let replacementBits := word (EncodedDomain.ArrayEncoding.bits (element.encode sizes replacement))
   let middle := frame sizes row column (encoded (element.arrayOfLength StandardMatrixEntry.length) sizes array)

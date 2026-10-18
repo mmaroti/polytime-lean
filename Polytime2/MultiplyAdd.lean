@@ -73,36 +73,31 @@ def exit : State := .inr (.inr (false, true))
 @[simp] theorem halt (symbols : Symbols Alphabet) : machine exit symbols = none := by
   simp [machine, exit, second, MultiTape.sequence, MultiTape.wire, StandardBinaryArithmetic.machine]
 
-def product (factor multiplier : List Bool) (shifted next : List Symbol) (flag : Symbol) : List Bool :=
-  (StandardBinaryMultiplication.finish factor multiplier.reverse
-    (List.replicate factor.length false, shifted, next, flag)).1
+def product (factor multiplier : List Bool) : List Bool :=
+  StandardBinaryMultiplication.finish factor multiplier.reverse (List.replicate factor.length false)
 
-def result (factor multiplier addend : List Bool) (shifted next : List Symbol) (flag : Symbol) : List Bool :=
-  BinaryAddition.lowSum (product factor multiplier shifted next flag) addend
+def result (factor multiplier addend : List Bool) : List Bool :=
+  BinaryAddition.lowSum (product factor multiplier) addend
 
-theorem product_length (factor multiplier : List Bool) (shifted next : List Symbol) (flag : Symbol)
-    (shiftedLength : shifted.length = factor.length) (nextLength : next.length = factor.length) :
-    (product factor multiplier shifted next flag).length = factor.length :=
-  (StandardBinaryMultiplication.finish_fits factor multiplier.reverse
-    (List.replicate factor.length false, shifted, next, flag)
-    ⟨List.length_replicate, shiftedLength, nextLength⟩).1
+theorem product_length (factor multiplier : List Bool) :
+    (product factor multiplier).length = factor.length :=
+  StandardBinaryMultiplication.finish_length factor multiplier.reverse
+    (List.replicate factor.length false) List.length_replicate
 
-theorem result_length (factor multiplier addend : List Bool) (shifted next : List Symbol) (flag : Symbol)
-    (addendLength : addend.length = factor.length)
-    (shiftedLength : shifted.length = factor.length) (nextLength : next.length = factor.length) :
-    (result factor multiplier addend shifted next flag).length = factor.length := by
-  have length := product_length factor multiplier shifted next flag shiftedLength nextLength
+theorem result_length (factor multiplier addend : List Bool)
+    (addendLength : addend.length = factor.length) :
+    (result factor multiplier addend).length = factor.length := by
+  have length := product_length factor multiplier
   exact (BinaryAddition.lowSum_length _ _ (addendLength.trans length.symm)).trans length
 
 /-- The single capacity hypothesis is the ordinary mathematical address bound. -/
-theorem result_value (factor multiplier addend : List Bool) (shifted next : List Symbol) (flag : Symbol)
+theorem result_value (factor multiplier addend : List Bool)
     (addendLength : addend.length = factor.length)
-    (shiftedLength : shifted.length = factor.length) (nextLength : next.length = factor.length)
     (capacity : value factor * value multiplier + value addend < 2 ^ factor.length) :
-    value (result factor multiplier addend shifted next flag) = value factor * value multiplier + value addend := by
-  have length := product_length factor multiplier shifted next flag shiftedLength nextLength
-  have productValue : value (product factor multiplier shifted next flag) = value factor * value multiplier :=
-    StandardBinaryMultiplication.result_value multiplier factor shifted next flag shiftedLength nextLength (by omega)
+    value (result factor multiplier addend) = value factor * value multiplier + value addend := by
+  have length := product_length factor multiplier
+  have productValue : value (product factor multiplier) = value factor * value multiplier :=
+    StandardBinaryMultiplication.result_value multiplier factor (by omega)
   exact (BinaryAddition.lowSum_value _ _ (addendLength.trans length.symm)
     (by simpa [length, productValue] using capacity)).1.trans (by rw [productValue])
 
@@ -119,15 +114,14 @@ theorem runs (factor multiplier addend : List Bool) (addendLength : addend.lengt
       entry (fun _ => 0)
       (frame factor multiplier addend oldProduct oldShifted oldNext oldResult multiplyFlag addFlag)
       exit (fun _ => 0)
-      (frame factor multiplier addend (word (product factor multiplier oldShifted oldNext multiplyFlag))
+      (frame factor multiplier addend (word (product factor multiplier))
         (word (List.replicate factor.length false)) (word (List.replicate factor.length false))
-        (word (result factor multiplier addend oldShifted oldNext multiplyFlag)) (data false) (data false)) := by
-  let productBits := product factor multiplier oldShifted oldNext multiplyFlag
+        (word (result factor multiplier addend)) (data false) (data false)) := by
+  let productBits := product factor multiplier
   have length : productBits.length = factor.length :=
-    product_length factor multiplier oldShifted oldNext multiplyFlag shiftedLength nextLength
+    product_length factor multiplier
   have productValue : value productBits = value factor * value multiplier :=
-    StandardBinaryMultiplication.result_value multiplier factor oldShifted oldNext multiplyFlag
-      shiftedLength nextLength (by omega)
+    StandardBinaryMultiplication.result_value multiplier factor (by omega)
   have noCarry := (BinaryAddition.lowSum_value productBits addend (addendLength.trans length.symm)
     (by simpa [length, productValue] using capacity)).2
   have multiplied := (StandardBinaryMultiplication.runs multiplier factor oldProduct oldShifted oldNext

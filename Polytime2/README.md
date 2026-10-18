@@ -34,7 +34,7 @@ supply the operational width computation needed by generic tape algorithms.
   expose preservation of unwired tapes and their head positions.
 - Executable mathematical gcd with correctness, capacity preservation, and an
   iteration bound in binary capacity. A standard-convention gcd machine composes
-  a zero guard, binary remainder, scratch clearing, and operand copies.
+  a zero guard, binary remainder, and operand copies.
   It preserves both binary operands, accepts arbitrary writable contents, and
   returns a valid output encoding.
 - Two fixed catalogue maps at runtime-selected active coordinates, preserving
@@ -56,6 +56,11 @@ supply the operational width computation needed by generic tape algorithms.
   bound, preserved operands, restored heads, and fixed-width scratch. A shift
   and subtraction followed by selection process each dividend bit once, using
   separate result tapes and finite carry or borrow memory.
+- `StandardBitFold.runsValues` tracks live multiplication and remainder
+  accumulators through representation predicates. Private scratch needs only
+  region bounds. Gcd uses `Runs.whileValues` for two live operands, without
+  scratch recurrences or final scratch clearing. Mathematical product and
+  remainder functions are independent of private tape contents.
 - Fixed-width multiplication and compound `(left + right) * multiplier` and
   `factor * multiplier + addend` computations with immutable operands and
   arbitrary initial writable contents.
@@ -336,14 +341,6 @@ For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
 The consolidation steps below are ordered by rough expected net line reduction;
 the estimates include new machinery, overlap, and should not be added together.
-
-### Arithmetic workspaces (~450 lines)
-
-Generalize `StandardBitFold` to represent live mathematical values while leaving
-private scratch subject only to region bounds. Apply it to multiplication and
-remainder, and reuse `Runs.whileValues` for gcd. Remove explicit scratch
-recurrences and their `Fits` proofs where only the accumulator or operands are
-needed; retain the mathematical arithmetic invariants.
 
 ### Call frames (~350 lines)
 

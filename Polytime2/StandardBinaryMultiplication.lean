@@ -52,32 +52,14 @@ def widths (sourceWidth digits : ℕ) (name : Fin 6) : ℕ :=
 
 def readOnly (name : Fin 6) : Bool := decide (name = 1 ∨ name = 5)
 
-def Fits (digits : ℕ) (work : Workspace) : Prop :=
-  work.1.length = digits ∧ work.2.1.length = digits ∧ work.2.2.1.length = digits
-
-def advance (bit : Bool) (factor : List Bool) (work : Workspace) : Workspace :=
-  let result := StandardBinaryMultiplyStep.added bit work.1 factor
-  (result.1, word (StandardBinaryMultiplyStep.shifted work.1), word result.1, data result.2)
-
-theorem advance_fits (bit : Bool) (factor : List Bool) (work : Workspace)
-    (fits : Fits factor.length work) : Fits factor.length (advance bit factor work) := by
-  have length := StandardBinaryMultiplyStep.added_length bit work.1 factor fits.1.symm
-  refine ⟨length.trans fits.1, ?_, ?_⟩
-  · simp [advance, word, fits.1]
-  · simpa [advance, word] using length.trans fits.1
-
 def stepWiring : Fin 5 ↪ Fin 6 :=
   ⟨(fun name => ⟨name.val, by omega⟩), by
     intro first second equal
     exact Fin.ext (congrArg (fun name : Fin 6 => name.val) equal)⟩
 
-def copyWiring : Bool ↪ Fin 6 :=
-  ⟨(fun name => if name then 0 else 3), by
-    intro first second equal
-    cases first <;> cases second <;> simp_all⟩
 
 @[simp] theorem stepWiring_apply (name : Fin 5) : stepWiring name = ⟨name.val, by omega⟩ := rfl
-@[simp] theorem copyWiring_apply (name : Bool) : copyWiring name = (if name then 0 else 3) := rfl
+
 
 noncomputable def stepMachine (bit : Bool) : Machine Alphabet StandardBinaryMultiplyStep.State :=
   MultiTape.wire stepWiring (StandardBinaryMultiplyStep.machine bit)
@@ -89,7 +71,7 @@ noncomputable def choice : Machine Alphabet ChoiceState
   | .inr state, symbols => (stepMachine false state symbols).map (fun command => (.inr command.1, command.2))
 
 noncomputable def copyMachine : Machine Alphabet (Fin 3) :=
-  MultiTape.wire copyWiring StandardTerminatedCopy.machine
+  StandardTapeCommands.copy 3 0 (by decide)
 
 abbrev BodyState := Sum (Sum ChoiceState Unit) (Fin 3)
 
@@ -101,160 +83,93 @@ def bodyEntry (bit : Bool) : BodyState :=
 
 def bodyExit : BodyState := .inr 2
 
-private theorem step_positions (offset : ℤ) :
-    install stepWiring (fun _ : Fin 5 => (0 : ℤ)) (position offset) = position offset := by
-  funext name
-  fin_cases name
-  all_goals first
-    | (change install stepWiring _ _ (stepWiring 0) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 1) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 2) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 3) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 4) = _; rw [install_at]; rfl)
-    | (apply install_outside; rintro ⟨localName, equal⟩;
-        have values := congrArg (fun name : Fin 6 => name.val) equal;
-        have bounded := localName.isLt; simp only [stepWiring_apply] at values; omega)
+private def Represents (sourceWidth : ℕ) (factor current : List Bool) (tapes : Tapes Alphabet) : Prop :=
+  current.length = factor.length ∧ tapes 0 = buffer (word current) ∧
+    tapes 1 = buffer (word factor) ∧
+    ∀ name, name ≠ 5 → Region (widths sourceWidth factor.length name) 0 (tapes name)
 
-private theorem step_install (source : Turing.Tape Symbol) (factor current : List Bool)
-    (shifted result : List Symbol) (flag : Symbol) (old : Workspace) :
-    install stepWiring (StandardBinaryMultiplyStep.frame current factor shifted result flag)
-      (frame source factor old) = frame source factor (current, shifted, result, flag) := by
-  funext name
-  fin_cases name
-  all_goals first
-    | (change install stepWiring _ _ (stepWiring 0) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 1) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 2) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 3) = _; rw [install_at]; rfl)
-    | (change install stepWiring _ _ (stepWiring 4) = _; rw [install_at]; rfl)
-    | (rw [install_outside _ _ _ _ (by
-        rintro ⟨localName, equal⟩
-        have values := congrArg (fun name : Fin 6 => name.val) equal
-        have bounded := localName.isLt
-        simp only [stepWiring_apply] at values
-        omega)]; rfl)
+private theorem represents_cursor (sourceWidth : ℕ) (factor current : List Bool)
+    (tapes : Tapes Alphabet) (source : Turing.Tape Symbol)
+    (represented : Represents sourceWidth factor current tapes) :
+    Represents sourceWidth factor current (StandardBitFold.frame 5 id source tapes) := by
+  rcases represented with ⟨length, currentEq, factorEq, regions⟩
+  refine ⟨length, currentEq, factorEq, ?_⟩
+  intro name different
+  simpa [StandardBitFold.frame, different] using regions name different
 
-private theorem copy_positions (offset : ℤ) :
-    install copyWiring (fun _ : Bool => (0 : ℤ)) (position offset) = position offset := by
-  funext name
-  fin_cases name
-  · change install copyWiring _ _ (copyWiring true) = _
-    rw [install_at]; rfl
-  · apply install_outside
-    rintro ⟨localName, equal⟩
-    cases localName <;> simp [copyWiring_apply] at equal
-  · apply install_outside
-    rintro ⟨localName, equal⟩
-    cases localName <;> simp [copyWiring_apply] at equal
-  · change install copyWiring _ _ (copyWiring false) = _
-    rw [install_at]; rfl
-  all_goals
-    apply install_outside
-    rintro ⟨localName, equal⟩
-    cases localName <;> simp [copyWiring_apply] at equal
-
-private theorem copy_install (source : Turing.Tape Symbol) (factor current result : List Bool)
-    (shifted : List Symbol) (flag : Symbol) (newCurrent : List Bool) :
-    install copyWiring (Copy.frame [0] (word result ++ [0]) [0] (word newCurrent ++ [0]))
-      (frame source factor (current, shifted, word result, flag)) =
-      frame source factor (newCurrent, shifted, word result, flag) := by
-  funext name
-  fin_cases name
-  · change install copyWiring _ _ (copyWiring true) = _
-    rw [install_at]
-    exact buffer_padding _
-  · apply install_outside
-    rintro ⟨localName, equal⟩
-    cases localName <;> simp [copyWiring_apply] at equal
-  · apply install_outside
-    rintro ⟨localName, equal⟩
-    cases localName <;> simp [copyWiring_apply] at equal
-  · change install copyWiring _ _ (copyWiring false) = _
-    rw [install_at]
-    exact buffer_padding _
-  all_goals
-    apply install_outside
-    rintro ⟨localName, equal⟩
-    cases localName <;> simp [copyWiring_apply] at equal
-
-/-- One restoring body call changes only private accumulator and scratch tapes.
-The multiplier cursor remains wherever the enclosing traversal placed it. -/
-theorem body_runs (bit : Bool) (factor : List Bool) (work : Workspace)
-    (fits : Fits factor.length work) (source : Turing.Tape Symbol) (sourceWidth : ℕ) (offset : ℤ) :
-    Runs (widths sourceWidth factor.length) readOnly body (6 * factor.length + 10)
-      (bodyEntry bit) (position offset) (frame source factor work)
-      bodyExit (position offset) (frame source factor (advance bit factor work)) := by
-  have stepTrace := (StandardBinaryMultiplyStep.runs bit work.1 factor fits.1.symm
-    work.2.1 work.2.2.1 (fits.2.1.trans fits.1.symm) (fits.2.2.trans fits.1.symm) work.2.2.2).wire
-    stepWiring (widths sourceWidth factor.length) readOnly
-    (by intro name; fin_cases name <;> simp [widths, StandardBinaryMultiplyStep.widths, fits.1])
-    (by intro name premise; fin_cases name <;>
-      simp_all [readOnly, StandardBinaryMultiplyStep.readOnly])
-    (frame source factor work) (position offset)
-  rw [step_positions, step_install, step_install] at stepTrace
-  have originalWork : (work.1, work.2.1, work.2.2.1, work.2.2.2) = work := rfl
-  rw [originalWork] at stepTrace
-  have selected : Runs (widths sourceWidth factor.length) readOnly choice (4 * work.1.length + 6)
+/-- Only the accumulator is live; scratch requires its preserved region. -/
+private theorem body_runs (bit : Bool) (factor current : List Bool) (sourceWidth : ℕ)
+    (initial : Tapes Alphabet) (represented : Represents sourceWidth factor current initial) :
+    ∃ final, Runs (widths sourceWidth factor.length) readOnly body (6 * factor.length + 10)
+      (bodyEntry bit) (fun _ => 0) initial bodyExit (fun _ => 0) final ∧
+      Represents sourceWidth factor (StandardBinaryMultiplyStep.added bit current factor).1 final := by
+  rcases represented with ⟨length, currentEq, factorEq, regions⟩
+  obtain ⟨shifted, shiftedLength, shiftedEq⟩ := (regions 2 (by decide)).exists_buffer
+  obtain ⟨result, resultLength, resultEq⟩ := (regions 3 (by decide)).exists_buffer
+  obtain ⟨flags, flagLength, flagEq⟩ := (regions 4 (by decide)).exists_buffer
+  change flags.length = 1 at flagLength
+  obtain ⟨flag, rfl⟩ := List.length_eq_one_iff.mp flagLength
+  obtain ⟨after, lifted, located, outside, immutable⟩ :=
+    (StandardBinaryMultiplyStep.runs bit current factor length.symm shifted result
+      (shiftedLength.trans length.symm) (resultLength.trans length.symm) flag).wire_restoring
+      stepWiring (widths sourceWidth factor.length) readOnly
+      (by intro name; fin_cases name <;> simp [widths, StandardBinaryMultiplyStep.widths, length])
+      (by intro name premise; fin_cases name <;> first | rfl | contradiction)
+      initial (by intro name; fin_cases name <;> assumption)
+  have selected : Runs (widths sourceWidth factor.length) readOnly choice (4 * current.length + 6)
       (if bit then .inl StandardBinaryMultiplyStep.entry else .inr StandardBinaryMultiplyStep.entry)
-      (position offset) (frame source factor work)
+      (fun _ => 0) initial
       (if bit then .inl StandardBinaryMultiplyStep.exit else .inr StandardBinaryMultiplyStep.exit)
-      (position offset) (frame source factor (work.1,
-        word (StandardBinaryMultiplyStep.shifted work.1),
-        word (StandardBinaryMultiplyStep.added bit work.1 factor).1,
-        data (StandardBinaryMultiplyStep.added bit work.1 factor).2)) := by
+      (fun _ => 0) after := by
     cases bit
-    · exact stepTrace.rename Sum.inr (by intro state symbols next actions transition; simp [choice, stepMachine, transition])
-    · exact stepTrace.rename Sum.inl (by intro state symbols next actions transition; simp [choice, stepMachine, transition])
-  have common := selected.withExit (by
-    intro symbols
-    cases bit <;> simp [choice, stepMachine, MultiTape.wire, StandardBinaryMultiplyStep.machine,
+    · exact lifted.rename Sum.inr (by intro state symbols next actions transition; simp [choice, stepMachine, transition])
+    · exact lifted.rename Sum.inl (by intro state symbols next actions transition; simp [choice, stepMachine, transition])
+  have common := selected.withExit (by intro symbols; cases bit <;>
+    simp [choice, stepMachine, MultiTape.wire, StandardBinaryMultiplyStep.machine,
       StandardBinaryMultiplyStep.exit, MultiTape.withExit])
-  let next := (StandardBinaryMultiplyStep.added bit work.1 factor).1
+  let next := (StandardBinaryMultiplyStep.added bit current factor).1
   have nextLength : next.length = factor.length :=
-    (StandardBinaryMultiplyStep.added_length bit work.1 factor fits.1.symm).trans fits.1
-  have copied := (StandardTerminatedCopy.runs next (word work.1)
-    (by simp [word, nextLength, fits.1])).wire
-    copyWiring (widths sourceWidth factor.length) readOnly
-    (by intro name; cases name <;> simp [widths, nextLength])
-    (by intro name premise; cases name <;> simp [readOnly] at premise)
-    (frame source factor (work.1, word (StandardBinaryMultiplyStep.shifted work.1), word next,
-      data (StandardBinaryMultiplyStep.added bit work.1 factor).2)) (position offset)
-  rw [copy_positions, copy_install, copy_install] at copied
+    (StandardBinaryMultiplyStep.added_length bit current factor length.symm).trans length
+  have copied := StandardTapeCommands.copy_runs (3 : Fin 6) 0 (by decide)
+    (widths sourceWidth factor.length) readOnly rfl next (word current)
+    nextLength.symm nextLength.symm (by simp [word, nextLength, length]) after (located 3) (located 0)
   have complete := common.sequence copyMachine 0 (by intro symbols; rfl) copied
-  simp only [fits.1, nextLength] at complete
-  convert complete using 1 <;> first | rfl | omega
+  refine ⟨Function.update after 0 (buffer (word next)), ?_, nextLength, Function.update_self _ _ _, ?_, ?_⟩
+  · convert complete using 1 <;> first | rfl | omega
+  · exact (complete.readOnly_tape 1 rfl).trans factorEq
+  · intro name different
+    exact complete.region name (regions name different)
 
 abbrev LoopState := StandardBitFold.State BodyState
-
 noncomputable def loop : Machine Alphabet LoopState := StandardBitFold.machine 5 body bodyEntry
-
 def loopEntry : LoopState := StandardBitFold.entry
 def loopExit : LoopState := StandardBitFold.exit
 
-def finish (factor : List Bool) (bits : List Bool) (work : Workspace) : Workspace :=
-  StandardBitFold.fold (fun bit work => advance bit factor work) bits work
+/-- The logical recurrence contains only the accumulator. -/
+def finish (factor bits current : List Bool) : List Bool :=
+  StandardBitFold.fold (fun bit current => (StandardBinaryMultiplyStep.added bit current factor).1) bits current
 
-theorem finish_fits (factor bits : List Bool) (work : Workspace)
-    (fits : Fits factor.length work) : Fits factor.length (finish factor bits work) := by
-  induction bits generalizing work with
-  | nil => exact fits
-  | cons bit bits hypothesis => exact hypothesis _ (advance_fits bit factor work fits)
+theorem finish_length (factor bits current : List Bool) (length : current.length = factor.length) :
+    (finish factor bits current).length = factor.length := by
+  induction bits generalizing current with
+  | nil => exact length
+  | cons bit bits hypothesis =>
+    exact hypothesis _ ((StandardBinaryMultiplyStep.added_length bit current factor length.symm).trans length)
 
 /-- The accumulator computes the product prefix modulo its fixed capacity. -/
-theorem finish_value (factor bits : List Bool) (work : Workspace)
-    (fits : Fits factor.length work) :
-    value (finish factor bits work).1 =
-      (2 ^ bits.length * value work.1 + value factor * value bits.reverse) % 2 ^ factor.length := by
-  induction bits generalizing work with
+theorem finish_value (factor bits current : List Bool) (length : current.length = factor.length) :
+    value (finish factor bits current) =
+      (2 ^ bits.length * value current + value factor * value bits.reverse) % 2 ^ factor.length := by
+  induction bits generalizing current with
   | nil =>
-    have bounded : value work.1 < 2 ^ factor.length := by
-      simpa only [fits.1] using Binary.value_lt_pow_length work.1
+    have bounded : value current < 2 ^ factor.length := by
+      simpa only [length] using Binary.value_lt_pow_length current
     simp [finish, StandardBitFold.fold, value, Nat.mod_eq_of_lt bounded]
   | cons bit bits hypothesis =>
-    have nextFits := advance_fits bit factor work fits
-    have rest := hypothesis (advance bit factor work) nextFits
-    have step := StandardBinaryMultiplyStep.added_mod bit work.1 factor fits.1.symm
-    rw [fits.1] at step
+    have nextLength := (StandardBinaryMultiplyStep.added_length bit current factor length.symm).trans length
+    have rest := hypothesis _ nextLength
+    have step := StandardBinaryMultiplyStep.added_mod bit current factor length.symm
+    rw [length] at step
     have reverseValue : value (bit :: bits).reverse =
         value bits.reverse + 2 ^ bits.length * bit.toNat := by
       have previous := Binary.prefixValue_reverse bits.reverse bit.toNat
@@ -263,42 +178,38 @@ theorem finish_value (factor bits : List Bool) (work : Workspace)
       rw [← whole]
       change Binary.prefixValue bits (bit.toNat + 2 * 0) = _
       simpa using previous
-    change value (finish factor bits (advance bit factor work)).1 = _
-    rw [rest]
-    change (2 ^ bits.length * value (StandardBinaryMultiplyStep.added bit work.1 factor).1 +
-      value factor * value bits.reverse) % 2 ^ factor.length = _
-    rw [step, reverseValue, List.length_cons, pow_succ]
+    change value (finish factor bits (StandardBinaryMultiplyStep.added bit current factor).1) = _
+    rw [rest, step, reverseValue, List.length_cons, pow_succ]
     calc
-      _ = (2 ^ bits.length * (2 * value work.1 + (if bit then value factor else 0)) +
+      _ = (2 ^ bits.length * (2 * value current + (if bit then value factor else 0)) +
           value factor * value bits.reverse) % 2 ^ factor.length := by
         simp only [Nat.add_mod, Nat.mul_mod, Nat.mod_mod]
       _ = _ := by congr 1; cases bit <;> simp <;> ring
 
-/-- With zero initial accumulator and sufficient capacity, the loop is exact. -/
-theorem result_value (input factor : List Bool) (shifted result : List Symbol) (flag : Symbol)
-    (shiftedLength : shifted.length = factor.length) (resultLength : result.length = factor.length)
+theorem result_value (input factor : List Bool)
     (capacity : value factor * value input < 2 ^ factor.length) :
-    value (finish factor input.reverse (List.replicate factor.length false, shifted, result, flag)).1 =
-      value factor * value input := by
+    value (finish factor input.reverse (List.replicate factor.length false)) = value factor * value input := by
   simpa [Nat.mod_eq_of_lt capacity] using finish_value factor input.reverse
-    (List.replicate factor.length false, shifted, result, flag)
-    ⟨List.length_replicate, shiftedLength, resultLength⟩
+    (List.replicate factor.length false) List.length_replicate
 
-/-- The runtime-width multiplication loop uses one fixed finite controller.
-Every source head and every body head is restored at its boundary. -/
-theorem loop_runs (input factor : List Bool) (work : Workspace) (fits : Fits factor.length work) :
-    Runs (widths input.length factor.length) readOnly loop
-      (input.length * (6 * factor.length + 14) + 3) loopEntry (fun _ => 0)
-      (frame (buffer (word input)) factor work) loopExit (fun _ => 0)
-      (frame (buffer (word input)) factor (finish factor input.reverse work)) := by
-  exact StandardBitFold.runs 5 body bodyEntry (storage factor) (widths input.length factor.length)
-    readOnly (fun bit work => advance bit factor work) (Fits factor.length) bodyExit
-    (6 * factor.length + 10)
-    (by intro symbols; simp [body, bodyExit, MultiTape.sequence, copyMachine,
-      MultiTape.wire, StandardTerminatedCopy.machine])
-    (fun bit work valid => advance_fits bit factor work valid)
-    (fun bit work valid source offset => body_runs bit factor work valid source input.length offset)
-    input work fits
+private theorem loop_runs (input factor current : List Bool) (initial : Tapes Alphabet)
+    (source : initial 5 = buffer (word input)) (represented : Represents input.length factor current initial) :
+    ∃ final, Runs (widths input.length factor.length) readOnly loop
+      (input.length * (6 * factor.length + 14) + 3) loopEntry (fun _ => 0) initial loopExit (fun _ => 0) final ∧
+      Represents input.length factor (finish factor input.reverse current) final := by
+  apply StandardBitFold.runsValues 5 body bodyEntry (widths input.length factor.length) readOnly
+    (fun bit current => (StandardBinaryMultiplyStep.added bit current factor).1)
+    (Represents input.length factor) (by intro value tapes source valid; exact represents_cursor _ _ _ _ _ valid)
+    rfl bodyExit (6 * factor.length + 10)
+    (by intro symbols; simp [body, bodyExit, MultiTape.sequence, copyMachine, StandardTapeCommands.copy,
+      MultiTape.wire, StandardTerminatedCopy.machine]) ?_ input current initial source represented
+  intro bit current tapes valid source offset
+  obtain ⟨final, trace, correct⟩ := body_runs bit factor current input.length
+    (StandardBitFold.frame 5 id source tapes) (represents_cursor _ _ _ _ _ valid)
+  refine ⟨final, ?_, correct⟩
+  have shifted := trace.regions (widths input.length factor.length) (position offset)
+    (by intro name writable; fin_cases name <;> simp_all [position, StandardBitFold.position, readOnly])
+  simpa only [zero_add, position] using shifted
 
 
 noncomputable def initializeResult : Machine Alphabet (StandardBinaryScan.State Unit) :=
@@ -318,7 +229,8 @@ def cleanupExit : CleanupState := .inr (.inr true)
 /-- Scratch is canonical even when the multiplier was empty and the loop did
 not write any of it. The immutable factor supplies every word extent. -/
 theorem cleanup_runs (source : Turing.Tape Symbol) (sourceWidth : ℕ)
-    (factor : List Bool) (work : Workspace) (fits : Fits factor.length work) :
+    (factor : List Bool) (work : Workspace)
+    (shiftedLength : work.2.1.length = factor.length) (resultLength : work.2.2.1.length = factor.length) :
     Runs (widths sourceWidth factor.length) readOnly cleanup (4 * factor.length + 7)
       cleanupEntry (fun _ => 0) (frame source factor work)
       cleanupExit (fun _ => 0) (frame source factor (work.1,
@@ -326,7 +238,7 @@ theorem cleanup_runs (source : Turing.Tape Symbol) (sourceWidth : ℕ)
   let first : Workspace := (work.1, word (List.replicate factor.length false), work.2.2.1, work.2.2.2)
   let second : Workspace := (work.1, first.2.1, word (List.replicate factor.length false), work.2.2.2)
   have clearFirst := StandardTapeCommands.clear_runs (1 : Fin 6) 2 (by decide)
-    (widths sourceWidth factor.length) readOnly rfl factor work.2.1 rfl rfl fits.2.1
+    (widths sourceWidth factor.length) readOnly rfl factor work.2.1 rfl rfl shiftedLength
     (frame source factor work) rfl rfl
   have firstEq : Function.update (frame source factor work) 2
       (buffer (word (List.replicate factor.length false))) = frame source factor first := by
@@ -334,7 +246,7 @@ theorem cleanup_runs (source : Turing.Tape Symbol) (sourceWidth : ℕ)
     fin_cases name <;> simp [frame, StandardBitFold.frame, storage, first]
   rw [firstEq] at clearFirst
   have clearSecond := StandardTapeCommands.clear_runs (1 : Fin 6) 3 (by decide)
-    (widths sourceWidth factor.length) readOnly rfl factor work.2.2.1 rfl rfl fits.2.2
+    (widths sourceWidth factor.length) readOnly rfl factor work.2.2.1 rfl rfl resultLength
     (frame source factor first) rfl rfl
   have secondEq : Function.update (frame source factor first) 3
       (buffer (word (List.replicate factor.length false))) = frame source factor second := by
@@ -368,21 +280,18 @@ def initialFrame (input factor : List Bool) (old shifted result : List Symbol) (
     Tapes Alphabet := Function.update
       (frame (buffer (word input)) factor (List.replicate factor.length false, shifted, result, flag)) 0 (buffer old)
 
-/-- Complete multiplication initializes its own result, restores every head,
-from arbitrary writable contents. The concrete trace also records scratch. -/
+/-- Multiplication initializes its result and restores every head. Cleanup is
+retained for the existing matrix-address caller's concrete scratch format. -/
 theorem runs (input factor : List Bool) (old shifted result : List Symbol)
     (oldLength : old.length = factor.length) (shiftedLength : shifted.length = factor.length)
     (resultLength : result.length = factor.length) (flag : Symbol) :
-    let work : Workspace := (List.replicate factor.length false, shifted, result, flag)
-    let product := (finish factor input.reverse work).1
+    let product := finish factor input.reverse (List.replicate factor.length false)
     Runs (widths input.length factor.length) readOnly machine
       (input.length * (6 * factor.length + 14) + 6 * factor.length + 14)
       entry (fun _ => 0) (initialFrame input factor old shifted result flag)
       exit (fun _ => 0) (frame (buffer (word input)) factor
         (product, word (List.replicate factor.length false), word (List.replicate factor.length false), data false)) := by
-  dsimp only
   let work : Workspace := (List.replicate factor.length false, shifted, result, flag)
-  have fits : Fits factor.length work := ⟨List.length_replicate, shiftedLength, resultLength⟩
   have cleared := StandardTapeCommands.clear_runs (1 : Fin 6) 0 (by decide)
     (widths input.length factor.length) readOnly rfl factor old rfl rfl oldLength
     (initialFrame input factor old shifted result flag) rfl (Function.update_self _ _ _)
@@ -391,9 +300,40 @@ theorem runs (input factor : List Bool) (old shifted result : List Symbol)
     funext name
     fin_cases name <;> simp [initialFrame, frame, StandardBitFold.frame, storage, work]
   rw [initialized] at cleared
-  have iterated := loop_runs input factor work fits
-  have cleaned := cleanup_runs (buffer (word input)) input.length factor (finish factor input.reverse work)
-    (finish_fits factor input.reverse work fits)
+  have represented : Represents input.length factor (List.replicate factor.length false)
+      (frame (buffer (word input)) factor work) := by
+    refine ⟨List.length_replicate, rfl, rfl, ?_⟩
+    intro name different
+    fin_cases name
+    · simpa [widths, frame, storage, StandardBitFold.frame, work, word] using
+        buffer_region (word (List.replicate factor.length false))
+    · simpa [widths, frame, storage, StandardBitFold.frame, word] using buffer_region (word factor)
+    · simpa [widths, frame, storage, StandardBitFold.frame, work, shiftedLength] using buffer_region shifted
+    · simpa [widths, frame, storage, StandardBitFold.frame, work, resultLength] using buffer_region result
+    · simpa [widths, frame, storage, StandardBitFold.frame, work] using buffer_region [flag]
+    · exact False.elim (different rfl)
+  obtain ⟨after, iterated, productLength, productEq, factorEq, regions⟩ :=
+    loop_runs input factor (List.replicate factor.length false) _ rfl represented
+  obtain ⟨lastShifted, lastShiftedLength, lastShiftedEq⟩ := (regions 2 (by decide)).exists_buffer
+  obtain ⟨lastResult, lastResultLength, lastResultEq⟩ := (regions 3 (by decide)).exists_buffer
+  obtain ⟨lastFlags, lastFlagLength, lastFlagEq⟩ := (regions 4 (by decide)).exists_buffer
+  change lastFlags.length = 1 at lastFlagLength
+  obtain ⟨lastFlag, rfl⟩ := List.length_eq_one_iff.mp lastFlagLength
+  have sourceEq := iterated.readOnly_tape 5 rfl
+  have afterFrame : after = frame (buffer (word input)) factor
+      (finish factor input.reverse (List.replicate factor.length false), lastShifted, lastResult, lastFlag) := by
+    funext name
+    fin_cases name
+    · exact productEq
+    · exact factorEq
+    · exact lastShiftedEq
+    · exact lastResultEq
+    · exact lastFlagEq
+    · exact sourceEq
+  have cleaned := cleanup_runs (buffer (word input)) input.length factor
+    (finish factor input.reverse (List.replicate factor.length false), lastShifted, lastResult, lastFlag)
+    (by simpa [widths] using lastShiftedLength) (by simpa [widths] using lastResultLength)
+  rw [← afterFrame] at cleaned
   have tail := iterated.sequence cleanup cleanupEntry
     (by intro symbols; simp [loop, loopExit, StandardBitFold.machine, StandardBitFold.exit]) cleaned
   have complete := cleared.sequence _ (Sum.inl loopEntry)
@@ -462,12 +402,11 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
   have oldFits : old.length = factor.length := oldLength.trans factorLength.symm
   have shiftedFits : oldShifted.length = factor.length := shiftedLength.trans factorLength.symm
   have resultFits : oldResult.length = factor.length := resultLength.trans factorLength.symm
-  let work : Workspace := (List.replicate factor.length false, oldShifted, oldResult, oldFlag)
-  let product := (finish factor multiplier.reverse work).1
+  let product := finish factor multiplier.reverse (List.replicate factor.length false)
   have productLength : product.length = assignment false :=
-    (finish_fits factor multiplier.reverse work ⟨List.length_replicate, shiftedFits, resultFits⟩).1.trans factorLength
+    (finish_length factor multiplier.reverse (List.replicate factor.length false) List.length_replicate).trans factorLength
   have correct : value product = value factor * value multiplier :=
-    result_value multiplier factor oldShifted oldResult oldFlag shiftedFits resultFits
+    result_value multiplier factor
       (by rw [factorValue, multiplierValue, factorLength]; exact valid)
   have trace := (runs multiplier factor old oldShifted oldResult oldFits shiftedFits resultFits oldFlag).wire
     dataTapes (fun name => (domains name).width assignment) argumentReadOnly

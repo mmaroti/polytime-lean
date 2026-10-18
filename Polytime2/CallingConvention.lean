@@ -592,14 +592,15 @@ theorem Runs.preserves {width : TapeName → ℕ} {readOnly : TapeName → Bool}
 This supplies canonical inputs when composing encoded-domain routines. -/
 theorem Runs.readOnly_tape {width : TapeName → ℕ} {readOnly : TapeName → Bool}
     {machine : Machine (Alphabet TapeName) State}
-    {ticks state finalState tapes finalTapes}
-    (trace : Runs width readOnly machine ticks state (fun _ => 0) tapes
-      finalState (fun _ => 0) finalTapes)
+    {ticks state finalState position tapes finalTapes}
+    (trace : Runs width readOnly machine ticks state position tapes
+      finalState position finalTapes)
     (name : TapeName) (immutable : readOnly name = true) :
     finalTapes name = tapes name := by
   have cells : ∀ index : ℤ, (finalTapes name).nth index = (tapes name).nth index := by
     intro index
-    simpa only [sub_zero] using trace.preserves name index (Or.inl immutable)
+    simpa only [add_sub_cancel_right] using
+      trace.preserves name (index + position name) (Or.inl immutable)
   generalize finalEq : finalTapes name = finalTape at cells ⊢
   generalize initialEq : tapes name = initialTape at cells ⊢
   cases finalTape with

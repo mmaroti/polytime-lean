@@ -132,85 +132,104 @@ private theorem forward_runs (bits : List Bool) (left right : List Symbol)
       simp [word, List.reverse_cons, List.append_assoc, Nat.add_comm,
         Int.add_comm, Int.add_left_comm]
 
-/-- A mathematical fold records the workspace changes made by the body. -/
+/-- A mathematical fold records changes to the body's live values. -/
 def fold (advance : Bool → Work → Work) : List Bool → Work → Work
   | [], work => work
   | bit :: bits, work => fold advance bits (advance bit work)
 
-variable (advance : Bool → Work → Work) (invariant : Work → Prop)
-variable (bodyExit : BodyState) (bodyTicks : ℕ)
-variable (bodyHalt : ∀ symbols, body bodyExit symbols = none)
-variable (advance_preserves : ∀ bit work, invariant work → invariant (advance bit work))
-variable (body_runs : ∀ bit work, invariant work → ∀ source offset,
-  Runs width readOnly body bodyTicks (bodyEntry bit) (position cursor offset)
-    (frame cursor storage source work) bodyExit (position cursor offset)
-    (frame cursor storage source (advance bit work)))
+-- valueLevel: logical accumulator values, independently of private tape contents.
+universe valueLevel
 
-include bodyHalt advance_preserves body_runs in
-private theorem loop_runs (bits processed : List Bool) (work : Work) (valid : invariant work) :
-    Runs width readOnly (machine cursor body bodyEntry) (bits.length * (bodyTicks + 3) + 2)
-      (.inl 1) (position cursor bits.length)
-      (frame cursor storage (Turing.Tape.mk' (Turing.ListBlank.mk (word bits ++ [0]))
-        (Turing.ListBlank.mk (word processed ++ [0]))) work)
-      exit (position cursor 0)
-      (frame cursor storage (buffer (word (bits.reverse ++ processed))) (fold advance bits work)) := by
-  induction bits generalizing processed work with
-  | nil =>
-    have first := move_run cursor body bodyEntry storage width readOnly work
-      (Turing.Tape.mk' (Turing.ListBlank.mk [0]) (Turing.ListBlank.mk (word processed ++ [0])))
-      0 (.inl 1) (.inl 2) .left (by simp [machine])
-    simp [displacement, Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk] at first
-    have second := move_run cursor body bodyEntry storage width readOnly work
-      (Turing.Tape.mk' (Turing.ListBlank.mk []) (Turing.ListBlank.mk (0 :: word processed ++ [0])))
-      (-1) (.inl 2) (.inl 3) .right (by simp [machine, MultiTape.read, frame])
-    simp [displacement, Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk] at second
-    have complete := first.trans second
-    simpa only [List.length_nil, CharP.cast_eq_zero, zero_mul, zero_add, word, List.map_nil,
-      List.nil_append, List.reverse_nil, List.map_append, fold, exit, buffer_padding] using complete
-  | cons bit bits hypothesis =>
-    let source := Turing.Tape.mk' (Turing.ListBlank.mk (word bits ++ [0]))
-      (Turing.ListBlank.mk (data bit :: word processed ++ [0]))
-    have first := move_run cursor body bodyEntry storage width readOnly work
-      (Turing.Tape.mk' (Turing.ListBlank.mk (word (bit :: bits) ++ [0]))
-        (Turing.ListBlank.mk (word processed ++ [0])))
-      ((bit :: bits).length : ℤ) (.inl 1) (.inl 2) .left (by simp [machine])
-    have moved : ((bit :: bits).length : ℤ) + displacement (some Turing.Dir.left) = bits.length := by
-      simp [displacement]
-    simp only [moved] at first
-    simp [word, Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk] at first
-    have nonblank : data bit ≠ 0 := by cases bit <;> decide
-    have digit : (data bit == 2) = bit := by cases bit <;> decide
-    have launch := stationary_run cursor body bodyEntry storage width readOnly work source bits.length
-      (.inl 2) (.inr (bodyEntry bit)) (by simp [machine, MultiTape.read, frame, source, nonblank, digit])
-    have run := (body_runs bit work valid source bits.length).rename Sum.inr
-      (target := machine cursor body bodyEntry)
-      (by intro state symbols next actions transition; simp [machine, transition])
-    have restart := stationary_run cursor body bodyEntry storage width readOnly (advance bit work) source bits.length
-      (.inr bodyExit) (.inl 1) (by simp [machine, bodyHalt])
-    have rest := hypothesis (bit :: processed) (advance bit work) (advance_preserves bit work valid)
-    have complete := first.trans (launch.trans (run.trans (restart.trans rest)))
-    convert complete using 1 <;> simp [fold, word, List.reverse_cons, List.append_assoc]
-    ring
-
-include bodyHalt advance_preserves body_runs in
-/-- A source word of length `m` calls the body exactly `m` times. Its cells are
-never changed, and every head is restored on return. -/
-theorem runs (bits : List Bool) (work : Work) (valid : invariant work) :
-    Runs width readOnly (machine cursor body bodyEntry) (bits.length * (bodyTicks + 4) + 3)
-      entry (fun _ => 0) (frame cursor storage (buffer (word bits)) work)
-      exit (fun _ => 0) (frame cursor storage (buffer (word bits)) (fold advance bits.reverse work)) := by
-  have scanned := forward_runs cursor body bodyEntry storage width readOnly bits [0] [0] work 0
+/-- A bit fold relates live values to arbitrary bounded work tapes. Private
+contents need no mathematical recurrence or canonical return encoding. -/
+theorem runsValues {Value : Type valueLevel}
+    (advance : Bool → Value → Value)
+    (representation : Value → Tapes (Alphabet TapeName) → Prop)
+    (cursorIrrelevant : ∀ value tapes source,
+      representation value tapes → representation value (frame cursor id source tapes))
+    (cursorReadOnly : readOnly cursor = true)
+    (bodyExit : BodyState) (bodyTicks : ℕ)
+    (bodyHalt : ∀ symbols, body bodyExit symbols = none)
+    (execute : ∀ bit value tapes, representation value tapes → ∀ source offset,
+      ∃ final, Runs width readOnly body bodyTicks (bodyEntry bit) (position cursor offset)
+        (frame cursor id source tapes) bodyExit (position cursor offset) final ∧
+        representation (advance bit value) final)
+    (bits : List Bool) (value : Value) (initial : Tapes (Alphabet TapeName))
+    (source : initial cursor = buffer (word bits)) (represented : representation value initial) :
+    ∃ final, Runs width readOnly (machine cursor body bodyEntry)
+        (bits.length * (bodyTicks + 4) + 3) entry (fun _ => 0) initial exit (fun _ => 0) final ∧
+      representation (fold advance bits.reverse value) final := by
+  have loop : ∀ bits processed value work, representation value work →
+      ∃ final, Runs width readOnly (machine cursor body bodyEntry) (bits.length * (bodyTicks + 3) + 2)
+        (.inl 1) (position cursor bits.length)
+        (frame cursor id (Turing.Tape.mk' (Turing.ListBlank.mk (word bits ++ [0]))
+          (Turing.ListBlank.mk (word processed ++ [0]))) work)
+        exit (position cursor 0) final ∧ representation (fold advance bits value) final := by
+    intro bits
+    induction bits with
+    | nil =>
+      intro processed value work valid
+      have first := move_run cursor body bodyEntry id width readOnly work
+        (Turing.Tape.mk' (Turing.ListBlank.mk [0]) (Turing.ListBlank.mk (word processed ++ [0])))
+        0 (.inl 1) (.inl 2) .left (by simp [machine])
+      simp [displacement, Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk] at first
+      have second := move_run cursor body bodyEntry id width readOnly work
+        (Turing.Tape.mk' (Turing.ListBlank.mk []) (Turing.ListBlank.mk (0 :: word processed ++ [0])))
+        (-1) (.inl 2) (.inl 3) .right (by simp [machine, MultiTape.read, frame])
+      simp [displacement, Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk] at second
+      refine ⟨frame cursor id (Turing.Tape.mk' (Turing.ListBlank.mk [0])
+        (Turing.ListBlank.mk (word processed ++ [0]))) work, ?_, cursorIrrelevant value work _ valid⟩
+      simpa only [List.length_nil, CharP.cast_eq_zero, zero_mul, zero_add, word, List.map_nil,
+        List.nil_append, List.reverse_nil, List.map_append, fold, exit, buffer_padding] using first.trans second
+    | cons bit bits hypothesis =>
+      intro processed value work valid
+      let source := Turing.Tape.mk' (Turing.ListBlank.mk (word bits ++ [0]))
+        (Turing.ListBlank.mk (data bit :: word processed ++ [0]))
+      have first := move_run cursor body bodyEntry id width readOnly work
+        (Turing.Tape.mk' (Turing.ListBlank.mk (word (bit :: bits) ++ [0]))
+          (Turing.ListBlank.mk (word processed ++ [0])))
+        ((bit :: bits).length : ℤ) (.inl 1) (.inl 2) .left (by simp [machine])
+      have moved : ((bit :: bits).length : ℤ) + displacement (some Turing.Dir.left) = bits.length := by
+        simp [displacement]
+      simp only [moved] at first
+      simp [word, Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk] at first
+      have nonblank : data bit ≠ 0 := by cases bit <;> decide
+      have digit : (data bit == 2) = bit := by cases bit <;> decide
+      have launch := stationary_run cursor body bodyEntry id width readOnly work source bits.length
+        (.inl 2) (.inr (bodyEntry bit)) (by simp [machine, MultiTape.read, frame, source, nonblank, digit])
+      obtain ⟨changed, bodyTrace, changedValid⟩ := execute bit value work valid source bits.length
+      have sourceKept : changed cursor = source := by
+        simpa [frame] using bodyTrace.readOnly_tape cursor cursorReadOnly
+      have framed : frame cursor id source changed = changed := by
+        unfold frame
+        rw [← sourceKept]
+        exact Function.update_eq_self cursor changed
+      have run := bodyTrace.rename Sum.inr (target := machine cursor body bodyEntry)
+        (by intro state symbols next actions transition; simp [machine, transition])
+      have restart := stationary_run cursor body bodyEntry id width readOnly changed source bits.length
+        (.inr bodyExit) (.inl 1) (by simp [machine, bodyHalt])
+      rw [← framed] at run
+      obtain ⟨final, rest, finalValid⟩ := hypothesis (bit :: processed) (advance bit value) changed changedValid
+      have complete := first.trans (launch.trans (run.trans (restart.trans rest)))
+      refine ⟨final, ?_, finalValid⟩
+      convert complete using 1 <;> simp [word]
+      ring
+  have scanned := forward_runs cursor body bodyEntry id width readOnly bits [0] [0] initial 0
   simp only [buffer_padding, zero_add] at scanned
-  let source := Turing.Tape.mk' (Turing.ListBlank.mk ((word bits).reverse ++ [0])) (Turing.ListBlank.mk [0])
-  have handover := stationary_run cursor body bodyEntry storage width readOnly work source bits.length
-    entry (.inl 1) (by simp [machine, entry, MultiTape.read, frame, source])
-  have loop := loop_runs cursor body bodyEntry storage width readOnly advance invariant bodyExit bodyTicks
-    bodyHalt advance_preserves body_runs bits.reverse [] work valid
-  simp only [word, List.map_reverse, List.reverse_reverse, List.length_reverse,
-    List.append_nil, List.map_nil, List.nil_append] at loop
+  let endSource := Turing.Tape.mk' (Turing.ListBlank.mk ((word bits).reverse ++ [0])) (Turing.ListBlank.mk [0])
+  have handover := stationary_run cursor body bodyEntry id width readOnly initial endSource bits.length
+    entry (.inl 1) (by simp [machine, entry, MultiTape.read, frame, endSource])
+  obtain ⟨final, returned, finalValid⟩ := loop bits.reverse [] value initial represented
+  simp only [word, List.map_reverse, List.length_reverse, List.map_nil, List.nil_append] at returned
   have zero : position cursor 0 = fun _ : TapeName => (0 : ℤ) := by funext name; simp [position]
-  rw [zero] at scanned loop
-  have complete := scanned.trans (handover.trans loop)
-  convert complete using 1 <;> first | rfl | ring
+  rw [zero] at scanned returned
+  have complete := scanned.trans (handover.trans returned)
+  have start : frame cursor id (buffer (word bits)) initial = initial := by
+    unfold frame
+    rw [← source]
+    exact Function.update_eq_self cursor initial
+  rw [start] at complete
+  refine ⟨final, ?_, finalValid⟩
+  convert complete using 1; ring
 
 end Polytime2.StandardBitFold
