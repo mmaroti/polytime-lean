@@ -70,6 +70,12 @@ supply the operational width computation needed by generic tape algorithms.
   the source and neighboring data and restoring both heads.
 - Runtime-width copying, counter initialization and increment, and unary-size
   reading into binary counters under capacity hypotheses.
+- Finite tables accept arbitrary finite families of fixed encoded arguments and
+  results, each with its own width. One controller and contract cover binary
+  tables, unary predicates, and row-entry combinations, including zero-width
+  words and empty families. `Computation.finiteOperation_realizable` exposes the
+  single-result case for arbitrary finite argument names. No dummy inputs or
+  scratch tapes are required.
 - Specialization-fixed encoded constants written from arbitrary output contents,
   without a source tape, in `2 * width + 1` transitions with a restored head.
 - Binary decrement with a polynomial digit-cost certificate, fixed controller,
@@ -360,14 +366,6 @@ comparison guard, and counter advancement. Replace repeated guard
 interpretation, counter-capacity, and preservation proofs in matrix row
 traversal, clear intervals, and elimination. Keep each algorithm's mathematical
 state invariant as a parameter.
-
-### Finite tables (~150 lines)
-
-Generalize `StandardFiniteTable` from two inputs and one output to arbitrary
-finite families with different fixed widths. Replace the separate
-`StandardRowCombine` controller and simplify `StandardFinitePredicate`, which
-already wraps the binary table through a private singleton input. Preserve the
-existing codecs.
 
 ### Size substitution (~100 lines)
 

@@ -15,78 +15,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardFiniteTable
-import Polytime2.CallingConventionRegions
+import Polytime2.FiniteTable
 
-/-! # A fixed finite predicate on one immutable encoded argument
-
-The binary-table primitive's second argument is a private zero-bit singleton.
-Its whole tape is blank by its region contract, so no initialization is needed.
--/
+/-! # A unary finite predicate with one argument and one result tape -/
 
 namespace Polytime2.StandardFinitePredicate
 
 open MultiTape CallingConvention
 
-noncomputable def unitDomain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
-noncomputable abbrev State (width : ℕ) := StandardFiniteTable.State width
-  (unitDomain.width Empty.elim) (EncodedDomain.booleans.width Empty.elim)
-abbrev Alphabet := CallingConvention.Alphabet (Fin 3)
+abbrev Alphabet := CallingConvention.Alphabet (Fin 1 ⊕ Fin 1)
+noncomputable abbrev State (width : ℕ) :=
+  FiniteTable.State (fun _ : Fin 1 => width) (fun _ : Fin 1 => EncodedDomain.booleans.width Empty.elim)
+abbrev readOnly : Fin 1 ⊕ Fin 1 → Bool := FiniteTable.readOnly
+abbrev sizeTapes : Empty ↪ (Fin 1 ⊕ Fin 1) := FiniteTable.sizeTapes
+abbrev outputTapes : Fin 1 ↪ (Fin 1 ⊕ Fin 1) := FiniteTable.outputTapes
 
-noncomputable def domains (domain : EncodedDomain.{0, 0} Empty) : Fin 3 → EncodedDomain Empty :=
-  StandardFiniteTable.domains domain unitDomain EncodedDomain.booleans
+noncomputable def entry {width : ℕ} : State width := FiniteTable.entry _ _
+noncomputable def exit {width : ℕ} : State width := none
 
-def readOnly (name : Fin 3) : Bool := decide (name = 0)
+noncomputable abbrev domains (domain : EncodedDomain.{0, 0} Empty) :=
+  FiniteTable.domains (fun _ : Fin 1 => domain) (fun _ : Fin 1 => EncodedDomain.booleans)
 
 noncomputable def machine (domain : EncodedDomain.{0, 0} Empty)
-    (predicate : ∀ assignment, domain.Carrier assignment → Bool) : Machine Alphabet (State (domain.width Empty.elim)) :=
-  StandardFiniteTable.algorithm domain unitDomain EncodedDomain.booleans (fun assignment value _ => predicate assignment value)
+    (predicate : ∀ sizes, domain.Carrier sizes → Bool) : Machine Alphabet (State (domain.width Empty.elim)) :=
+  FiniteTable.algorithm (fun _ : Fin 1 => domain) (fun _ : Fin 1 => EncodedDomain.booleans)
+    (fun sizes values _ => predicate sizes (values 0))
 
-/-- Only the scalar is a public input and only the Boolean is a public output.
-The private singleton needs no validity guarantee on return. -/
+/-- The predicate needs no dummy argument or private singleton tape. -/
 theorem contract (domain : EncodedDomain.{0, 0} Empty)
-    (predicate : ∀ assignment, domain.Carrier assignment → Bool) :
-    CallingConvention.Realizes (domains domain) readOnly StandardFiniteTable.sizeTapes StandardFiniteTable.outputTapes (machine domain predicate)
-      StandardFiniteTable.entry StandardFiniteTable.exit (fun _ _ => True)
-      (fun assignment input output => output () = predicate assignment (input ⟨0, rfl⟩)) := by
-  obtain ⟨bound, execute⟩ := (StandardFiniteTable.contract domain unitDomain EncodedDomain.booleans
-    (fun assignment value _ => predicate assignment value)).wired_runs (Function.Embedding.refl (Fin 3))
-  refine ⟨(by intro parameter; cases parameter), (by intro name; rfl), (by intro symbols; rfl), bound, ?_⟩
-  intro assignment input initial valid represented headers
-  have sameAssignment : assignment = (Empty.elim : Empty → ℕ) := Subsingleton.elim _ _
-  subst assignment
-  obtain ⟨oldUnit, length, unitEq⟩ := represented.2 1 rfl
-  norm_num [domains, StandardFiniteTable.domains, unitDomain, EncodedDomain.fixed,
-    EncodedDomain.ofCodec] at length
-  subst oldUnit
-  have unitCanonical : initial 1 = encoded unitDomain Empty.elim (0 : Fin 1) := by
-    simpa [encoded, unitDomain, EncodedDomain.fixed, EncodedDomain.ofCodec,
-      EncodedDomain.ArrayEncoding.bits, tape, buffer, Binary.word] using unitEq
-  let localInput : Inputs (domains domain) StandardFiniteTable.readOnly Empty.elim := fun name => by
-    rcases name with ⟨name, readonly⟩
-    by_cases scalar : name = 0
-    · subst name; exact input ⟨0, rfl⟩
-    · have singleton : name = 1 := by
-        have accepted : name.val < 2 := of_decide_eq_true readonly
-        apply Fin.ext
-        omega
-      subst name
-      exact (0 : Fin 1)
-  obtain ⟨ticks, localOutput, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute Empty.elim localInput (fun name => (domains domain name).width Empty.elim) readOnly initial
-      (fun _ => rfl)
-      (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      trivial
-      (by intro name readonly; fin_cases name <;> first | exact represented.1 0 rfl | exact unitCanonical | contradiction)
-      (by intro name writable; exact represented.region name)
-      (by intro parameter; cases parameter)
-  let output : Outputs (domains domain) StandardFiniteTable.outputTapes Empty.elim :=
-    fun _ => localOutput ()
-  refine ⟨ticks, output, final, cost, ?_, correct, ?_⟩
-  · rw [MultiTape.wire_refl] at trace
-    exact trace
-  · intro name
-    cases name
-    exact canonical ()
+    (predicate : ∀ sizes, domain.Carrier sizes → Bool) :
+    CallingConvention.Realizes (domains domain) readOnly sizeTapes outputTapes (machine domain predicate) entry exit
+      (fun _ _ => True)
+      (fun sizes input output => output 0 = predicate sizes (input ⟨.inl 0, rfl⟩)) := by
+  apply (FiniteTable.contract (fun _ : Fin 1 => domain) (fun _ : Fin 1 => EncodedDomain.booleans) _).postcondition
+  intro sizes input output correct
+  exact congrFun correct 0
 
 end Polytime2.StandardFinitePredicate

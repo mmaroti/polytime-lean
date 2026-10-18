@@ -17,8 +17,7 @@ limitations under the License.
 
 import Polytime2.StandardMatrixEntryContract
 import Polytime2.StandardMatrixRowsContract
-import Polytime2.StandardFiniteTable
-import Polytime2.StandardTapeCommands
+import Polytime2.FiniteTable
 import Polytime2.MatrixRowField
 import Polytime2.FieldRow
 
@@ -81,12 +80,11 @@ def lookupWiring : StandardMatrixEntry.TapeName ↪ TapeName where
   toFun := lookupTarget
   inj' := lookupTarget_injective
 
-def tableTarget : Fin 3 → TapeName
-    | 0 => dataTape 3
-    | 1 => dataTape 16
-    | _ => dataTape 7
+def tableTarget : Fin 1 ⊕ Fin 1 → TapeName
+  | .inl _ => dataTape 3
+  | .inr _ => dataTape 7
 
-def tableWiring : Fin 3 ↪ TapeName where
+def tableWiring : (Fin 1 ⊕ Fin 1) ↪ TapeName where
   toFun := tableTarget
   inj' := by
     intro first second equal
@@ -119,17 +117,13 @@ noncomputable def additionOperation (enumeration : Scalar ≃ Fin cardinality) :
       infer_instance
     exact (source, target + coefficient * source)
 
-noncomputable abbrev NegateState (width : ℕ) :=
-  StandardFiniteTable.State width
-    ((EncodedDomain.booleans (Parameter := Empty)).width Empty.elim) width
+abbrev NegateState (width : ℕ) :=
+  FiniteTable.State (fun _ : Fin 1 => width) (fun _ : Fin 1 => width)
 
 noncomputable abbrev State (width : ℕ) :=
-  Sum (StandardMatrixEntry.State width)
-    (Sum Bool (Sum (NegateState width) (StandardMatrixRows.State width)))
+  Sum (StandardMatrixEntry.State width) (Sum (NegateState width) (StandardMatrixRows.State width))
 
 noncomputable instance statesFinite (width : ℕ) : Fintype (State width) := by
-  letI : Fintype (StandardFiniteTable.State width
-    ((EncodedDomain.booleans (Parameter := Empty)).width Empty.elim) width) := inferInstance
   letI : Fintype (StandardMatrixRows.State width) := inferInstance
   dsimp only [State, NegateState]
   infer_instance
@@ -141,16 +135,13 @@ noncomputable def lookup (enumeration : Scalar ≃ Fin cardinality) :
     (StandardMatrixEntry.machine
       ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim))
 
-noncomputable def prepareFlag : Machine Alphabet Bool :=
-  StandardTapeCommands.setBoolean (dataTape 16) false
-
 noncomputable def negate (enumeration : Scalar ≃ Fin cardinality) :
     Machine Alphabet (NegateState
       ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   let scalar := Polytime2.FieldRow.scalarDomain enumeration
   MultiTape.wire tableWiring
-    (StandardFiniteTable.algorithm scalar (EncodedDomain.booleans (Parameter := Empty)) scalar
-      (fun (_ : Empty → ℕ) (value : Scalar) (_ : Bool) => -value))
+    (FiniteTable.algorithm (fun _ : Fin 1 => scalar) (fun _ : Fin 1 => scalar)
+      (fun (_ : Empty → ℕ) (values : Fin 1 → Scalar) (_ : Fin 1) => -(values 0)))
 
 noncomputable def rowClear (enumeration : Scalar ≃ Fin cardinality) :
     Machine Alphabet (StandardMatrixRows.State
@@ -164,16 +155,14 @@ noncomputable def algorithm (enumeration : Scalar ≃ Fin cardinality) :
       ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   let scalar := Polytime2.FieldRow.scalarDomain enumeration
   MultiTape.sequence (lookup enumeration)
-    (MultiTape.sequence prepareFlag
-      (MultiTape.sequence (negate enumeration) (rowClear enumeration)
-        (StandardMatrixRows.entry (scalar.width Empty.elim)))
-      (.inl StandardFiniteTable.entry))
-    (.inl false)
+    (MultiTape.sequence (negate enumeration) (rowClear enumeration)
+      (StandardMatrixRows.entry (scalar.width Empty.elim)))
+    (.inl (FiniteTable.entry _ _))
 
 def entry (width : ℕ) : State width := .inl (StandardMatrixEntry.entry width)
 
 def exit (width : ℕ) : State width :=
-  .inr (.inr (.inr (StandardMatrixRows.exit width)))
+  .inr (.inr (StandardMatrixRows.exit width))
 
 omit [Field Scalar] in
 @[simp] theorem lookup_halt (enumeration : Scalar ≃ Fin cardinality)
@@ -182,16 +171,10 @@ omit [Field Scalar] in
       ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := by
   simp [lookup, MultiTape.wire, StandardMatrixEntry.halt]
 
-@[simp] theorem prepareFlag_halt (symbols : Symbols Alphabet) :
-    prepareFlag true symbols = none := by
-  simp [prepareFlag, StandardTapeCommands.setBoolean, MultiTape.wire,
-    StandardTapeCommands.booleanMachine]
-
 @[simp] theorem negate_halt (enumeration : Scalar ≃ Fin cardinality)
     (symbols : Symbols Alphabet) :
-    negate enumeration StandardFiniteTable.exit symbols = none := by
-  simp [negate, MultiTape.wire, StandardFiniteTable.algorithm,
-    StandardFiniteTable.machine, StandardFiniteTable.exit]
+    negate enumeration none symbols = none := by
+  simp [negate, MultiTape.wire, FiniteTable.algorithm]
 
 @[simp] theorem rowClear_halt (enumeration : Scalar ≃ Fin cardinality)
     (symbols : Symbols Alphabet) :
@@ -277,61 +260,39 @@ theorem lookup_runs (enumeration : Scalar ≃ Fin cardinality) :
 coefficient output, including for zero-bit scalar presentations. -/
 theorem negate_runs (enumeration : Scalar ≃ Fin cardinality) :
     ∃ cost : ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet) (value : Scalar),
-      initial (dataTape 3) = encoded (Polytime2.FieldRow.scalarDomain enumeration)
-        Empty.elim value →
-      initial (dataTape 16) = encoded EncodedDomain.booleans Empty.elim false →
+      initial (dataTape 3) = encoded (Polytime2.FieldRow.scalarDomain enumeration) Empty.elim value →
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ cost ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly
-          (negate enumeration) ticks StandardFiniteTable.entry (fun _ => 0) initial
-          StandardFiniteTable.exit (fun _ => 0) final ∧
-        final (dataTape 7) = encoded (Polytime2.FieldRow.scalarDomain enumeration)
-          Empty.elim (-value) ∧
+          (negate enumeration) ticks (FiniteTable.entry _ _) (fun _ => 0) initial none (fun _ => 0) final ∧
+        final (dataTape 7) = encoded (Polytime2.FieldRow.scalarDomain enumeration) Empty.elim (-value) ∧
         (∀ name, name ∉ Set.range tableWiring → final name = initial name) ∧
-        (∀ name, StandardFiniteTable.readOnly name = true →
-          final (tableWiring name) = initial (tableWiring name)) := by
+        (∀ name, FiniteTable.readOnly name = true → final (tableWiring name) = initial (tableWiring name)) := by
   let scalar := Polytime2.FieldRow.scalarDomain enumeration
-  let boolean : EncodedDomain.{0, 0} Empty := EncodedDomain.booleans
-  obtain ⟨bound, execute⟩ := (StandardFiniteTable.contract scalar boolean scalar
-    (fun (_ : Empty → ℕ) (value : Scalar) (_ : Bool) => -value)).wired_runs tableWiring
+  obtain ⟨bound, execute⟩ := (FiniteTable.contract (fun _ : Fin 1 => scalar) (fun _ : Fin 1 => scalar)
+    (fun (_ : Empty → ℕ) (values : Fin 1 → Scalar) (_ : Fin 1) => -(values 0))).wired_runs tableWiring
   refine ⟨MvPolynomial.eval Empty.elim bound, ?_⟩
-  intro sizes initial value valueEq flagEq regions
-  let input : Inputs (StandardFiniteTable.domains scalar boolean scalar)
-      StandardFiniteTable.readOnly Empty.elim := fun name => by
-    rcases name with ⟨name, readonly⟩
-    by_cases isFirst : name = 0
-    · subst name
-      exact value
-    · by_cases isSecond : name = 1
-      · subst name
-        exact false
-      · have small : name.val < 2 := of_decide_eq_true readonly
-        have notZero : name.val ≠ 0 := fun equal => isFirst (Fin.ext equal)
-        have notOne : name.val ≠ 1 := fun equal => isSecond (Fin.ext equal)
-        exact False.elim (by omega)
+  intro sizes initial value valueEq regions
+  let input : Inputs (FiniteTable.domains (fun _ : Fin 1 => scalar) (fun _ : Fin 1 => scalar))
+      FiniteTable.readOnly Empty.elim := fun name => match name with
+    | ⟨.inl _, _⟩ => value
+    | ⟨.inr _, impossible⟩ => nomatch impossible
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute Empty.elim input (fun name => (domains enumeration name).width sizes)
-      readOnly initial
+    execute Empty.elim input (fun name => (domains enumeration name).width sizes) readOnly initial
       (by
         intro name
         change (domains enumeration (tableTarget name)).width sizes = _
-        fin_cases name <;> simp [domains, tableTarget, dataTape, scalar, boolean,
-          StandardMatrixRows.domains, StandardMatrixRows.dataTape, StandardMatrixRowStep.domains,
-          StandardMatrixRowEntry.domains, StandardFiniteTable.domains, EncodedDomain.constant,
-          EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
-      (by intro name; fin_cases name <;> decide)
-      trivial
-      (by
-        intro name readonly
-        fin_cases name
-        · exact valueEq
-        · exact flagEq
-        · contradiction)
+        fin_cases name <;> simp [domains, tableTarget, dataTape, scalar,
+        StandardMatrixRows.domains, StandardMatrixRows.dataTape, StandardMatrixRowStep.domains,
+        StandardMatrixRowEntry.domains, FiniteTable.domains, EncodedDomain.constant])
+      (by intro name; fin_cases name <;> decide) trivial
+      (by intro name readonly; fin_cases name; exact valueEq; contradiction)
       (by intro name writable; exact regions (tableWiring name))
       (by intro parameter; cases parameter)
-  change output () = -value at correct
-  have result := canonical ()
-  rw [correct] at result
+  have selected := congrFun correct 0
+  change output 0 = -value at selected
+  have result := canonical 0
+  rw [selected] at result
   exact ⟨ticks, final, cost, trace, result, outside, immutable⟩
 
 /-- The row phase accepts arbitrary writable regions, preserves its arguments,
@@ -433,7 +394,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨lookupBound, executeLookup⟩ := lookup_runs enumeration
   obtain ⟨negateCost, executeNegate⟩ := negate_runs enumeration
   obtain ⟨rowBound, executeRow⟩ := rowClear_runs enumeration
-  refine ⟨lookupBound + MvPolynomial.C negateCost + rowBound + 4, ?_⟩
+  refine ⟨lookupBound + MvPolynomial.C negateCost + rowBound + 2, ?_⟩
   intro sizes initial sourceRow targetRow column sourceValid targetValid matrix
     columnsFit columnValid capacity sourceEq targetEq columnEq matrixEq headers regions
   have within := StandardMatrixEntry.index_lt sizes targetRow.val column.val targetValid columnValid
@@ -443,36 +404,13 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
       columnValid capacity targetEq columnEq matrixEq headers regions
   have loadedRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (loaded name) :=
     fun name => lookupTrace.region name (regions name)
-  obtain ⟨old, oldLength, oldEq⟩ := (loadedRegions (dataTape 16)).exists_buffer
-  norm_num [domains, dataTape, StandardMatrixRows.domains, StandardMatrixRows.dataTape,
-    StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains, EncodedDomain.booleans,
-    EncodedDomain.fixed, EncodedDomain.ofCodec] at oldLength
-  obtain ⟨oldBit, rfl⟩ := List.length_eq_one_iff.mp oldLength
-  let prepared := Function.update loaded (dataTape 16) (buffer [Binary.data false])
-  have flagTrace := StandardTapeCommands.setBoolean_runs (dataTape 16) false
-    (fun name => (domains enumeration name).width sizes) readOnly rfl (by norm_num [domains, dataTape,
-      StandardMatrixRows.domains, StandardMatrixRows.dataTape, StandardMatrixRowStep.domains,
-      StandardMatrixRowEntry.domains, EncodedDomain.booleans, EncodedDomain.fixed,
-      EncodedDomain.ofCodec]) loaded oldBit oldEq
-  have preparedValue : prepared (dataTape 3) =
-      encoded (Polytime2.FieldRow.scalarDomain enumeration) Empty.elim value := by
-    exact (Function.update_of_ne (by decide) _ _).trans valueEq
-  have preparedFlag : prepared (dataTape 16) =
-      encoded EncodedDomain.booleans Empty.elim false := by
-    change Function.update loaded (dataTape 16) (buffer [Binary.data false])
-      (dataTape 16) = _
-    rw [Function.update_self]
-    exact (encoded_booleans Empty.elim false).symm
-  have preparedRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (prepared name) :=
-    fun name => flagTrace.region name (loadedRegions name)
   obtain ⟨negateTicks, negated, negationCost, negateTrace, coefficientEq, negateOutside, negateImmutable⟩ :=
-    executeNegate sizes prepared value preparedValue preparedFlag preparedRegions
+    executeNegate sizes loaded value valueEq loadedRegions
   have negateRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (negated name) :=
-    fun name => negateTrace.region name (preparedRegions name)
-  have firstStages := lookupTrace.sequence prepareFlag false (lookup_halt enumeration) flagTrace
+    fun name => negateTrace.region name (loadedRegions name)
   have preserveInput : ∀ name, readOnly name = true → negated name = initial name := by
     intro name readonly
-    exact (negateTrace.readOnly_tape name readonly).trans (firstStages.readOnly_tape name readonly)
+    exact (negateTrace.readOnly_tape name readonly).trans (lookupTrace.readOnly_tape name readonly)
   obtain ⟨rowTicks, final, rowCost, rowTrace, result, rowOutside, rowImmutable⟩ :=
     executeRow sizes negated sourceRow targetRow sourceValid targetValid
       (Neg.neg (α := Scalar) value) matrix
@@ -485,13 +423,11 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   have tail := negateTrace.sequence (rowClear enumeration)
     (StandardMatrixRows.entry ((Polytime2.FieldRow.scalarDomain enumeration).width Empty.elim))
     (negate_halt enumeration) rowTrace
-  have middle := flagTrace.sequence _ (Sum.inl StandardFiniteTable.entry) prepareFlag_halt tail
-  have complete := lookupTrace.sequence _ (Sum.inl false) (lookup_halt enumeration) middle
-  refine ⟨lookupTicks + (1 + (negateTicks + rowTicks + 1) + 1) + 1, final, ?_, ?_,
-    ⟨within, result⟩⟩
+  have complete := lookupTrace.sequence _ (Sum.inl (FiniteTable.entry _ _)) (lookup_halt enumeration) tail
+  refine ⟨lookupTicks + (negateTicks + rowTicks + 1) + 1, final, ?_, ?_, ⟨within, result⟩⟩
   · simp only [map_add, MvPolynomial.eval_C, map_ofNat]
     omega
-  · simpa only [algorithm, entry, exit, prepareFlag] using complete
+  · simpa only [algorithm, entry, exit] using complete
 @[simp] theorem halt (enumeration : Scalar ≃ Fin cardinality)
     (symbols : Symbols Alphabet) :
     algorithm enumeration

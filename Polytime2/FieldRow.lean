@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.StandardArrayMapContract
-import Polytime2.StandardRowCombineContract
+import Polytime2.StandardRowCombine
 import Mathlib.Algebra.Field.Defs
 
 /-! # Binary-encoded finite-field row operations
@@ -60,8 +60,8 @@ theorem combine_contract (enumeration : Scalar ≃ Fin cardinality)
       StandardRowCombine.readOnly StandardRowCombine.sizeTapes StandardRowCombine.outputTapes
       (StandardRowCombine.algorithm (scalarDomain enumeration) (fun _ => operation))
       StandardRowCombine.entry StandardRowCombine.exit (fun _ _ => True)
-      (fun _ input output => (output false, output true) =
-        operation (input ⟨0, rfl⟩) (input ⟨1, rfl⟩) (input ⟨2, rfl⟩)) :=
+      (fun _ input output => (output 0, output 1) =
+        operation (input ⟨.inl 0, rfl⟩) (input ⟨.inl 1, rfl⟩) (input ⟨.inl 2, rfl⟩)) :=
   StandardRowCombine.contract (scalarDomain enumeration) (fun _ => operation)
 
 /-- Multiplication by any coefficient, including zero, maps the whole row. -/

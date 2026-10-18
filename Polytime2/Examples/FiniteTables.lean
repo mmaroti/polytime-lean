@@ -38,4 +38,31 @@ example : (finiteTable (EncodedDomain.fixed (Equiv.refl (Fin 1)))
     (EncodedDomain.fixed (Equiv.refl (Fin 1))) (EncodedDomain.fixed (Equiv.refl (Fin 1)))
     (fun _ first _ => first)).Realizable := finiteTable_realizable _ _ _ _
 
+/-- Four arguments include different widths and a zero-bit singleton. -/
+private noncomputable def mixedInputs : Fin 4 → EncodedDomain Empty
+  | 0 => threeElements
+  | 1 => EncodedDomain.booleans
+  | 2 => threeElements
+  | 3 => EncodedDomain.fixed (Equiv.refl (Fin 1))
+
+private noncomputable def mixedOutputs : Fin 2 → EncodedDomain Empty
+  | 0 => EncodedDomain.booleans
+  | 1 => threeElements
+
+private noncomputable def mixedOperation (sizes : Empty → ℕ)
+    (values : ∀ name, (mixedInputs name).Carrier sizes) : ∀ name, (mixedOutputs name).Carrier sizes
+  | 0 => values 1
+  | 1 => (show Fin 3 from values 0) + (show Fin 3 from values 2)
+
+example : CallingConvention.Realizes (FiniteTable.domains mixedInputs mixedOutputs)
+    FiniteTable.readOnly FiniteTable.sizeTapes FiniteTable.outputTapes
+    (FiniteTable.algorithm mixedInputs mixedOutputs mixedOperation) (FiniteTable.entry _ _) none
+    (fun _ _ => True)
+    (fun sizes input output => output = mixedOperation sizes (fun name => input ⟨.inl name, rfl⟩)) :=
+  FiniteTable.contract mixedInputs mixedOutputs mixedOperation
+
+-- A nullary operation has no input tapes and writes its result directly.
+example : (finiteOperation (fun name : Empty => nomatch name) EncodedDomain.booleans
+    (fun _ _ => true)).Realizable := finiteOperation_realizable _ _ _
+
 end Polytime2.Examples.FiniteTables

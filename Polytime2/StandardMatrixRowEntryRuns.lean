@@ -130,7 +130,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   have writes := firstWriteTrace.sequence _ (StandardMatrixReplace.entry (scalar.width Empty.elim))
     (by intro symbols; simp [replace, MultiTape.wire]) lastWriteTrace
   have combined := combineTrace.sequence _ (Sum.inl (StandardMatrixReplace.entry (scalar.width Empty.elim)))
-    (by intro symbols; simp [combine, MultiTape.wire, StandardRowCombine.algorithm]) writes
+    (by intro symbols; simp [combine, MultiTape.wire, StandardRowCombine.algorithm, StandardRowCombine.exit, FiniteTable.algorithm]) writes
   have readThenCombined := targetTrace.sequence _ (Sum.inl StandardRowCombine.entry)
     (by intro symbols; simp [access, MultiTape.wire]) combined
   have complete := sourceTrace.sequence _ (Sum.inl (StandardMatrixEntry.entry (scalar.width Empty.elim)))

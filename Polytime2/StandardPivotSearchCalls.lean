@@ -144,77 +144,54 @@ theorem compare_runs (scalar : EncodedDomain.{0, 0} Empty) :
     · exact False.elim (notDifference equal.symm)
     · exact False.elim (notFound equal.symm)
 
-/-- The finite scalar test changes only the continue bit. Its private singleton
-tape remains blank and valid, and the scalar argument is preserved throughout. -/
+/-- The finite scalar test changes only the continue bit. -/
 theorem zeroTest_runs (scalar : EncodedDomain.{0, 0} Empty)
     (isZero : ∀ assignment, scalar.Carrier assignment → Bool) :
     ∃ bound : ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
       (value : scalar.Carrier Empty.elim),
       initial elementTape = encoded scalar Empty.elim value →
-      Region 0 0 (initial unitTape) → Region 1 0 (initial continueTape) →
+      Region 1 0 (initial continueTape) →
       ∃ ticks final, ticks ≤ bound ∧
         Runs (fun name => (domains scalar name).width sizes) readOnly (zeroTest scalar isZero) ticks
-          StandardFiniteTable.entry (fun _ => 0) initial StandardFiniteTable.exit (fun _ => 0) final ∧
+          StandardFinitePredicate.entry (fun _ => 0) initial StandardFinitePredicate.exit (fun _ => 0) final ∧
         final continueTape = encoded EncodedDomain.booleans sizes (isZero Empty.elim value) ∧
         (∀ name, name ≠ continueTape → final name = initial name) := by
   obtain ⟨bound, execute⟩ := (StandardFinitePredicate.contract scalar isZero).wired_runs testWiring
   refine ⟨MvPolynomial.eval Empty.elim bound, ?_⟩
-  intro sizes initial value scalarEq unitRegion continueRegion
-  obtain ⟨oldUnit, unitLength, unitEq⟩ := unitRegion.exists_buffer
-  have empty : oldUnit = [] := List.eq_nil_of_length_eq_zero unitLength
-  subst oldUnit
-  let input : Inputs (StandardFinitePredicate.domains scalar) StandardFinitePredicate.readOnly Empty.elim := fun name => by
-    rcases name with ⟨name, readonly⟩
-    have argument : name = 0 := of_decide_eq_true readonly
-    subst name
-    exact value
+  intro sizes initial value scalarEq continueRegion
+  let input : Inputs (StandardFinitePredicate.domains scalar) StandardFinitePredicate.readOnly Empty.elim :=
+    fun name => match name with
+      | ⟨.inl _, _⟩ => value
+      | ⟨.inr _, impossible⟩ => nomatch impossible
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute Empty.elim input (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; fin_cases name <;>
-        simp [domains, StandardMatrixEntry.domains,
-          StandardFinitePredicate.domains, StandardFiniteTable.domains,
-          StandardFinitePredicate.unitDomain,
-          EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant, EncodedDomain.ofCodec,
-          elementTape, unitTape, continueTape])
+        simp [domains, StandardMatrixEntry.domains, StandardFinitePredicate.domains,
+          FiniteTable.domains, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant,
+          EncodedDomain.ofCodec, elementTape, continueTape])
       (by intro name premise; fin_cases name <;> contradiction)
-      trivial
-      (by intro name readonly; fin_cases name <;> first | exact scalarEq | contradiction)
+      trivial (by intro name readonly; fin_cases name <;> first | exact scalarEq | contradiction)
       (by
         intro name writable
         fin_cases name
         · contradiction
-        · convert unitRegion using 1 <;>
-            norm_num [domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
-              EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl
-        · convert continueRegion using 1 <;>
-            norm_num [domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl)
+        · change Region ((domains scalar continueTape).width sizes) 0 (initial continueTape)
+          simpa [domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed,
+            EncodedDomain.ofCodec, show Nat.clog 2 2 = 1 from by decide] using continueRegion)
       (by intro parameter; cases parameter)
-  have unitWidth : (domains scalar unitTape).width sizes = 0 := by
-    norm_num [domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
-      EncodedDomain.fixed, EncodedDomain.ofCodec]
-  have unitFinal : final unitTape = initial unitTape := by
-    obtain ⟨contents, length, finalEq⟩ := (trace.region unitTape (by simpa only [unitWidth] using unitRegion)).exists_buffer
-    rw [unitWidth] at length
-    have empty : contents = [] := List.eq_nil_of_length_eq_zero length
-    subst contents
-    exact finalEq.trans unitEq.symm
   refine ⟨ticks, final, cost, trace, ?_, ?_⟩
-  · have result := canonical ()
-    change final continueTape = encoded EncodedDomain.booleans Empty.elim (output ()) at result
-    change output () = isZero Empty.elim value at correct
+  · have result := canonical 0
+    change final continueTape = encoded EncodedDomain.booleans Empty.elim (output 0) at result
+    change output 0 = isZero Empty.elim value at correct
     simpa only [encoded, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
       EncodedDomain.ArrayEncoding.bits_cast] using
       result.trans (congrArg (encoded EncodedDomain.booleans Empty.elim) correct)
   · intro name notContinue
-    by_cases isUnit : name = unitTape
-    · subst name
-      exact unitFinal
-    · apply preserved_of_wiring testWiring StandardFinitePredicate.readOnly initial final outside immutable
-      intro localName equal
-      fin_cases localName
-      · rfl
-      · exact False.elim (isUnit equal.symm)
-      · exact False.elim (notContinue equal.symm)
+    apply preserved_of_wiring testWiring StandardFinitePredicate.readOnly initial final outside immutable
+    intro localName equal
+    fin_cases localName
+    · rfl
+    · exact False.elim (notContinue equal.symm)
 
 /-- Lookup preserves the candidate and all comparison tapes. Its scalar output
 and every arithmetic scratch word are canonical before the finite zero test. -/
@@ -235,9 +212,9 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
           (StandardMatrixEntry.exit (scalar.width Empty.elim)) (fun _ => 0) final ∧
         final elementTape = encoded scalar Empty.elim (array ⟨candidate.val * sizes 2 + column.val, within⟩) ∧
         final (counterTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes candidate ∧
-        (∀ name : Fin 7, final (.inr name) = initial (.inr name)) := by
+        (∀ name : Fin 6, final (.inr name) = initial (.inr name)) := by
   obtain ⟨bound, execute⟩ := (StandardMatrixEntry.contract scalar.constant (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])).wired_runs
-    (Function.Embedding.inl (α := StandardMatrixEntry.TapeName) (β := Fin 7))
+    (Function.Embedding.inl (α := StandardMatrixEntry.TapeName) (β := Fin 6))
   refine ⟨bound, ?_⟩
   intro sizes initial candidate column array within columnsFit candidateValid columnValid capacity candidateEq columnEq arrayEq headers regions
   let input := StandardMatrixEntry.inputValues scalar.constant sizes candidate column array

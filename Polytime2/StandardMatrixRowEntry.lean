@@ -17,7 +17,7 @@ limitations under the License.
 
 import Polytime2.StandardMatrixEntryContract
 import Polytime2.StandardMatrixReplaceContract
-import Polytime2.StandardRowCombineContract
+import Polytime2.StandardRowCombine
 import Polytime2.CallingConventionRegions
 
 /-! # One column of a matrix row operation
@@ -95,13 +95,17 @@ def replaceWiring (source : Bool) : StandardMatrixReplace.TapeName ↪ TapeName 
     | .inr name => .inr (if name = 0 then (if source then 4 else 6)
         else if name = 1 then (if source then 9 else 10) else (if source then 6 else 5))) := rfl
 
-def combineWiring : Fin 5 ↪ TapeName :=
-  ⟨(fun name => .inr (match name.val with | 0 => 3 | 1 => 7 | 2 => 8 | 3 => 9 | _ => 10)), by
+def combineWiring : (Fin 3 ⊕ Fin 2) ↪ TapeName :=
+  ⟨(fun name => .inr (match name with
+    | .inl name => match name.val with | 0 => 3 | 1 => 7 | _ => 8
+    | .inr name => if name = 0 then 9 else 10)), by
     intro first second equal
     fin_cases first <;> fin_cases second <;> simp_all⟩
 
-@[simp] theorem combineWiring_apply (name : Fin 5) : combineWiring name =
-    .inr (match name.val with | 0 => 3 | 1 => 7 | 2 => 8 | 3 => 9 | _ => 10) := rfl
+@[simp] theorem combineWiring_apply (name : Fin 3 ⊕ Fin 2) : combineWiring name =
+    .inr (match name with
+    | .inl name => match name.val with | 0 => 3 | 1 => 7 | _ => 8
+    | .inr name => if name = 0 then 9 else 10) := rfl
 
 def effectiveOperation (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment → scalar.Carrier assignment →
@@ -167,11 +171,13 @@ theorem combine_runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   refine ⟨MvPolynomial.eval Empty.elim bound, ?_⟩
   intro sizes initial coefficient source target coefficientEq sourceEq targetEq regions
   let input : Inputs (StandardRowCombine.domains scalar) StandardRowCombine.readOnly Empty.elim := fun name =>
-    if name.val = 0 then coefficient else if name.val = 1 then source else target
+    match name with
+    | ⟨.inl name, _⟩ => if name = 0 then coefficient else if name = 1 then source else target
+    | ⟨.inr _, impossible⟩ => nomatch impossible
   obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute Empty.elim input (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; fin_cases name <;>
-        simp [domains, StandardRowCombine.domains, EncodedDomain.constant, EncodedDomain.ofCodec])
+        simp [domains, StandardRowCombine.domains, FiniteTable.domains, EncodedDomain.constant, EncodedDomain.ofCodec])
       (by
         intro name premise
         simp only [combineWiring_apply] at premise
@@ -189,15 +195,15 @@ theorem combine_runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (by intro parameter; cases parameter)
   have firstOutput := congrArg Prod.fst correct
   have secondOutput := congrArg Prod.snd correct
-  change output false =
+  change output 0 =
     (effectiveOperation writeSource scalar operation Empty.elim coefficient source target).1 at firstOutput
-  change output true =
+  change output 1 =
     (effectiveOperation writeSource scalar operation Empty.elim coefficient source target).2 at secondOutput
   refine ⟨ticks, final, cost, trace, ?_, ?_, outside, immutable⟩
-  · have result := canonical false
+  · have result := canonical 0
     rw [firstOutput] at result
     exact result
-  · have result := canonical true
+  · have result := canonical 1
     rw [secondOutput] at result
     exact result
 

@@ -84,11 +84,10 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
     have readRegions : ∀ name, Region (width name) 0 (afterRead name) :=
       fun name => readTrace.region name (comparedRegions name)
     obtain ⟨testTicks, final, testCost, testTrace, continueEq, testOutside⟩ :=
-      executeTest sizes afterRead value elementEq (by simpa [width, domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
-          EncodedDomain.fixed, EncodedDomain.ofCodec] using readRegions unitTape)
+      executeTest sizes afterRead value elementEq
         (by simpa [width, domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
           show Nat.clog 2 2 = 1 from by decide] using readRegions continueTape)
-    have readTestTrace := readTrace.sequence (zeroTest scalar isZero) StandardFiniteTable.entry
+    have readTestTrace := readTrace.sequence (zeroTest scalar isZero) StandardFinitePredicate.entry
       (by intro symbols; simp [readEntry, MultiTape.wire, StandardMatrixEntry.halt]) testTrace
     have selectTrace := readTestTrace.branch_true found stop false
       (by simpa only [valid, decide_true] using selected)

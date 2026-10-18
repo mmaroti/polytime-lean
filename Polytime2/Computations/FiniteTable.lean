@@ -16,17 +16,85 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
-import Polytime2.StandardFinitePredicate
-import Polytime2.StandardRowCombineContract
+import Polytime2.FiniteTable
 
-/-! # Two separate mathematical arguments implemented by a fixed finite table -/
+/-! # Specialization-fixed finite operations on mathematical arguments -/
 
 namespace Polytime2.Computation
 
 open MultiTape CallingConvention Realizable
 
--- carrierLevel: arbitrary mathematical carriers of specialization-fixed domains.
+-- carrierLevel: mathematical carriers of the fixed domains.
 universe carrierLevel
+variable {Argument : Type} [Fintype Argument]
+
+/-- Arbitrarily many separate fixed encoded arguments compute one result. -/
+def finiteOperation (inputs : Argument → EncodedDomain.{0, carrierLevel} Empty)
+    (output : EncodedDomain.{0, carrierLevel} Empty)
+    (operation : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → output.Carrier sizes) :
+    Computation Empty Argument where
+  inputDomains := inputs
+  outputDomain := output
+  precondition _ _ := True
+  compute sizes arguments := operation sizes arguments.val
+
+namespace Realizable.Internal
+
+private noncomputable def finitePlacement : PublicTape Empty Argument ↪ (Fin (Fintype.card Argument) ⊕ Fin 1) :=
+  ⟨(fun role => match role with
+    | .inl empty => nomatch empty
+    | .inr (.inl name) => .inl (Fintype.equivFin Argument name)
+    | .inr (.inr _) => .inr 0), by
+    intro first second equal
+    rcases first with empty | first | first
+    · cases empty
+    · rcases second with empty | second | second
+      · cases empty
+      · exact congrArg (fun name => Sum.inr (Sum.inl name))
+          ((Fintype.equivFin Argument).injective (Sum.inl.inj equal))
+      · cases equal
+    · rcases second with empty | second | second
+      · cases empty
+      · cases equal
+      · cases first; cases second; rfl⟩
+
+end Realizable.Internal
+
+open Realizable.Internal in
+/-- Every specialization-fixed family operation uses the same finite table. -/
+theorem finiteOperation_realizable (inputs : Argument → EncodedDomain.{0, carrierLevel} Empty)
+    (output : EncodedDomain.{0, carrierLevel} Empty)
+    (operation : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → output.Carrier sizes) :
+    (finiteOperation inputs output operation).Realizable := by
+  classical
+  let sourceInputs := fun name => inputs ((Fintype.equivFin Argument).symm name)
+  let sourceOutputs := fun _ : Fin 1 => output
+  let sourceOperation := fun sizes (values : ∀ name, (sourceInputs name).Carrier sizes) (_ : Fin 1) =>
+    operation sizes (fun name => by simpa [sourceInputs] using values (Fintype.equivFin Argument name))
+  refine ofNamedLayout (finiteOperation inputs output operation)
+    (FiniteTable.domains sourceInputs sourceOutputs) FiniteTable.readOnly
+    FiniteTable.sizeTapes FiniteTable.outputTapes
+    (FiniteTable.algorithm sourceInputs sourceOutputs sourceOperation) (FiniteTable.entry _ _) none _ _
+    (FiniteTable.contract sourceInputs sourceOutputs sourceOperation) finitePlacement
+    (by
+      intro role
+      rcases role with empty | name | result
+      · cases empty
+      · change inputs name = inputs ((Fintype.equivFin Argument).symm (Fintype.equivFin Argument name))
+        rw [Equiv.symm_apply_apply]
+      · cases result; rfl)
+    (by intro role; rcases role with empty | name | result; cases empty; rfl; rfl)
+    (by
+      intro name outside
+      cases name with
+      | inl name => exact False.elim (outside ⟨.inr (.inl ((Fintype.equivFin Argument).symm name)), by
+          change Sum.inl (Fintype.equivFin Argument ((Fintype.equivFin Argument).symm name)) = Sum.inl name
+          rw [Equiv.apply_symm_apply]⟩)
+      | inr name => rfl)
+    (by intro empty; cases empty) 0 rfl (by intro sizes input valid; trivial) ?_
+  intro sizes input valid result correct
+  have selected := congrFun correct 0
+  exact congrArg (encoded output sizes) selected
 
 /-- False and true name the two arguments, whose carrier types may differ. -/
 def finiteTable (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLevel} Empty)
@@ -37,37 +105,12 @@ def finiteTable (firstDomain secondDomain outputDomain : EncodedDomain.{0, carri
   precondition _ _ := True
   compute sizes arguments := operation sizes (arguments.val false) (arguments.val true)
 
-namespace Realizable.Internal
-
-private def tablePlacement : PublicTape Empty Bool ↪ Fin 3 :=
-  ⟨(fun role => match role with
-    | .inl empty => nomatch empty
-    | .inr (.inl false) => 0 | .inr (.inl true) => 1 | .inr (.inr _) => 2), by
-    intro first second equal
-    fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-
-end Realizable.Internal
-
-open Realizable.Internal in
-/-- The existing finite-table machine certifies a public binary computation. -/
 theorem finiteTable_realizable
     (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLevel} Empty)
     (operation : ∀ sizes, firstDomain.Carrier sizes → secondDomain.Carrier sizes →
-      outputDomain.Carrier sizes) : (finiteTable firstDomain secondDomain outputDomain operation).Realizable := by
-  refine ofNamedLayout (finiteTable firstDomain secondDomain outputDomain operation)
-    (StandardFiniteTable.domains firstDomain secondDomain outputDomain) StandardFiniteTable.readOnly
-    StandardFiniteTable.sizeTapes StandardFiniteTable.outputTapes
-    (StandardFiniteTable.algorithm firstDomain secondDomain outputDomain operation)
-    StandardFiniteTable.entry StandardFiniteTable.exit _ _
-    (StandardFiniteTable.contract firstDomain secondDomain outputDomain operation) tablePlacement
-    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
-    (by intro name outside; fin_cases name <;> first
-      | rfl
-      | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
-      | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
-    (by intro empty; cases empty) () rfl (by intro sizes input valid; trivial) ?_
-  intro sizes input valid output correct
-  exact congrArg (encoded outputDomain sizes) correct
+      outputDomain.Carrier sizes) : (finiteTable firstDomain secondDomain outputDomain operation).Realizable :=
+  finiteOperation_realizable (Argument := Bool) (fun | false => firstDomain | true => secondDomain) outputDomain
+    (fun sizes values => operation sizes (values false) (values true))
 
 /-- A unary specialization-fixed predicate returns a single Boolean. -/
 noncomputable def finitePredicate (domain : EncodedDomain.{0, 0} Empty)
@@ -75,32 +118,11 @@ noncomputable def finitePredicate (domain : EncodedDomain.{0, 0} Empty)
   unaryMap domain EncodedDomain.booleans (fun _ _ => True)
     (fun sizes value => predicate sizes value.val)
 
-namespace Realizable.Internal
-
-private def predicatePlacement : PublicTape Empty Unit ↪ Fin 3 :=
-  ⟨(fun role => match role with
-    | .inl empty => nomatch empty
-    | .inr (.inl _) => 0 | .inr (.inr _) => 2), by
-    intro first second equal
-    fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-
-end Realizable.Internal
-
-open Realizable.Internal in
-/-- The singleton workspace is private and has no mathematical return contract. -/
 theorem finitePredicate_realizable (domain : EncodedDomain.{0, 0} Empty)
     (predicate : ∀ sizes, domain.Carrier sizes → Bool) :
-    (finitePredicate domain predicate).Realizable := by
-  refine ofNamedLayout (finitePredicate domain predicate) (StandardFinitePredicate.domains domain)
-    StandardFinitePredicate.readOnly StandardFiniteTable.sizeTapes StandardFiniteTable.outputTapes
-    (StandardFinitePredicate.machine domain predicate) StandardFiniteTable.entry StandardFiniteTable.exit
-    _ _ (StandardFinitePredicate.contract domain predicate) predicatePlacement
-    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
-    (by intro name outside; fin_cases name <;> first
-      | rfl | exact False.elim (outside ⟨.inr (.inl ()), rfl⟩))
-    (by intro empty; cases empty) () rfl (by intro sizes input valid; trivial) ?_
-  intro sizes input valid output correct
-  exact congrArg (encoded EncodedDomain.booleans sizes) correct
+    (finitePredicate domain predicate).Realizable :=
+  finiteOperation_realizable (fun _ : Unit => domain) EncodedDomain.booleans
+    (fun sizes values => predicate sizes (values ()))
 
 /-- Three separate arguments from one fixed domain compute one mathematical result. -/
 def finiteTernary (domain : EncodedDomain.{0, carrierLevel} Empty)
@@ -111,34 +133,10 @@ def finiteTernary (domain : EncodedDomain.{0, carrierLevel} Empty)
   precondition _ _ := True
   compute sizes arguments := operation sizes (arguments.val 0) (arguments.val 1) (arguments.val 2)
 
-namespace Realizable.Internal
-
-private def ternaryPlacement : PublicTape Empty (Fin 3) ↪ Fin 5 :=
-  ⟨(fun role => match role with
-    | .inl empty => nomatch empty
-    | .inr (.inl name) => ⟨name.val, by omega⟩ | .inr (.inr _) => 3), by
-    intro first second equal
-    fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-
-end Realizable.Internal
-
-open Realizable.Internal in
 theorem finiteTernary_realizable (domain : EncodedDomain.{0, carrierLevel} Empty)
     (operation : ∀ sizes, domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes) :
-    (finiteTernary domain operation).Realizable := by
-  refine ofNamedLayout (finiteTernary domain operation) (StandardRowCombine.domains domain)
-    StandardRowCombine.readOnly StandardRowCombine.sizeTapes StandardRowCombine.outputTapes
-    (StandardRowCombine.algorithm domain (fun sizes first second third =>
-      (operation sizes first second third, operation sizes first second third)))
-    StandardRowCombine.entry StandardRowCombine.exit _ _ (StandardRowCombine.contract domain _)
-    ternaryPlacement (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
-    (by intro name outside; fin_cases name <;> first
-      | rfl
-      | exact False.elim (outside ⟨.inr (.inl 0), rfl⟩)
-      | exact False.elim (outside ⟨.inr (.inl 1), rfl⟩)
-      | exact False.elim (outside ⟨.inr (.inl 2), rfl⟩))
-    (by intro empty; cases empty) false rfl (by intro sizes input valid; trivial) ?_
-  intro sizes input valid output correct
-  exact congrArg (encoded domain sizes) (congrArg Prod.fst correct)
+    (finiteTernary domain operation).Realizable :=
+  finiteOperation_realizable (fun _ : Fin 3 => domain) domain
+    (fun sizes values => operation sizes (values 0) (values 1) (values 2))
 
 end Polytime2.Computation

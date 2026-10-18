@@ -124,7 +124,7 @@ import Polytime2.Examples.Arithmetic
 import Polytime2.Examples.FiniteTables
 import Polytime2.StandardArrayMapContract
 import Polytime2.Examples.ArrayMaps
-import Polytime2.StandardRowCombineContract
+import Polytime2.StandardRowCombine
 import Polytime2.Examples.RowCombine
 import Polytime2.StandardMatrixRowEntry
 import Polytime2.Examples.MatrixRowEntry

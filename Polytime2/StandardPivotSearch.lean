@@ -34,7 +34,7 @@ namespace Polytime2.StandardPivotSearch
 
 open MultiTape CallingConvention
 
-abbrev TapeName := Sum StandardMatrixEntry.TapeName (Fin 7)
+abbrev TapeName := Sum StandardMatrixEntry.TapeName (Fin 6)
 abbrev Alphabet := CallingConvention.Alphabet TapeName
 
 def sizeTape (parameter : Fin 3) : TapeName := .inl (.inl (.inl parameter))
@@ -47,12 +47,10 @@ def differenceTape : TapeName := .inr 2
 def foundTape : TapeName := .inr 3
 def continueTape : TapeName := .inr 4
 def nextTape : TapeName := .inr 5
-def unitTape : TapeName := .inr 6
 
 noncomputable def domains (scalar : EncodedDomain.{0, 0} Empty) : TapeName → EncodedDomain (Fin 3)
   | .inl name => StandardMatrixEntry.domains scalar.constant name
-  | .inr name => if name = 6 then StandardFinitePredicate.unitDomain.constant
-      else if name = 3 ∨ name = 4 then EncodedDomain.booleans else EncodedDomain.binaryNaturals 0
+  | .inr name => if name = 3 ∨ name = 4 then EncodedDomain.booleans else EncodedDomain.binaryNaturals 0
 
 def readOnly : TapeName → Bool
   | .inl (.inl (.inl _)) => true
@@ -77,13 +75,13 @@ def comparisonWiring : Sum Unit (Fin 4) ↪ TapeName :=
     | .inr name => match name.val with
       | 0 => counterTape 1 | 1 => rowLimitTape | 2 => differenceTape | _ => foundTape) := rfl
 
-def testWiring : Fin 3 ↪ TapeName :=
-  ⟨(fun name => match name.val with | 0 => elementTape | 1 => unitTape | _ => continueTape), by
+def testWiring : (Fin 1 ⊕ Fin 1) ↪ TapeName :=
+  ⟨Sum.elim (fun _ => elementTape) (fun _ => continueTape), by
     intro first second equal
-    fin_cases first <;> fin_cases second <;> simp_all [elementTape, unitTape, continueTape]⟩
+    fin_cases first <;> fin_cases second <;> simp_all [elementTape, continueTape]⟩
 
-@[simp] theorem testWiring_apply (name : Fin 3) : testWiring name =
-    (match name.val with | 0 => elementTape | 1 => unitTape | _ => continueTape) := rfl
+@[simp] theorem testWiring_apply (name : Fin 1 ⊕ Fin 1) : testWiring name =
+    (match name with | .inl _ => elementTape | .inr _ => continueTape) := by cases name <;> rfl
 
 def incrementWiring : Sum (Fin 3) Bool ↪ TapeName :=
   ⟨(fun name => match name with
@@ -129,10 +127,10 @@ abbrev ReadTestState (width : ℕ) := Sum (StandardMatrixEntry.State width) (Sta
 
 noncomputable def readTest (scalar : EncodedDomain.{0, 0} Empty)
     (isZero : ∀ assignment, scalar.Carrier assignment → Bool) : Machine Alphabet (ReadTestState (scalar.width Empty.elim)) :=
-  MultiTape.sequence (readEntry (scalar.width Empty.elim)) (zeroTest scalar isZero) StandardFiniteTable.entry
+  MultiTape.sequence (readEntry (scalar.width Empty.elim)) (zeroTest scalar isZero) StandardFinitePredicate.entry
 
 def readTestEntry (width : ℕ) : ReadTestState width := .inl (StandardMatrixEntry.entry width)
-noncomputable def readTestExit (width : ℕ) : ReadTestState width := .inr StandardFiniteTable.exit
+noncomputable def readTestExit (width : ℕ) : ReadTestState width := .inr StandardFinitePredicate.exit
 
 noncomputable def stop : Machine Alphabet Bool := StandardTapeCommands.setBoolean continueTape false
 
