@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.CallingConvention
+import Polytime2.RestoringScan
 import Polytime2.Copy
 
 /-! # Marker-free runtime-width copying
@@ -41,79 +41,39 @@ def machine : Machine (fun _ : Bool => Symbol) (Fin 3) := fun state symbols =>
     else some (1, fun name => (symbols name, some .left))
   | _ => none
 
-private theorem forward (bits : List Bool) (old : List Symbol) (sameLength : old.length = bits.length)
-    (sourceLeft sourceRight targetLeft targetRight : List Symbol) :
-    Steps machine bits.length
-      (0, frame sourceLeft (word bits ++ sourceRight) targetLeft (old ++ targetRight))
-      (0, frame ((word bits).reverse ++ sourceLeft) sourceRight
-        ((word bits).reverse ++ targetLeft) targetRight) := by
-  induction bits generalizing old sourceLeft targetLeft with
-  | nil =>
-    have empty : old = [] := List.eq_nil_of_length_eq_zero sameLength
-    subst old
-    simpa [word] using Steps.zero (machine := machine) (0, frame sourceLeft sourceRight targetLeft targetRight)
-  | cons bit bits hypothesis =>
-    cases old with
-    | nil => simp at sameLength
-    | cons previous old =>
-      have first : step machine
-          (0, frame sourceLeft (word (bit :: bits) ++ sourceRight) targetLeft ((previous :: old) ++ targetRight)) =
-          some (0, frame (data bit :: sourceLeft) (word bits ++ sourceRight)
-            (data bit :: targetLeft) (old ++ targetRight)) := by
-        have nonblank : data bit ≠ 0 := by cases bit <;> decide
-        simp only [step, machine, Fin.val_zero, MultiTape.read, frame, word, List.map_cons, List.cons_append,
-          Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons, nonblank, ↓reduceIte, Option.map_some]
-        congr 2
-        funext name
-        cases name <;>
-          simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-      have rest := hypothesis old (by simpa using sameLength) (data bit :: sourceLeft) (data bit :: targetLeft)
-      simpa [word, List.reverse_cons, List.append_assoc] using Steps.next first rest
+private def copyDigit (_memory : Unit) (bit : Bool) : Unit × Bool := ((), bit)
 
+private theorem copy_run (bits : List Bool) : BinaryScan.run copyDigit () bits = ((), bits) := by
+  induction bits with
+  | nil => rfl
+  | cons bit bits hypothesis => simp [BinaryScan.run, copyDigit, hypothesis]
 
-private theorem return_head (bits : List Bool) (current : Symbol) (notBoundary : current ≠ 0)
-    (sourceLeft sourceRight targetLeft targetRight : List Symbol) :
-    Steps machine (bits.length + 2)
-      (1, frame (word bits ++ 0 :: sourceLeft) (current :: sourceRight)
-        (word bits ++ 0 :: targetLeft) (current :: targetRight))
-      (2, frame (0 :: sourceLeft) ((word bits).reverse ++ current :: sourceRight)
-        (0 :: targetLeft) ((word bits).reverse ++ current :: targetRight)) := by
-  induction bits generalizing current sourceRight targetRight with
-  | nil =>
-    have first : step machine
-        (1, frame (0 :: sourceLeft) (current :: sourceRight) (0 :: targetLeft) (current :: targetRight)) =
-        some (1, frame sourceLeft (0 :: current :: sourceRight) targetLeft (0 :: current :: targetRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have second : step machine
-        (1, frame sourceLeft (0 :: current :: sourceRight) targetLeft (0 :: current :: targetRight)) =
-        some (2, frame (0 :: sourceLeft) (current :: sourceRight) (0 :: targetLeft) (current :: targetRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-    simpa [word] using Steps.next first (Steps.next second (.zero _))
-  | cons bit bits hypothesis =>
-    have first : step machine
-        (1, frame (word (bit :: bits) ++ 0 :: sourceLeft) (current :: sourceRight)
-          (word (bit :: bits) ++ 0 :: targetLeft) (current :: targetRight)) =
-        some (1, frame (word bits ++ 0 :: sourceLeft) (data bit :: current :: sourceRight)
-          (word bits ++ 0 :: targetLeft) (data bit :: current :: targetRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, word, List.map_cons, List.cons_append,
-        Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have notMarker : data bit ≠ 0 := by cases bit <;> decide
-    have rest := hypothesis (data bit) notMarker (current :: sourceRight) (current :: targetRight)
-    simpa [word, List.reverse_cons, List.append_assoc, Nat.add_assoc] using Steps.next first rest
+private def copyState : RestoringScan.State Unit → Fin 3
+  | .inl _ => 0
+  | .inr (_, false) => 1
+  | .inr (_, true) => 2
 
+private theorem copy_transition (state : RestoringScan.State Unit) (symbols : Symbols (fun _ : Bool => Symbol))
+    (next : RestoringScan.State Unit) (actions : Actions (fun _ : Bool => Symbol))
+    (instruction : RestoringScan.machine copyDigit state symbols = some (next, actions)) :
+    machine (copyState state) symbols = some (copyState next, actions) := by
+  have same : machine (copyState state) symbols =
+      (RestoringScan.machine copyDigit state symbols).map
+        (fun command => (copyState command.1, command.2)) := by
+    have preserved (blank : symbols false ≠ 0) : data (symbols false == 2) = symbols false := by
+      generalize equal : symbols false = symbol at *
+      fin_cases symbol <;> simp_all [Binary.data]
+    rcases state with memory | ⟨memory, finished⟩
+    · cases memory
+      by_cases blank : symbols false = 0
+      · simp [RestoringScan.machine, machine, copyState, blank]
+      · simp [RestoringScan.machine, machine, copyState, copyDigit, blank, preserved blank]
+    · cases finished <;> by_cases blank : symbols false = 0 <;>
+        simp [RestoringScan.machine, machine, copyState, blank]
+  rw [same, instruction]
+  rfl
 
-/-- Copying uses a linear number of transitions and restores both heads. -/
+/-- Copying specializes the shared scan without retaining controller memory. -/
 theorem steps (bits : List Bool) (old : List Symbol)
     (sameLength : old.length = bits.length)
     (sourceLeft sourceRight targetLeft targetRight : List Symbol) :
@@ -122,165 +82,20 @@ theorem steps (bits : List Bool) (old : List Symbol)
         (0 :: targetLeft) (old ++ 0 :: targetRight))
       (2, frame (0 :: sourceLeft) (word bits ++ 0 :: sourceRight)
         (0 :: targetLeft) (word bits ++ 0 :: targetRight)) := by
-  have copied := forward bits old sameLength (0 :: sourceLeft) (0 :: sourceRight)
-    (0 :: targetLeft) (0 :: targetRight)
-  have handover : step machine
-      (0, frame ((word bits).reverse ++ 0 :: sourceLeft) (0 :: sourceRight)
-        ((word bits).reverse ++ 0 :: targetLeft) (0 :: targetRight)) =
-      some (1, frame (((word bits).reverse ++ 0 :: sourceLeft).tail)
-        (((word bits).reverse ++ 0 :: sourceLeft).headI :: 0 :: sourceRight)
-        (((word bits).reverse ++ 0 :: targetLeft).tail)
-        (((word bits).reverse ++ 0 :: targetLeft).headI :: 0 :: targetRight)) := by
-    simp only [step, machine, Fin.val_zero, MultiTape.read, frame, Turing.Tape.mk'_head,
-      Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-    congr 2
-    funext name
-    cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk',
-      Turing.ListBlank.tail_mk, Turing.ListBlank.head_mk, Turing.ListBlank.cons_mk]
-  cases reversed : bits.reverse with
-  | nil =>
-    have empty : bits = [] := by simpa using congrArg List.reverse reversed
-    subst bits
-    have finish : step machine
-        (1, frame sourceLeft (0 :: 0 :: sourceRight) targetLeft (0 :: 0 :: targetRight)) =
-        some (2, frame (0 :: sourceLeft) (0 :: sourceRight)
-          (0 :: targetLeft) (0 :: targetRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_right_mk',
-        Turing.ListBlank.cons_mk]
-    simpa [word] using copied.trans (Steps.next handover (Steps.next finish (.zero _)))
-  | cons bit remaining =>
-    have restored := return_head remaining (data bit) (by cases bit <;> decide)
-      sourceLeft (0 :: sourceRight) targetLeft (0 :: targetRight)
-    have wordReverse : (word bits).reverse = data bit :: word remaining := by
-      simp [word, ← List.map_reverse, reversed]
-    have reconstruct : (word remaining).reverse ++ [data bit] = word bits := by
-      have equal := congrArg List.reverse wordReverse
-      simpa using equal.symm
-    have length : bits.length = remaining.length + 1 := by
-      have equal := congrArg List.length reversed
-      simpa using equal
-    simp only [wordReverse, List.cons_append, List.tail_cons, List.headI_cons] at handover
-    rw [wordReverse] at copied
-    have trace := copied.trans (Steps.next handover restored)
-    have sourceEq : (word remaining).reverse ++ data bit :: 0 :: sourceRight =
-        word bits ++ 0 :: sourceRight := by
-      rw [← List.singleton_append, ← List.append_assoc, reconstruct]
-    have targetEq : (word remaining).reverse ++ data bit :: 0 :: targetRight =
-        word bits ++ 0 :: targetRight := by
-      rw [← List.singleton_append, ← List.append_assoc, reconstruct]
-    rw [sourceEq, targetEq] at trace
-    convert trace using 1; omega
+  have trace := (RestoringScan.steps copyDigit () bits old sameLength
+    sourceLeft sourceRight targetLeft targetRight).rename copyState copy_transition
+  simpa only [copy_run, copyState] using trace
 
 open CallingConvention
 
-private def invariant (width : ℕ) (position : Bool → ℤ) (state : Fin 3)
-    (tapes : Tapes (CallingConvention.Alphabet Bool)) : Prop :=
-  position true = position false ∧
-    (∀ index : ℤ, (tapes false).nth (index - position false) = 0 ↔
-      index < 0 ∨ (width : ℤ) ≤ index) ∧
-    (if state = 0 then 0 ≤ position false ∧ position false ≤ width
-     else if state = 1 then -1 ≤ position false ∧ position false < width
-     else position false = 0)
-
-private theorem safe (width : ℕ) (position : Bool → ℤ) (state : Fin 3)
-    (tapes : Tapes (CallingConvention.Alphabet Bool))
-    (nextState : Fin 3) (actions : Actions (CallingConvention.Alphabet Bool))
-    (valid : invariant width position state tapes)
-    (instruction : machine state (read tapes) = some (nextState, actions)) :
-    Allowed (fun _ : Bool => width) (fun name => !name) position (read tapes) actions ∧
-      invariant width (fun name => position name + displacement (actions name).2)
-        nextState (act actions tapes) := by
-  obtain ⟨synchronized, shape, bounds⟩ := valid
-  have atHead := shape (position false)
-  simp only [sub_self, Turing.Tape.nth_zero] at atHead
-  have preserveShape (source : (actions false).1 = (tapes false).head) :
-      ∀ index : ℤ,
-        (act actions tapes false).nth
-          (index - (position false + displacement (actions false).2)) = 0 ↔
-        index < 0 ∨ (width : ℤ) ≤ index := by
-    intro index
-    rw [action_nth]
-    by_cases equal : index = position false
-    · subst index
-      simpa [source] using atHead
-    · simpa [equal] using shape index
-  fin_cases state <;> simp only [machine] at instruction
-  · by_cases blank : (tapes false).head = 0
-    · simp only [MultiTape.read, blank, ↓reduceIte, Option.some.injEq,
-        Prod.mk.injEq] at instruction
-      obtain ⟨rfl, rfl⟩ := instruction
-      refine ⟨(by intro name premise; rfl), ?_⟩
-      refine ⟨by simpa [displacement] using synchronized, preserveShape rfl, ?_⟩
-      simp only [Fin.zero_eta, Fin.isValue, ↓reduceIte] at bounds
-      simp only [Fin.isValue, show (1 : Fin 3) ≠ 0 by decide, ↓reduceIte, displacement]
-      have outside := atHead.mp blank
-      norm_num at bounds ⊢
-      omega
-    · simp only [MultiTape.read, blank, ↓reduceIte, Option.some.injEq,
-        Prod.mk.injEq] at instruction
-      obtain ⟨rfl, rfl⟩ := instruction
-      have inside : ¬ (position false < 0 ∨ (width : ℤ) ≤ position false) := by
-        exact fun outside => blank (atHead.mpr outside)
-      refine ⟨?_, ?_⟩
-      · intro name premise
-        cases name with
-        | false => rfl
-        | true => simp only [Bool.not_true, Bool.false_eq_true, false_or] at premise
-                  rw [synchronized] at premise
-                  exact False.elim (inside premise)
-      · refine ⟨by simpa [displacement] using synchronized, preserveShape rfl, ?_⟩
-        simp only [Fin.isValue, ↓reduceIte, displacement]
-        omega
-  · by_cases blank : (tapes false).head = 0
-    · simp only [MultiTape.read, blank, ↓reduceIte, Option.some.injEq,
-        Prod.mk.injEq] at instruction
-      obtain ⟨rfl, rfl⟩ := instruction
-      refine ⟨(by intro name premise; rfl), ?_⟩
-      refine ⟨by simpa [displacement] using synchronized, preserveShape rfl, ?_⟩
-      simp only [Fin.isValue] at bounds
-      simp only [Fin.isValue, show (2 : Fin 3) ≠ 0 by decide,
-        show (2 : Fin 3) ≠ 1 by decide, ↓reduceIte, displacement]
-      have outside := atHead.mp blank
-      norm_num at bounds ⊢
-      omega
-    · simp only [MultiTape.read, blank, ↓reduceIte, Option.some.injEq,
-        Prod.mk.injEq] at instruction
-      obtain ⟨rfl, rfl⟩ := instruction
-      have inside : ¬ (position false < 0 ∨ (width : ℤ) ≤ position false) := by
-        exact fun outside => blank (atHead.mpr outside)
-      refine ⟨(by intro name premise; rfl), ?_⟩
-      refine ⟨by simpa [displacement] using synchronized, preserveShape rfl, ?_⟩
-      simp only [Fin.isValue, show (1 : Fin 3) ≠ 0 by decide, ↓reduceIte, displacement]
-      omega
-  · simp at instruction
-
-/-- The marker-free controller obeys the convention at every transition,
-including on an empty region and while crossing either surrounding blank. -/
+/-- Copying inherits safety and head restoration from the shared scanner. -/
 theorem runs (bits : List Bool) (old : List Symbol) (sameLength : old.length = bits.length) :
     Runs (fun _ : Bool => bits.length) (fun name => !name) machine
       (2 * bits.length + 2) 0 (fun _ => 0)
       (frame [0] (word bits ++ [0]) [0] (old ++ [0]))
       2 (fun _ => 0) (frame [0] (word bits ++ [0]) [0] (word bits ++ [0])) := by
-  have initial : invariant bits.length (fun _ => 0) 0
-      (frame [0] (word bits ++ [0]) [0] (old ++ [0])) := by
-    refine ⟨rfl, ?_, ?_⟩
-    · intro index
-      simpa only [sub_zero, frame] using word_nth_blank_iff bits index
-    · simp
-  obtain ⟨finalPosition, trace, finalValid⟩ := Runs.of_steps_invariant (invariant bits.length)
-    (safe bits.length) (steps bits old sameLength [] [] [] []) (fun _ => 0) initial
-  have zero : finalPosition = fun _ => 0 := by
-    obtain ⟨synchronized, shape, bounds⟩ := finalValid
-    have atZero : finalPosition false = 0 := by simpa using bounds
-    funext name
-    cases name with
-    | false => exact atZero
-    | true => exact synchronized.trans atZero
-  simpa only [zero] using trace
+  have trace := (RestoringScan.runs copyDigit () bits old sameLength).rename copyState copy_transition
+  simpa only [copy_run, copyState] using trace
 
 -- parameterLevel: size names bounding the runtime number of copied bits.
 universe parameterLevel

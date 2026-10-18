@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.ScanReturn
 import Polytime2.CallingConvention
 import Polytime2.BinaryRipple
 
@@ -103,73 +104,6 @@ private theorem forward (previous : Bool) (left right : List Bool)
           (data (digit bit other previous) :: leftOutput)
         simpa [ripple, BinaryRipple.ripple, word, List.reverse_cons, List.append_assoc] using Steps.next first restTrace
 
-private theorem return_heads (left right output : List Bool)
-    (rightLength : right.length = left.length) (outputLength : output.length = left.length)
-    (currentFirst currentSecond currentOutput : Symbol) (notBoundary : currentFirst ≠ 0)
-    (leftFirst leftSecond leftOutput tailFirst tailSecond tailOutput : List Symbol) :
-    Steps (machine digit carry) (left.length + 2)
-      (.inr 0, frame (word left ++ 0 :: leftFirst) (currentFirst :: tailFirst)
-        (word right ++ 0 :: leftSecond) (currentSecond :: tailSecond)
-        (word output ++ 0 :: leftOutput) (currentOutput :: tailOutput))
-      (.inr 1, frame (0 :: leftFirst) ((word left).reverse ++ currentFirst :: tailFirst)
-        (0 :: leftSecond) ((word right).reverse ++ currentSecond :: tailSecond)
-        (0 :: leftOutput) ((word output).reverse ++ currentOutput :: tailOutput)) := by
-  induction left generalizing right output currentFirst currentSecond currentOutput
-      tailFirst tailSecond tailOutput with
-  | nil =>
-    have rightEmpty : right = [] := List.eq_nil_of_length_eq_zero rightLength
-    have outputEmpty : output = [] := List.eq_nil_of_length_eq_zero outputLength
-    subst right; subst output
-    have first : step (machine digit carry)
-        (.inr 0, frame (0 :: leftFirst) (currentFirst :: tailFirst)
-          (0 :: leftSecond) (currentSecond :: tailSecond) (0 :: leftOutput) (currentOutput :: tailOutput)) =
-        some (.inr 0, frame leftFirst (0 :: currentFirst :: tailFirst)
-          leftSecond (0 :: currentSecond :: tailSecond) leftOutput (0 :: currentOutput :: tailOutput)) := by
-      simp only [step, machine, MultiTape.read, frame, BinaryRipple.frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      fin_cases name <;>
-        simp [act, BinaryRipple.frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have second : step (machine digit carry)
-        (.inr 0, frame leftFirst (0 :: currentFirst :: tailFirst)
-          leftSecond (0 :: currentSecond :: tailSecond) leftOutput (0 :: currentOutput :: tailOutput)) =
-        some (.inr 1, frame (0 :: leftFirst) (currentFirst :: tailFirst)
-          (0 :: leftSecond) (currentSecond :: tailSecond) (0 :: leftOutput) (currentOutput :: tailOutput)) := by
-      simp only [step, machine, MultiTape.read, frame, BinaryRipple.frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      fin_cases name <;>
-        simp [act, BinaryRipple.frame, Turing.Tape.write_mk', Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-    simpa [word] using Steps.next first (Steps.next second (.zero _))
-  | cons bit bits hypothesis =>
-    cases right with
-    | nil => simp at rightLength
-    | cons other rest =>
-      cases output with
-      | nil => simp at outputLength
-      | cons result results =>
-        have first : step (machine digit carry)
-            (.inr 0, frame (word (bit :: bits) ++ 0 :: leftFirst) (currentFirst :: tailFirst)
-              (word (other :: rest) ++ 0 :: leftSecond) (currentSecond :: tailSecond)
-              (word (result :: results) ++ 0 :: leftOutput) (currentOutput :: tailOutput)) =
-            some (.inr 0, frame (word bits ++ 0 :: leftFirst) (data bit :: currentFirst :: tailFirst)
-              (word rest ++ 0 :: leftSecond) (data other :: currentSecond :: tailSecond)
-              (word results ++ 0 :: leftOutput) (data result :: currentOutput :: tailOutput)) := by
-          simp only [step, machine, MultiTape.read, frame, BinaryRipple.frame, word, List.map_cons, List.cons_append,
-            Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons, notBoundary,
-            ↓reduceIte, Option.map_some]
-          congr 2
-          funext name
-          fin_cases name <;>
-            simp [act, BinaryRipple.frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-        have dataNotBoundary : data bit ≠ 0 := by cases bit <;> decide
-        have restTrace := hypothesis rest results (by simpa using rightLength)
-          (by simpa using outputLength) (data bit) (data other) (data result) dataNotBoundary
-          (currentFirst :: tailFirst) (currentSecond :: tailSecond) (currentOutput :: tailOutput)
-        simpa [word, List.reverse_cons, List.append_assoc, Nat.add_assoc] using Steps.next first restTrace
-
 /-- Exact linear cost for an arbitrary old output, including its carry cell. -/
 theorem steps (previous : Bool) (left right : List Bool) (sameLength : right.length = left.length)
     (old : List Symbol) (oldLength : old.length = left.length) (oldCarry : Symbol)
@@ -183,104 +117,49 @@ theorem steps (previous : Bool) (left right : List Bool) (sameLength : right.len
         (0 :: leftOutput) (word ((ripple digit carry previous left right).1 ++
           [(ripple digit carry previous left right).2]) ++ tailOutput)) := by
   let low := (ripple digit carry previous left right).1
-  let last := data (ripple digit carry previous left right).2
+  let finalCarry := (ripple digit carry previous left right).2
+  let atEnd := frame ((word left).reverse ++ 0 :: leftFirst) (0 :: tailFirst)
+    ((word right).reverse ++ 0 :: leftSecond) (0 :: tailSecond)
+    ((word low).reverse ++ 0 :: leftOutput) (oldCarry :: tailOutput)
+  let prepared := frame ((word left).reverse ++ 0 :: leftFirst) (0 :: tailFirst)
+    ((word right).reverse ++ 0 :: leftSecond) (0 :: tailSecond)
+    ((word low).reverse ++ 0 :: leftOutput) (data finalCarry :: tailOutput)
   have lowLength : low.length = left.length :=
     BinaryRipple.ripple_length digit carry previous left right sameLength
   have scanned := forward digit carry previous left right sameLength old oldLength
     (0 :: leftFirst) (0 :: leftSecond) (0 :: leftOutput)
     (0 :: tailFirst) (0 :: tailSecond) (oldCarry :: tailOutput)
-  have finish : step (machine digit carry)
-      (.inl (ripple digit carry previous left right).2,
-        frame ((word left).reverse ++ 0 :: leftFirst) (0 :: tailFirst)
-          ((word right).reverse ++ 0 :: leftSecond) (0 :: tailSecond)
-          ((word low).reverse ++ 0 :: leftOutput) (oldCarry :: tailOutput)) =
-      some (.inr 0,
-        frame (((word left).reverse ++ 0 :: leftFirst).tail)
-          (((word left).reverse ++ 0 :: leftFirst).headI :: 0 :: tailFirst)
-          (((word right).reverse ++ 0 :: leftSecond).tail)
-          (((word right).reverse ++ 0 :: leftSecond).headI :: 0 :: tailSecond)
-          (((word low).reverse ++ 0 :: leftOutput).tail)
-          (((word low).reverse ++ 0 :: leftOutput).headI :: last :: tailOutput)) := by
-    simp only [step, machine, MultiTape.read, frame, BinaryRipple.frame,
-      Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons,
-      ↓reduceIte, Option.map_some]
+  have boundary : step (machine digit carry) (.inl finalCarry, atEnd) =
+      some ((.inr 0), ScanReturn.move (fun _ : Fin 3 => true) .left prepared) := by
+    simp only [step, machine, MultiTape.read, atEnd, frame, BinaryRipple.frame, Turing.Tape.mk'_head,
+      Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
     congr 2
     funext name
-    fin_cases name <;> simp [act, BinaryRipple.frame, last, Turing.Tape.write_mk',
-      Turing.Tape.move_left_mk', Turing.ListBlank.tail_mk,
-      Turing.ListBlank.head_mk, Turing.ListBlank.cons_mk]
-  cases reversedLeft : left.reverse with
-  | nil =>
-    have leftEmpty : left = [] := by simpa using congrArg List.reverse reversedLeft
-    subst left
-    have rightEmpty : right = [] := List.eq_nil_of_length_eq_zero sameLength
-    subst right
-    have lowEmpty : low = [] := List.eq_nil_of_length_eq_zero lowLength
-    have restored : step (machine digit carry)
-        (.inr 0, frame leftFirst (0 :: 0 :: tailFirst)
-          leftSecond (0 :: 0 :: tailSecond) leftOutput (0 :: last :: tailOutput)) =
-        some (.inr 1, frame (0 :: leftFirst) (0 :: tailFirst)
-          (0 :: leftSecond) (0 :: tailSecond) (0 :: leftOutput) (last :: tailOutput)) := by
-      simp only [step, machine, MultiTape.read, frame, BinaryRipple.frame,
-        Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons,
-        ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      fin_cases name <;> simp [act, BinaryRipple.frame, Turing.Tape.write_mk',
-        Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-    simp only [lowEmpty, word, List.map_nil, List.reverse_nil, List.nil_append,
-      List.tail_cons, List.headI_cons] at finish
-    simpa [output, BinaryRipple.output, ripple, BinaryRipple.ripple, word, last] using
-      scanned.trans (Steps.next finish (Steps.next restored (.zero _)))
-  | cons bit bits =>
-    cases reversedRight : right.reverse with
-    | nil => simp_all
-    | cons other others =>
-      cases reversedLow : low.reverse with
-      | nil => simp_all
-      | cons result results =>
-        have firstLength : left.length = bits.length + 1 := by
-          simpa using congrArg List.length reversedLeft
-        have secondLength : others.length = bits.length := by
-          have equality := congrArg List.length reversedRight
-          simp only [List.length_reverse, List.length_cons] at equality
-          omega
-        have resultLength : results.length = bits.length := by
-          have equality := congrArg List.length reversedLow
-          simp only [List.length_reverse, List.length_cons] at equality
-          omega
-        have restored := return_heads digit carry bits others results secondLength resultLength
-          (data bit) (data other) (data result) (by cases bit <;> decide)
-          leftFirst leftSecond leftOutput (0 :: tailFirst) (0 :: tailSecond) (last :: tailOutput)
-        have leftReverse : (word left).reverse = data bit :: word bits := by
-          simp [word, ← List.map_reverse, reversedLeft]
-        have rightReverse : (word right).reverse = data other :: word others := by
-          simp [word, ← List.map_reverse, reversedRight]
-        have lowReverse : (word low).reverse = data result :: word results := by
-          simp [word, ← List.map_reverse, reversedLow]
-        rw [leftReverse, rightReverse, lowReverse] at finish
-        simp only [List.cons_append, List.tail_cons, List.headI_cons] at finish
-        rw [leftReverse, rightReverse] at scanned
-        change Steps (machine digit carry) _ _ (Sum.inl _, frame _ _ _ _ ((word low).reverse ++ _) _) at scanned
-        rw [lowReverse] at scanned
-        have trace := scanned.trans (Steps.next finish restored)
-        have leftReconstruct : (word bits).reverse ++ [data bit] = word left := by
-          simpa using (congrArg List.reverse leftReverse).symm
-        have rightReconstruct : (word others).reverse ++ [data other] = word right := by
-          simpa using (congrArg List.reverse rightReverse).symm
-        have lowReconstruct : (word results).reverse ++ [data result] = word low := by
-          simpa using (congrArg List.reverse lowReverse).symm
-        have first : (word bits).reverse ++ data bit :: 0 :: tailFirst = word left ++ 0 :: tailFirst := by
-          rw [← List.singleton_append, ← List.append_assoc, leftReconstruct]
-        have second : (word others).reverse ++ data other :: 0 :: tailSecond = word right ++ 0 :: tailSecond := by
-          rw [← List.singleton_append, ← List.append_assoc, rightReconstruct]
-        have result : (word results).reverse ++ data result :: last :: tailOutput =
-            word ((ripple digit carry previous left right).1 ++
-          [(ripple digit carry previous left right).2]) ++ tailOutput := by
-          rw [← List.singleton_append, ← List.append_assoc, lowReconstruct]
-          simp [word, low, last, List.append_assoc]
-        rw [first, second, result] at trace
-        convert trace using 1; omega
+    fin_cases name <;> simp [act, prepared, frame, BinaryRipple.frame, ScanReturn.move, Turing.Tape.write_mk',
+      Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
+  have returned := ScanReturn.from_end (machine digit carry) (.inl finalCarry)
+    (.inr 0) (.inr 1) 0 (fun _ : Fin 3 => true) rfl
+    (by intro symbols nonblank; simp [machine, nonblank])
+    (fun symbols name => (symbols name, some .right))
+    (by intro symbols blank; simp [machine, blank]) left.reverse leftFirst tailFirst atEnd prepared boundary
+    (by simp [prepared, frame, BinaryRipple.frame, word, List.map_reverse])
+  have restored : Steps (machine digit carry) (left.length + 2) (.inl finalCarry, atEnd)
+      ((.inr 1), frame (0 :: leftFirst) (word left ++ 0 :: tailFirst)
+        (0 :: leftSecond) (word right ++ 0 :: tailSecond)
+        (0 :: leftOutput) (word low ++ data finalCarry :: tailOutput)) := by
+    simp only [List.length_reverse] at returned
+    convert returned using 1
+    congr 1
+    funext name
+    fin_cases name <;> simp only [act, MultiTape.read, Turing.Tape.write_self, ScanReturn.move_iterate,
+      prepared, frame, BinaryRipple.frame]
+    · simpa [word, List.map_reverse, Turing.Tape.write_self] using
+        (ScanReturn.restore_tape ((word left).reverse) leftFirst (0 :: tailFirst)).symm
+    · simpa [word, List.map_reverse, sameLength, Turing.Tape.write_self] using
+        (ScanReturn.restore_tape ((word right).reverse) leftSecond (0 :: tailSecond)).symm
+    · simpa [word, List.map_reverse, lowLength, Turing.Tape.write_self] using
+        (ScanReturn.restore_tape ((word low).reverse) leftOutput (data finalCarry :: tailOutput)).symm
+  simpa [low, finalCarry, word, List.map_append, Nat.mul_add, two_mul, Nat.add_assoc] using scanned.trans restored
 
 open CallingConvention
 

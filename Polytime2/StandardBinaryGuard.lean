@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.ScanReturn
 import Polytime2.CallingConvention
 import Polytime2.StandardBinaryScan
 
@@ -67,90 +68,38 @@ private theorem forward (bits : List Bool) (flag : Bool)
     have rest := hypothesis (flag || bit) (data bit :: sourceLeft)
     simpa [word, List.reverse_cons, List.append_assoc, Bool.or_assoc] using Steps.next first rest
 
-private theorem return_head (bits : List Bool) (current : Symbol) (notBoundary : current ≠ 0)
-    (flag : Bool) (sourceLeft sourceRight flagLeft flagRight : List Symbol) (oldFlag : Symbol) :
-    Steps machine (bits.length + 2)
-      ((flag, 1), frame (word bits ++ 0 :: sourceLeft) (current :: sourceRight) flagLeft (oldFlag :: flagRight))
-      ((false, 2), frame (0 :: sourceLeft) ((word bits).reverse ++ current :: sourceRight) flagLeft (data flag :: flagRight)) := by
-  induction bits generalizing current sourceRight with
-  | nil =>
-    have first : step machine
-        ((flag, 1), frame (0 :: sourceLeft) (current :: sourceRight) flagLeft (oldFlag :: flagRight)) =
-        some ((flag, 1), frame sourceLeft (0 :: current :: sourceRight) flagLeft (oldFlag :: flagRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;>
-        simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have second : step machine
-        ((flag, 1), frame sourceLeft (0 :: current :: sourceRight) flagLeft (oldFlag :: flagRight)) =
-        some ((false, 2), frame (0 :: sourceLeft) (current :: sourceRight) flagLeft (data flag :: flagRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;>
-        simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-    simpa [word] using Steps.next first (Steps.next second (.zero _))
-  | cons bit bits hypothesis =>
-    have first : step machine
-        ((flag, 1), frame (word (bit :: bits) ++ 0 :: sourceLeft) (current :: sourceRight) flagLeft (oldFlag :: flagRight)) =
-        some ((flag, 1), frame (word bits ++ 0 :: sourceLeft) (data bit :: current :: sourceRight) flagLeft (oldFlag :: flagRight)) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, word, List.map_cons, List.cons_append,
-        Turing.Tape.mk'_head, Turing.ListBlank.head_mk, List.headI_cons, notBoundary, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;>
-        simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have notMarker : data bit ≠ 0 := by cases bit <;> decide
-    have rest := hypothesis (data bit) notMarker (current :: sourceRight)
-    simpa [word, List.reverse_cons, List.append_assoc, Nat.add_assoc] using Steps.next first rest
-
 theorem steps (bits : List Bool) (oldFlag : Symbol) :
     Steps machine (2 * bits.length + 2)
       ((false, 0), frame [0] (word bits ++ [0]) [0] [oldFlag, 0])
       ((false, 2), frame [0] (word bits ++ [0]) [0] [data (bits.any id), 0]) := by
-  cases reversed : bits.reverse with
-  | nil =>
-    have empty : bits = [] := List.reverse_eq_nil_iff.mp reversed
-    subst bits
-    have first : step machine ((false, 0), frame [0] [0] [0] [oldFlag, 0]) =
-        some ((false, 1), frame [] [0, 0] [0] [oldFlag, 0]) := by
-      simp only [step, machine, Fin.val_zero, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have second : step machine ((false, 1), frame [] [0, 0] [0] [oldFlag, 0]) =
-        some ((false, 2), frame [0] [0] [0] [data false, 0]) := by
-      simp only [step, machine, Fin.val_one, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-    exact Steps.next first (Steps.next second (.zero _))
-  | cons last rest =>
-    have original : bits = (last :: rest).reverse := by rw [← reversed, List.reverse_reverse]
-    have scanned := forward bits false [0] [0] [0] [0] oldFlag
-    simp only [Bool.false_or, word, ← List.map_reverse, reversed, List.map_cons, List.cons_append] at scanned
-    have handover : step machine
-        ((bits.any id, 0), frame (data last :: word rest ++ [0]) [0] [0] [oldFlag, 0]) =
-        some ((bits.any id, 1), frame (word rest ++ [0]) [data last, 0] [0] [oldFlag, 0]) := by
-      simp only [step, machine, Fin.val_zero, MultiTape.read, frame, Turing.Tape.mk'_head,
-        Turing.ListBlank.head_mk, List.headI_cons, ↓reduceIte, Option.map_some]
-      congr 2
-      funext name
-      cases name <;> simp [act, frame, Turing.Tape.write_mk', Turing.Tape.move_left_mk', Turing.ListBlank.cons_mk]
-    have nonblank : data last ≠ 0 := by cases last <;> decide
-    have returned := return_head rest (data last) nonblank (bits.any id) [] [0] [0] [0] oldFlag
-    have complete := scanned.trans (Steps.next handover returned)
-    have length : bits.length = rest.length + 1 := by
-      have lengths := congrArg List.length reversed
-      simpa using lengths
-    convert complete using 1 <;>
-      simp [word, original, List.reverse_cons, List.append_assoc]
-    omega
+  let atEnd := frame ((word bits).reverse ++ [0]) [0] [0] [oldFlag, 0]
+  have scanned := forward bits false [0] [0] [0] [0] oldFlag
+  have boundary : step machine ((bits.any id, 0), atEnd) =
+      some ((bits.any id, 1), ScanReturn.move (fun name : Bool => !name) .left atEnd) := by
+    change (machine (bits.any id, 0) (MultiTape.read atEnd)).map _ = _
+    rw [show machine (bits.any id, 0) (MultiTape.read atEnd) =
+      some ((bits.any id, 1), fun name => ((atEnd name).head, if name then none else some .left)) from rfl]
+    simp only [Option.map_some]
+    congr 2
+    funext name
+    cases name <;> simp [act, ScanReturn.move, Turing.Tape.write_self]
+  have returned := ScanReturn.from_end machine (bits.any id, 0) (bits.any id, 1) (false, 2)
+    false (fun name : Bool => !name) rfl
+    (by intro symbols nonblank; simp [machine, nonblank]; funext name; cases name <;> rfl)
+    (fun symbols name => if name then (data (bits.any id), none) else (symbols name, some .right))
+    (by intro symbols blank; simp [machine, blank]) bits.reverse [] [] atEnd atEnd boundary
+    (by simp [atEnd, frame, word, List.map_reverse])
+  have restored : Steps machine (bits.length + 2) ((bits.any id, 0), atEnd)
+      ((false, 2), frame [0] (word bits ++ [0]) [0] [data (bits.any id), 0]) := by
+    simp only [List.length_reverse] at returned
+    convert returned using 1
+    congr 1
+    funext name
+    cases name <;> simp only [act, MultiTape.read, ScanReturn.move_iterate, atEnd, frame]
+    · simpa [word, List.map_reverse, Turing.Tape.write_self] using
+        (ScanReturn.restore_tape ((word bits).reverse) [] [0]).symm
+    · simp [Turing.Tape.write_mk']
+  simpa [Bool.false_or, Nat.two_mul, Nat.add_assoc] using scanned.trans restored
 
 def widths (digits : ℕ) (name : Bool) : ℕ := if name then 1 else digits
 

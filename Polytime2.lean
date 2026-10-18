@@ -54,6 +54,8 @@ import Polytime2.StandardCopy
 import Polytime2.StandardConstant
 import Polytime2.StandardTerminatedCopy
 import Polytime2.StandardBinaryRipple
+import Polytime2.RestoringScan
+import Polytime2.ScanReturn
 import Polytime2.StandardBinaryScan
 import Polytime2.BinaryEncoding
 import Polytime2.StandardBinaryArithmetic

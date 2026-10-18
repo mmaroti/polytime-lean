@@ -41,6 +41,11 @@ supply the operational width computation needed by generic tape algorithms.
   both indices, the active count, and inactive data. Binary-encoded scalars use
   fixed finite tables; each map writes a separate array, and equal indices apply
   both maps sequentially.
+- `RestoringScan` shares finite-memory traversal, boundary handling, and safety
+  proofs between binary transducers and copying. `ScanReturn` handles named
+  groups of moving heads and caller-supplied termination actions, including
+  arithmetic carry outputs and Boolean guards. Empty words and arbitrary old
+  output contents are supported; fixed-width slice copying remains distinct.
 - Runtime-width binary addition with a final carry digit, linear transition
   cost, preserved operands and neighboring storage, and restored heads. Its
   mathematical contract states exact natural-number addition.
@@ -331,14 +336,6 @@ For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
 The consolidation steps below are ordered by rough expected net line reduction;
 the estimates include new machinery, overlap, and should not be added together.
-
-### Scanning (~600 lines)
-
-Consolidate forward scanning, boundary handling, rewinding, and head restoration
-under a finite-memory scanner with configurable tape roles and termination
-actions. Start with a small pair of controllers and verify a net reduction;
-retain the distinction between blank termination and explicit slice widths.
-Reuse the existing `BinaryScan`, `StandardBitFold`, `ArraySeek`, and `Sweep`.
 
 ### Arithmetic workspaces (~450 lines)
 
