@@ -42,15 +42,13 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly (algorithm enumeration)
-          ticks (entry (StandardGaussJordanClear.zeroBits enumeration).length
+          ticks (entry
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) initial
-          (exit (StandardGaussJordanClear.zeroBits enumeration).length
+          (exit
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final ∧
         final resultTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (MatrixOperations.pivotStep (Scalar := Scalar) matrix
-            ⟨pivot.val, pivotValid⟩ ⟨candidate.val, candidateValid⟩ ⟨column.val, columnValid⟩) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
+            ⟨pivot.val, pivotValid⟩ ⟨candidate.val, candidateValid⟩ ⟨column.val, columnValid⟩) := by
   obtain ⟨lookupBound, executeLookup⟩ := lookup_runs enumeration
   obtain ⟨swapBound, executeSwap⟩ := row_runs true enumeration (MatrixRowField.swap (Scalar := Scalar))
   obtain ⟨normalizeBound, executeNormalize⟩ := row_runs false enumeration (MatrixRowField.normalize (Scalar := Scalar))
@@ -95,7 +93,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     fun name => lookupTrace.region name (preparedRegions name)
   have loadedPreserves (name : TapeName) (readonly : readOnly name = true) : loaded name = initial name :=
     (lookupTrace.readOnly_tape name readonly).trans (preparePreserves name readonly)
-  obtain ⟨swapTicks, swapped, swapCost, swapTrace, swappedResult, swapCanonical, swapOutside, swapImmutable⟩ :=
+  obtain ⟨swapTicks, swapped, swapCost, swapTrace, swappedResult, swapOutside, swapImmutable⟩ :=
     executeSwap sizes loaded candidate pivot candidateValid pivotValid coefficient matrix columnsFit capacity
       ((loadedPreserves candidateTape rfl).trans candidateEq)
       ((loadedPreserves pivotTape rfl).trans pivotEq) coefficientEq loadedMatrix
@@ -123,7 +121,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     (Function.update_of_ne (by decide) _ _).trans
       ((swapImmutable (StandardMatrixRows.dataTape 3) rfl).trans coefficientEq)
   obtain ⟨normalizeTicks, normalized, normalizeCost, normalizeTrace, normalizedResult,
-      normalizeCanonical, normalizeOutside, normalizeImmutable⟩ :=
+      normalizeOutside, normalizeImmutable⟩ :=
     executeNormalize sizes committed candidate pivot candidateValid pivotValid coefficient swappedMatrix
       columnsFit capacity ((committedPreserves candidateTape rfl).trans candidateEq)
       ((committedPreserves pivotTape rfl).trans pivotEq) savedCoefficient (Function.update_self _ _ _)
@@ -144,7 +142,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   have readyPreserves (name : TapeName) (readonly : readOnly name = true) : ready name = initial name :=
     (secondCommitTrace.readOnly_tape name readonly).trans
       ((normalizeTrace.readOnly_tape name readonly).trans (committedPreserves name readonly))
-  obtain ⟨clearTicks, final, clearCost, clearTrace, finalMatrix, clearCanonical, clearOutside, clearImmutable⟩ :=
+  obtain ⟨clearTicks, final, clearCost, clearTrace, finalMatrix, clearOutside, clearImmutable⟩ :=
     executeClear sizes ready pivot column pivotValid columnValid normalizedMatrix rowsFit columnsFit capacity
       ((readyPreserves pivotTape rfl).trans pivotEq) ((readyPreserves columnTape rfl).trans columnEq)
       (Function.update_self _ _ _)
@@ -155,7 +153,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
         (StandardMatrixRows.exit ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := by
     intro writeSource operation symbols
     simp [MultiTape.wire, StandardMatrixRows.halt]
-  let clearEntry := StandardGaussJordanClear.algorithmEntry (StandardGaussJordanClear.zeroBits enumeration).length
+  let clearEntry := StandardGaussJordanClear.algorithmEntry
     ((FieldRow.scalarDomain enumeration).width Empty.elim)
   let rowEntry := StandardMatrixRows.entry ((FieldRow.scalarDomain enumeration).width Empty.elim)
   let lookupEntry := StandardMatrixEntry.entry ((FieldRow.scalarDomain enumeration).width Empty.elim)
@@ -170,31 +168,19 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   let total := (2 * (domains enumeration originalTape).width sizes + 2) +
     (lookupTicks + (swapTicks + (copyCost + (normalizeTicks + (copyCost + clearTicks + 1) + 1) + 1) + 1) + 1) + 1
   have fullTrace : Runs (fun name => (domains enumeration name).width sizes) readOnly
-      (algorithm enumeration) total (entry (StandardGaussJordanClear.zeroBits enumeration).length
+      (algorithm enumeration) total (entry
         ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) initial
-      (exit (StandardGaussJordanClear.zeroBits enumeration).length
+      (exit
         ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final := by
     simpa only [algorithm, entry, exit, prepareMatrix, commit, swapRows, normalizeRow,
       clearEntry, rowEntry, lookupEntry, total, copyCost] using complete
-  refine ⟨total, final, ?_, fullTrace, ?_, ?_⟩
+  refine ⟨total, final, ?_, fullTrace, ?_⟩
   · dsimp only [total, copyCost]
     simp only [matrixBound, map_add, map_mul, map_ofNat]
     rw [inputWidth]
     simp only [EncodedDomain.width]
     omega
   · exact finalMatrix
-  · intro name writable
-    cases name with
-    | inr extra => cases writable
-    | inl name =>
-      by_cases isWorking : name = StandardGaussJordanClear.originalTape
-      · subst name
-        refine ⟨matrixEquiv sizes normalizedMatrix, ?_⟩
-        exact (clearImmutable StandardGaussJordanClear.originalTape rfl).trans (Function.update_self _ _ _)
-      · have localWritable : StandardGaussJordanClear.readOnly name = false := by
-          simpa only [readOnly, isWorking, ↓reduceIte] using writable
-        exact clearCanonical name localWritable
-
 def sizeTapes : Fin 3 ↪ TapeName := StandardGaussJordanClear.sizeTapes.trans clearWiring
 
 end Polytime2.StandardGaussJordanPivot

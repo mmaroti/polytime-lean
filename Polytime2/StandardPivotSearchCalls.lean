@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.StandardPivotSearch
+import Polytime2.Initialization
 
 /-! # Certified bound and scalar tests in the pivot-search workspace -/
 
@@ -39,8 +40,8 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
   refine ⟨4 * MvPolynomial.X 0 + MvPolynomial.X 1 * (4 * MvPolynomial.X 0 + 8) + 11, ?_⟩
   intro sizes initial fits headers limitRegion scratchRegion
   let localSizes : Bool → ℕ := fun name => if name then sizes 0 else sizes 1
-  obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
-    StandardSizeRead.Internal.runs_wired limitWiring localSizes
+  obtain ⟨final, trace, resultEq, scratchEq, outside⟩ :=
+    Initialization.readSize_runs limitWiring 1 0 sizes
       (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; fin_cases name <;>
         simp [domains, StandardMatrixEntry.domains, StandardMatrixAddress.domains,
@@ -50,29 +51,9 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
           sizeTape, counterTape, rowLimitTape,
           localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
-  let resultBits := StandardSizeRead.advanceBits (sizes 1) (List.replicate (sizes 0) false)
-  have resultLength : resultBits.length = sizes 0 := by simp [resultBits]
-  have resultValue : Binary.value resultBits = sizes 1 := by
-    simp [resultBits, StandardSizeRead.advanceBits_value, Nat.mod_eq_of_lt fits]
-  have resultEncoding := encoded_binaryNaturals (0 : Fin 3) sizes resultBits resultLength
-  have naturalEq : (⟨Binary.value resultBits, by
-      simpa only [resultLength] using Binary.value_lt_pow_length resultBits⟩ : Fin (2 ^ sizes 0)) =
-      ⟨sizes 1, fits⟩ := Fin.ext resultValue
-  rw [naturalEq] at resultEncoding
-  let scratchValue : Fin (2 ^ sizes 0) := ⟨Binary.value scratch, by
-    simpa only [show scratch.length = sizes 0 from scratchLength] using Binary.value_lt_pow_length scratch⟩
-  refine ⟨_, final, ?_, trace, resultEq.trans resultEncoding.symm,
-    ⟨scratchValue, scratchEq.trans (encoded_binaryNaturals 0 sizes scratch scratchLength).symm⟩, ?_⟩
-  · simp [localSizes]
-  · intro name notLimit notScratch
-    apply preserved_of_wiring limitWiring StandardSizeRead.argumentReadOnly initial final outside immutable
-    intro localName equal
-    cases localName with
-    | inl parameter => rfl
-    | inr name => cases name with
-      | false => exact False.elim (notLimit equal.symm)
-      | true => exact False.elim (notScratch equal.symm)
+      (by intro name; cases name <;> exact headers _) fits limitRegion scratchRegion
+  refine ⟨_, final, ?_, trace, resultEq, scratchEq, outside⟩
+  simp [localSizes]
 
 theorem compare_runs (scalar : EncodedDomain.{0, 0} Empty) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
@@ -254,15 +235,13 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
           (StandardMatrixEntry.exit (scalar.width Empty.elim)) (fun _ => 0) final ∧
         final elementTape = encoded scalar Empty.elim (array ⟨candidate.val * sizes 2 + column.val, within⟩) ∧
         final (counterTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes candidate ∧
-        (∀ name, StandardMatrixEntry.readOnly name = false → ∃ value : (domains scalar (.inl name)).Carrier sizes,
-          final (.inl name) = encoded (domains scalar (.inl name)) sizes value) ∧
         (∀ name : Fin 7, final (.inr name) = initial (.inr name)) := by
-  obtain ⟨bound, execute⟩ := StandardMatrixEntry.Internal.wired_runs scalar.constant (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])
+  obtain ⟨bound, execute⟩ := (StandardMatrixEntry.contract scalar.constant (scalar.width Empty.elim) (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])).wired_runs
     (Function.Embedding.inl (α := StandardMatrixEntry.TapeName) (β := Fin 7))
   refine ⟨bound, ?_⟩
   intro sizes initial candidate column array within columnsFit candidateValid columnValid capacity candidateEq columnEq arrayEq headers regions
   let input := StandardMatrixEntry.inputValues scalar.constant sizes candidate column array
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, privateFrame, outside, immutable⟩ :=
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute sizes input (fun name => (domains scalar name).width sizes) readOnly initial
       (fun _ => rfl)
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
@@ -290,12 +269,10 @@ theorem readEntry_runs (scalar : EncodedDomain.{0, 0} Empty) :
       (by intro name writable; exact regions (.inl name)) headers
   obtain ⟨otherWithin, valueEq⟩ := correct
   change output () = array ⟨candidate.val * sizes 2 + column.val, otherWithin⟩ at valueEq
-  refine ⟨ticks, final, cost, trace, ?_, (immutable (.inl (.inr 1)) rfl).trans candidateEq, ?_, ?_⟩
+  refine ⟨ticks, final, cost, trace, ?_, (immutable (.inl (.inr 1)) rfl).trans candidateEq, ?_⟩
   · have result := canonical ()
     rw [valueEq] at result
     exact result.trans (encoded_constant scalar sizes _)
-  · intro name writable
-    exact privateFrame name writable
   · intro name
     apply outside (.inr name)
     rintro ⟨localName, equal⟩

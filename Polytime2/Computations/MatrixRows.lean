@@ -48,41 +48,16 @@ def rowTransform (writeSource : Bool) (scalar : EncodedDomain Empty)
 
 namespace Realizable.Internal
 
-private abbrev RowTape := StandardMatrixRows.TapeName
-
-private def rowLayout (name : RowTape) : Fin 3 ⊕ (Fin 4 ⊕ (Unit ⊕ RowTape)) :=
-  match name with
-  | .inl (.inl (.inl parameter)) => .inl parameter
-  | .inl (.inl (.inr 0)) => .inr (.inl 0)
-  | .inl (.inl (.inr 1)) => .inr (.inl 1)
-  | .inl (.inl (.inr 3)) => .inr (.inl 2)
-  | .inr 3 => .inr (.inl 3)
-  | .inl (.inl (.inr 5)) => .inr (.inr (.inl ()))
-  | privateTape => .inr (.inr (.inr privateTape))
-
-private def rowSource : Fin 3 ⊕ (Fin 4 ⊕ (Unit ⊕ RowTape)) → RowTape
-  | .inl parameter => StandardMatrixRows.sizeTape parameter
-  | .inr (.inl 0) => StandardMatrixRows.dataTape 0
-  | .inr (.inl 1) => StandardMatrixRows.dataTape 1
-  | .inr (.inl 2) => StandardMatrixRows.dataTape 3
-  | .inr (.inl 3) => StandardMatrixRows.inputTape
-  | .inr (.inr (.inl _)) => StandardMatrixRows.dataTape 5
-  | .inr (.inr (.inr name)) => name
-
-private theorem rowLayout_leftInverse : Function.LeftInverse rowSource rowLayout := by
-  intro name
-  fin_cases name <;> rfl
-
-private def rowEmbedding : RowTape ↪ Fin 3 ⊕ (Fin 4 ⊕ (Unit ⊕ RowTape)) :=
-  ⟨rowLayout, rowLayout_leftInverse.injective⟩
-
-private theorem rowDomains (writeSource : Bool) (scalar : EncodedDomain Empty)
-    (operation : ∀ sizes, scalar.Carrier sizes → scalar.Carrier sizes →
-      scalar.Carrier sizes → scalar.Carrier sizes × scalar.Carrier sizes)
-    (name : RowTape) :
-    domains (rowTransform writeSource scalar operation) (StandardMatrixRows.mathematicalDomains scalar)
-      (rowEmbedding name) = StandardMatrixRows.mathematicalDomains scalar name := by
-  fin_cases name <;> rfl
+private def rowPlacement : PublicTape (Fin 3) (Fin 4) ↪ StandardMatrixRows.TapeName :=
+  ⟨(fun role => match role with
+    | .inl parameter => StandardMatrixRows.sizeTape parameter
+    | .inr (.inl 0) => StandardMatrixRows.dataTape 0
+    | .inr (.inl 1) => StandardMatrixRows.dataTape 1
+    | .inr (.inl 2) => StandardMatrixRows.dataTape 3
+    | .inr (.inl 3) => StandardMatrixRows.inputTape
+    | .inr (.inr _) => StandardMatrixRows.dataTape 5), by
+    intro first second equal
+    fin_cases first <;> fin_cases second <;> first | rfl | exact absurd equal (by decide)⟩
 
 end Realizable.Internal
 
@@ -91,22 +66,25 @@ theorem rowTransform_realizable (writeSource : Bool) (scalar : EncodedDomain Emp
     (operation : ∀ sizes, scalar.Carrier sizes → scalar.Carrier sizes →
       scalar.Carrier sizes → scalar.Carrier sizes × scalar.Carrier sizes) :
     (rowTransform writeSource scalar operation).Realizable := by
-  let computation := rowTransform writeSource scalar operation
-  let scratchDomains := StandardMatrixRows.mathematicalDomains scalar
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (rowDomains writeSource scalar operation name))
-  refine ofLayout computation scratchDomains (StandardMatrixRows.mathematicalDomains scalar)
-    StandardMatrixRows.readOnly StandardMatrixRows.sizeTapes StandardMatrixRows.outputTapes
+  refine ofNamedLayout (rowTransform writeSource scalar operation)
+    (StandardMatrixRows.mathematicalDomains scalar) StandardMatrixRows.readOnly
+    StandardMatrixRows.sizeTapes StandardMatrixRows.outputTapes
     (StandardMatrixRows.machine writeSource scalar operation)
     (StandardMatrixRows.entry (scalar.width Empty.elim))
     (StandardMatrixRows.exit (scalar.width Empty.elim)) _ _
-    (StandardMatrixRows.mathematical_contract writeSource scalar operation)
-    rowEmbedding values
+    (StandardMatrixRows.mathematical_contract writeSource scalar operation) rowPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
     (by
-      intro name sizes
-      exact congrArg (fun domain => domain.width sizes) (rowDomains writeSource scalar operation name))
-    (by intro name sizes value; fin_cases name <;> rfl)
-    (by intro name; fin_cases name <;> rfl)
+      intro name outside
+      fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inl 0, rfl⟩)
+        | exact False.elim (outside ⟨.inl 1, rfl⟩)
+        | exact False.elim (outside ⟨.inl 2, rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl 0), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl 1), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl 2), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl 3), rfl⟩))
     (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   obtain ⟨sourceValid, targetValid, result⟩ := correct

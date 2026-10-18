@@ -73,7 +73,7 @@ theorem contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   let targetIndex : Fin (MvPolynomial.eval sizes StandardMatrixEntry.length) := ⟨targetRow.val * sizes 2 + column.val, targetWithin⟩
   let result := effectiveOperation writeSource scalar operation Empty.elim coefficient (array sourceIndex) (array targetIndex)
   let resultArray := Function.update (Function.update array sourceIndex result.1) targetIndex result.2
-  obtain ⟨ticks, final, cost, trace, resultEq, canonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, resultEq⟩ :=
     execute sizes initial sourceRow targetRow column array coefficient sourceWithin targetWithin
       valid.1 valid.2.1 valid.2.2.1 valid.2.2.2.1 valid.2.2.2.2
       (represented.1 (.inr 0) rfl) (represented.1 (.inr 1) rfl) (represented.1 (.inr 2) rfl)

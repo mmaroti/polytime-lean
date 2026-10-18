@@ -193,9 +193,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
               (Neg.neg (α := Scalar) (matrix ⟨targetRow.val * sizes 2 + column.val, within⟩))
               matrix (sizes 2))) ∧
         final (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes
-          (StandardBinaryIncrement.next 0 sizes targetRow) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
+          (StandardBinaryIncrement.next 0 sizes targetRow) := by
   obtain ⟨targetBound, executeTarget⟩ := StandardGaussJordanClearTarget.runs enumeration
   obtain ⟨incrementBound, executeIncrement⟩ := increment_runs enumeration
   let matrixBound := ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
@@ -203,7 +201,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   intro sizes initial sourceRow targetRow column sourceValid targetValid matrix
     columnsFit columnValid capacity sourceEq targetEq columnEq matrixEq headers regions
   let width : TapeName → ℕ := fun name => (domains enumeration name).width sizes
-  obtain ⟨targetTicks, localFinal, targetCost, localTrace, ⟨within, localResult⟩, localCanonical⟩ :=
+  obtain ⟨targetTicks, localFinal, targetCost, localTrace, ⟨within, localResult⟩⟩ :=
     executeTarget sizes (fun name => initial (.inl name)) sourceRow targetRow column
       sourceValid targetValid matrix columnsFit columnValid capacity sourceEq targetEq
       columnEq matrixEq headers (fun name => regions (.inl name))
@@ -259,11 +257,6 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   simp only [EncodedDomain.binaryNaturals_width] at advanceTrace
   let final := Function.update incremented (dataTape 1)
     (encoded (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes targetRow))
-  have preserve (name : TapeName) (notCounter : name ≠ dataTape 1)
-      (notNext : name ≠ nextTape) (notMatrix : name ≠ workingTape) :
-      final name = afterTarget name :=
-    (Function.update_of_ne notCounter _ _).trans
-      ((incrementOutside name notNext).trans (Function.update_of_ne notMatrix _ _))
   have finalMatrix : final workingTape =
       encoded (domains enumeration workingTape) sizes resultMatrix := by
     exact (Function.update_of_ne (by decide) _ _).trans
@@ -276,38 +269,11 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     (by intro symbols; simp [MultiTape.wire, StandardGaussJordanClearTarget.halt]) middle
   refine ⟨targetTicks + ((2 * (domains enumeration workingTape).width sizes + 2) +
     (incrementTicks + (2 * sizes 0 + 2) + 1) + 1) + 1, final, ?_, ?_,
-    ⟨within, finalMatrix⟩, Function.update_self _ _ _, ?_⟩
+    ⟨within, finalMatrix⟩, Function.update_self _ _ _⟩
   · have matrixWidth : (domains enumeration workingTape).width sizes = MvPolynomial.eval sizes matrixBound := rfl
     rw [matrixWidth]
     simp only [matrixBound, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [machine, entry, exit, commit, advance, width, final,
       EncodedDomain.binaryNaturals_width] using complete
-  · intro name writable
-    by_cases isCounter : name = dataTape 1
-    · subst name
-      exact ⟨StandardBinaryIncrement.next 0 sizes targetRow, Function.update_self _ _ _⟩
-    · by_cases isNext : name = nextTape
-      · subst name
-        exact ⟨StandardBinaryIncrement.next 0 sizes targetRow,
-          (Function.update_of_ne (by decide) _ _).trans nextEq⟩
-      · by_cases isMatrix : name = workingTape
-        · subst name
-          exact ⟨resultMatrix, finalMatrix⟩
-        · cases name with
-          | inr extra => exact False.elim (isNext rfl)
-          | inl name =>
-            have localWritable : StandardGaussJordanClearTarget.readOnly name = false := by
-              change (if name = StandardGaussJordanClearTarget.dataTape 1 ∨
-                name = StandardGaussJordanClearTarget.inputTape then false
-                else StandardGaussJordanClearTarget.readOnly name) = false at writable
-              rw [ite_eq_right (by
-                rintro (equal | equal)
-                · exact isCounter (congrArg Sum.inl equal)
-                · exact isMatrix (congrArg Sum.inl equal))] at writable
-              exact writable
-            obtain ⟨value, encodedValue⟩ := localCanonical name localWritable
-            exact ⟨value, (preserve (.inl name) isCounter isNext isMatrix).trans
-              ((afterTargetAt name).trans encodedValue)⟩
-
 end Polytime2.StandardGaussJordanClearStep

@@ -32,48 +32,22 @@ noncomputable def readSize : Computation Bool Empty where
 
 namespace Realizable.Internal
 
-private def sizeReadLayout : Bool ⊕ Bool ≃ Bool ⊕ (Empty ⊕ (Unit ⊕ Unit)) where
-  toFun
-    | .inl parameter => .inl parameter
-    | .inr false => .inr (.inr (.inl ()))
-    | .inr true => .inr (.inr (.inr ()))
-  invFun
-    | .inl parameter => .inl parameter
-    | .inr (.inl empty) => nomatch empty
-    | .inr (.inr (.inl _)) => .inr false
-    | .inr (.inr (.inr _)) => .inr true
-  left_inv name := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | empty | result | scratch
-    · rfl
-    · exact Empty.elim empty
-    · cases result; rfl
-    · cases scratch; rfl
-
-private noncomputable def sizeReadScratch (_name : Unit) : EncodedDomain Bool := EncodedDomain.binaryNaturals true
-
-private theorem sizeReadDomains (name : Bool ⊕ Bool) :
-    domains readSize sizeReadScratch (sizeReadLayout name) = StandardSizeRead.domains name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => cases name <;> rfl
+private def sizeReadPlacement : PublicTape Bool Empty ↪ Bool ⊕ Bool :=
+  (Function.Embedding.refl Bool).sumMap
+    ⟨(fun _ => false), by intro first second equal; fin_cases first; fin_cases second; rfl⟩
 
 end Realizable.Internal
 
 open Realizable.Internal in
 theorem readSize_realizable : readSize.Realizable := by
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (sizeReadDomains name))
-  refine ofLayout readSize sizeReadScratch StandardSizeRead.domains StandardSizeRead.argumentReadOnly
+  refine ofNamedLayout readSize StandardSizeRead.domains StandardSizeRead.argumentReadOnly
     StandardSizeRead.sizeTapes StandardSizeRead.outputTapes StandardSizeRead.algorithm
     StandardSizeRead.entry StandardSizeRead.exit _ _ StandardSizeRead.contract
-    sizeReadLayout.toEmbedding values
-    (by intro name sizes; exact congrArg (fun domain => domain.width sizes) (sizeReadDomains name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => cases name <;> rfl)
+    sizeReadPlacement (by intro role; fin_cases role <;> rfl)
+    (by intro role; fin_cases role <;> rfl)
+    (by intro name outside; cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => cases name <;> rfl)
     (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   apply congrArg (CallingConvention.encoded (EncodedDomain.binaryNaturals true) sizes)

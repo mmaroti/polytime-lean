@@ -37,8 +37,8 @@ private theorem replace_scalar_preserved (source : Bool) (initial final : Tapes 
       omega
 
 /-- Both matrix reads precede both writes, so coincident source and target
-indices still use the original entries. All writable tapes are valid on return,
-including the intermediate matrix and every arithmetic or scalar scratch. -/
+indices still use the original entries. Only the result matrix needs an
+encoding on return; private scratch needs only bounded regions. -/
 theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment → scalar.Carrier assignment →
       scalar.Carrier assignment × scalar.Carrier assignment) :
@@ -64,9 +64,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
         Runs (fun name => (domains scalar name).width sizes) readOnly (machine writeSource scalar operation) ticks
           (entry (scalar.width Empty.elim)) (fun _ => 0) initial (exit (scalar.width Empty.elim)) (fun _ => 0) final ∧
         final (.inr 5) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes
-          (Function.update (Function.update array sourceIndex result.1) targetIndex result.2) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
-          final name = encoded (domains scalar name) sizes value) := by
+          (Function.update (Function.update array sourceIndex result.1) targetIndex result.2)  := by
   obtain ⟨sourceReadBound, readSource⟩ := access_runs false scalar
   obtain ⟨targetReadBound, readTarget⟩ := access_runs true scalar
   obtain ⟨scalarBound, combineScalars⟩ := combine_runs writeSource scalar operation
@@ -76,12 +74,12 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   intro sizes initial sourceRow targetRow column array coefficient sourceWithin targetWithin columnsFit
     sourceValid targetValid columnValid capacity sourceEq targetEq columnEq coefficientEq arrayEq headers regions
   intro sourceIndex targetIndex result
-  obtain ⟨sourceTicks, afterSource, sourceCost, sourceTrace, sourceValueEq, sourceCanonical, sourceOutside, sourceImmutable⟩ :=
+  obtain ⟨sourceTicks, afterSource, sourceCost, sourceTrace, sourceValueEq, sourceOutside, sourceImmutable⟩ :=
     readSource sizes initial sourceRow column array sourceWithin columnsFit sourceValid columnValid capacity
       sourceEq columnEq arrayEq headers regions
   have sourceRegions : ∀ name, Region ((domains scalar name).width sizes) 0 (afterSource name) :=
     fun name => sourceTrace.region name (regions name)
-  obtain ⟨targetTicks, afterTarget, targetCost, targetTrace, targetValueEq, targetCanonical, targetOutside, targetImmutable⟩ :=
+  obtain ⟨targetTicks, afterTarget, targetCost, targetTrace, targetValueEq, targetOutside, targetImmutable⟩ :=
     readTarget sizes afterSource targetRow column array targetWithin columnsFit targetValid columnValid capacity
       ((sourceTrace.readOnly_tape (.inr 1) rfl).trans targetEq)
       ((sourceTrace.readOnly_tape (.inr 2) rfl).trans columnEq)
@@ -102,7 +100,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (sourcePreserved.trans sourceValueEq) targetValueEq targetRegions
   have combineRegions : ∀ name, Region ((domains scalar name).width sizes) 0 (afterCombine name) :=
     fun name => combineTrace.region name (targetRegions name)
-  obtain ⟨firstWriteTicks, afterFirstWrite, firstWriteCost, firstWriteTrace, intermediateEq, firstWriteCanonical, firstWriteOutside, firstWriteImmutable⟩ :=
+  obtain ⟨firstWriteTicks, afterFirstWrite, firstWriteCost, firstWriteTrace, intermediateEq, firstWriteOutside, firstWriteImmutable⟩ :=
     writeSourceEntry sizes afterCombine sourceRow column array result.1 sourceWithin
       columnsFit sourceValid columnValid capacity
       ((combineTrace.readOnly_tape (.inr 0) rfl).trans ((targetTrace.readOnly_tape (.inr 0) rfl).trans
@@ -118,7 +116,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   have firstWriteRegions : ∀ name, Region ((domains scalar name).width sizes) 0 (afterFirstWrite name) :=
     fun name => firstWriteTrace.region name (combineRegions name)
   have firstScalars := replace_scalar_preserved true afterCombine afterFirstWrite firstWriteOutside firstWriteImmutable
-  obtain ⟨lastWriteTicks, final, lastWriteCost, lastWriteTrace, resultEq, lastWriteCanonical, lastWriteOutside, lastWriteImmutable⟩ :=
+  obtain ⟨lastWriteTicks, final, lastWriteCost, lastWriteTrace, resultEq, lastWriteOutside, lastWriteImmutable⟩ :=
     writeTargetEntry sizes afterFirstWrite targetRow column (Function.update array sourceIndex result.1) result.2 targetWithin
       columnsFit targetValid columnValid capacity
       ((firstWriteTrace.readOnly_tape (.inr 1) rfl).trans ((combineTrace.readOnly_tape (.inr 1) rfl).trans
@@ -129,7 +127,6 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
       (fun parameter => (firstWriteTrace.readOnly_tape (.inl parameter) rfl).trans
         ((combineTrace.readOnly_tape (.inl parameter) rfl).trans ((targetTrace.readOnly_tape (.inl parameter) rfl).trans
           ((sourceTrace.readOnly_tape (.inl parameter) rfl).trans (headers parameter))))) firstWriteRegions
-  have lastScalars := replace_scalar_preserved false afterFirstWrite final lastWriteOutside lastWriteImmutable
   have writes := firstWriteTrace.sequence _ (StandardMatrixReplace.entry (scalar.width Empty.elim))
     (by intro symbols; simp [replace, MultiTape.wire]) lastWriteTrace
   have combined := combineTrace.sequence _ (Sum.inl (StandardMatrixReplace.entry (scalar.width Empty.elim)))
@@ -139,39 +136,8 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   have complete := sourceTrace.sequence _ (Sum.inl (StandardMatrixEntry.entry (scalar.width Empty.elim)))
     (by intro symbols; simp [access, MultiTape.wire]) readThenCombined
   refine ⟨sourceTicks + (targetTicks + (combineTicks + (firstWriteTicks + lastWriteTicks + 1) + 1) + 1) + 1,
-    final, ?_, ?_, resultEq, ?_⟩
+    final, ?_, ?_, resultEq⟩
   · simp only [map_add, MvPolynomial.eval_C]
     omega
   · simpa only [machine, entry, exit] using complete
-  · intro name writable
-    cases name with
-    | inl parameter => contradiction
-    | inr name =>
-      fin_cases name
-      · contradiction
-      · contradiction
-      · contradiction
-      · contradiction
-      · contradiction
-      · exact lastWriteCanonical (.inr 2) rfl
-      · refine ⟨Function.update array sourceIndex result.1, ?_⟩
-        exact (lastWriteImmutable (.inr 0) rfl).trans intermediateEq
-      · refine ⟨array sourceIndex, ?_⟩
-        exact (lastScalars 7 (by decide)).trans ((firstScalars 7 (by decide)).trans
-          ((combineImmutable 1 rfl).trans (sourcePreserved.trans (sourceValueEq.trans (encoded_constant scalar sizes _).symm))))
-      · refine ⟨array targetIndex, ?_⟩
-        exact (lastScalars 8 (by decide)).trans ((firstScalars 8 (by decide)).trans
-          ((combineImmutable 2 rfl).trans (targetValueEq.trans (encoded_constant scalar sizes _).symm)))
-      · refine ⟨result.1, ?_⟩
-        exact (lastScalars 9 (by decide)).trans ((firstScalars 9 (by decide)).trans (newSourceEq.trans (encoded_constant scalar sizes _).symm))
-      · refine ⟨result.2, ?_⟩
-        exact (lastScalars 10 (by decide)).trans ((firstScalars 10 (by decide)).trans (newTargetEq.trans (encoded_constant scalar sizes _).symm))
-      · exact lastWriteCanonical (.inl (.inr 0)) rfl
-      · exact lastWriteCanonical (.inl (.inr 2)) rfl
-      · exact lastWriteCanonical (.inl (.inr 3)) rfl
-      · exact lastWriteCanonical (.inl (.inr 5)) rfl
-      · exact lastWriteCanonical (.inl (.inr 7)) rfl
-      · exact lastWriteCanonical (.inl (.inr 4)) rfl
-      · exact lastWriteCanonical (.inl (.inr 8)) rfl
-
 end Polytime2.StandardMatrixRowEntry

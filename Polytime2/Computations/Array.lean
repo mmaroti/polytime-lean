@@ -61,70 +61,35 @@ noncomputable def arrayMap (parameterDomain elementDomain : EncodedDomain Empty)
 
 namespace Realizable.Internal
 
-private def widthArguments {InputName : Type} :
-    (InputName ⊕ (Unit ⊕ Fin 3)) ⊕ Unit ≃ (InputName ⊕ Unit) ⊕ (Unit ⊕ Fin 3) where
-  toFun | .inl (.inl argument) => .inl (.inl argument)
-        | .inl (.inr result) => .inr result
-        | .inr _ => .inl (.inr ())
-  invFun | .inl (.inl argument) => .inl (.inl argument)
-         | .inl (.inr _) => .inr ()
-         | .inr result => .inl (.inr result)
-  left_inv name := by
-    rcases name with (argument | result) | marker
-    · rfl
-    · rfl
-    · cases marker; rfl
-  right_inv name := by
-    rcases name with (argument | marker) | result
-    · rfl
-    · cases marker; rfl
-    · rfl
+/-- Ordinary arguments occupy the first slots; the unary width is last.
+The result follows the ordinary arguments, with counters left private. -/
+private def arrayPlacement {InputName : Type} (arity : ℕ) (enumeration : Fin arity ≃ InputName) :
+    PublicTape Parameter (InputName ⊕ Unit) ↪ Parameter ⊕ Fin (arity + 5) :=
+  (Function.Embedding.refl Parameter).sumMap ⟨(fun role => match role with
+    | .inl (.inl name) => ⟨(enumeration.symm name).val, by have bound := (enumeration.symm name).isLt; omega⟩
+    | .inl (.inr _) => ⟨arity + 4, by omega⟩
+    | .inr _ => ⟨arity, by omega⟩), by
+    let recover (slot : Fin (arity + 5)) : Option ((InputName ⊕ Unit) ⊕ Unit) :=
+      if valid : slot.val < arity then some (.inl (.inl (enumeration ⟨slot.val, valid⟩)))
+      else if slot.val = arity + 4 then some (.inl (.inr ()))
+      else if slot.val = arity then some (.inr ()) else none
+    have recovered (role : (InputName ⊕ Unit) ⊕ Unit) : recover
+        (match role with
+        | .inl (.inl name) => ⟨(enumeration.symm name).val, by have bound := (enumeration.symm name).isLt; omega⟩
+        | .inl (.inr _) => ⟨arity + 4, by omega⟩
+        | .inr _ => ⟨arity, by omega⟩) = some role := by
+      rcases role with (name | marker) | result
+      · simp [recover, (enumeration.symm name).isLt]
+      · cases marker; simp [recover]
+      · cases result; simp [recover]
+    intro first second equal
+    exact Option.some.inj ((recovered first).symm.trans ((congrArg recover equal).trans (recovered second)))⟩
 
-/-- Arguments, result, counters, and the last unary-width argument. -/
-private def arrayLayout {InputName : Type} (arity : ℕ) (enumeration : Fin arity ≃ InputName) :
-    Parameter ⊕ Fin (arity + 5) ≃ Parameter ⊕ ((InputName ⊕ Unit) ⊕ (Unit ⊕ Fin 3)) :=
-  Equiv.sumCongr (Equiv.refl Parameter)
-    ((finSumFinEquiv.symm.trans (Equiv.sumCongr
-      (finSumFinEquiv.symm.trans (Equiv.sumCongr enumeration
-        (finSumFinEquiv.symm.trans (Equiv.sumCongr (Equiv.ofUnique (Fin 1) Unit) (Equiv.refl (Fin 3))))))
-      (Equiv.ofUnique (Fin 1) Unit))).trans widthArguments)
-
-private noncomputable def arrayScratch (capacity : Parameter) (name : Fin 3) : EncodedDomain Parameter :=
-  if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals capacity
-
-private theorem lookupDomains (element : EncodedDomain Parameter) (capacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) (name : Parameter ⊕ Fin 7) :
-    domains ((arrayLookup element capacity length).withUnaryWidth element.widthPolynomial) (arrayScratch capacity)
-      (arrayLayout 2 finTwoEquiv name) = RuntimeArrayLookup.domainsSized element capacity length name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private theorem updateDomains (element : EncodedDomain Parameter) (capacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) (name : Parameter ⊕ Fin 8) :
-    domains ((arrayUpdate element capacity length).withUnaryWidth element.widthPolynomial) (arrayScratch capacity)
-      (arrayLayout 3 (Equiv.refl (Fin 3)) name) = RuntimeArrayUpdate.domainsSized element capacity length name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private def mapLayout : Parameter ⊕ Fin 3 ≃ Parameter ⊕ (Bool ⊕ (Unit ⊕ Empty)) where
-  toFun | .inl parameter => .inl parameter
-        | .inr 0 => .inr (.inl false)
-        | .inr 1 => .inr (.inl true)
-        | .inr 2 => .inr (.inr (.inl ()))
-  invFun | .inl parameter => .inl parameter
-         | .inr (.inl false) => .inr 0
-         | .inr (.inl true) => .inr 1
-         | .inr (.inr (.inl _)) => .inr 2
-         | .inr (.inr (.inr empty)) => nomatch empty
-  left_inv name := by cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | argument | result | empty
-    · rfl
-    · cases argument <;> rfl
-    · cases result; rfl
-    · exact Empty.elim empty
+private def mapPlacement : PublicTape Parameter Bool ↪ Parameter ⊕ Fin 3 :=
+  (Function.Embedding.refl Parameter).sumMap
+    ⟨(fun role => match role with | .inl false => 0 | .inl true => 1 | .inr _ => 2), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 end Realizable.Internal
 
@@ -133,60 +98,57 @@ open Realizable.Internal in
 private theorem arrayLookup_withUnaryWidth_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ) :
     ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial).Realizable := by
-  let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes)
-    (lookupDomains element indexCapacity length name))
-  have readonly name : RuntimeArrayLookup.argumentReadOnly name =
-      readOnly ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayLayout 2 finTwoEquiv name) := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  refine ofLayout ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayScratch indexCapacity)
+  refine ofNamedLayout ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial)
     (RuntimeArrayLookup.domainsSized element indexCapacity length)
     RuntimeArrayLookup.argumentReadOnly RuntimeArrayLookup.sizeTapes RuntimeArrayLookup.outputTapes
-    RuntimeArrayLookup.algorithmSized RuntimeArrayLookup.entry
-    RuntimeArrayLookup.exit _ _
-    (RuntimeArrayLookup.contractSized element indexCapacity length)
-    (arrayLayout 2 finTwoEquiv).toEmbedding values ?_ ?_ readonly (by intro parameter; rfl)
-    () rfl (by intro sizes input valid; exact valid) ?_
-  · intro name sizes
-    exact congrArg (fun domain => domain.width sizes) (lookupDomains element indexCapacity length name)
-  · intro name sizes value
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  · intro sizes input valid output correct
-    obtain ⟨within, result⟩ := correct
-    exact congrArg (encoded element sizes) result
+    RuntimeArrayLookup.algorithmSized RuntimeArrayLookup.entry RuntimeArrayLookup.exit _ _
+    (RuntimeArrayLookup.contractSized element indexCapacity length) (arrayPlacement 2 finTwoEquiv)
+    (by rintro (parameter | (argument | marker) | result) <;> first
+      | rfl | (fin_cases argument <;> rfl))
+    (by rintro (parameter | (argument | marker) | result) <;> first
+      | rfl | (fin_cases argument <;> rfl))
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl (.inl false)), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl (.inl true)), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl (.inr ())), rfl⟩))
+    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
+  intro sizes input valid output correct
+  obtain ⟨within, result⟩ := correct
+  exact congrArg (encoded element sizes) result
 
 open Realizable.Internal in
 /-- Update overwrites a separate public result array under an in-range hypothesis. -/
 private theorem arrayUpdate_withUnaryWidth_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ) :
     ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial).Realizable := by
-  let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes)
-    (updateDomains element indexCapacity length name))
-  have readonly name : RuntimeArrayUpdate.argumentReadOnly name =
-      readOnly ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayLayout 3 (Equiv.refl (Fin 3)) name) := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  refine ofLayout ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial) (arrayScratch indexCapacity)
+  refine ofNamedLayout ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial)
     (RuntimeArrayUpdate.domainsSized element indexCapacity length)
     RuntimeArrayUpdate.argumentReadOnly RuntimeArrayUpdate.sizeTapes RuntimeArrayUpdate.outputTapes
-    RuntimeArrayUpdate.algorithmSized RuntimeArrayUpdate.entry
-    RuntimeArrayUpdate.exit _ _
-    (RuntimeArrayUpdate.contractSized element indexCapacity length)
-    (arrayLayout 3 (Equiv.refl (Fin 3))).toEmbedding values ?_ ?_ readonly (by intro parameter; rfl)
-    () rfl (by intro sizes input valid; exact valid) ?_
-  · intro name sizes
-    exact congrArg (fun domain => domain.width sizes) (updateDomains element indexCapacity length name)
-  · intro name sizes value
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  · intro sizes input valid output correct
-    obtain ⟨within, result⟩ := correct
-    exact congrArg (encoded (element.arrayOfLength length) sizes) result
+    RuntimeArrayUpdate.algorithmSized RuntimeArrayUpdate.entry RuntimeArrayUpdate.exit _ _
+    (RuntimeArrayUpdate.contractSized element indexCapacity length) (arrayPlacement 3 (Equiv.refl (Fin 3)))
+    (by rintro (parameter | (argument | marker) | result) <;> first
+      | rfl | (fin_cases argument <;> rfl))
+    (by rintro (parameter | (argument | marker) | result) <;> first
+      | rfl | (fin_cases argument <;> rfl))
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl (.inl 0)), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl (.inl 1)), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl (.inl 2)), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl (.inr ())), rfl⟩))
+    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
+  intro sizes input valid output correct
+  obtain ⟨within, result⟩ := correct
+  exact congrArg (encoded (element.arrayOfLength length) sizes) result
 
 /-- Polynomial element widths are computed privately from the size inputs. -/
 theorem arrayLookup_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
@@ -205,19 +167,21 @@ theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain Empty
     (length : MvPolynomial Parameter ℕ)
     (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
     (arrayMap parameterDomain elementDomain length operation).Realizable := by
-  let computation := arrayMap parameterDomain elementDomain length operation
-  let scratchDomains : Empty → EncodedDomain Parameter := Empty.elim
-  have domainsEqual name : domains computation scratchDomains (mapLayout name) =
-      StandardArrayMap.domains parameterDomain elementDomain length name := by
-    cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl
-  let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes) (domainsEqual name))
-  refine ofLayout computation scratchDomains (StandardArrayMap.domains parameterDomain elementDomain length)
+  refine ofNamedLayout (arrayMap parameterDomain elementDomain length operation)
+    (StandardArrayMap.domains parameterDomain elementDomain length)
     StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
     (StandardArrayMap.algorithm parameterDomain elementDomain operation) StandardArrayMap.entry StandardArrayMap.exit
-    _ _ (StandardArrayMap.contract parameterDomain elementDomain length operation) mapLayout.toEmbedding values
-    (by intro name sizes; exact congrArg (fun domain => domain.width sizes) (domainsEqual name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
+    _ _ (StandardArrayMap.contract parameterDomain elementDomain length operation) mapPlacement
+    (by rintro (parameter | argument | result) <;> first | rfl | (cases argument <;> rfl))
+    (by rintro (parameter | argument | result) <;> first | rfl | (cases argument <;> rfl))
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
     (by intro parameter; rfl) () rfl (by intro sizes input valid; trivial) ?_
   intro sizes input valid output correct
   exact congrArg (encoded (elementDomain.constant.arrayOfLength length) sizes) correct

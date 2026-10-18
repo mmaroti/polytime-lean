@@ -613,6 +613,41 @@ theorem Runs.readOnly_tape {width : TapeName → ℕ} {readOnly : TapeName → B
         cells (index + 1 : ℕ))
       congr
 
+-- targetTapeLevel: the enclosing collection used by a restoring call.
+universe targetTapeLevel
+
+/-- Lift a restoring call and expose its named results directly. Installation,
+zero head positions, and preservation of other tapes are handled once here. -/
+theorem Runs.wire_restoring {width : TapeName → ℕ} {readOnly : TapeName → Bool}
+    {machine : Machine (Alphabet TapeName) State}
+    {EnclosingTape : Type targetTapeLevel}
+    (wiring : TapeName ↪ EnclosingTape)
+    (enclosingWidth : EnclosingTape → ℕ) (enclosingReadOnly : EnclosingTape → Bool)
+    (widthMatches : ∀ name, enclosingWidth (wiring name) = width name)
+    (readOnlyMatches : ∀ name, enclosingReadOnly (wiring name) = true → readOnly name = true)
+    (initial : Tapes (Alphabet EnclosingTape)) {ticks state finalState tapes finalTapes}
+    (initialMatches : ∀ name, initial (wiring name) = tapes name)
+    (trace : Runs width readOnly machine ticks state (fun _ => 0)
+      tapes finalState (fun _ => 0) finalTapes) :
+    ∃ final, Runs enclosingWidth enclosingReadOnly (MultiTape.wire wiring machine) ticks
+        state (fun _ => 0) initial finalState (fun _ => 0) final ∧
+      (∀ name, final (wiring name) = finalTapes name) ∧
+      (∀ name, name ∉ Set.range wiring → final name = initial name) ∧
+      (∀ name, readOnly name = true → final (wiring name) = initial (wiring name)) := by
+  classical
+  have initialEqual : tapes = fun name => initial (wiring name) :=
+    funext (fun name => (initialMatches name).symm)
+  rw [initialEqual] at trace
+  have lifted := trace.wire wiring enclosingWidth enclosingReadOnly widthMatches readOnlyMatches
+    initial (fun _ => 0)
+  have positions : install wiring (fun _ => (0 : ℤ))
+      (fun _ : EnclosingTape => (0 : ℤ)) = fun _ => 0 := install_self wiring _
+  rw [install_self, positions] at lifted
+  refine ⟨install wiring finalTapes initial, lifted, install_at wiring finalTapes initial,
+    install_outside wiring finalTapes initial, ?_⟩
+  intro name immutable
+  exact (install_at wiring finalTapes initial name).trans (trace.readOnly_tape name immutable)
+
 /-- Blank surroundings at a known absolute head position. The interior is arbitrary. -/
 def Region (width : ℕ) (position : ℤ) (tape : Turing.Tape Symbol) : Prop :=
   ∀ index : ℤ, index < 0 ∨ (width : ℤ) ≤ index → tape.nth (index - position) = 0

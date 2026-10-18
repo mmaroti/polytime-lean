@@ -37,52 +37,28 @@ noncomputable def matrixAddress : Computation (Fin 3) Bool where
 
 namespace Realizable.Internal
 
-private def addressLayout (name : Fin 3 ⊕ Fin 9) : Fin 3 ⊕ (Bool ⊕ (Unit ⊕ Fin 9)) :=
-  match name with
-  | .inl parameter => .inl parameter
-  | .inr 1 => .inr (.inl false)
-  | .inr 6 => .inr (.inl true)
-  | .inr 7 => .inr (.inr (.inl ()))
-  | .inr privateTape => .inr (.inr (.inr privateTape))
-
-private def addressSource : Fin 3 ⊕ (Bool ⊕ (Unit ⊕ Fin 9)) → Fin 3 ⊕ Fin 9
-  | .inl parameter => .inl parameter
-  | .inr (.inl false) => .inr 1
-  | .inr (.inl true) => .inr 6
-  | .inr (.inr (.inl _)) => .inr 7
-  | .inr (.inr (.inr name)) => .inr name
-
-private theorem addressLayout_leftInverse : Function.LeftInverse addressSource addressLayout := by
-  intro name
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private def addressEmbedding : Fin 3 ⊕ Fin 9 ↪ Fin 3 ⊕ (Bool ⊕ (Unit ⊕ Fin 9)) :=
-  ⟨addressLayout, addressLayout_leftInverse.injective⟩
-
-private noncomputable def addressScratch (name : Fin 9) : EncodedDomain (Fin 3) :=
-  StandardMatrixAddress.domains (.inr name)
-
-private theorem addressDomains (name : Fin 3 ⊕ Fin 9) :
-    domains matrixAddress addressScratch (addressEmbedding name) = StandardMatrixAddress.domains name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
+private def addressPlacement : PublicTape (Fin 3) Bool ↪ Fin 3 ⊕ Fin 9 :=
+  (Function.Embedding.refl (Fin 3)).sumMap
+    ⟨(fun role => match role with | .inl false => 1 | .inl true => 6 | .inr _ => 7), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 end Realizable.Internal
 
 open Realizable.Internal in
 theorem matrixAddress_realizable : matrixAddress.Realizable := by
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (addressDomains name))
-  refine ofLayout matrixAddress addressScratch StandardMatrixAddress.domains
-    StandardMatrixAddress.readOnly StandardMatrixAddress.sizeTapes StandardMatrixAddress.outputTapes
-    StandardMatrixAddress.machine StandardMatrixAddress.entry StandardMatrixAddress.exit _ _
-    StandardMatrixAddress.contract addressEmbedding values
-    (by intro name sizes; exact congrArg (fun domain => domain.width sizes) (addressDomains name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
+  refine ofNamedLayout matrixAddress StandardMatrixAddress.domains StandardMatrixAddress.readOnly
+    StandardMatrixAddress.sizeTapes StandardMatrixAddress.outputTapes StandardMatrixAddress.machine StandardMatrixAddress.entry StandardMatrixAddress.exit
+    _ _ StandardMatrixAddress.contract addressPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
     (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   apply congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes)

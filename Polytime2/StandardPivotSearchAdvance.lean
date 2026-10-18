@@ -32,25 +32,19 @@ theorem advance_runs (scalar : EncodedDomain.{0, 0} Empty) :
       initial (counterTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes candidate →
       (∀ parameter, initial (sizeTape parameter) = unary (sizes parameter)) →
       (∀ name, Region ((domains scalar name).width sizes) 0 (initial name)) →
-      (∀ name, readOnly name = false →
-        ∃ value : (domains scalar name).Carrier sizes,
-          initial name = encoded (domains scalar name) sizes value) →
       ∃ ticks final,
         ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains scalar name).width sizes) readOnly advance ticks
           advanceEntry (fun _ => 0) initial advanceExit (fun _ => 0) final ∧
         final (counterTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes
           ⟨candidate.val + 1, candidateValue⟩ ∧
-        (∀ name, readOnly name = false →
-          ∃ value : (domains scalar name).Carrier sizes,
-            final name = encoded (domains scalar name) sizes value) ∧
         (∀ name, name ≠ counterTape 1 → name ≠ nextTape → final name = initial name) := by
   classical
   obtain ⟨incrementBound, executeIncrement⟩ :=
     (StandardBinaryIncrement.contract (0 : Fin 3)).wired_runs incrementWiring
   refine ⟨incrementBound +
     (MvPolynomial.C (2 : ℕ) * MvPolynomial.X 0 + MvPolynomial.C (3 : ℕ)), ?_⟩
-  intro sizes initial candidate candidateValue candidateEq headers regions canonical
+  intro sizes initial candidate candidateValue candidateEq headers regions
   let localInput : Inputs
       (StandardBinaryScan.domains (EncodedDomain.binaryNaturals (0 : Fin 3))
         (EncodedDomain.binaryNaturals 0)) StandardTerminatedCopy.readOnly sizes :=
@@ -130,7 +124,7 @@ theorem advance_runs (scalar : EncodedDomain.{0, 0} Empty) :
     | inr localName => cases localName with
       | false => rfl
       | true => exact False.elim (notNext (by simpa [incrementWiring, nextTape] using equal.symm))
-  refine ⟨incrementTicks + (2 * sizes 0 + 2) + 1, finalTapes, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨incrementTicks + (2 * sizes 0 + 2) + 1, finalTapes, ?_, ?_, ?_, ?_⟩
   · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_C, MvPolynomial.eval_X]
     omega
   · have joined := incrementTrace.sequence
@@ -140,22 +134,6 @@ theorem advance_runs (scalar : EncodedDomain.{0, 0} Empty) :
       EncodedDomain.binaryNaturals] using joined
   · change finalTapes (counterTape 1) = _
     simp [finalTapes, Function.update_self]
-  · intro name writable
-    by_cases isCandidate : name = counterTape 1
-    · subst name
-      exact ⟨⟨candidate.val + 1, candidateValue⟩, by
-        simp [domains, counterTape, StandardMatrixEntry.domains,
-          StandardMatrixAddress.domains, finalTapes]⟩
-    · by_cases isNext : name = nextTape
-      · subst name
-        have finalNext : finalTapes nextTape = incremented nextTape := by
-          simp [finalTapes, nextTape, counterTape]
-        exact ⟨⟨candidate.val + 1, candidateValue⟩, by
-          simpa [domains, nextTape] using finalNext.trans resultEq⟩
-      · obtain ⟨value, valid⟩ := canonical name writable
-        have afterCopy : finalTapes name = incremented name := by
-          simp [finalTapes, Function.update_of_ne isCandidate]
-        exact ⟨value, afterCopy.trans ((incrementPreserves name isNext).trans valid)⟩
   · intro name notCandidate notNext
     have afterCopy : finalTapes name = incremented name := by
       simp [finalTapes, Function.update_of_ne notCandidate]

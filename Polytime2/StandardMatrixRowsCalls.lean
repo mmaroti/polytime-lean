@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.StandardMatrixRowsInit
+import Polytime2.Initialization
 
 /-! # Size reading and column calls in a complete row workspace -/
 
@@ -55,8 +56,8 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
   refine ⟨4 * MvPolynomial.X 0 + MvPolynomial.X 2 * (4 * MvPolynomial.X 0 + 8) + 11, ?_⟩
   intro sizes initial fits headers limitRegion scratchRegion
   let localSizes : Bool → ℕ := fun name => if name then sizes 0 else sizes 2
-  obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
-    StandardSizeRead.Internal.runs_wired limitWiring localSizes
+  obtain ⟨final, trace, resultEq, scratchEq, outside⟩ :=
+    Initialization.readSize_runs limitWiring 2 0 sizes
       (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; fin_cases name <;>
         simp [domains, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
@@ -64,29 +65,9 @@ theorem readLimit_runs (scalar : EncodedDomain.{0, 0} Empty) :
           EncodedDomain.unary, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
           sizeTape, dataTape, limitTape, localSizes])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
-  let resultBits := StandardSizeRead.advanceBits (sizes 2) (List.replicate (sizes 0) false)
-  have resultLength : resultBits.length = sizes 0 := by simp [resultBits]
-  have resultValue : Binary.value resultBits = sizes 2 := by
-    simp [resultBits, StandardSizeRead.advanceBits_value, Nat.mod_eq_of_lt fits]
-  have resultEncoding := encoded_binaryNaturals (0 : Fin 3) sizes resultBits resultLength
-  have naturalEq : (⟨Binary.value resultBits, by
-      simpa only [resultLength] using Binary.value_lt_pow_length resultBits⟩ : Fin (2 ^ sizes 0)) =
-      ⟨sizes 2, fits⟩ := Fin.ext resultValue
-  rw [naturalEq] at resultEncoding
-  let scratchValue : Fin (2 ^ sizes 0) := ⟨Binary.value scratch, by
-    simpa only [show scratch.length = sizes 0 from scratchLength] using Binary.value_lt_pow_length scratch⟩
-  refine ⟨_, final, ?_, trace, resultEq.trans resultEncoding.symm,
-    ⟨scratchValue, scratchEq.trans (encoded_binaryNaturals 0 sizes scratch scratchLength).symm⟩, ?_⟩
-  · simp [localSizes]
-  · intro name notLimit notScratch
-    apply preserved_of_wiring limitWiring StandardSizeRead.argumentReadOnly initial final outside immutable
-    intro localName equal
-    cases localName with
-    | inl parameter => rfl
-    | inr name => cases name with
-      | false => exact False.elim (notLimit equal.symm)
-      | true => exact False.elim (notScratch equal.symm)
+      (by intro name; cases name <;> exact headers _) fits limitRegion scratchRegion
+  refine ⟨_, final, ?_, trace, resultEq, scratchEq, outside⟩
+  simp [localSizes]
 
 /-- Column calls leave the comparison workspace and original matrix unchanged.
 Only private matrix and counter tapes are mutable in the body. -/
@@ -120,33 +101,25 @@ theorem body_runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
         final (dataTape 4) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes resultArray ∧
         final (dataTape 5) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes resultArray ∧
         final (dataTape 2) = encoded (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes column) ∧
-        (∀ name, StandardMatrixRowStep.readOnly name = false → ∃ value : (domains scalar (.inl name)).Carrier sizes,
-          final (.inl name) = encoded (domains scalar (.inl name)) sizes value) ∧
         (∀ name : Fin 4, final (.inr name) = initial (.inr name)) := by
   obtain ⟨bound, execute⟩ := StandardMatrixRowStep.runs writeSource scalar operation
   refine ⟨bound, ?_⟩
   intro sizes initial sourceRow targetRow column array coefficient sourceWithin targetWithin columnsFit
     sourceValid targetValid columnValid capacity sourceEq targetEq columnEq coefficientEq arrayEq headers regions
     sourceIndex targetIndex values resultArray
-  obtain ⟨ticks, localFinal, cost, localTrace, workEq, resultEq, nextEq, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, workEq, resultEq, nextEq⟩ :=
     execute sizes (fun name => initial (.inl name)) sourceRow targetRow column array coefficient sourceWithin targetWithin
       columnsFit sourceValid targetValid columnValid capacity sourceEq targetEq columnEq coefficientEq arrayEq headers
       (fun name => regions (.inl name))
-  have trace := localTrace.wire stepWiring (fun name => (domains scalar name).width sizes) readOnly
-    (fun _ => rfl) (fun _ premise => premise) initial (fun _ => 0)
-  have start : install stepWiring (fun name => initial (.inl name)) initial = initial := install_self stepWiring initial
-  have positions : install stepWiring (fun _ : StandardMatrixRowStep.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self stepWiring _
-  rw [start, positions] at trace
-  refine ⟨ticks, install stepWiring localFinal initial, cost, trace, ?_, ?_, ?_, ?_, ?_⟩
-  · exact (install_at stepWiring localFinal initial (.inl (.inr 4))).trans workEq
-  · exact (install_at stepWiring localFinal initial (.inl (.inr 5))).trans resultEq
-  · exact (install_at stepWiring localFinal initial (.inl (.inr 2))).trans nextEq
-  · intro name writable
-    obtain ⟨value, canonical⟩ := canonical name writable
-    exact ⟨value, (install_at stepWiring localFinal initial name).trans canonical⟩
+  obtain ⟨final, trace, located, outside, immutable⟩ :=
+    localTrace.wire_restoring stepWiring (fun name => (domains scalar name).width sizes) readOnly
+    (fun _ => rfl) (fun _ premise => premise) initial (fun _ => rfl)
+  refine ⟨ticks, final, cost, trace, ?_, ?_, ?_, ?_⟩
+  · exact (located (.inl (.inr 4))).trans workEq
+  · exact (located (.inl (.inr 5))).trans resultEq
+  · exact (located (.inl (.inr 2))).trans nextEq
   · intro name
-    apply install_outside
+    apply outside
     rintro ⟨localName, equal⟩
     cases equal
 

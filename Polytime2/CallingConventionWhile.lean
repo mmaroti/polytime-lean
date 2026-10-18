@@ -33,7 +33,11 @@ variable {TapeName : Type tapeLevel} {Guard : Type guardLevel} {Body : Type body
 variable {Value : Type valueLevel}
 
 /-- A mathematical decreasing measure bounds iterations. The guard preserves
-its logical state; the body returns a smaller state with the required invariant. -/
+its logical state; the body returns a smaller state with the required invariant.
+`Value` may be a dependent family of mathematical variables. Immutable context
+is captured by the representations, so it need not be copied into the state.
+Only live variables need encodings; the `Runs` certificate bounds scratch
+regions and preserves read-only tapes independently of their contents. -/
 theorem whileValues (width : TapeName → ℕ) (readOnly : TapeName → Bool)
     (guard : Machine (Alphabet TapeName) Guard) (body : Machine (Alphabet TapeName) Body)
     (guardEntry guardExit : Guard) (bodyEntry bodyExit : Body)
@@ -101,5 +105,57 @@ theorem whileValues (width : TapeName → ℕ) (readOnly : TapeName → Bool)
         guardTicks + (1 + (bodyTicks + (1 + restTicks))) ≤
             (guardBound + bodyBound + 2) + rank * (guardBound + bodyBound + 2) := by omega
         _ = (rank + 1) * (guardBound + bodyBound + 2) := by ring
+
+/-- Traverse a bounded interval using a caller's live-state representation.
+The representation may describe any finite family of variables and immutable
+context; scratch needs only the region conditions required by the components. -/
+theorem whileRange (width : TapeName → ℕ) (readOnly : TapeName → Bool)
+    (guard : Machine (Alphabet TapeName) Guard) (body : Machine (Alphabet TapeName) Body)
+    (guardEntry guardExit : Guard) (bodyEntry bodyExit : Body)
+    (result : Symbols (Alphabet TapeName) → Bool)
+    (representation guardedRepresentation : ℕ → Tapes (Alphabet TapeName) → Prop)
+    (start limit guardBound bodyBound : ℕ) (within : start ≤ limit)
+    (guardHalt : ∀ symbols, guard guardExit symbols = none)
+    (bodyHalt : ∀ symbols, body bodyExit symbols = none)
+    (guardRuns : ∀ count, start ≤ count → count ≤ limit → ∀ initial,
+      representation count initial → ∃ ticks final, ticks ≤ guardBound ∧
+        Runs width readOnly guard ticks guardEntry (fun _ => 0) initial
+          guardExit (fun _ => 0) final ∧ guardedRepresentation count final)
+    (bodyRuns : ∀ count, start ≤ count → count < limit → ∀ initial,
+      guardedRepresentation count initial → ∃ ticks final, ticks ≤ bodyBound ∧
+        Runs width readOnly body ticks bodyEntry (fun _ => 0) initial
+          bodyExit (fun _ => 0) final ∧ representation (count + 1) final)
+    (resultCorrect : ∀ count, start ≤ count → count ≤ limit → ∀ tapes,
+      guardedRepresentation count tapes → result (read tapes) = decide (count < limit))
+    (initial : Tapes (Alphabet TapeName)) (represented : representation start initial) :
+    ∃ ticks final, ticks ≤ (limit - start + 1) * (guardBound + bodyBound + 2) + 1 ∧
+      Runs width readOnly
+        (MultiTape.withExit (MultiTape.whileMachine guard body guardEntry bodyEntry result)) ticks
+        (.inl (.inl guardEntry)) (fun _ => 0) initial (.inr ()) (fun _ => 0) final ∧
+      guardedRepresentation limit final := by
+  let Value := {count : ℕ // start ≤ count ∧ count ≤ limit}
+  obtain ⟨ticks, final, terminal, cost, trace, valid, stopped⟩ :=
+    whileValues width readOnly guard body guardEntry guardExit bodyEntry bodyExit result
+      (fun count : Value => representation count.val)
+      (fun count : Value => guardedRepresentation count.val)
+      (fun count : Value => decide (count.val < limit)) (fun count : Value => limit - count.val)
+      guardBound bodyBound guardHalt bodyHalt
+      (fun count tapes valid => guardRuns count.val count.property.1 count.property.2 tapes valid)
+      (by
+        intro count tapes valid active
+        have before : count.val < limit := of_decide_eq_true active
+        obtain ⟨ticks, final, cost, trace, next⟩ :=
+          bodyRuns count.val count.property.1 before tapes valid
+        exact ⟨⟨count.val + 1, by omega, by omega⟩, ticks, final, cost, trace, next, by dsimp; omega⟩)
+      (fun count tapes valid => resultCorrect count.val count.property.1 count.property.2 tapes valid)
+      ⟨start, le_rfl, within⟩ initial represented
+  have finished : terminal.val = limit := by
+    have upper := terminal.property.2
+    have lower := of_decide_eq_false stopped
+    omega
+  refine ⟨ticks + 1, final, Nat.add_le_add_right cost 1, ?_, ?_⟩
+  · exact trace.withExit_at (by simp [MultiTape.whileMachine, guardHalt,
+      resultCorrect terminal.val terminal.property.1 terminal.property.2 final valid, finished])
+  · simpa only [finished] using valid
 
 end Polytime2.CallingConvention.Runs

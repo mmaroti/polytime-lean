@@ -100,39 +100,11 @@ namespace Realizable.Internal
 
 variable {Parameter : Type} [Fintype Parameter]
 
-private def arithmeticLayout : Parameter ⊕ Fin 4 ≃ Parameter ⊕ (Bool ⊕ (Unit ⊕ Unit)) where
-  toFun
-    | .inl parameter => .inl parameter
-    | .inr 0 => .inr (.inl false)
-    | .inr 1 => .inr (.inl true)
-    | .inr 2 => .inr (.inr (.inl ()))
-    | .inr 3 => .inr (.inr (.inr ()))
-  invFun
-    | .inl parameter => .inl parameter
-    | .inr (.inl false) => .inr 0
-    | .inr (.inl true) => .inr 1
-    | .inr (.inr (.inl _)) => .inr 2
-    | .inr (.inr (.inr _)) => .inr 3
-  left_inv name := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · cases argument <;> rfl
-    · cases result; rfl
-    · cases scratch; rfl
-
-private theorem arithmeticDomains (capacity : Parameter)
-    (precondition : ∀ sizes : Parameter → ℕ, (Bool → Fin (2 ^ sizes capacity)) → Prop)
-    (compute : ∀ sizes, {arguments : Bool → Fin (2 ^ sizes capacity) // precondition sizes arguments} →
-      Fin (2 ^ sizes capacity)) (name : Parameter ⊕ Fin 4) :
-    domains (binarySpecificationAt capacity precondition compute) (fun _ : Unit => EncodedDomain.booleans)
-      (arithmeticLayout name) = (StandardBinaryArithmetic.domainsSized capacity) name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
+private def arithmeticPlacement : PublicTape Parameter Bool ↪ Parameter ⊕ Fin 4 :=
+  (Function.Embedding.refl Parameter).sumMap
+    ⟨(fun role => match role with | .inl false => 0 | .inl true => 1 | .inr _ => 2), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 /-- The carry/borrow is private when only the bounded natural result is exposed. -/
 private theorem arithmetic_realizable (capacity : Parameter)
@@ -146,132 +118,44 @@ private theorem arithmetic_realizable (capacity : Parameter)
         (List.ofFn (fun index : Fin (sizes capacity) => (BitVec.ofFin (arguments true)).getLsbD index.val))).1 =
         (compute sizes ⟨arguments, valid⟩).val) :
     (binarySpecificationAt capacity precondition compute).Realizable := by
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (arithmeticDomains capacity precondition compute name))
-  have readonly name : StandardBinaryArithmetic.argumentReadOnly name =
-      readOnly (binarySpecificationAt capacity precondition compute) (arithmeticLayout name) := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  refine ofLayout (binarySpecificationAt capacity precondition compute) (fun _ : Unit => EncodedDomain.booleans)
+  refine ofNamedLayout (binarySpecificationAt capacity precondition compute)
     (StandardBinaryArithmetic.domainsSized capacity) StandardBinaryArithmetic.argumentReadOnly
     StandardBinaryArithmetic.sizeTapes StandardBinaryArithmetic.outputTapes (StandardBinaryArithmetic.algorithm digit carry)
     (StandardBinaryArithmetic.entry previous) StandardBinaryArithmetic.exit _ _
-    (StandardBinaryArithmetic.contractSized capacity digit carry previous) arithmeticLayout.toEmbedding values ?_ ?_ readonly
+    (StandardBinaryArithmetic.contractSized capacity digit carry previous) arithmeticPlacement
+    (by rintro (parameter | argument | result) <;> first | rfl | (cases argument <;> rfl))
+    (by rintro (parameter | argument | result) <;> first | rfl | (cases argument <;> rfl))
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
     (by intro parameter; rfl) false rfl (by intro sizes input valid; trivial) ?_
-  · intro name sizes
-    exact congrArg (fun domain => domain.width sizes) (arithmeticDomains capacity precondition compute name)
-  · intro name sizes value
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  · intro sizes input valid output result
-    apply congrArg (encoded (EncodedDomain.binaryNaturals capacity) sizes)
-    apply Fin.ext
-    exact result.1.trans (mathematical sizes _ valid)
+  intro sizes input valid output result
+  apply congrArg (encoded (EncodedDomain.binaryNaturals capacity) sizes)
+  apply Fin.ext
+  exact result.1.trans (mathematical sizes _ valid)
 
-private def comparisonLayout : Unit ⊕ Fin 4 ≃ Unit ⊕ (Bool ⊕ (Unit ⊕ Unit)) where
-  toFun
-    | .inl parameter => .inl parameter
-    | .inr 0 => .inr (.inl false)
-    | .inr 1 => .inr (.inl true)
-    | .inr 2 => .inr (.inr (.inr ()))
-    | .inr 3 => .inr (.inr (.inl ()))
-  invFun
-    | .inl parameter => .inl parameter
-    | .inr (.inl false) => .inr 0
-    | .inr (.inl true) => .inr 1
-    | .inr (.inr (.inl _)) => .inr 3
-    | .inr (.inr (.inr _)) => .inr 2
-  left_inv name := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · cases argument <;> rfl
-    · cases result; rfl
-    · cases scratch; rfl
+private def comparisonPlacement : PublicTape Unit Bool ↪ Unit ⊕ Fin 4 :=
+  (Function.Embedding.refl Unit).sumMap
+    ⟨(fun role => match role with | .inl false => 0 | .inl true => 1 | .inr _ => 3), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
-private theorem comparisonDomains (name : Unit ⊕ Fin 4) :
-    domains binaryLess (fun _ : Unit => EncodedDomain.binaryNaturals ()) (comparisonLayout name) =
-      StandardBinaryArithmetic.domains name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
+private def multiplicationPlacement : PublicTape Bool Bool ↪ Bool ⊕ Fin 6 :=
+  (Function.Embedding.refl Bool).sumMap
+    ⟨(fun role => match role with | .inl false => 1 | .inl true => 5 | .inr _ => 0), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
-private def multiplicationLayout : Bool ⊕ Fin 6 ≃ Bool ⊕ (Bool ⊕ (Unit ⊕ Fin 3)) where
-  toFun | .inl parameter => .inl parameter
-        | .inr 0 => .inr (.inr (.inl ()))
-        | .inr 1 => .inr (.inl false)
-        | .inr 2 => .inr (.inr (.inr 0))
-        | .inr 3 => .inr (.inr (.inr 1))
-        | .inr 4 => .inr (.inr (.inr 2))
-        | .inr 5 => .inr (.inl true)
-  invFun | .inl parameter => .inl parameter
-         | .inr (.inr (.inl ())) => .inr 0
-         | .inr (.inl false) => .inr 1
-         | .inr (.inr (.inr 0)) => .inr 2
-         | .inr (.inr (.inr 1)) => .inr 3
-         | .inr (.inr (.inr 2)) => .inr 4
-         | .inr (.inl true) => .inr 5
-  left_inv name := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · cases argument <;> rfl
-    · cases result; rfl
-    · fin_cases scratch <;> rfl
-
-private noncomputable def multiplicationScratch (name : Fin 3) : EncodedDomain Bool :=
-  if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals false
-
-private theorem multiplicationDomains (name : Bool ⊕ Fin 6) :
-    domains binaryMultiply multiplicationScratch (multiplicationLayout name) = StandardBinaryMultiplication.domains name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private def remainderLayout : Unit ⊕ Fin 7 ≃ Unit ⊕ (Bool ⊕ (Unit ⊕ Fin 4)) where
-  toFun | .inl parameter => .inl parameter
-        | .inr 0 => .inr (.inr (.inl ()))
-        | .inr 1 => .inr (.inl true)
-        | .inr 2 => .inr (.inr (.inr 0))
-        | .inr 3 => .inr (.inr (.inr 1))
-        | .inr 4 => .inr (.inr (.inr 2))
-        | .inr 5 => .inr (.inr (.inr 3))
-        | .inr 6 => .inr (.inl false)
-  invFun | .inl parameter => .inl parameter
-         | .inr (.inr (.inl ())) => .inr 0
-         | .inr (.inl true) => .inr 1
-         | .inr (.inr (.inr 0)) => .inr 2
-         | .inr (.inr (.inr 1)) => .inr 3
-         | .inr (.inr (.inr 2)) => .inr 4
-         | .inr (.inr (.inr 3)) => .inr 5
-         | .inr (.inl false) => .inr 6
-  left_inv name := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · cases argument <;> rfl
-    · cases result; rfl
-    · fin_cases scratch <;> rfl
-
-private noncomputable def remainderScratch (name : Fin 4) : EncodedDomain Unit :=
-  if name = 2 then EncodedDomain.booleans else EncodedDomain.binaryNaturals ()
-
-private theorem remainderDomains (name : Unit ⊕ Fin 7) :
-    domains binaryRemainder remainderScratch (remainderLayout name) = StandardBinaryRemainder.domains name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
+private def remainderPlacement : PublicTape Unit Bool ↪ Unit ⊕ Fin 7 :=
+  (Function.Embedding.refl Unit).sumMap
+    ⟨(fun role => match role with | .inl false => 6 | .inl true => 1 | .inr _ => 0), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 end Realizable.Internal
 
@@ -305,28 +189,36 @@ theorem binarySubtract_realizable : binarySubtract.Realizable := by
 
 open Realizable.Internal in
 theorem binaryLess_realizable : binaryLess.Realizable := by
-  let values name sizes := Equiv.cast
-    (congrArg (fun domain => domain.Carrier sizes) (comparisonDomains name))
-  refine ofLayout binaryLess (fun _ : Unit => EncodedDomain.binaryNaturals ())
-    BinarySubtraction.domains BinarySubtraction.argumentReadOnly BinarySubtraction.sizeTapes
-    StandardBinaryArithmetic.outputTapes BinarySubtraction.algorithm BinarySubtraction.entry BinarySubtraction.exit
-    _ _ BinarySubtraction.comparison_contract comparisonLayout.toEmbedding values
-    (by intro name sizes; exact congrArg (fun domain => domain.width sizes) (comparisonDomains name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro parameter; rfl) true rfl (by intro sizes input valid; trivial) ?_
+  refine ofNamedLayout binaryLess StandardBinaryArithmetic.domains StandardBinaryArithmetic.argumentReadOnly
+    StandardBinaryArithmetic.sizeTapes StandardBinaryArithmetic.outputTapes BinarySubtraction.algorithm BinarySubtraction.entry BinarySubtraction.exit
+    _ _ BinarySubtraction.comparison_contract comparisonPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
+    (by intro parameter; rfl) true rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   exact congrArg (encoded EncodedDomain.booleans sizes) correct
 
 open Realizable.Internal in
 theorem binaryMultiply_realizable : binaryMultiply.Realizable := by
-  let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes) (multiplicationDomains name))
-  refine ofLayout binaryMultiply multiplicationScratch StandardBinaryMultiplication.domains StandardBinaryMultiplication.argumentReadOnly
+  refine ofNamedLayout binaryMultiply StandardBinaryMultiplication.domains StandardBinaryMultiplication.argumentReadOnly
     StandardBinaryMultiplication.sizeTapes StandardBinaryMultiplication.outputTapes StandardBinaryMultiplication.algorithm StandardBinaryMultiplication.entry StandardBinaryMultiplication.exit
-    _ _ StandardBinaryMultiplication.contract multiplicationLayout.toEmbedding values
-    (by intro name sizes; exact congrArg (fun domain => domain.width sizes) (multiplicationDomains name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
+    _ _ StandardBinaryMultiplication.contract multiplicationPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
     (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   apply congrArg (encoded (EncodedDomain.binaryNaturals false) sizes)
@@ -335,13 +227,18 @@ theorem binaryMultiply_realizable : binaryMultiply.Realizable := by
 
 open Realizable.Internal in
 theorem binaryRemainder_realizable : binaryRemainder.Realizable := by
-  let values name sizes := Equiv.cast (congrArg (fun domain => domain.Carrier sizes) (remainderDomains name))
-  refine ofLayout binaryRemainder remainderScratch StandardBinaryRemainder.domains StandardBinaryRemainder.argumentReadOnly
+  refine ofNamedLayout binaryRemainder StandardBinaryRemainder.domains StandardBinaryRemainder.argumentReadOnly
     StandardBinaryRemainder.sizeTapes StandardBinaryRemainder.outputTapes StandardBinaryRemainder.algorithm StandardBinaryRemainder.entry StandardBinaryRemainder.exit
-    _ _ StandardBinaryRemainder.contract remainderLayout.toEmbedding values
-    (by intro name sizes; exact congrArg (fun domain => domain.width sizes) (remainderDomains name))
-    (by intro name sizes value; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
-    (by intro name; cases name with | inl _ => rfl | inr name => fin_cases name <;> rfl)
+    _ _ StandardBinaryRemainder.contract remainderPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
     (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   apply congrArg (encoded (EncodedDomain.binaryNaturals ()) sizes)

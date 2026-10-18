@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardPivotSearchGuard
+import Polytime2.StandardPivotSearchAlgorithm
 
 /-! # Preparing a pivot workspace and executing its first guard -/
 
@@ -50,7 +50,7 @@ private noncomputable def initial (rows : Fin 2) (value : Bool) : Tapes Alphabet
   else buffer (List.replicate ((domains scalar name).width (sizes rows)) 2)
 
 private noncomputable def preparedGuard :=
-  MultiTape.sequence (initialization scalar true)
+  MultiTape.sequence initialization
     (MultiTape.sequence readLimit (guard scalar isZero) (guardEntry (scalar.width Empty.elim))) (.inl StandardSizeRead.entry)
 
 /-- Runtime row counts zero and one use the same finite controller. All
@@ -58,7 +58,7 @@ writable tapes start with arbitrary contents, and preparation is part of the run
 theorem first_guard (rows : Fin 2) (value : Bool) :
     ∃ ticks final,
       Runs (fun name => (domains scalar name).width (sizes rows)) readOnly preparedGuard ticks
-        (.inl (Pipeline.position (initEntry (defaultBits scalar true).length) 0)) (fun _ => 0) (initial rows value)
+        (.inl 0) (fun _ => 0) (initial rows value)
         (.inr (.inr (guardExit (scalar.width Empty.elim)))) (fun _ => 0) final ∧
       final foundTape = encoded EncodedDomain.booleans (sizes rows) (decide (0 < rows.val)) ∧
       final continueTape = encoded EncodedDomain.booleans (sizes rows) (if 0 < rows.val then !value else false) := by
@@ -74,10 +74,16 @@ theorem first_guard (rows : Fin 2) (value : Bool) :
     have header := represented.1 (sizeTape parameter) rfl
     change initial rows value (sizeTape parameter) = encoded (EncodedDomain.unary parameter) (sizes rows) PUnit.unit at header
     exact header.trans (encoded_unary parameter (sizes rows))
-  obtain ⟨initTicks, initialized, initCost, initTrace, candidateEq, elementEq,
-      continueEq, initCanonical⟩ :=
-    initialization_runs scalar (sizes rows) true 0 (initial rows value)
-      (represented.1 startTape rfl) (headers 0) represented.region
+  have initTrace := StandardTapeCommands.copy_encoded_runs (EncodedDomain.binaryNaturals 0)
+    (sizes rows) (0 : Fin 2) startTape (counterTape 1) (by decide)
+    (fun name => (domains scalar name).width (sizes rows)) readOnly rfl rfl rfl
+    (initial rows value) (represented.1 startTape rfl) (represented.region (counterTape 1))
+  let initialized := Function.update (initial rows value) (counterTape 1)
+    (encoded (EncodedDomain.binaryNaturals 0) (sizes rows) (0 : Fin 2))
+  have candidateEq : initialized (counterTape 1) =
+      encoded (EncodedDomain.binaryNaturals 0) (sizes rows) (0 : Fin 2) := Function.update_self _ _ _
+  let initTicks := 2 * (sizes rows) 0 + 2
+  simp only [EncodedDomain.binaryNaturals_width] at initTrace
   have initializedRegions : ∀ name, Region ((domains scalar name).width (sizes rows)) 0 (initialized name) :=
     fun name => initTrace.region name (represented.region name)
   obtain ⟨readBound, executeRead⟩ := readLimit_runs scalar
@@ -87,17 +93,8 @@ theorem first_guard (rows : Fin 2) (value : Bool) :
       (by simpa [domains, rowLimitTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using initializedRegions rowLimitTape)
       (by simpa [domains, counterTape, StandardMatrixEntry.domains, StandardMatrixAddress.domains,
         EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using initializedRegions (counterTape 2))
-  have preparedCanonical : ∀ name, readOnly name = false → ∃ entryValue : (domains scalar name).Carrier (sizes rows),
-      prepared name = encoded (domains scalar name) (sizes rows) entryValue := by
-    intro name writable
-    by_cases isLimit : name = rowLimitTape
-    · subst name; exact ⟨⟨rows.val, rows.isLt⟩, limitEq⟩
-    · by_cases isScratch : name = counterTape 2
-      · subst name; exact scratchEq
-      · obtain ⟨entryValue, encodedValue⟩ := initCanonical name writable
-        exact ⟨entryValue, (readOutside name isLimit isScratch).trans encodedValue⟩
   obtain ⟨guardBound, executeGuard⟩ := guard_runs scalar isZero
-  obtain ⟨guardTicks, final, guardCost, guardTrace, finalCandidate, finalLimit, foundEq, continueEq, finalCanonical⟩ :=
+  obtain ⟨guardTicks, final, guardCost, guardTrace, finalCandidate, finalLimit, foundEq, continueEq⟩ :=
     executeGuard (sizes rows) prepared 0 0 (fun _ => value) rows.isLt
       (by simp [sizes]) (by simp [sizes])
       (by have bound := rows.isLt; change rows.val * 1 ≤ 2; omega)
@@ -108,7 +105,7 @@ theorem first_guard (rows : Fin 2) (value : Bool) :
         (represented.1 matrixTape rfl)))
       (fun parameter => (readTrace.readOnly_tape (sizeTape parameter) rfl).trans
         ((initTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)))
-      (fun name => readTrace.region name (initializedRegions name)) preparedCanonical
+      (fun name => readTrace.region name (initializedRegions name))
   have tail := readTrace.sequence (guard scalar isZero) (guardEntry (scalar.width Empty.elim)) readLimit_halt guardTrace
   have complete := initTrace.sequence _ (Sum.inl StandardSizeRead.entry) (by intro symbols; rfl) tail
   refine ⟨initTicks + (readTicks + guardTicks + 1) + 1, final, complete, foundEq, ?_⟩

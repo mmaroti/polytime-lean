@@ -116,6 +116,7 @@ import Polytime2.Examples.MatrixEntry
 import Polytime2.StandardMatrixReplaceContract
 import Polytime2.Examples.MatrixReplace
 import Polytime2.Pipeline
+import Polytime2.Initialization
 import Polytime2.Examples.Arithmetic
 import Polytime2.Examples.FiniteTables
 import Polytime2.StandardArrayMapContract
@@ -136,7 +137,6 @@ import Polytime2.StandardFinitePredicate
 import Polytime2.Examples.FinitePredicate
 import Polytime2.StandardPivotSearch
 import Polytime2.StandardPivotSearchCalls
-import Polytime2.StandardPivotSearchInit
 import Polytime2.StandardPivotSearchGuard
 import Polytime2.StandardPivotSearchAdvance
 import Polytime2.StandardPivotSearchLoop
@@ -150,7 +150,6 @@ import Polytime2.StandardGaussJordanClearAlgorithm
 import Polytime2.StandardGaussJordanPivotAlgorithm
 import Polytime2.StandardGaussJordanColumnInit
 import Polytime2.StandardGaussJordanColumnAlgorithm
-import Polytime2.StandardGaussJordanColumnWorkspace
 import Polytime2.StandardGaussJordanEliminationAlgorithm
 import Polytime2.StandardGaussJordanEliminationTM0
 import Polytime2.Head

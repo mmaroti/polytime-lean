@@ -40,70 +40,33 @@ noncomputable def gcd : Computation Unit Bool where
 
 namespace Realizable.Internal
 
-private noncomputable def gcdScratchDomains (name : Fin 9) : EncodedDomain Unit :=
-  StandardGcd.domains (.inr ⟨name.val, by omega⟩)
-
-private noncomputable def gcdLayout : Unit ⊕ Fin 12 ≃ TapeName gcd (Fin 9) where
-  toFun
-    | .inl parameter => .inl parameter
-    | .inr name => if privateTape : name.val < 9 then scratchTape gcd ⟨name.val, privateTape⟩
-        else if name.val = 9 then inputTape gcd false
-        else if name.val = 10 then inputTape gcd true
-        else outputTape gcd
-  invFun
-    | .inl parameter => .inl parameter
-    | .inr (.inl false) => .inr 9
-    | .inr (.inl true) => .inr 10
-    | .inr (.inr (.inl _)) => .inr 11
-    | .inr (.inr (.inr name)) => .inr ⟨name.val, by omega⟩
-  left_inv name := by
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  right_inv name := by
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · cases argument <;> rfl
-    · cases result; rfl
-    · fin_cases scratch <;> rfl
-
-private theorem gcdDomains (name : Unit ⊕ Fin 12) :
-    domains gcd gcdScratchDomains (gcdLayout name) = StandardGcd.domains name := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
-
-private def gcdValues (name : Unit ⊕ Fin 12) (sizes : Unit → ℕ) :
-    (domains gcd gcdScratchDomains (gcdLayout name)).Carrier sizes ≃
-      (StandardGcd.domains name).Carrier sizes :=
-  Equiv.cast (congrArg (fun domain => domain.Carrier sizes) (gcdDomains name))
-
-private theorem gcdReadOnly (name : Unit ⊕ Fin 12) :
-    StandardGcd.argumentReadOnly name = readOnly gcd (gcdLayout name) := by
-  cases name with
-  | inl parameter => rfl
-  | inr name => fin_cases name <;> rfl
+private def gcdPlacement : PublicTape Unit Bool ↪ Unit ⊕ Fin 12 :=
+  (Function.Embedding.refl Unit).sumMap
+    ⟨(fun role => match role with | .inl false => 9 | .inl true => 10 | .inr _ => 11), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 end Realizable.Internal
 
 open Realizable.Internal in
 /-- The physical certificate is consumed only inside this foundational proof. -/
 theorem gcd_realizable : gcd.Realizable := by
-  refine ofLayout gcd gcdScratchDomains StandardGcd.domains StandardGcd.argumentReadOnly
+  refine ofNamedLayout gcd StandardGcd.domains StandardGcd.argumentReadOnly
     StandardGcd.sizeTapes StandardGcd.outputTapes StandardGcd.algorithm StandardGcd.entry StandardGcd.exit
-    _ _ StandardGcd.contract gcdLayout.toEmbedding gcdValues ?_ ?_ gcdReadOnly
-    (by intro parameter; rfl) () rfl ?_ ?_
-  · intro name sizes
-    exact congrArg (fun domain => domain.width sizes) (gcdDomains name)
-  · intro name sizes value
-    cases name with
-    | inl parameter => rfl
-    | inr name => fin_cases name <;> rfl
-  · intro sizes input valid
-    exact valid
-  · intro sizes input valid output result
-    apply congrArg (encoded (EncodedDomain.binaryNaturals ()) sizes)
-    apply Fin.ext
-    exact result
+    _ _ StandardGcd.contract gcdPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
+    (by
+      intro name outside
+      cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr name => fin_cases name <;> first
+        | rfl
+        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
+        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
+    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
+  intro sizes input valid output result
+  apply congrArg (encoded (EncodedDomain.binaryNaturals ()) sizes)
+  apply Fin.ext
+  exact result
 
 end Polytime2.Computation

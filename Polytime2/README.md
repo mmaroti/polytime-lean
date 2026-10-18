@@ -114,9 +114,9 @@ supply the operational width computation needed by generic tape algorithms.
   An internal column step commits that result to a private working matrix and
   advances a fixed-width binary counter through a separate increment output.
   Two consecutive column steps reuse these tapes without external preparation.
-- Complete matrix row traversal initializes all nineteen writable tapes from
-  immutable inputs, reads the unary column count into a binary limit, and runs
-  the guarded column loop. Its polynomial contract includes zero columns,
+- Complete matrix row traversal initializes only the working matrix, result
+  matrix, and column counter, reads the unary count into a binary limit, and
+  runs the guarded column loop. Its polynomial contract includes zero columns,
   arbitrary initial writable contents and restored heads. A matrix-valued
   contract specifies only the result matrix. Scaling, normalization, addition,
   and swapping reuse the shared field identities. Gauss–Jordan's standard
@@ -135,7 +135,7 @@ supply the operational width computation needed by generic tape algorithms.
   storage, returning reduced row-echelon form with an invertible row
   transformation, including empty rectangular matrices.
 - Standard Gauss–Jordan startup copies the immutable encoded matrix, reads the
-  unary column size, and initializes every writable tape. Its TM0 certificate
+  unary column size, and initializes only live counters. Its TM0 certificate
   includes startup and preserves the mathematical row-equivalence and reduced
   row-echelon guarantees.
 - Generic standalone TM0 output extraction erases every working track and
@@ -276,6 +276,12 @@ added to the library, not bypassed by inspecting an existing realization.
 Witness handling belongs exclusively to foundational library proofs in
 `Computation.Realizable.Internal` and the implementations of certified rules.
 
+Internal primitive adapters place named size, argument, and result roles using
+`ofNamedLayout`; the remaining source tapes become private automatically.
+Domain equalities determine carrier transport, widths, and encodings. Restoring
+calls share `Runs.wire_restoring` and `Realizes.wired_runs` for tape placement
+and preservation proofs.
+
 `Computation.Realizable.followedBy` feeds a result to a single-argument
 computation. `letThen` retains the original arguments alongside that result for
 the continuation; nested bindings describe DAGs. `withArguments` selects inputs
@@ -290,12 +296,17 @@ precondition; uncalled branch scratch stays arbitrary.
 `whileLoop` uses a mathematical invariant, decreasing measure, and existential
 polynomial bound. Its conserved answer equals the state when the guard stops;
 the library handles state copies, scratch, and all execution costs.
+Internal workspaces use `Runs.whileValues` for mathematical state families and
+`Runs.whileRange` for bounded traversals. Immutable context stays in the
+representations; only live variables require encoding proofs. `Initialization`
+compiles finite copy, clear, and constant plans through `Pipeline.updates_runs`
+and supplies shared unary-size reading. Matrix and elimination controllers use
+these rules without preparing unused scratch, including for empty loops.
 Compound arithmetic composes addition at a named capacity with multiplication.
 It retains one intermediate word and the primitives' scratch: three binary words
 and two flag tapes in total. It adds no operand copies and takes one additional
 transition compared with the former standalone controllers. The matrix-address
-controller retains its shared-workspace lowering pending the loop-workspace
-migration.
+controller retains its shared-workspace lowering.
 Public certificates cover constants, unary-size reading, counter initialization,
 copying, increment/decrement, nonzero tests, comparison, bounded arithmetic,
 compound arithmetic, remainder, gcd, finite tables and predicates, array
@@ -331,21 +342,6 @@ and specialized unary-sum preparation.
 Implement one finite-table construction for arbitrary finite input and output
 families, allowing different fixed widths. Make binary tables, predicates, and
 row combination specializations of it while preserving their existing codecs.
-
-### Tape layouts
-
-Extend the generic layout adapter to place named public roles and allocate the
-remaining tapes privately. Derive width and encoding compatibility from domain
-equality, simplify nested tape names and alphabet proofs, and consolidate
-specialized execution and wiring adapters.
-
-### Loop workspaces
-
-Generalize loops to immutable context and finite families of state variables.
-Build reusable initialization plans from copy, constant, and size-reading
-commands, using `Pipeline.updates_runs`. Require valid encodings only for live
-mathematical variables, then migrate matrix and elimination controllers while
-retaining their mathematical correctness proofs.
 
 ### Scanning
 

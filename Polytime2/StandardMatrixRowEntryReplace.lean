@@ -78,13 +78,10 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
         final (.inr (if source then 6 else 5)) =
           encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes
             (Function.update array ⟨row.val * sizes 2 + column.val, within⟩ replacement) ∧
-        (∀ name, StandardMatrixReplace.readOnly name = false →
-          ∃ value : (domains scalar (replaceWiring source name)).Carrier sizes,
-            final (replaceWiring source name) = encoded (domains scalar (replaceWiring source name)) sizes value) ∧
         (∀ name, name ∉ Set.range (replaceWiring source) → final name = initial name) ∧
         (∀ name, StandardMatrixReplace.readOnly name = true → final (replaceWiring source name) = initial (replaceWiring source name)) := by
-  obtain ⟨bound, execute⟩ := StandardMatrixReplace.Internal.wired_runs scalar.constant (scalar.width Empty.elim)
-    (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec]) (replaceWiring source)
+  obtain ⟨bound, execute⟩ := (StandardMatrixReplace.contract scalar.constant (scalar.width Empty.elim)
+    (fun _ => by simp [EncodedDomain.constant, EncodedDomain.ofCodec])).wired_runs (replaceWiring source)
   refine ⟨bound, ?_⟩
   intro sizes initial row column array replacement within columnsFit rowValid columnValid capacity
     rowEq columnEq arrayEq replacementEq headers regions
@@ -92,7 +89,7 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
   have sameDomain : ∀ name, domains scalar (replaceWiring source name) = StandardMatrixReplace.domains scalar.constant name := by
     intro name
     cases source <;> fin_cases name <;> rfl
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, privateFrame, outside, immutable⟩ :=
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
     execute sizes input (fun name => (domains scalar name).width sizes) readOnly initial
       (by intro name; rw [sameDomain name])
       (by
@@ -134,12 +131,9 @@ theorem replace_runs (source : Bool) (scalar : EncodedDomain.{0, 0} Empty) :
       (by intro name writable; exact regions (replaceWiring source name)) headers
   obtain ⟨otherWithin, valueEq⟩ := correct
   change output () = Function.update array ⟨row.val * sizes 2 + column.val, otherWithin⟩ replacement at valueEq
-  refine ⟨ticks, final, cost, trace, ?_, ?_, outside, immutable⟩
+  refine ⟨ticks, final, cost, trace, ?_, outside, immutable⟩
   · have result := canonical ()
     rw [valueEq] at result
     exact result
-  · intro name writable
-    rw [sameDomain name]
-    exact privateFrame name writable
 
 end Polytime2.StandardMatrixRowEntry

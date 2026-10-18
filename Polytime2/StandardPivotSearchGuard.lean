@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardPivotSearchInit
+import Polytime2.StandardPivotSearchCalls
 
 /-! # A pivot guard that tests the bound before matrix lookup -/
 
@@ -47,8 +47,6 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
       initial matrixTape = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes array →
       (∀ parameter, initial (sizeTape parameter) = unary (sizes parameter)) →
       (∀ name, Region ((domains scalar name).width sizes) 0 (initial name)) →
-      (∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
-        initial name = encoded (domains scalar name) sizes value) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains scalar name).width sizes) readOnly (guard scalar isZero) ticks
           (guardEntry (scalar.width Empty.elim)) (fun _ => 0) initial
@@ -56,14 +54,12 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
         final (counterTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes candidate ∧
         final rowLimitTape = encoded (EncodedDomain.binaryNaturals 0) sizes ⟨sizes 1, rowFits⟩ ∧
         final foundTape = encoded EncodedDomain.booleans sizes (decide (candidate.val < sizes 1)) ∧
-        final continueTape = encoded EncodedDomain.booleans sizes (continueValue scalar isZero sizes array candidate column columnValid) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
-          final name = encoded (domains scalar name) sizes value) := by
+        final continueTape = encoded EncodedDomain.booleans sizes (continueValue scalar isZero sizes array candidate column columnValid) := by
   obtain ⟨compareBound, executeCompare⟩ := compare_runs scalar
   obtain ⟨readBound, executeRead⟩ := readEntry_runs scalar
   obtain ⟨testBound, executeTest⟩ := zeroTest_runs scalar isZero
   refine ⟨compareBound + readBound + MvPolynomial.C (testBound + 4), ?_⟩
-  intro sizes initial candidate column array rowFits columnValid columnsFit capacity candidateEq columnEq limitEq arrayEq headers regions canonical
+  intro sizes initial candidate column array rowFits columnValid columnsFit capacity candidateEq columnEq limitEq arrayEq headers regions
   let width : TapeName → ℕ := fun name => (domains scalar name).width sizes
   obtain ⟨compareTicks, compared, compareCost, compareTrace, foundEq, difference, compareOutside⟩ :=
     executeCompare sizes initial candidate ⟨sizes 1, rowFits⟩ (headers 0) candidateEq limitEq
@@ -72,15 +68,6 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
         show Nat.clog 2 2 = 1 from by decide] using regions foundTape)
   have comparedRegions : ∀ name, Region (width name) 0 (compared name) :=
     fun name => compareTrace.region name (regions name)
-  have comparedCanonical : ∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
-      compared name = encoded (domains scalar name) sizes value := by
-    intro name writable
-    by_cases isFound : name = foundTape
-    · subst name; exact ⟨decide (candidate.val < sizes 1), foundEq⟩
-    · by_cases isDifference : name = differenceTape
-      · subst name; exact difference
-      · obtain ⟨value, encodedValue⟩ := canonical name writable
-        exact ⟨value, (compareOutside name isDifference isFound).trans encodedValue⟩
   have selected : found (MultiTape.read compared) = decide (candidate.val < sizes 1) := by
     unfold found MultiTape.read
     rw [foundEq, encoded_booleans]
@@ -88,7 +75,7 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
   by_cases valid : candidate.val < sizes 1
   · let within := StandardMatrixEntry.index_lt sizes candidate.val column.val valid columnValid
     let value := array (⟨candidate.val * sizes 2 + column.val, within⟩ : Fin (MvPolynomial.eval sizes StandardMatrixEntry.length))
-    obtain ⟨readTicks, afterRead, readCost, readTrace, elementEq, candidateAfterRead, readCanonical, readOutside⟩ :=
+    obtain ⟨readTicks, afterRead, readCost, readTrace, elementEq, candidateAfterRead, readOutside⟩ :=
       executeRead sizes compared candidate column array within columnsFit valid columnValid capacity
         ((compareOutside (counterTape 1) (by decide) (by decide)).trans candidateEq)
         ((compareTrace.readOnly_tape (counterTape 6) rfl).trans columnEq)
@@ -96,18 +83,6 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
         (fun parameter => (compareTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)) comparedRegions
     have readRegions : ∀ name, Region (width name) 0 (afterRead name) :=
       fun name => readTrace.region name (comparedRegions name)
-    have afterReadCanonical : ∀ name, readOnly name = false → ∃ entryValue : (domains scalar name).Carrier sizes,
-        afterRead name = encoded (domains scalar name) sizes entryValue := by
-      intro name writable
-      cases name with
-      | inl name =>
-        fin_cases name <;> first
-          | contradiction
-          | exact ⟨candidate, candidateAfterRead⟩
-          | exact readCanonical _ rfl
-      | inr name =>
-        obtain ⟨entryValue, encodedValue⟩ := comparedCanonical (.inr name) writable
-        exact ⟨entryValue, (readOutside name).trans encodedValue⟩
     obtain ⟨testTicks, final, testCost, testTrace, continueEq, testOutside⟩ :=
       executeTest sizes afterRead value elementEq (by simpa [width, domains, unitTape, StandardFinitePredicate.unitDomain, EncodedDomain.constant,
           EncodedDomain.fixed, EncodedDomain.ofCodec] using readRegions unitTape)
@@ -122,7 +97,7 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
       (by intro symbols; simp [compare, MultiTape.wire, BinarySubtraction.algorithm, BinarySubtraction.exit,
         StandardBinaryArithmetic.algorithm, StandardBinaryArithmetic.exit, MultiTape.withExit]) selectTrace
     refine ⟨compareTicks + (readTicks + testTicks + 1 + 2) + 1, final, ?_, ?_,
-      (testOutside (counterTape 1) (by decide)).trans candidateAfterRead, ?_, ?_, ?_, ?_⟩
+      (testOutside (counterTape 1) (by decide)).trans candidateAfterRead, ?_, ?_, ?_⟩
     · simp only [map_add, MvPolynomial.eval_C]
       omega
     · simpa only [guard, guardEntry, guardExit, select, readTest, readTestEntry, readTestExit] using complete
@@ -133,11 +108,6 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
         unfold continueValue
         exact dite_eq_left valid
       exact continueEq.trans (congrArg (encoded EncodedDomain.booleans sizes) selectedValue.symm)
-    · intro name writable
-      by_cases isContinue : name = continueTape
-      · subst name; exact ⟨isZero Empty.elim value, continueEq⟩
-      · obtain ⟨entryValue, encodedValue⟩ := afterReadCanonical name writable
-        exact ⟨entryValue, (testOutside name isContinue).trans encodedValue⟩
   · obtain ⟨old, length, oldEq⟩ := (comparedRegions continueTape).exists_buffer
     norm_num [width, domains, continueTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at length
     obtain ⟨oldBit, rfl⟩ := List.length_eq_one_iff.mp length
@@ -152,7 +122,7 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
       (by intro symbols; simp [compare, MultiTape.wire, BinarySubtraction.algorithm, BinarySubtraction.exit,
         StandardBinaryArithmetic.algorithm, StandardBinaryArithmetic.exit, MultiTape.withExit]) selectTrace
     refine ⟨compareTicks + (1 + 2) + 1, Function.update compared continueTape (encoded EncodedDomain.booleans sizes false),
-      ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [map_add, MvPolynomial.eval_C]
       omega
     · simpa only [guard, guardEntry, guardExit, select, stop] using complete
@@ -165,10 +135,4 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty)
         unfold continueValue
         exact dite_eq_right valid
       exact (Function.update_self _ _ _).trans (congrArg (encoded EncodedDomain.booleans sizes) stoppedValue.symm)
-    · intro name writable
-      by_cases isContinue : name = continueTape
-      · subst name; exact ⟨false, Function.update_self _ _ _⟩
-      · obtain ⟨entryValue, encodedValue⟩ := comparedCanonical name writable
-        exact ⟨entryValue, (Function.update_of_ne isContinue _ _).trans encodedValue⟩
-
 end Polytime2.StandardPivotSearch

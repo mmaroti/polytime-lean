@@ -140,8 +140,6 @@ theorem mathematical_loop_runs (enumeration : Scalar ≃ Fin cardinality) :
       initial limitTape = encoded (EncodedDomain.binaryNaturals 0) sizes limit →
       (∀ parameter, initial (sizeTape parameter) = unary (sizes parameter)) →
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
-      (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-        initial name = encoded (domains enumeration name) sizes value) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly
           (machine enumeration) ticks (entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
@@ -150,14 +148,12 @@ theorem mathematical_loop_runs (enumeration : Scalar ≃ Fin cardinality) :
         final workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (clearedInterval (Scalar := Scalar) matrix ⟨sourceRow.val, sourceValid⟩
             ⟨column.val, columnValid⟩ start.val limit.val) ∧
-        final (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes limit ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
+        final (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes limit := by
   obtain ⟨bound, execute⟩ := loop_runs enumeration
   refine ⟨bound, ?_⟩
   intro sizes initial sourceRow column start limit sourceValid columnValid matrix limitWithin
     startWithin separated columnsFit capacity sourceEq counterEq columnEq matrixEq limitEq
-    headers regions canonical
+    headers regions
   let pivot : Fin (sizes 1) := ⟨sourceRow.val, sourceValid⟩
   let pivotColumn : Fin (sizes 2) := ⟨column.val, columnValid⟩
   let current := fun count => matrixEquiv (Carrier := Scalar) sizes
@@ -182,7 +178,7 @@ theorem mathematical_loop_runs (enumeration : Scalar ≃ Fin cardinality) :
     simpa only [current, clearedInterval_start] using matrixEq
   exact execute sizes initial sourceRow column start limit sourceValid columnValid limitWithin
     startWithin current updateLaw columnsFit capacity sourceEq counterEq columnEq initialMatrix
-    limitEq headers regions canonical
+    limitEq headers regions
 
 end Polytime2.StandardGaussJordanClearInterval
 

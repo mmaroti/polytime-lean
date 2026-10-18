@@ -39,29 +39,23 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly (algorithm enumeration) ticks
-          (algorithmEntry (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (algorithmEntry
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) initial
-          (algorithmExit (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (algorithmExit
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final ∧
         final resultTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (GaussJordan.columnStep matrix pivotRow.val ⟨column.val, columnBound⟩).1 ∧
         final nextRowTape = encoded (EncodedDomain.binaryNaturals 0) sizes
           (⟨(GaussJordan.columnStep matrix pivotRow.val ⟨column.val, columnBound⟩).2,
             Nat.lt_of_le_of_lt (GaussJordan.columnStep_row_bound matrix pivotRow.val
-              ⟨column.val, columnBound⟩ pivotBound).2 rowsFit⟩ : Fin (2 ^ sizes 0)) ∧
-        (∀ name, readOnly name = false →
-          ∃ value : (domains enumeration name).Carrier sizes,
-            final name = encoded (domains enumeration name) sizes value) := by
+              ⟨column.val, columnBound⟩ pivotBound).2 rowsFit⟩ : Fin (2 ^ sizes 0)) := by
   obtain ⟨initBound, executeInit⟩ := initialization_runs enumeration
   obtain ⟨searchBound, executeSearch⟩ := search_runs enumeration
   obtain ⟨foundBound, executeFound⟩ := found_runs enumeration
   refine ⟨initBound + searchBound + foundBound + 8, ?_⟩
   intro sizes initial pivotRow column matrix pivotBound columnBound rowsFit columnsFit capacity
     pivotEq columnEq matrixEq headers regions
-  obtain ⟨initTicks, initialized, initCost, initTrace, initialResult, initialNext,
-      initCanonical⟩ :=
+  obtain ⟨initTicks, initialized, initCost, initTrace, initialResult, initialNext⟩ :=
     executeInit sizes initial pivotRow matrix pivotEq matrixEq headers regions
   have initializedRegions : ∀ name,
       Region ((domains enumeration name).width sizes) 0 (initialized name) :=
@@ -76,19 +70,11 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
   have initializedHeaders : ∀ parameter, initialized (sizeTape parameter) = unary (sizes parameter) :=
     fun parameter => (initTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)
   obtain ⟨searchTicks, searched, searchCost, searchTrace,
-      searchResult, searchCanonical, searchOutside, searchImmutable⟩ :=
+      searchResult, searchOutside, searchImmutable⟩ :=
     executeSearch sizes initialized pivotRow column matrix pivotBound columnBound
       rowsFit columnsFit capacity initializedPivot initializedColumn initializedMatrix
       initializedHeaders initializedRegions
   obtain ⟨candidate, candidateBounds, candidateEq, foundEquation, foundFlag⟩ := searchResult
-  have transportCanonical : ∀ {first second : TapeName} (equality : first = second)
-      (value : (domains enumeration first).Carrier sizes),
-      searched first = encoded (domains enumeration first) sizes value →
-      searched second = encoded (domains enumeration second) sizes
-        (Eq.mp (congrArg (fun name => (domains enumeration name).Carrier sizes) equality) value) := by
-    intro first second equality value canonical
-    cases equality
-    exact canonical
   have searchedRegions : ∀ name,
       Region ((domains enumeration name).width sizes) 0 (searched name) :=
     fun name => searchTrace.region name (initializedRegions name)
@@ -107,38 +93,6 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       rintro ⟨name, equal⟩
       fin_cases name <;> cases equal
     exact (searchOutside nextRowTape outside).trans initialNext
-  have searchedCanonical : ∀ name, readOnly name = false →
-      ∃ value : (domains enumeration name).Carrier sizes,
-        searched name = encoded (domains enumeration name) sizes value := by
-    intro name writable
-    cases name with
-    | inl localName =>
-      by_cases candidateName : localName = StandardGaussJordanPivot.candidateTape
-      · subst localName
-        refine ⟨candidate, ?_⟩
-        simpa [domains, candidateTape, StandardGaussJordanPivot.domains,
-          StandardGaussJordanPivot.candidateTape] using candidateEq
-      · have pivotWritable : StandardGaussJordanPivot.readOnly localName = false := by
-          simpa only [readOnly, candidateName, ↓reduceIte] using writable
-        obtain ⟨value, valueEq⟩ := initCanonical localName pivotWritable
-        have unchanged := search_preserves_pivot initialized searched searchOutside searchImmutable
-          localName candidateName
-        exact ⟨value, unchanged.trans valueEq⟩
-    | inr rest =>
-      cases rest with
-      | inl scratch =>
-        cases scratch with
-        | mk localName properties =>
-          obtain ⟨value, valueEq⟩ := searchCanonical localName properties.1
-          let targetName : TapeName := .inr (.inl ⟨localName, properties⟩)
-          have locationEq : searchWiring localName = targetName :=
-            searchWiring_scratch (⟨localName, properties⟩ : SearchScratch)
-          exact ⟨Eq.mp (congrArg (fun tapeName => (domains enumeration tapeName).Carrier sizes)
-              locationEq) value,
-            transportCanonical locationEq value valueEq⟩
-      | inr extra =>
-        refine ⟨pivotRow, ?_⟩
-        exact searchedNext
   by_cases candidateActive : candidate.val < sizes 1
   · have candidateValid : candidate.val < sizes 1 := candidateActive
     have pivotValid : pivotRow.val < sizes 1 := by omega
@@ -148,11 +102,7 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       ((searchTrace.readOnly_tape columnTape rfl).trans initializedColumn)
       ((searchTrace.readOnly_tape originalTape rfl).trans initializedMatrix)
       searchedHeaders searchedRegions
-      (by
-        intro name
-        obtain ⟨value, valueEq⟩ := searchedCanonical (.inr (.inl name)) rfl
-        exact ⟨value, valueEq⟩)
-    obtain ⟨foundTicks, foundFinal, foundCost, foundTrace, resultEq, nextEq, foundCanonical⟩ :=
+    obtain ⟨foundTicks, foundFinal, foundCost, foundTrace, resultEq, nextEq⟩ :=
       foundTraceData
     have flagEq : searched (searchWiring StandardPivotSearch.foundTape) =
         encoded EncodedDomain.booleans sizes true := by
@@ -160,20 +110,17 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       simp [candidateActive]
     have selected := select_found enumeration sizes searched foundFinal foundTicks flagEq foundTrace
     have complete := searchTrace.sequence (select enumeration) (selectEntry
-      (StandardGaussJordanClear.zeroBits enumeration).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim))
       (by intro symbols; rfl) selected
     have whole := initTrace.sequence
       (MultiTape.sequence (search enumeration) (select enumeration)
-        (selectEntry (StandardGaussJordanClear.zeroBits enumeration).length
+        (selectEntry
           ((FieldRow.scalarDomain enumeration).width Empty.elim)))
       (.inl (StandardPivotSearch.algorithmEntry
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :
         Sum (StandardPivotSearch.AlgorithmState
-          (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
           ((FieldRow.scalarDomain enumeration).width Empty.elim))
-          (SelectState (StandardGaussJordanClear.zeroBits enumeration).length
+          (SelectState
             ((FieldRow.scalarDomain enumeration).width Empty.elim)))
       (by intro symbols; rfl) complete
     have mathEq : (GaussJordan.columnStep matrix pivotRow.val
@@ -184,7 +131,7 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
     have nextValue : (GaussJordan.columnStep matrix pivotRow.val
         ⟨column.val, columnBound⟩).2 = pivotRow.val + 1 := by
       simp [GaussJordan.columnStep, pivotValid, foundEquation, candidateActive]
-    refine ⟨initTicks + searchTicks + foundTicks + 4, foundFinal, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨initTicks + searchTicks + foundTicks + 4, foundFinal, ?_, ?_, ?_, ?_⟩
     · simp only [map_add, map_ofNat]
       have foundNonnegative : 0 ≤ MvPolynomial.eval sizes foundBound := Nat.zero_le _
       omega
@@ -195,8 +142,6 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       apply congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes)
       apply Fin.ext
       exact nextValue.symm
-    · intro name writable
-      exact foundCanonical name writable
   · have unchanged : GaussJordan.columnStep matrix pivotRow.val
         ⟨column.val, columnBound⟩ = (matrix, pivotRow.val) := by
       by_cases pivotValid : pivotRow.val < sizes 1
@@ -208,23 +153,20 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       simp [candidateActive]
     have selected := select_missing enumeration sizes searched flagEq
     have complete := searchTrace.sequence (select enumeration) (selectEntry
-      (StandardGaussJordanClear.zeroBits enumeration).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim))
       (by intro symbols; rfl) selected
     have whole := initTrace.sequence
       (MultiTape.sequence (search enumeration) (select enumeration)
-        (selectEntry (StandardGaussJordanClear.zeroBits enumeration).length
+        (selectEntry
           ((FieldRow.scalarDomain enumeration).width Empty.elim)))
       (.inl (StandardPivotSearch.algorithmEntry
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :
         Sum (StandardPivotSearch.AlgorithmState
-          (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
           ((FieldRow.scalarDomain enumeration).width Empty.elim))
-          (SelectState (StandardGaussJordanClear.zeroBits enumeration).length
+          (SelectState
             ((FieldRow.scalarDomain enumeration).width Empty.elim)))
       (by intro symbols; rfl) complete
-    refine ⟨initTicks + searchTicks + 4, searched, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨initTicks + searchTicks + 4, searched, ?_, ?_, ?_, ?_⟩
     · simp only [map_add, map_ofNat]
       have foundNonnegative : 0 ≤ MvPolynomial.eval sizes foundBound := Nat.zero_le _
       omega
@@ -235,7 +177,6 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       apply congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes)
       apply Fin.ext
       exact (congrArg Prod.snd unchanged).symm
-    · exact searchedCanonical
 
 def sizeTapes : Fin 3 ↪ TapeName :=
   StandardGaussJordanPivot.sizeTapes.trans pivotWiring

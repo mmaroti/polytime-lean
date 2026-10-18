@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.StandardGaussJordanClearIntervalMath
 import Polytime2.StandardSizeReadContract
+import Polytime2.Initialization
 
 /-! # Shared caller workspace for complete pivot-column clearing
 
@@ -218,8 +219,8 @@ theorem readRows_runs (enumeration : Scalar ≃ Fin cardinality) :
   refine ⟨4 * MvPolynomial.X 0 + MvPolynomial.X 1 * (4 * MvPolynomial.X 0 + 8) + 11, ?_⟩
   intro sizes initial fits headers limitRegion scratchRegion
   let localSizes : Bool → ℕ := fun name => if name then sizes 0 else sizes 1
-  obtain ⟨scratch, scratchLength, final, trace, resultEq, scratchEq, outside, immutable⟩ :=
-    StandardSizeRead.Internal.runs_wired rowLimitWiring localSizes
+  obtain ⟨final, trace, resultEq, scratchEq, outside⟩ :=
+    Initialization.readSize_runs rowLimitWiring 1 0 sizes
       (fun name => (domains enumeration name).width sizes) readOnly initial
       (by intro name; fin_cases name <;>
         simp [domains, StandardGaussJordanClearInterval.domains, StandardGaussJordanClearStep.domains,
@@ -231,29 +232,9 @@ theorem readRows_runs (enumeration : Scalar ≃ Fin cardinality) :
           StandardGaussJordanClearTarget.sizeTape, StandardMatrixRows.sizeTape,
           StandardGaussJordanClearInterval.limitTape, StandardGaussJordanClearInterval.differenceTape])
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      (by intro name; cases name <;> exact headers _) limitRegion scratchRegion
-  let resultBits := StandardSizeRead.advanceBits (sizes 1) (List.replicate (sizes 0) false)
-  have resultLength : resultBits.length = sizes 0 := by simp [resultBits]
-  have resultValue : Binary.value resultBits = sizes 1 := by
-    simp [resultBits, StandardSizeRead.advanceBits_value, Nat.mod_eq_of_lt fits]
-  have resultEncoding := encoded_binaryNaturals (0 : Fin 3) sizes resultBits resultLength
-  have naturalEq : (⟨Binary.value resultBits, by
-      simpa only [resultLength] using Binary.value_lt_pow_length resultBits⟩ : Fin (2 ^ sizes 0)) =
-      ⟨sizes 1, fits⟩ := Fin.ext resultValue
-  rw [naturalEq] at resultEncoding
-  let scratchValue : Fin (2 ^ sizes 0) := ⟨Binary.value scratch, by
-    simpa only [show scratch.length = sizes 0 from scratchLength] using Binary.value_lt_pow_length scratch⟩
-  refine ⟨_, final, ?_, trace, resultEq.trans resultEncoding.symm,
-    ⟨scratchValue, scratchEq.trans (encoded_binaryNaturals 0 sizes scratch scratchLength).symm⟩, ?_⟩
-  · simp [localSizes]
-  · intro name notLimit notScratch
-    apply preserved_of_wiring rowLimitWiring StandardSizeRead.argumentReadOnly initial final outside immutable
-    intro localName equal
-    cases localName with
-    | inl parameter => rfl
-    | inr name => cases name with
-      | false => exact False.elim (notLimit equal.symm)
-      | true => exact False.elim (notScratch equal.symm)
+      (by intro name; cases name <;> exact headers _) fits limitRegion scratchRegion
+  refine ⟨_, final, ?_, trace, resultEq, scratchEq, outside⟩
+  simp [localSizes]
 
 abbrev HandoverState := Sum SkipState StandardSizeRead.State
 
@@ -306,6 +287,15 @@ theorem handover_runs (enumeration : Scalar ≃ Fin cardinality) :
   · simpa only [handover, handoverEntry, handoverExit] using complete
   · intro name notNext notTarget notLimit notDifference
     exact (readOutside name notLimit notDifference).trans (skipOutside name notNext notTarget)
+
+def rowsWiring : StandardMatrixRows.TapeName ↪ TapeName :=
+  ⟨(fun name => .inl (.inl (.inl (.inl name)))), by
+    intro first second equal
+    cases equal
+    rfl⟩
+
+@[simp] theorem rowsWiring_apply (name : StandardMatrixRows.TapeName) :
+    rowsWiring name = .inl (.inl (.inl (.inl name))) := rfl
 
 end Polytime2.StandardGaussJordanClear
 

@@ -173,18 +173,9 @@ theorem wiredRuns {ScratchName State TargetTape : Type}
   obtain ⟨ticks, localFinal, cost, trace, correct⟩ := execute sizes arguments valid
     (fun name => initial (wiring name)) headers inputs
     (by intro name; rw [← widths]; exact regions name)
-  have lifted := trace.wire wiring width readOnly widths readonly initial (fun _ => 0)
-  have start : install wiring (fun name => initial (wiring name)) initial = initial :=
-    install_self wiring initial
-  have positions : install wiring (fun _ => (0 : ℤ)) (fun _ => (0 : ℤ)) = fun _ => 0 :=
-    install_self wiring (fun _ => (0 : ℤ))
-  rw [start, positions] at lifted
-  refine ⟨ticks, install wiring localFinal initial, cost, lifted, ?_, ?_, ?_⟩
-  · exact (install_at wiring localFinal initial _).trans correct
-  · intro name outside
-    exact install_outside wiring localFinal initial name outside
-  · intro name immutable
-    exact (install_at wiring localFinal initial _).trans (trace.readOnly_tape name immutable)
+  obtain ⟨final, lifted, located, outside, immutable⟩ :=
+    trace.wire_restoring wiring width readOnly widths readonly initial (fun _ => rfl)
+  exact ⟨ticks, final, cost, lifted, (located _).trans correct, outside, immutable⟩
 
 end Computation.Realizable.Internal
 

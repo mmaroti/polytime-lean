@@ -25,34 +25,30 @@ open MultiTape CallingConvention StandardMatrixRows
 
 variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
 
-abbrev AlgorithmState (initWidth searchWidth scalarWidth : ℕ) :=
-  Sum (InitializationState initWidth searchWidth) (LoopState initWidth searchWidth scalarWidth)
+abbrev AlgorithmState (scalarWidth : ℕ) :=
+  Sum InitializationState (LoopState scalarWidth)
 
-noncomputable instance algorithmStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
-    Fintype (AlgorithmState initWidth searchWidth scalarWidth) := by
-  letI : Fintype (InitializationState initWidth searchWidth) := inferInstance
-  letI : Fintype (LoopState initWidth searchWidth scalarWidth) := inferInstance
+noncomputable instance algorithmStatesFinite (scalarWidth : ℕ) :
+    Fintype (AlgorithmState scalarWidth) := by
+  letI : Fintype (LoopState scalarWidth) := inferInstance
   dsimp only [AlgorithmState]
   infer_instance
 
 noncomputable def algorithm (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (AlgorithmState (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    Machine Alphabet (AlgorithmState
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
-  MultiTape.sequence (initialization enumeration) (loop enumeration)
-    (loopEntry (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+  MultiTape.sequence initialization (loop enumeration)
+    (loopEntry
       ((FieldRow.scalarDomain enumeration).width Empty.elim))
 
-def entry (initWidth searchWidth scalarWidth : ℕ) : AlgorithmState initWidth searchWidth scalarWidth :=
-  .inl (initializationEntry initWidth searchWidth)
+def entry (scalarWidth : ℕ) : AlgorithmState scalarWidth :=
+  .inl (initializationEntry)
 
-def exit (initWidth searchWidth scalarWidth : ℕ) : AlgorithmState initWidth searchWidth scalarWidth :=
-  .inr (loopExit initWidth searchWidth scalarWidth)
+def exit (scalarWidth : ℕ) : AlgorithmState scalarWidth :=
+  .inr (loopExit scalarWidth)
 
 @[simp] theorem halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    algorithm enumeration (exit (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    algorithm enumeration (exit
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := rfl
 
 theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
@@ -64,11 +60,9 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly (algorithm enumeration) ticks
-          (entry (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (entry
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) initial
-          (exit (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (exit
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final ∧
         final workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (GaussJordan.eliminate (Scalar := Scalar) matrix) := by
@@ -76,21 +70,20 @@ theorem runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
   obtain ⟨loopBound, executeLoop⟩ := mathematical_loop_runs enumeration
   refine ⟨initBound + loopBound + 1, ?_⟩
   intro sizes initial matrix rowsFit columnsFit capacity inputEq headers regions
-  obtain ⟨initTicks, prepared, initCost, initTrace, matrixEq, pivotEq, columnEq, limitEq, initCanonical⟩ :=
+  obtain ⟨initTicks, prepared, initCost, initTrace, matrixEq, pivotEq, columnEq, limitEq⟩ :=
     executeInit sizes initial matrix columnsFit inputEq headers regions
   let zero : Fin (2 ^ sizes 0) := ⟨0, by positivity⟩
   obtain ⟨loopTicks, final, finalPivot, loopCost, loopTrace, resultEq, finalPivotEq,
-      finalPivotValue, finalColumnEq, _finalCanonical⟩ :=
+      finalPivotValue, finalColumnEq⟩ :=
     executeLoop sizes prepared zero matrix (by simp [zero]) rowsFit columnsFit capacity
       pivotEq columnEq matrixEq limitEq
       (fun parameter => (initTrace.readOnly_tape (sizeTape parameter)
         (by fin_cases parameter <;> decide)).trans (headers parameter))
-      (fun name => initTrace.region name (regions name)) initCanonical
+      (fun name => initTrace.region name (regions name))
   have complete := initTrace.sequence (loop enumeration)
-    (loopEntry (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    (loopEntry
       ((FieldRow.scalarDomain enumeration).width Empty.elim))
-    (initialization_halt enumeration) loopTrace
+    initialization_halt loopTrace
   refine ⟨initTicks + loopTicks + 1, final, ?_, ?_, ?_⟩
   · simp only [map_add, map_one]
     omega
@@ -105,11 +98,9 @@ def outputTapes : Unit ↪ TapeName := MultiTape.oneTape workingTape
 All output and private tapes may initially contain arbitrary symbols. -/
 theorem contract [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
     CallingConvention.Realizes (domains enumeration) readOnly sizeTapes outputTapes (algorithm enumeration)
-      (entry (StandardGaussJordanClear.zeroBits enumeration).length
-        (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+      (entry
         ((FieldRow.scalarDomain enumeration).width Empty.elim))
-      (exit (StandardGaussJordanClear.zeroBits enumeration).length
-        (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+      (exit
         ((FieldRow.scalarDomain enumeration).width Empty.elim))
       (fun sizes _ => sizes 1 < 2 ^ sizes 0 ∧ sizes 2 < 2 ^ sizes 0 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
       (fun sizes input output =>

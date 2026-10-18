@@ -55,28 +55,22 @@ theorem mathematical_loop_runs (enumeration : Scalar ≃ Fin cardinality) :
         (⟨sizes 2, columnsFit⟩ : Fin (2 ^ sizes 0)) →
       (∀ parameter, initial (sizeTape parameter) = unary (sizes parameter)) →
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
-      (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-        initial name = encoded (domains enumeration name) sizes value) →
       ∃ ticks final, ∃ finalPivot : Fin (2 ^ sizes 0), ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly (loop enumeration) ticks
-          (loopEntry (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (loopEntry
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) initial
-          (loopExit (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (loopExit
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final ∧
         final workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (GaussJordan.eliminateColumns matrix pivot.val (List.finRange (sizes 2))).1 ∧
         final pivotTape = encoded (EncodedDomain.binaryNaturals 0) sizes finalPivot ∧
         finalPivot.val = (GaussJordan.eliminateColumns matrix pivot.val (List.finRange (sizes 2))).2 ∧
         final columnTape = encoded (EncodedDomain.binaryNaturals 0) sizes
-          (⟨sizes 2, columnsFit⟩ : Fin (2 ^ sizes 0)) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
+          (⟨sizes 2, columnsFit⟩ : Fin (2 ^ sizes 0)) := by
   obtain ⟨bound, execute⟩ := loop_runs enumeration
   refine ⟨bound, ?_⟩
   intro sizes initial pivot matrix pivotWithin rowsFit columnsFit capacity pivotEq
-    columnEq matrixEq limitEq headers regions canonical
+    columnEq matrixEq limitEq headers regions
   let states (count : ℕ) :=
     GaussJordan.eliminateColumns matrix pivot.val ((List.finRange (sizes 2)).take count)
   have stateBound (count : ℕ) : (states count).2 ≤ sizes 1 :=
@@ -100,15 +94,15 @@ theorem mathematical_loop_runs (enumeration : Scalar ≃ Fin cardinality) :
   let start : Fin (2 ^ sizes 0) := ⟨0, by positivity⟩
   have firstPivot : pivots start.val = pivot := Fin.ext rfl
   have firstMatrix : matrices start.val = matrix := rfl
-  obtain ⟨ticks, final, cost, trace, resultEq, finalRowEq, finalColumnEq, finalCanonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, resultEq, finalRowEq, finalColumnEq⟩ :=
     execute sizes initial start (by simp [start]) rowsFit columnsFit matrices pivots stateBound stateStep
       capacity
       (pivotEq.trans (congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes) firstPivot.symm))
       columnEq (matrixEq.trans (congrArg (encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes)
-        firstMatrix.symm)) limitEq headers regions canonical
+        firstMatrix.symm)) limitEq headers regions
   have fullPrefix : (List.finRange (sizes 2)).take (sizes 2) = List.finRange (sizes 2) := by simp
   refine ⟨ticks, final, pivots (sizes 2), cost, trace, ?_, finalRowEq, ?_,
-    finalColumnEq, finalCanonical⟩
+    finalColumnEq⟩
   · simpa only [matrices, states, fullPrefix] using resultEq
   · simp only [pivots, states, fullPrefix]
 

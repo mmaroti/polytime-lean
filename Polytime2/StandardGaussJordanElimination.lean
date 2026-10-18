@@ -92,20 +92,18 @@ def guardWiring : Sum Unit (Fin 4) ↪ TapeName :=
 
 abbrev IncrementState := Sum (StandardBinaryScan.State Bool) Unit
 abbrev GuardState := Sum StandardBinaryArithmetic.State Unit
-abbrev BodyState (initWidth searchWidth scalarWidth : ℕ) :=
-  Sum (StandardGaussJordanColumn.AlgorithmState initWidth searchWidth scalarWidth)
+abbrev BodyState (scalarWidth : ℕ) :=
+  Sum (StandardGaussJordanColumn.AlgorithmState scalarWidth)
     (Sum (Fin 3) (Sum (Fin 3) (Sum IncrementState (Fin 3))))
 
-noncomputable instance bodyStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
-    Fintype (BodyState initWidth searchWidth scalarWidth) := by
-  letI : Fintype (StandardGaussJordanColumn.AlgorithmState initWidth searchWidth scalarWidth) := inferInstance
+noncomputable instance bodyStatesFinite (scalarWidth : ℕ) :
+    Fintype (BodyState scalarWidth) := by
+  letI : Fintype (StandardGaussJordanColumn.AlgorithmState scalarWidth) := inferInstance
   dsimp only [BodyState, IncrementState]
   infer_instance
 
 noncomputable def column (enumeration : Scalar ≃ Fin cardinality) :
     Machine Alphabet (StandardGaussJordanColumn.AlgorithmState
-      (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.wire columnWiring (StandardGaussJordanColumn.algorithm enumeration)
 
@@ -122,8 +120,7 @@ noncomputable def commitColumn : Machine Alphabet (Fin 3) :=
   StandardTapeCommands.copy nextColumnTape columnTape (by decide)
 
 noncomputable def body (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (BodyState (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    Machine Alphabet (BodyState
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.sequence (column enumeration)
     (MultiTape.sequence commitMatrix
@@ -131,10 +128,10 @@ noncomputable def body (enumeration : Scalar ≃ Fin cardinality) :
         (MultiTape.sequence increment commitColumn 0) (.inl (.inl (.inl true))))
       (.inl 0)) (.inl 0)
 
-def bodyEntry (initWidth searchWidth scalarWidth : ℕ) : BodyState initWidth searchWidth scalarWidth :=
-  .inl (StandardGaussJordanColumn.algorithmEntry initWidth searchWidth scalarWidth)
+def bodyEntry (scalarWidth : ℕ) : BodyState scalarWidth :=
+  .inl (StandardGaussJordanColumn.algorithmEntry scalarWidth)
 
-def bodyExit (initWidth searchWidth scalarWidth : ℕ) : BodyState initWidth searchWidth scalarWidth :=
+def bodyExit (scalarWidth : ℕ) : BodyState scalarWidth :=
   .inr (.inr (.inr (.inr 2)))
 
 noncomputable def guard : Machine Alphabet GuardState :=
@@ -142,46 +139,40 @@ noncomputable def guard : Machine Alphabet GuardState :=
 
 def continues (symbols : Symbols Alphabet) : Bool := decide (symbols guardTape = Binary.data true)
 
-abbrev LoopState (initWidth searchWidth scalarWidth : ℕ) :=
-  Sum (Sum GuardState (BodyState initWidth searchWidth scalarWidth)) Unit
+abbrev LoopState (scalarWidth : ℕ) :=
+  Sum (Sum GuardState (BodyState scalarWidth)) Unit
 
-noncomputable instance loopStatesFinite (initWidth searchWidth scalarWidth : ℕ) :
-    Fintype (LoopState initWidth searchWidth scalarWidth) := by
-  letI : Fintype (BodyState initWidth searchWidth scalarWidth) := inferInstance
+noncomputable instance loopStatesFinite (scalarWidth : ℕ) :
+    Fintype (LoopState scalarWidth) := by
+  letI : Fintype (BodyState scalarWidth) := inferInstance
   dsimp only [LoopState, GuardState]
   infer_instance
 
 noncomputable def loop (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (LoopState (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    Machine Alphabet (LoopState
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.withExit (MultiTape.whileMachine guard (body enumeration) BinarySubtraction.entry
-    (bodyEntry (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    (bodyEntry
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) continues)
 
-def loopEntry (initWidth searchWidth scalarWidth : ℕ) : LoopState initWidth searchWidth scalarWidth :=
+def loopEntry (scalarWidth : ℕ) : LoopState scalarWidth :=
   .inl (.inl BinarySubtraction.entry)
 
-def loopExit (initWidth searchWidth scalarWidth : ℕ) : LoopState initWidth searchWidth scalarWidth := .inr ()
+def loopExit (scalarWidth : ℕ) : LoopState scalarWidth := .inr ()
 
 @[simp] theorem column_halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
     column enumeration (StandardGaussJordanColumn.algorithmExit
-      (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := rfl
 
 @[simp] theorem guard_halt (symbols : Symbols Alphabet) :
     guard BinarySubtraction.exit symbols = none := rfl
 
 @[simp] theorem body_halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    body enumeration (bodyExit (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    body enumeration (bodyExit
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := rfl
 
 @[simp] theorem loop_halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    loop enumeration (loopExit (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+    loop enumeration (loopExit
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := rfl
 
 /-- One column call temporarily preserves its arguments even though the outer
@@ -199,20 +190,15 @@ theorem column_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ∃ nextRow : Fin (2 ^ sizes 0), ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly (column enumeration) ticks
-          (StandardGaussJordanColumn.algorithmEntry (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (StandardGaussJordanColumn.algorithmEntry
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) initial
-          (StandardGaussJordanColumn.algorithmExit (StandardGaussJordanClear.zeroBits enumeration).length
-            (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
+          (StandardGaussJordanColumn.algorithmExit
             ((FieldRow.scalarDomain enumeration).width Empty.elim)) (fun _ => 0) final ∧
         final resultTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (GaussJordan.columnStep matrix pivotRow.val ⟨columnIndex.val, columnValid⟩).1 ∧
         nextRow.val = (GaussJordan.columnStep matrix pivotRow.val ⟨columnIndex.val, columnValid⟩).2 ∧
         nextRow.val ≤ sizes 1 ∧
         final nextRowTape = encoded (EncodedDomain.binaryNaturals 0) sizes nextRow ∧
-        (∀ name, StandardGaussJordanColumn.readOnly name = false →
-          ∃ value : (domains enumeration (.inl name)).Carrier sizes,
-            final (.inl name) = encoded (domains enumeration (.inl name)) sizes value) ∧
         (∀ name, name ∉ Set.range columnWiring → final name = initial name) ∧
         (∀ name, StandardGaussJordanColumn.readOnly name = true →
           final (columnWiring name) = initial (columnWiring name)) := by
@@ -220,10 +206,11 @@ theorem column_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
   refine ⟨bound, ?_⟩
   intro sizes initial pivotRow columnIndex matrix pivotBound columnValid rowsFit columnsFit capacity
     pivotEq columnEq matrixEq headers regions
-  obtain ⟨ticks, localFinal, cost, localTrace, resultEq, nextEq, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, resultEq, nextEq⟩ :=
     execute sizes (fun name => initial (.inl name)) pivotRow columnIndex matrix pivotBound columnValid
       rowsFit columnsFit capacity pivotEq columnEq matrixEq headers (fun name => regions (.inl name))
-  have trace := localTrace.wire columnWiring
+  obtain ⟨final, trace, located, outside, immutable⟩ :=
+    localTrace.wire_restoring columnWiring
     (fun name => (domains enumeration name).width sizes) readOnly (fun _ => rfl)
     (by
       intro name premise
@@ -233,28 +220,18 @@ theorem column_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
         else StandardGaussJordanColumn.readOnly name) = true at premise
       split_ifs at premise
       exact premise)
-    initial (fun _ => 0)
-  have start : install columnWiring (fun name => initial (.inl name)) initial = initial :=
-    install_self columnWiring initial
-  have positions : install columnWiring
-      (fun _ : StandardGaussJordanColumn.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self columnWiring _
-  rw [start, positions] at trace
+    initial (fun _ => rfl)
   have nextBound := (GaussJordan.columnStep_row_bound matrix pivotRow.val
     ⟨columnIndex.val, columnValid⟩ pivotBound).2
   let nextRow : Fin (2 ^ sizes 0) :=
     ⟨(GaussJordan.columnStep matrix pivotRow.val ⟨columnIndex.val, columnValid⟩).2,
       lt_of_le_of_lt nextBound rowsFit⟩
-  refine ⟨ticks, install columnWiring localFinal initial, nextRow, cost, trace,
-    (install_at columnWiring localFinal initial _).trans resultEq, rfl, nextBound,
-    (install_at columnWiring localFinal initial _).trans nextEq, ?_, ?_, ?_⟩
-  · intro name writable
-    obtain ⟨value, valueEq⟩ := canonical name writable
-    exact ⟨value, (install_at columnWiring localFinal initial name).trans valueEq⟩
-  · intro name outside
-    exact install_outside columnWiring localFinal initial name outside
-  · intro name immutable
-    exact (install_at columnWiring localFinal initial name).trans
-      (localTrace.readOnly_tape name immutable)
+  refine ⟨ticks, final, nextRow, cost, trace,
+    (located _).trans resultEq, rfl, nextBound,
+    (located _).trans nextEq, ?_, ?_⟩
+  · intro name absent
+    exact outside name absent
+  · intro name fixed
+    exact immutable name fixed
 
 end Polytime2.StandardGaussJordanElimination

@@ -160,7 +160,7 @@ theorem increment_runs (scalar : EncodedDomain.{0, 0} Empty) :
 
 /-- One column is processed and committed before the fixed-capacity counter
 advances. The caller supplies the private working values; every scratch region
-may otherwise start arbitrary, and every writable tape is valid on return. -/
+may otherwise start arbitrary; only the live matrices and counter are encoded. -/
 theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment →
       scalar.Carrier assignment → scalar.Carrier assignment × scalar.Carrier assignment) :
@@ -192,9 +192,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
         final (.inl (.inr 4)) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes resultArray ∧
         final (.inl (.inr 5)) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes resultArray ∧
         final (.inl (.inr 2)) = encoded (EncodedDomain.binaryNaturals 0) sizes
-          (StandardBinaryIncrement.next 0 sizes column) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
-          final name = encoded (domains scalar name) sizes value) := by
+          (StandardBinaryIncrement.next 0 sizes column)  := by
   classical
   obtain ⟨entryBound, executeEntry⟩ := StandardMatrixRowEntry.runs writeSource scalar operation
   obtain ⟨incrementBound, executeIncrement⟩ := increment_runs scalar
@@ -204,7 +202,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     columnsFit sourceValid targetValid columnValid capacity sourceEq targetEq columnEq coefficientEq arrayEq headers regions
     sourceIndex targetIndex result resultArray
   let width : TapeName → ℕ := fun name => (domains scalar name).width sizes
-  obtain ⟨entryTicks, localFinal, entryCost, localTrace, localResult, localCanonical⟩ :=
+  obtain ⟨entryTicks, localFinal, entryCost, localTrace, localResult⟩ :=
     executeEntry sizes (fun name => initial (.inl name)) sourceRow targetRow column array coefficient
       sourceWithin targetWithin columnsFit sourceValid targetValid columnValid capacity
       sourceEq targetEq columnEq coefficientEq arrayEq headers (fun name => regions (.inl name))
@@ -280,7 +278,7 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
     rw [Function.update_of_ne (by simpa using notColumn)]
     exact incrementOutside (.inl name) (by simp)
   refine ⟨entryTicks + ((2 * (scalar.constant.arrayOfLength StandardMatrixEntry.length).width sizes + 2) +
-    (incrementTicks + (2 * sizes 0 + 2) + 1) + 1) + 1, final, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    (incrementTicks + (2 * sizes 0 + 2) + 1) + 1) + 1, final, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
     omega
   · simpa only [machine, entry, exit] using complete
@@ -288,29 +286,4 @@ theorem runs (writeSource : Bool) (scalar : EncodedDomain.{0, 0} Empty)
   · rw [finalPreserved (.inr 5) (by decide)]
     exact (Function.update_of_ne (by decide : (.inl (.inr 5) : TapeName) ≠ .inl (.inr 4)) _ _).trans matrixEq
   · exact Function.update_self _ _ _
-  · intro name writable
-    cases name with
-    | inr name =>
-      cases name
-      refine ⟨nextColumn, ?_⟩
-      exact (Function.update_of_ne (by decide : (.inr () : TapeName) ≠ .inl (.inr 2)) _ _).trans nextEq
-    | inl name =>
-      cases name with
-      | inl parameter => contradiction
-      | inr name =>
-        by_cases isColumn : name = 2
-        · subst name
-          exact ⟨nextColumn, Function.update_self _ _ _⟩
-        · by_cases isMatrix : name = 4
-          · subst name
-            exact ⟨resultArray, (finalPreserved (.inr 4) (by decide)).trans (Function.update_self _ _ _)⟩
-          · have localWritable : StandardMatrixRowEntry.readOnly (.inr name) = false := by
-              fin_cases name <;> first | rfl | contradiction
-            obtain ⟨value, canonical⟩ := localCanonical (.inr name) localWritable
-            refine ⟨value, ?_⟩
-            rw [finalPreserved (.inr name) (by simpa using isColumn)]
-            change Function.update afterEntry _ _ (.inl (.inr name)) = _
-            rw [Function.update_of_ne (by simpa using isMatrix)]
-            exact (afterEntryAt (.inr name)).trans canonical
-
 end Polytime2.StandardMatrixRowStep

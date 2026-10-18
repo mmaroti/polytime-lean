@@ -15,40 +15,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardGaussJordanClearInit
+import Polytime2.StandardGaussJordanClearTraversal
+import Polytime2.Initialization
 
-/-! # Complete arbitrary-content initialization for column clearing -/
+/-! # Initialization of live values for pivot-column clearing -/
 
 namespace Polytime2.StandardGaussJordanClear
 
 open MultiTape CallingConvention
 
-variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
+variable {Scalar : Type} {cardinality : ℕ}
 
-abbrev InitializationState (width : ℕ) := Sum (Sum (Copy.State width) (Fin 3))
-  (Sum (Pipeline.State StandardMatrixRows.InitStageState) (Pipeline.State FinishStageState))
+def initCommand (stage : Fin 3) : Initialization.Command TapeName :=
+  if stage = 0 then .copy originalTape workingTape (by decide)
+  else if stage = 1 then .clear (sizeTape 0) (dataTape 1) (by decide)
+  else .copy (dataTape 0) limitTape (by decide)
 
-instance initializationStateFinite (width : ℕ) : Fintype (InitializationState width) := by
-  letI : Fintype (Pipeline.State StandardMatrixRows.InitStageState) := inferInstance
-  letI : Fintype (Pipeline.State FinishStageState) := inferInstance
-  dsimp only [InitializationState]
-  infer_instance
+abbrev InitializationState := Pipeline.State (fun stage => (initCommand stage).State)
 
-noncomputable def initialization (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (InitializationState (zeroBits enumeration).length) :=
-  MultiTape.sequence (seed enumeration)
-    (MultiTape.sequence rowWorkspace finishInitialization (Pipeline.position finishEntry 0))
-    (.inl (Pipeline.position StandardMatrixRows.initEntry 0))
+noncomputable def initialization : Machine Alphabet InitializationState := Initialization.machine initCommand
 
-def initializationEntry (width : ℕ) : InitializationState width := .inl (seedEntry width)
-def initializationExit (width : ℕ) : InitializationState width := .inr (.inr none)
+def initializationEntry : InitializationState := Pipeline.position (fun stage => (initCommand stage).entry) 0
+def initializationExit : InitializationState := none
 
-@[simp] theorem initialization_halt (enumeration : Scalar ≃ Fin cardinality)
-    (symbols : Symbols Alphabet) :
-    initialization enumeration (initializationExit (zeroBits enumeration).length) symbols = none := rfl
+@[simp] theorem initialization_halt (symbols : Symbols Alphabet) :
+    initialization initializationExit symbols = none := rfl
 
-/-- Every writable tape becomes a valid encoded value before either interval
-is called. No externally prepared output or scratch is required. -/
+/-- Only the working matrix, target counter, and interval limit are initialized.
+All other private contents may be arbitrary, including for empty intervals. -/
 theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
       (pivot : Fin (2 ^ sizes 0))
@@ -60,93 +54,63 @@ theorem initialization_runs (enumeration : Scalar ≃ Fin cardinality) :
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly
-          (initialization enumeration) ticks (initializationEntry (zeroBits enumeration).length)
-          (fun _ => 0) initial (initializationExit (zeroBits enumeration).length) (fun _ => 0) final ∧
+          initialization ticks initializationEntry (fun _ => 0) initial initializationExit (fun _ => 0) final ∧
         final workingTape = encoded (domains enumeration workingTape) sizes matrix ∧
         final (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes
           (⟨0, by positivity⟩ : Fin (2 ^ sizes 0)) ∧
-        final limitTape = encoded (EncodedDomain.binaryNaturals 0) sizes pivot ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
-  obtain ⟨seedBound, executeSeed⟩ := seed_runs enumeration
-  let matrixBound := ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
-  refine ⟨seedBound + 19 * (2 * matrixBound +
-    MvPolynomial.C (2 * (FieldRow.scalarDomain enumeration).width Empty.elim) + 2 * MvPolynomial.X 0 + 3) +
-    5 * (2 * MvPolynomial.X 0 + 3) + 2, ?_⟩
+        final limitTape = encoded (EncodedDomain.binaryNaturals 0) sizes pivot := by
+  let domain := (FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length
+  refine ⟨3 * (2 * domain.widthPolynomial + 2 * MvPolynomial.X 0 + 3), ?_⟩
   intro sizes initial pivot matrix pivotEq matrixEq headers regions
-  obtain ⟨seedTicks, seeded, seedCost, seedTrace, workEq, zeroEq, seedOutside⟩ :=
-    executeSeed sizes initial matrix matrixEq regions
-  have seededRegions : ∀ name, Region ((domains enumeration name).width sizes) 0 (seeded name) :=
-    fun name => seedTrace.region name (regions name)
-  obtain ⟨rowTicks, prepared, rowCost, rowTrace, preparedMatrix, preparedZero, rowCanonical, rowOutside⟩ :=
-    rowWorkspace_runs enumeration sizes matrix seeded workEq zeroEq
-      ((seedTrace.readOnly_tape (sizeTape 0) rfl).trans (headers 0)) seededRegions
-  obtain ⟨finishTicks, final, finishCost, finishTrace, finishValues, finishPreserved⟩ :=
-    finishInitialization_runs enumeration sizes pivot prepared
-      ((rowTrace.readOnly_tape (dataTape 0) rfl).trans
-        ((seedTrace.readOnly_tape (dataTape 0) rfl).trans pivotEq))
-      ((rowTrace.readOnly_tape (sizeTape 0) rfl).trans
-        ((seedTrace.readOnly_tape (sizeTape 0) rfl).trans (headers 0)))
-      (fun name => rowTrace.region name (seededRegions name))
-  have finalMatrix : final workingTape = encoded (domains enumeration workingTape) sizes matrix :=
-    (finishPreserved workingTape (by decide)).trans preparedMatrix
-  have finalZero : final (dataTape 3) = encoded (FieldRow.scalarDomain enumeration) Empty.elim (0 : Scalar) :=
-    (finishPreserved (dataTape 3) (by decide)).trans preparedZero
-  have tail := rowTrace.sequence finishInitialization (Pipeline.position finishEntry 0)
-    rowWorkspace_halt finishTrace
-  have complete := seedTrace.sequence _ (Sum.inl (Pipeline.position StandardMatrixRows.initEntry 0))
-    (seed_halt enumeration) tail
-  refine ⟨seedTicks + (rowTicks + finishTicks + 1) + 1, final, ?_, ?_, finalMatrix,
-    finishValues 0, finishValues 4, ?_⟩
-  · simp only [EncodedDomain.width] at rowCost
-    simp only [matrixBound, EncodedDomain.width, map_add, map_mul, map_ofNat, MvPolynomial.eval_C, MvPolynomial.eval_X]
+  let words (name : TapeName) : List Bool :=
+    if name = originalTape then List.ofFn (fun index : Fin (domain.width sizes) =>
+      (domain.encode sizes matrix).getLsbD index.val)
+    else if name = dataTape 0 then EncodedDomain.ArrayEncoding.bits
+      ((EncodedDomain.binaryNaturals (0 : Fin 3)).encode sizes pivot)
+    else List.replicate (sizes 0) true
+  have matrixWidth : (domains enumeration originalTape).width sizes = domain.width sizes := rfl
+  have workWidth : (domains enumeration workingTape).width sizes = domain.width sizes := rfl
+  have sourceWidth : (domains enumeration (dataTape 0)).width sizes = sizes 0 := EncodedDomain.binaryNaturals_width 0 sizes
+  have targetWidth : (domains enumeration (dataTape 1)).width sizes = sizes 0 := EncodedDomain.binaryNaturals_width 0 sizes
+  have limitWidth : (domains enumeration limitTape).width sizes = sizes 0 := EncodedDomain.binaryNaturals_width 0 sizes
+  have headerWidth : (domains enumeration (sizeTape 0)).width sizes = sizes 0 := by
+    change (EncodedDomain.unary.{0, 0} (0 : Fin 3)).width sizes = sizes 0
+    simp [EncodedDomain.unary, EncodedDomain.ofCodec]
+  have headerMatrix : sizeTape 0 ≠ originalTape := by decide
+  have headerPivot : sizeTape 0 ≠ dataTape 0 := by decide
+  have pivotMatrix : dataTape 0 ≠ originalTape := by decide
+  obtain ⟨ticks, final, cost, trace, outputs⟩ := Initialization.runs initCommand words
+    (fun name => (domains enumeration name).width sizes) readOnly
+    (2 * domain.width sizes + 2 * sizes 0 + 2)
+    (by intro first second equal; fin_cases first <;> fin_cases second <;>
+      first | rfl | exact absurd equal (by decide))
+    (by intro stage; fin_cases stage <;> decide)
+    (by intro stage name source; fin_cases stage <;>
+      norm_num [initCommand, Initialization.Command.source] at source <;> subst name <;> rfl)
+    (by
+      intro stage name source
+      fin_cases stage <;> norm_num [initCommand, Initialization.Command.source] at source <;> subst name
+      all_goals simp [words, headerMatrix, headerPivot, pivotMatrix, EncodedDomain.ArrayEncoding.bits, matrixWidth, sourceWidth, headerWidth])
+    (by intro stage; fin_cases stage <;> norm_num [initCommand, Initialization.Command.target,
+      Initialization.Command.word, words, headerMatrix, headerPivot, pivotMatrix, EncodedDomain.ArrayEncoding.bits, workWidth, targetWidth, limitWidth])
+    (by intro stage; fin_cases stage <;> simp [initCommand, Initialization.Command.cost,
+      Initialization.Command.word, words, headerMatrix, headerPivot, pivotMatrix, EncodedDomain.ArrayEncoding.bits] <;> omega)
+    initial
+    (by
+      intro stage name source
+      fin_cases stage <;> norm_num [initCommand, Initialization.Command.source] at source <;> subst name
+      all_goals first | exact matrixEq | exact headers 0 | simpa only [words, ite_eq_right pivotMatrix, ite_eq_left rfl, ite_true, encoded, tape, buffer] using pivotEq)
+    regions
+  refine ⟨ticks, final, ?_, trace, outputs 0, ?_, ?_⟩
+  · simp only [map_mul, map_add, map_ofNat, MvPolynomial.eval_X]
+    simp only [EncodedDomain.width] at cost
     omega
-  · simpa only [initialization, initializationEntry, initializationExit] using complete
-  · intro name writable
-    by_cases isTarget : name = dataTape 1
-    · subst name
-      exact ⟨⟨0, by positivity⟩, finishValues 0⟩
-    · by_cases isNext : name = nextTape
-      · subst name
-        exact ⟨⟨0, by positivity⟩, finishValues 1⟩
-      · by_cases isDifference : name = differenceTape
-        · subst name
-          exact ⟨⟨0, by positivity⟩, finishValues 2⟩
-        · by_cases isGuard : name = guardTape
-          · subst name
-            exact ⟨false, finishValues 3⟩
-          · by_cases isLimit : name = limitTape
-            · subst name
-              exact ⟨pivot, finishValues 4⟩
-            · by_cases isMatrix : name = workingTape
-              · subst name
-                exact ⟨matrix, finalMatrix⟩
-              · by_cases isScalar : name = dataTape 3
-                · subst name
-                  exact ⟨(0 : Scalar), finalZero.trans
-                    (encoded_constant (FieldRow.scalarDomain enumeration) sizes _).symm⟩
-                · have preserved : final name = prepared name := finishPreserved name (by
-                    simp only [finishReadOnly, isTarget, isNext, isDifference, isGuard, isLimit,
-                      or_self, ↓reduceIte])
-                  cases name with
-                  | inr extra => contradiction
-                  | inl name => cases name with
-                    | inr slot =>
-                      fin_cases slot <;> first
-                        | exact False.elim (isLimit rfl)
-                        | exact False.elim (isDifference rfl)
-                        | exact False.elim (isGuard rfl)
-                    | inl name => cases name with
-                      | inr extra => exact False.elim (isNext rfl)
-                      | inl name => cases name with
-                        | inr extra => contradiction
-                        | inl name =>
-                          have localWritable : StandardMatrixRows.readOnly name = false := by
-                            fin_cases name <;> first
-                              | rfl
-                              | contradiction
-                          obtain ⟨value, encodedValue⟩ := rowCanonical name localWritable
-                          exact ⟨value, preserved.trans encodedValue⟩
+  · have zeroWord : (initCommand 1).word words = List.replicate (sizes 0) false := by
+      simp [initCommand, Initialization.Command.word, words, headerMatrix, headerPivot]
+    have counterResult := outputs 1
+    rw [zeroWord] at counterResult
+    exact counterResult.trans (by simpa only [Binary.value_replicate_false] using
+      (encoded_binaryNaturals (0 : Fin 3) sizes (List.replicate (sizes 0) false) (by simp)).symm)
+  · exact outputs 2
 
 end Polytime2.StandardGaussJordanClear
-

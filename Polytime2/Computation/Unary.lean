@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Realizable
+import Polytime2.Computation.Layout
 import Polytime2.StandardBinaryScan
 
 /-! # Packaging existing unary routines without exposing their tape names -/
@@ -27,6 +27,12 @@ open MultiTape CallingConvention
 -- carrierLevel: mathematical values represented by the existing unary routine.
 universe carrierLevel
 variable {Parameter : Type} [Fintype Parameter]
+
+private def unaryPlacement : PublicTape Parameter Unit ↪ Parameter ⊕ Bool :=
+  (Function.Embedding.refl Parameter).sumMap
+    ⟨(fun role => match role with | .inl _ => false | .inr _ => true), by
+      intro first second equal
+      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 /-- The existing size/input/output convention has no private scratch. -/
 theorem ofUnaryRealizes (computation : Computation.{carrierLevel} Parameter Unit)
@@ -40,60 +46,20 @@ theorem ofUnaryRealizes (computation : Computation.{carrierLevel} Parameter Unit
           (fun _ => input ⟨.inr false, rfl⟩),
         output () = computation.compute sizes
           ⟨(fun _ => input ⟨.inr false, rfl⟩), valid⟩)) : computation.Realizable := by
-  classical
-  let wiring : Parameter ⊕ Bool ↪ Internal.TapeName computation Empty :=
-    ⟨(fun name => match name with
-      | .inl parameter => .inl parameter
-      | .inr false => Internal.inputTape computation ()
-      | .inr true => (Internal.outputTape computation)), by
-      intro first second equal
-      rcases first with parameter | flag <;> rcases second with parameter' | flag'
-      · simpa using equal
-      · cases flag' <;> cases equal
-      · cases flag <;> cases equal
-      · cases flag <;> cases flag' <;> first | rfl | cases equal⟩
-  let scratchDomains : Empty → EncodedDomain.{0, carrierLevel} Parameter := Empty.elim
-  refine ⟨Empty, inferInstance, scratchDomains, State, inferInstance,
-    MultiTape.wire (Alphabet := Alphabet (Internal.TapeName computation Empty)) wiring machine,
-    entry, exit, ?_⟩
-  obtain ⟨bound, execute⟩ := certificate.wired_runs wiring
-  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [MultiTape.wire, certificate.2.2.1]), bound, ?_⟩
-  intro sizes input initial valid represented headers
-  let arguments := Internal.arguments computation scratchDomains sizes input
-  let localInput : Inputs
-      (StandardBinaryScan.domains (computation.inputDomains ()) computation.outputDomain)
-      StandardTerminatedCopy.readOnly sizes := fun name => match name with
-    | ⟨.inl _, _⟩ => PUnit.unit
-    | ⟨.inr false, _⟩ => arguments ()
-    | ⟨.inr true, impossible⟩ => False.elim (Bool.noConfusion impossible)
-  have sameArguments : (fun _ : Unit => localInput ⟨.inr false, rfl⟩) = arguments := by
-    funext name
-    cases name
-    rfl
-  obtain ⟨ticks, localOutput, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute sizes localInput
-      (fun name => (Internal.domains computation scratchDomains name).width sizes)
-      (Internal.readOnly computation) initial
-      (by intro name; rcases name with parameter | flag; rfl; cases flag <;> rfl)
-      (by intro name readonly; rcases name with parameter | flag; rfl; cases flag <;> first | rfl | contradiction)
-      (by simpa only [sameArguments] using valid)
-      (by
-        intro name readonly
-        rcases name with parameter | flag
-        · exact (headers parameter).trans (encoded_unary parameter sizes).symm
-        · cases flag
-          · exact represented.1 (Internal.inputTape computation ()) rfl
-          · contradiction)
-      (by intro name writable; exact represented.region (wiring name)) headers
+  refine ofNamedLayout computation
+    (StandardBinaryScan.domains (computation.inputDomains ()) computation.outputDomain)
+    StandardTerminatedCopy.readOnly StandardTerminatedCopy.sizeTapes StandardTerminatedCopy.outputTapes
+    machine entry exit _ _ certificate unaryPlacement
+    (by rintro (parameter | argument | result) <;> rfl)
+    (by rintro (parameter | argument | result) <;> rfl)
+    (by intro name outside; cases name with
+      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
+      | inr flag => cases flag with
+        | false => exact False.elim (outside ⟨.inr (.inl ()), rfl⟩)
+        | true => rfl)
+    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
+  intro sizes input valid output correct
   obtain ⟨good, result⟩ := correct
-  have outputValue : localOutput () = computation.compute sizes ⟨arguments, valid⟩ := by
-    simpa only [sameArguments] using result
-  let output : Outputs (Internal.domains computation scratchDomains)
-      (Internal.outputTapes computation Empty) sizes :=
-    fun _ => computation.compute sizes ⟨arguments, valid⟩
-  refine ⟨ticks, output, final, cost, trace, ⟨valid, rfl⟩, ?_⟩
-  intro name
-  cases name
-  exact (canonical ()).trans (congrArg (encoded computation.outputDomain sizes) outputValue)
+  exact congrArg (encoded computation.outputDomain sizes) result
 
 end Polytime2.Computation.Realizable.Internal

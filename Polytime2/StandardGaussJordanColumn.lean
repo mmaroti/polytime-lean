@@ -88,19 +88,18 @@ def pivotWiring : StandardGaussJordanPivot.TapeName ↪ TapeName :=
 
 noncomputable def search (enumeration : Scalar ≃ Fin cardinality) :
     let scalar := FieldRow.scalarDomain enumeration
-    Machine Alphabet (StandardPivotSearch.AlgorithmState
-      (StandardPivotSearch.defaultBits scalar (0 : Scalar)).length (scalar.width Empty.elim)) :=
+    Machine Alphabet (StandardPivotSearch.AlgorithmState (scalar.width Empty.elim)) :=
   MultiTape.wire searchWiring (StandardPivotSearch.algorithm (FieldRow.scalarDomain enumeration)
-    (StandardPivotSearch.fieldIsZero enumeration) (0 : Scalar))
+    (StandardPivotSearch.fieldIsZero enumeration))
 
 noncomputable def pivot (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (StandardGaussJordanPivot.State (StandardGaussJordanClear.zeroBits enumeration).length
+    Machine Alphabet (StandardGaussJordanPivot.State
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.wire pivotWiring (StandardGaussJordanPivot.algorithm enumeration)
 
 /-- Search returns the mathematical first nonzero row at or after the
-immutable pivot, or the row-count sentinel. Every search scratch tape is valid
-on return, and unwired pivot workspace tapes are left untouched. -/
+immutable pivot, or the row-count sentinel. Unwired pivot workspace tapes
+are left untouched; private search scratch has no encoding obligation. -/
 theorem search_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
     let scalar := FieldRow.scalarDomain enumeration
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
@@ -115,9 +114,9 @@ theorem search_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
       (∀ name, Region ((domains enumeration name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly (search enumeration) ticks
-          (StandardPivotSearch.algorithmEntry (StandardPivotSearch.defaultBits scalar (0 : Scalar)).length
+          (StandardPivotSearch.algorithmEntry
             (scalar.width Empty.elim)) (fun _ => 0) initial
-          (StandardPivotSearch.algorithmExit (StandardPivotSearch.defaultBits scalar (0 : Scalar)).length
+          (StandardPivotSearch.algorithmExit
             (scalar.width Empty.elim)) (fun _ => 0) final ∧
         (∃ candidate : Fin (2 ^ sizes 0),
           (start.val ≤ candidate.val ∧ candidate.val ≤ sizes 1) ∧
@@ -126,9 +125,6 @@ theorem search_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
             (if valid : candidate.val < sizes 1 then some ⟨candidate.val, valid⟩ else none) ∧
           final (searchWiring StandardPivotSearch.foundTape) =
             encoded EncodedDomain.booleans sizes (decide (candidate.val < sizes 1))) ∧
-        (∀ name, StandardPivotSearch.readOnly name = false →
-          ∃ value : (domains enumeration (searchWiring name)).Carrier sizes,
-            final (searchWiring name) = encoded (domains enumeration (searchWiring name)) sizes value) ∧
         (∀ name, name ∉ Set.range searchWiring → final name = initial name) ∧
         (∀ name, StandardPivotSearch.readOnly name = true →
           final (searchWiring name) = initial (searchWiring name)) := by
@@ -141,7 +137,7 @@ theorem search_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
       StandardPivotSearch.domains scalar name := by
     intro name
     fin_cases name <;> rfl
-  obtain ⟨ticks, localFinal, cost, localTrace, candidate, bounds, candidateEq, found, foundEq, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, candidate, bounds, candidateEq, found, foundEq⟩ :=
     execute sizes (fun name => initial (searchWiring name)) start column matrix startValid columnValid
       rowsFit columnsFit capacity startEq columnEq matrixEq
       (by intro parameter; fin_cases parameter <;> exact headers _)
@@ -150,28 +146,19 @@ theorem search_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinali
         change Region ((StandardPivotSearch.domains scalar name).width sizes) 0 (initial (searchWiring name))
         rw [← sameDomain name]
         exact regions (searchWiring name))
-  have trace := localTrace.wire searchWiring
+  obtain ⟨final, trace, located, outside, immutable⟩ :=
+    localTrace.wire_restoring searchWiring
     (fun name => (domains enumeration name).width sizes) readOnly
     (by intro name; rw [sameDomain name])
-    (by intro name; fin_cases name <;> decide) initial (fun _ => 0)
-  have startTapes : install searchWiring (fun name => initial (searchWiring name)) initial = initial :=
-    install_self searchWiring initial
-  have positions : install searchWiring (fun _ : StandardPivotSearch.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self searchWiring _
-  rw [startTapes, positions] at trace
-  refine ⟨ticks, install searchWiring localFinal initial, cost, trace,
-    ⟨candidate, bounds, (install_at searchWiring localFinal initial _).trans candidateEq, found,
-      (install_at searchWiring localFinal initial _).trans foundEq⟩,
-    ?_, ?_, ?_⟩
-  · intro name writable
-    obtain ⟨value, encodedValue⟩ := canonical name writable
-    rw [sameDomain name]
-    exact ⟨value, (install_at searchWiring localFinal initial name).trans encodedValue⟩
-  · intro name outside
-    exact install_outside searchWiring localFinal initial name outside
-  · intro name immutable
-    rw [install_at]
-    exact localTrace.readOnly_tape name immutable
+    (by intro name; fin_cases name <;> decide) initial (fun _ => rfl)
+  refine ⟨ticks, final, cost, trace,
+    ⟨candidate, bounds, (located _).trans candidateEq, found,
+      (located _).trans foundEq⟩,
+    ?_, ?_⟩
+  · intro name absent
+    exact outside name absent
+  · intro name fixed
+    exact immutable name fixed
 
 def incrementWiring : Sum (Fin 3) Bool ↪ TapeName :=
   ⟨(fun name => match name with
@@ -188,36 +175,36 @@ noncomputable def advancePivot : Machine Alphabet IncrementState :=
 def found (symbols : Symbols Alphabet) : Bool :=
   decide (symbols (searchWiring StandardPivotSearch.foundTape) = Binary.data true)
 
-abbrev FoundState (initWidth scalarWidth : ℕ) :=
-  Sum (StandardGaussJordanPivot.State initWidth scalarWidth) IncrementState
+abbrev FoundState (scalarWidth : ℕ) :=
+  Sum (StandardGaussJordanPivot.State scalarWidth) IncrementState
 
 noncomputable def foundMachine (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (FoundState (StandardGaussJordanClear.zeroBits enumeration).length
+    Machine Alphabet (FoundState
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.sequence (pivot enumeration) advancePivot (.inl (.inl true))
 
 def idle : Machine Alphabet Unit := fun _ _ => none
 
-abbrev SelectState (initWidth scalarWidth : ℕ) :=
-  Sum (Sum Unit (Sum (FoundState initWidth scalarWidth) Unit)) Unit
+abbrev SelectState (scalarWidth : ℕ) :=
+  Sum (Sum Unit (Sum (FoundState scalarWidth) Unit)) Unit
 
-noncomputable instance selectStateFinite (initWidth scalarWidth : ℕ) : Fintype (SelectState initWidth scalarWidth) := by
-  letI : Fintype (StandardGaussJordanPivot.State initWidth scalarWidth) := inferInstance
+noncomputable instance selectStateFinite (scalarWidth : ℕ) : Fintype (SelectState scalarWidth) := by
+  letI : Fintype (StandardGaussJordanPivot.State scalarWidth) := inferInstance
   dsimp only [SelectState, FoundState, IncrementState]
   infer_instance
 
 noncomputable def select (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (SelectState (StandardGaussJordanClear.zeroBits enumeration).length
+    Machine Alphabet (SelectState
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.withExit (MultiTape.branchMachine found (foundMachine enumeration) idle
-    (.inl (StandardGaussJordanPivot.entry (StandardGaussJordanClear.zeroBits enumeration).length
+    (.inl (StandardGaussJordanPivot.entry
       ((FieldRow.scalarDomain enumeration).width Empty.elim))) ())
 
-def selectEntry (initWidth scalarWidth : ℕ) : SelectState initWidth scalarWidth := .inl (.inl ())
-def selectExit (initWidth scalarWidth : ℕ) : SelectState initWidth scalarWidth := .inr ()
+def selectEntry (scalarWidth : ℕ) : SelectState scalarWidth := .inl (.inl ())
+def selectExit (scalarWidth : ℕ) : SelectState scalarWidth := .inr ()
 
 @[simp] theorem select_halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    select enumeration (selectExit (StandardGaussJordanClear.zeroBits enumeration).length
+    select enumeration (selectExit
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := rfl
 
 omit [Field Scalar] in

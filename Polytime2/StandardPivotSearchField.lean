@@ -57,7 +57,7 @@ theorem field_zeroAt_iff (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin
   simp only [decide_eq_true_eq]
 
 /-- The returned bounded counter denotes exactly `findPivot`, including its
-row-count sentinel. Inputs stay immutable; all writable tapes return valid. -/
+row-count sentinel. Inputs stay immutable; private scratch stays bounded. -/
 theorem field_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality) :
     let scalar := FieldRow.scalarDomain enumeration
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
@@ -72,31 +72,29 @@ theorem field_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinalit
       (∀ name, Region ((domains scalar name).width sizes) 0 (initial name)) →
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains scalar name).width sizes) readOnly
-          (algorithm scalar (fieldIsZero enumeration) (0 : Scalar)) ticks
-          (algorithmEntry (defaultBits scalar (0 : Scalar)).length (scalar.width Empty.elim))
+          (algorithm scalar (fieldIsZero enumeration)) ticks
+          (algorithmEntry (scalar.width Empty.elim))
           (fun _ => 0) initial
-          (algorithmExit (defaultBits scalar (0 : Scalar)).length (scalar.width Empty.elim))
+          (algorithmExit (scalar.width Empty.elim))
           (fun _ => 0) final ∧
         ∃ candidate : Fin (2 ^ sizes 0),
           (start.val ≤ candidate.val ∧ candidate.val ≤ sizes 1) ∧
           final (counterTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes candidate ∧
           GaussJordan.findPivot (Scalar := Scalar) matrix start.val ⟨column.val, columnValid⟩ =
             (if valid : candidate.val < sizes 1 then some ⟨candidate.val, valid⟩ else none) ∧
-          final foundTape = encoded EncodedDomain.booleans sizes (decide (candidate.val < sizes 1)) ∧
-          (∀ name, readOnly name = false → ∃ value : (domains scalar name).Carrier sizes,
-            final name = encoded (domains scalar name) sizes value) := by
+          final foundTape = encoded EncodedDomain.booleans sizes (decide (candidate.val < sizes 1)) := by
   classical
   intro scalar
-  obtain ⟨bound, execute⟩ := runs scalar (fieldIsZero enumeration) (0 : Scalar)
+  obtain ⟨bound, execute⟩ := runs scalar (fieldIsZero enumeration)
   refine ⟨bound, ?_⟩
   intro sizes initial start column matrix startValid columnValid rowsFit columnsFit capacity
     startEq columnEq matrixEq headers regions
   change initial matrixTape = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length)
     sizes (matrixEquiv sizes matrix) at matrixEq
-  obtain ⟨ticks, final, cost, trace, candidate, bounds, candidateEq, skipped, stop, foundEq, flagEq, canonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, candidate, bounds, candidateEq, skipped, stop, foundEq, flagEq⟩ :=
     execute sizes initial start column (matrixEquiv sizes matrix) startValid columnValid rowsFit
       columnsFit capacity startEq columnEq matrixEq headers regions
-  refine ⟨ticks, final, cost, trace, candidate, bounds, candidateEq, ?_, foundEq, canonical⟩
+  refine ⟨ticks, final, cost, trace, candidate, bounds, candidateEq, ?_, foundEq⟩
   apply GaussJordan.findPivot_eq_of_minimal matrix start.val candidate.val
     (⟨column.val, columnValid⟩ : Fin (sizes 2)) bounds.1 bounds.2
   · intro row lower upper

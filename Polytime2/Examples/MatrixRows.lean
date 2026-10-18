@@ -68,8 +68,8 @@ private theorem initial_header (scalar : EncodedDomain.{0, 0} Empty) (sizes : Fi
   change initial scalar sizes value (sizeTape parameter) = encoded (EncodedDomain.unary parameter) sizes PUnit.unit at represented
   exact represented.trans (encoded_unary parameter sizes)
 
-/-- A zero-column matrix still initializes every scalar and Boolean scratch
-word. Binary words and matrices have zero width, and all heads are restored. -/
+/-- A zero-column matrix returns its empty result without formatting unused
+scalar or Boolean scratch. All heads are restored. -/
 theorem empty_columns (scalar : EncodedDomain.{0, 0} Empty) (value : scalar.Carrier Empty.elim)
     (operation : ∀ assignment, scalar.Carrier assignment → scalar.Carrier assignment →
       scalar.Carrier assignment → scalar.Carrier assignment × scalar.Carrier assignment) :
@@ -77,18 +77,16 @@ theorem empty_columns (scalar : EncodedDomain.{0, 0} Empty) (value : scalar.Carr
       Runs (fun name => (domains scalar name).width ![0, 1, 0]) readOnly (machine true scalar operation) ticks
         (entry (scalar.width Empty.elim)) (fun _ => 0) (initial scalar ![0, 1, 0] value)
         (exit (scalar.width Empty.elim)) (fun _ => 0) final ∧
-      final (dataTape 5) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) ![0, 1, 0] (fun _ => value) ∧
-      (∀ name, readOnly name = false → ∃ result : (domains scalar name).Carrier ![0, 1, 0],
-        final name = encoded (domains scalar name) ![0, 1, 0] result) := by
+      final (dataTape 5) = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) ![0, 1, 0] (fun _ => value) := by
   obtain ⟨bound, execute⟩ := runs true scalar operation
   have represented := initial_entry scalar ![0, 1, 0] value
-  obtain ⟨ticks, final, cost, trace, matrixEq, canonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, matrixEq⟩ :=
     execute ![0, 1, 0] (initial scalar ![0, 1, 0] value) 0 0 (by decide) (by decide) value (fun _ => value)
       (by decide) (by decide)
       (represented.1 (dataTape 0) rfl) (represented.1 (dataTape 1) rfl)
       ((represented.1 (dataTape 3) rfl).trans (encoded_constant scalar ![0, 1, 0] _)) (represented.1 inputTape rfl)
       (initial_header scalar ![0, 1, 0] value) represented.region
-  exact ⟨ticks, final, trace, matrixEq, canonical⟩
+  exact ⟨ticks, final, trace, matrixEq⟩
 
 private noncomputable abbrev scalar := EncodedDomain.booleans (Parameter := Empty)
 private abbrev sizes : Fin 3 → ℕ := ![2, 1, 2]
@@ -148,7 +146,7 @@ theorem two_columns :
       final (dataTape 5) = encoded arrayDomain sizes (fun _ => true) := by
   obtain ⟨bound, execute⟩ := runs false scalar operation
   have represented := initial_entry scalar sizes false
-  obtain ⟨ticks, final, cost, trace, matrixEq, canonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, matrixEq⟩ :=
     execute sizes (initial scalar sizes false) 0 0 (by decide) (by decide) false (fun _ => false)
       (by decide) (by decide)
       (represented.1 (dataTape 0) rfl) (represented.1 (dataTape 1) rfl)
@@ -169,7 +167,7 @@ theorem zero_width_columns :
   intro domain combine
   obtain ⟨bound, execute⟩ := runs true domain combine
   have represented := initial_entry domain sizes (0 : Fin 1)
-  obtain ⟨ticks, final, cost, trace, matrixEq, canonical⟩ :=
+  obtain ⟨ticks, final, cost, trace, matrixEq⟩ :=
     execute sizes (initial domain sizes (0 : Fin 1)) 0 0 (by decide) (by decide) (0 : Fin 1) (fun _ => (0 : Fin 1))
       (by decide) (by decide)
       (represented.1 (dataTape 0) rfl) (represented.1 (dataTape 1) rfl)

@@ -117,25 +117,24 @@ noncomputable def commit : Machine Alphabet (Fin 3) :=
 
 noncomputable def clearColumn (enumeration : Scalar ≃ Fin cardinality) :
     Machine Alphabet (StandardGaussJordanClear.AlgorithmState
-      (StandardGaussJordanClear.zeroBits enumeration).length
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   MultiTape.wire clearWiring (StandardGaussJordanClear.algorithm enumeration)
 
-abbrev State (initWidth scalarWidth : ℕ) := Sum (Fin 3)
+abbrev State (scalarWidth : ℕ) := Sum (Fin 3)
   (Sum (StandardMatrixEntry.State scalarWidth)
     (Sum (StandardMatrixRows.State scalarWidth)
       (Sum (Fin 3) (Sum (StandardMatrixRows.State scalarWidth)
-        (Sum (Fin 3) (StandardGaussJordanClear.AlgorithmState initWidth scalarWidth))))))
+        (Sum (Fin 3) (StandardGaussJordanClear.AlgorithmState scalarWidth))))))
 
-noncomputable instance statesFinite (initWidth scalarWidth : ℕ) : Fintype (State initWidth scalarWidth) := by
+noncomputable instance statesFinite (scalarWidth : ℕ) : Fintype (State scalarWidth) := by
   letI : Fintype (StandardMatrixEntry.State scalarWidth) := inferInstance
   letI : Fintype (StandardMatrixRows.State scalarWidth) := inferInstance
-  letI : Fintype (StandardGaussJordanClear.AlgorithmState initWidth scalarWidth) := inferInstance
+  letI : Fintype (StandardGaussJordanClear.AlgorithmState scalarWidth) := inferInstance
   dsimp only [State]
   infer_instance
 
 noncomputable def algorithm (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (State (StandardGaussJordanClear.zeroBits enumeration).length
+    Machine Alphabet (State
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
   let width := (FieldRow.scalarDomain enumeration).width Empty.elim
   MultiTape.sequence prepareMatrix
@@ -144,21 +143,20 @@ noncomputable def algorithm (enumeration : Scalar ≃ Fin cardinality) :
         (MultiTape.sequence commit
           (MultiTape.sequence (normalizeRow enumeration)
             (MultiTape.sequence commit (clearColumn enumeration)
-              (StandardGaussJordanClear.algorithmEntry
-                (StandardGaussJordanClear.zeroBits enumeration).length width))
+              (StandardGaussJordanClear.algorithmEntry width))
             (Sum.inl 0))
           (Sum.inl (StandardMatrixRows.entry width)))
         (Sum.inl 0))
       (Sum.inl (StandardMatrixRows.entry width)))
     (Sum.inl (StandardMatrixEntry.entry width))
 
-def entry (initWidth scalarWidth : ℕ) : State initWidth scalarWidth := .inl 0
+def entry (scalarWidth : ℕ) : State scalarWidth := .inl 0
 
-def exit (initWidth scalarWidth : ℕ) : State initWidth scalarWidth :=
-  .inr (.inr (.inr (.inr (.inr (.inr (StandardGaussJordanClear.algorithmExit initWidth scalarWidth))))))
+def exit (scalarWidth : ℕ) : State scalarWidth :=
+  .inr (.inr (.inr (.inr (.inr (.inr (StandardGaussJordanClear.algorithmExit scalarWidth))))))
 
 @[simp] theorem halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    algorithm enumeration (exit (StandardGaussJordanClear.zeroBits enumeration).length
+    algorithm enumeration (exit
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := by
   simp [algorithm, exit, MultiTape.sequence, clearColumn, MultiTape.wire,
     StandardGaussJordanClear.algorithm_halt]

@@ -335,7 +335,7 @@ theorem negate_runs (enumeration : Scalar ≃ Fin cardinality) :
   exact ⟨ticks, final, cost, trace, result, outside, immutable⟩
 
 /-- The row phase accepts arbitrary writable regions, preserves its arguments,
-and returns the row transform with every private tape valid. -/
+and returns the encoded row transform without scratch validity obligations. -/
 theorem rowClear_runs (enumeration : Scalar ≃ Fin cardinality) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ)
       (initial : Tapes Alphabet) (sourceRow targetRow : Fin (2 ^ sizes 0))
@@ -364,10 +364,6 @@ theorem rowClear_runs (enumeration : Scalar ≃ Fin cardinality) :
           (StandardMatrixRows.processed false
             (Polytime2.FieldRow.scalarDomain enumeration) (additionOperation enumeration)
             sizes sourceRow targetRow sourceValid targetValid coefficient matrix (sizes 2)) ∧
-        (∀ name, StandardMatrixRows.readOnly name = false →
-          ∃ value : (domains enumeration (rowWiring name)).Carrier sizes,
-            final (rowWiring name) = encoded
-              (domains enumeration (rowWiring name)) sizes value) ∧
         (∀ name, name ∉ Set.range rowWiring → final name = initial name) ∧
         (∀ name, StandardMatrixRows.readOnly name = true →
           final (rowWiring name) = initial (rowWiring name)) := by
@@ -386,33 +382,25 @@ theorem rowClear_runs (enumeration : Scalar ≃ Fin cardinality) :
     intro name
     fin_cases name <;> decide
   let localInitial : Tapes StandardMatrixRows.Alphabet := fun name => initial (rowWiring name)
-  obtain ⟨ticks, localFinal, cost, localTrace, result, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, result⟩ :=
     execute sizes localInitial sourceRow targetRow sourceValid targetValid coefficient matrix
       columnsFit capacity sourceEq targetEq coefficientEq matrixEq headers
       (by intro name; simpa only [localInitial, ← sameDomain name] using regions (rowWiring name))
-  have trace := localTrace.wire rowWiring
+  obtain ⟨final, trace, located, outside, immutable⟩ :=
+    localTrace.wire_restoring rowWiring
     (fun name => (domains enumeration name).width sizes) readOnly
-    (by intro name; rw [sameDomain name]) readOnlyMatches initial (fun _ => 0)
-  have initialEq : install rowWiring localInitial initial = initial := install_self rowWiring initial
-  have positions : install rowWiring (fun _ : BaseTape => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self rowWiring _
-  rw [initialEq, positions] at trace
-  refine ⟨ticks, install rowWiring localFinal initial, cost, trace, ?_, ?_, ?_, ?_⟩
-  · have resultAt := install_at rowWiring localFinal initial (StandardMatrixRows.dataTape 5)
-    change (install rowWiring localFinal initial) (dataTape 5) = _ at resultAt
+    (by intro name; rw [sameDomain name]) readOnlyMatches initial (fun _ => rfl)
+  refine ⟨ticks, final, cost, trace, ?_, ?_, ?_⟩
+  · have resultAt := located (StandardMatrixRows.dataTape 5)
+    change final (dataTape 5) = _ at resultAt
     exact resultAt.trans result
-  · intro name writable
-    obtain ⟨value, encodedValue⟩ := canonical name writable
-    rw [sameDomain name]
-    exact ⟨value, (install_at rowWiring localFinal initial name).trans encodedValue⟩
-  · intro name outside
-    exact install_outside rowWiring localFinal initial name outside
-  · intro name immutable
-    rw [install_at]
-    exact localTrace.readOnly_tape name immutable
+  · intro name absent
+    exact outside name absent
+  · intro name fixed
+    exact immutable name fixed
 
 /-- Lookup, coefficient negation, and row traversal share one workspace and
-accept arbitrary initial writable contents. All scratch is valid on return. -/
+accept arbitrary initial writable contents and restore all heads. -/
 theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ)
       (initial : Tapes Alphabet) (sourceRow targetRow column : Fin (2 ^ sizes 0))
@@ -441,10 +429,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
               (Polytime2.FieldRow.scalarDomain enumeration) (additionOperation enumeration)
               sizes sourceRow targetRow sourceValid targetValid
               (Neg.neg (α := Scalar) (matrix ⟨targetRow.val * sizes 2 + column.val, within⟩))
-              matrix (sizes 2))) ∧
-        (∀ name, readOnly name = false →
-          ∃ value : (domains enumeration name).Carrier sizes,
-            final name = encoded (domains enumeration name) sizes value) := by
+              matrix (sizes 2))) := by
   obtain ⟨lookupBound, executeLookup⟩ := lookup_runs enumeration
   obtain ⟨negateCost, executeNegate⟩ := negate_runs enumeration
   obtain ⟨rowBound, executeRow⟩ := rowClear_runs enumeration
@@ -488,7 +473,7 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   have preserveInput : ∀ name, readOnly name = true → negated name = initial name := by
     intro name readonly
     exact (negateTrace.readOnly_tape name readonly).trans (firstStages.readOnly_tape name readonly)
-  obtain ⟨rowTicks, final, rowCost, rowTrace, result, canonical, rowOutside, rowImmutable⟩ :=
+  obtain ⟨rowTicks, final, rowCost, rowTrace, result, rowOutside, rowImmutable⟩ :=
     executeRow sizes negated sourceRow targetRow sourceValid targetValid
       (Neg.neg (α := Scalar) value) matrix
       columnsFit capacity
@@ -503,24 +488,10 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
   have middle := flagTrace.sequence _ (Sum.inl StandardFiniteTable.entry) prepareFlag_halt tail
   have complete := lookupTrace.sequence _ (Sum.inl false) (lookup_halt enumeration) middle
   refine ⟨lookupTicks + (1 + (negateTicks + rowTicks + 1) + 1) + 1, final, ?_, ?_,
-    ⟨within, result⟩, ?_⟩
+    ⟨within, result⟩⟩
   · simp only [map_add, MvPolynomial.eval_C, map_ofNat]
     omega
   · simpa only [algorithm, entry, exit, prepareFlag] using complete
-  · intro name writable
-    cases name with
-    | inr extra => contradiction
-    | inl name =>
-      by_cases isCoefficient : name = StandardMatrixRows.dataTape 7
-      · subst name
-        exact ⟨-value, (rowImmutable (StandardMatrixRows.dataTape 3) rfl).trans
-          (coefficientEq.trans (encoded_constant (Polytime2.FieldRow.scalarDomain enumeration) sizes _).symm)⟩
-      · have localWritable : StandardMatrixRows.readOnly (rowSwap name) = false := by
-          fin_cases name <;> first | rfl | exact False.elim (isCoefficient rfl) | contradiction
-        have valid := canonical (rowSwap name) localWritable
-        rw [rowWiring_swap] at valid
-        exact valid
-
 @[simp] theorem halt (enumeration : Scalar ≃ Fin cardinality)
     (symbols : Symbols Alphabet) :
     algorithm enumeration

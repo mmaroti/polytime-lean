@@ -42,38 +42,19 @@ namespace Realizable.Internal
 
 private abbrev EliminationTape := StandardGaussJordanElimination.TapeName
 
-/-- Public roles map to the standard interface; all other source tapes remain
-private. Extra unused private tapes have no mathematical validity requirement. -/
-private noncomputable def eliminationLayoutFunction (enumeration : Scalar ≃ Fin cardinality) :
-    EliminationTape → TapeName (gaussJordanWithCapacity enumeration) EliminationTape
-  | .inl (.inl (.inl (.inl (.inl (.inl (.inl (.inl (.inl (.inl (parameter)))))))))) => .inl parameter
-  | .inr 0 => inputTape (gaussJordanWithCapacity enumeration) ()
-  | .inl (.inl (.inr 1)) => outputTape (gaussJordanWithCapacity enumeration)
-  | name => scratchTape (gaussJordanWithCapacity enumeration) name
-
-private noncomputable def eliminationLayout (enumeration : Scalar ≃ Fin cardinality) :
-    EliminationTape ↪ TapeName (gaussJordanWithCapacity enumeration) EliminationTape := by
-  refine ⟨eliminationLayoutFunction enumeration, ?_⟩
-  let recover : TapeName (gaussJordanWithCapacity enumeration) EliminationTape → EliminationTape
+private def eliminationPlacement : PublicTape (Fin 3) Unit ↪ EliminationTape :=
+  ⟨(fun role => match role with
     | .inl parameter => StandardGaussJordanElimination.sizeTape parameter
     | .inr (.inl _) => StandardGaussJordanElimination.inputTape
-    | .inr (.inr (.inl _)) => StandardGaussJordanElimination.workingTape
-    | .inr (.inr (.inr name)) => name
-  have inverse : Function.LeftInverse recover (eliminationLayoutFunction enumeration) := by
-    intro name
-    fin_cases name <;> rfl
-  exact inverse.injective
+    | .inr (.inr _) => StandardGaussJordanElimination.workingTape), by
+    intro first second equal
+    fin_cases first <;> fin_cases second <;> first | rfl | exact absurd equal (by decide)⟩
 
 private noncomputable def eliminationPresentation (enumeration : Scalar ≃ Fin cardinality)
     (name : EliminationTape) : EncodedDomain (Fin 3) :=
   if name = StandardGaussJordanElimination.inputTape ∨ name = StandardGaussJordanElimination.workingTape then
     matrixDomain (FieldRow.scalarDomain enumeration)
   else StandardGaussJordanElimination.domains enumeration name
-
-private theorem eliminationDomains (enumeration : Scalar ≃ Fin cardinality) (name : EliminationTape) :
-    domains (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration)
-      (eliminationLayout enumeration name) = eliminationPresentation enumeration name := by
-  fin_cases name <;> rfl
 
 private noncomputable def eliminationPresentationValues (enumeration : Scalar ≃ Fin cardinality)
     (name : EliminationTape) (sizes : Fin 3 → ℕ) :
@@ -89,13 +70,34 @@ private noncomputable def eliminationPresentationValues (enumeration : Scalar �
   unfold eliminationPresentation
   rw [ite_eq_right (not_or_intro isInput isOutput)]
 
-private noncomputable def eliminationValues (enumeration : Scalar ≃ Fin cardinality)
-    (name : EliminationTape) (sizes : Fin 3 → ℕ) :
-    (domains (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration)
-      (eliminationLayout enumeration name)).Carrier sizes ≃
-      (StandardGaussJordanElimination.domains enumeration name).Carrier sizes :=
-  (Equiv.cast (congrArg (fun domain => domain.Carrier sizes) (eliminationDomains enumeration name))).trans
-    (eliminationPresentationValues enumeration name sizes)
+/-- Expose ordinary matrices through the source controller's existing codec. -/
+private theorem eliminationPresentation_contract (enumeration : Scalar ≃ Fin cardinality) :
+    CallingConvention.Realizes (eliminationPresentation enumeration) StandardGaussJordanElimination.readOnly
+      StandardGaussJordanElimination.sizeTapes StandardGaussJordanElimination.outputTapes
+      (StandardGaussJordanElimination.algorithm enumeration)
+      (StandardGaussJordanElimination.entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
+      (StandardGaussJordanElimination.exit ((FieldRow.scalarDomain enumeration).width Empty.elim))
+      (fun sizes _ => sizes 1 < 2 ^ sizes 0 ∧ sizes 2 < 2 ^ sizes 0 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0)
+      (fun sizes input output => output () = GaussJordan.eliminate (Scalar := Scalar)
+        (input ⟨StandardGaussJordanElimination.inputTape, rfl⟩)) := by
+  classical
+  refine CallingConvention.realizes_reindex (eliminationPresentationValues enumeration)
+    (by intro name sizes; fin_cases name <;> rfl)
+    (by intro name sizes value; fin_cases name <;> rfl)
+    StandardGaussJordanElimination.readOnly StandardGaussJordanElimination.sizeTapes
+    StandardGaussJordanElimination.outputTapes (StandardGaussJordanElimination.algorithm enumeration)
+    (StandardGaussJordanElimination.entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
+    (StandardGaussJordanElimination.exit ((FieldRow.scalarDomain enumeration).width Empty.elim))
+    _ _ _ _ (by intro sizes input valid; exact valid) ?_
+    (StandardGaussJordanElimination.contract enumeration)
+  intro sizes input output correct
+  change (matrixEquiv (Carrier := Scalar) sizes).symm (output ()) =
+    GaussJordan.eliminate (Scalar := Scalar) ((matrixEquiv (Carrier := Scalar) sizes).symm
+      (matrixEquiv sizes (input ⟨StandardGaussJordanElimination.inputTape, rfl⟩))) at correct
+  change (matrixEquiv (Carrier := Scalar) sizes).symm (output ()) =
+    GaussJordan.eliminate (Scalar := Scalar) (input ⟨StandardGaussJordanElimination.inputTape, rfl⟩)
+  exact correct.trans (congrArg (GaussJordan.eliminate (Scalar := Scalar))
+    ((matrixEquiv (Carrier := Scalar) sizes).symm_apply_apply _))
 
 end Realizable.Internal
 
@@ -103,38 +105,22 @@ open Realizable.Internal in
 /-- The public certificate contains neither workspace names nor runtime bounds. -/
 private theorem gaussJordanWithCapacity_realizable (enumeration : Scalar ≃ Fin cardinality) :
     (gaussJordanWithCapacity enumeration).Realizable := by
-  classical
-  refine ofLayout (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration)
-    (StandardGaussJordanElimination.domains enumeration) StandardGaussJordanElimination.readOnly
-    StandardGaussJordanElimination.sizeTapes StandardGaussJordanElimination.outputTapes
-    (StandardGaussJordanElimination.algorithm enumeration)
-    (StandardGaussJordanElimination.entry (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
-      ((FieldRow.scalarDomain enumeration).width Empty.elim))
-    (StandardGaussJordanElimination.exit (StandardGaussJordanClear.zeroBits enumeration).length
-      (StandardPivotSearch.defaultBits (FieldRow.scalarDomain enumeration) (0 : Scalar)).length
-      ((FieldRow.scalarDomain enumeration).width Empty.elim))
-    _ _ (StandardGaussJordanElimination.contract enumeration) (eliminationLayout enumeration)
-    (eliminationValues enumeration) ?_ ?_ ?_ (by intro parameter; rfl) () rfl
-    (by intro sizes input valid; exact valid) ?_
-  · intro name sizes
-    fin_cases name <;> rfl
-  · intro name sizes value
-    fin_cases name <;> rfl
-  · intro name
-    fin_cases name <;> rfl
-  · intro sizes input valid output correct
-    change (matrixEquiv (Carrier := Scalar) sizes).symm (output ()) =
-      GaussJordan.eliminate (Scalar := Scalar)
-        ((matrixEquiv (Carrier := Scalar) sizes).symm
-          (matrixEquiv sizes (arguments (gaussJordanWithCapacity enumeration)
-            (StandardGaussJordanElimination.domains enumeration) sizes input ()))) at correct
-    have roundtrip := (matrixEquiv (Carrier := Scalar) sizes).symm_apply_apply
-      (arguments (gaussJordanWithCapacity enumeration) (StandardGaussJordanElimination.domains enumeration) sizes input ())
-    have mathematical := correct.trans (congrArg (GaussJordan.eliminate (Scalar := Scalar)) roundtrip)
-    have equality := ((matrixEquiv (Carrier := Scalar) sizes).apply_symm_apply (output ())).symm.trans
-      (congrArg (matrixEquiv (Carrier := Scalar) sizes) mathematical)
-    exact congrArg (encoded _ sizes) equality
+  refine ofNamedLayout (gaussJordanWithCapacity enumeration) (eliminationPresentation enumeration)
+    StandardGaussJordanElimination.readOnly StandardGaussJordanElimination.sizeTapes
+    StandardGaussJordanElimination.outputTapes (StandardGaussJordanElimination.algorithm enumeration)
+    (StandardGaussJordanElimination.entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
+    (StandardGaussJordanElimination.exit ((FieldRow.scalarDomain enumeration).width Empty.elim))
+    _ _ (eliminationPresentation_contract enumeration) eliminationPlacement
+    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
+    (by intro name outside; fin_cases name <;> first
+      | rfl
+      | exact False.elim (outside ⟨.inl 0, rfl⟩)
+      | exact False.elim (outside ⟨.inl 1, rfl⟩)
+      | exact False.elim (outside ⟨.inl 2, rfl⟩)
+      | exact False.elim (outside ⟨.inr (.inl ()), rfl⟩))
+    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
+  intro sizes input valid output correct
+  exact congrArg (encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes) correct
 
 private theorem gaussJordan_capacity_fits (sizes : Fin 2 → ℕ) :
     sizes 0 < 2 ^ (sizes 0 + sizes 1 + 1) ∧

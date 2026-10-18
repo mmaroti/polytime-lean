@@ -170,19 +170,15 @@ theorem Realizes.wired_runs
     exact ⟨contents, length.trans (widthMatches name), sameTape⟩
   obtain ⟨ticks, output, localFinal, cost, localTrace, correct, localExit⟩ :=
     execute sizes input localInitial valid localEntry sizeHeaders
-  have trace := localTrace.wire wiring width readOnly widthMatches readOnlyMatches initial (fun _ => 0)
-  have initialEq : install wiring localInitial initial = initial := install_self wiring initial
-  have positions : install wiring (fun _ : LocalTape => (0 : ℤ)) (fun _ : TapeName => (0 : ℤ)) =
-      fun _ => 0 := install_self wiring _
-  rw [initialEq, positions] at trace
-  refine ⟨ticks, output, install wiring localFinal initial, cost, trace, correct, ?_, ?_, ?_⟩
+  obtain ⟨final, trace, located, outside, immutable⟩ :=
+    localTrace.wire_restoring wiring width readOnly widthMatches readOnlyMatches initial (fun _ => rfl)
+  refine ⟨ticks, output, final, cost, trace, correct, ?_, ?_, ?_⟩
   · intro name
-    rw [install_at]
+    rw [located]
     exact localExit name
-  · intro name outside
-    exact install_outside wiring localFinal initial name outside
-  · intro name immutable
-    rw [install_at]
-    exact localTrace.readOnly_tape name immutable
+  · intro name absent
+    exact outside name absent
+  · intro name fixed
+    exact immutable name fixed
 
 end Polytime2.CallingConvention

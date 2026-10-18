@@ -32,36 +32,36 @@ instance tapeNamesFinite : Fintype TapeName := by
   letI : Fintype StandardGaussJordanClearInterval.TapeName := inferInstance
   infer_instance
 
-abbrev AlgorithmState (initWidth scalarWidth : ℕ) :=
-  Sum (InitializationState initWidth) (TraversalState scalarWidth)
+abbrev AlgorithmState (scalarWidth : ℕ) :=
+  Sum (InitializationState) (TraversalState scalarWidth)
 
-noncomputable instance algorithmStateFinite (initWidth scalarWidth : ℕ) : Fintype (AlgorithmState initWidth scalarWidth) := by
-  letI : Fintype (InitializationState initWidth) := inferInstance
+noncomputable instance algorithmStateFinite (scalarWidth : ℕ) : Fintype (AlgorithmState scalarWidth) := by
   letI : Fintype (TraversalState scalarWidth) := inferInstance
   dsimp only [AlgorithmState]
   infer_instance
 
-def sizeTapes : Fin 3 ↪ TapeName := StandardMatrixRows.sizeTapes.trans rowsWiring
+def sizeTapes : Fin 3 ↪ TapeName :=
+  ⟨sizeTape, by intro first second equal; cases equal; rfl⟩
 
 noncomputable def algorithm (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (AlgorithmState (zeroBits enumeration).length
+    Machine Alphabet (AlgorithmState
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
-  MultiTape.sequence (initialization enumeration) (traversal enumeration)
+  MultiTape.sequence initialization (traversal enumeration)
     (traversalEntry ((FieldRow.scalarDomain enumeration).width Empty.elim))
 
-def algorithmEntry (initWidth scalarWidth : ℕ) : AlgorithmState initWidth scalarWidth :=
-  .inl (initializationEntry initWidth)
+def algorithmEntry (scalarWidth : ℕ) : AlgorithmState scalarWidth :=
+  .inl (initializationEntry)
 
-def algorithmExit (initWidth scalarWidth : ℕ) : AlgorithmState initWidth scalarWidth :=
+def algorithmExit (scalarWidth : ℕ) : AlgorithmState scalarWidth :=
   .inr (traversalExit scalarWidth)
 
 @[simp] theorem algorithm_halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    algorithm enumeration (algorithmExit (zeroBits enumeration).length
+    algorithm enumeration (algorithmExit
       ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := by
   simp [algorithm, algorithmExit, MultiTape.sequence, traversal_halt]
 
 /-- Initialization and both guarded intervals form one routine. Writable
-regions can contain arbitrary symbols, and all return valid encoded values. -/
+regions can contain arbitrary symbols; only the live result is encoded. -/
 theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
       (pivot column : Fin (2 ^ sizes 0))
@@ -77,15 +77,13 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly
           (algorithm enumeration) ticks
-          (algorithmEntry (zeroBits enumeration).length ((FieldRow.scalarDomain enumeration).width Empty.elim))
+          (algorithmEntry ((FieldRow.scalarDomain enumeration).width Empty.elim))
           (fun _ => 0) initial
-          (algorithmExit (zeroBits enumeration).length ((FieldRow.scalarDomain enumeration).width Empty.elim))
+          (algorithmExit ((FieldRow.scalarDomain enumeration).width Empty.elim))
           (fun _ => 0) final ∧
         final workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (MatrixOperations.clearColumn (Scalar := Scalar) matrix
-            ⟨pivot.val, pivotValid⟩ ⟨column.val, columnValid⟩) ∧
-        (∀ name, readOnly name = false → ∃ value : (domains enumeration name).Carrier sizes,
-          final name = encoded (domains enumeration name) sizes value) := by
+            ⟨pivot.val, pivotValid⟩ ⟨column.val, columnValid⟩) := by
   obtain ⟨initBound, executeInit⟩ := initialization_runs enumeration
   obtain ⟨traversalBound, executeTraversal⟩ := traversal_runs enumeration
   refine ⟨initBound + traversalBound + 1, ?_⟩
@@ -93,19 +91,19 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     pivotEq columnEq matrixEq headers regions
   change initial originalTape = encoded (domains enumeration originalTape) sizes
     (matrixEquiv (Carrier := Scalar) sizes matrix) at matrixEq
-  obtain ⟨initTicks, initialized, initCost, initTrace, workEq, targetEq, limitEq, canonical⟩ :=
+  obtain ⟨initTicks, initialized, initCost, initTrace, workEq, targetEq, limitEq⟩ :=
     executeInit sizes initial pivot (matrixEquiv sizes matrix) pivotEq matrixEq headers regions
   change initialized workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes matrix at workEq
-  obtain ⟨traversalTicks, final, traversalCost, traversalTrace, resultEq, finalCounter, finalCanonical⟩ :=
+  obtain ⟨traversalTicks, final, traversalCost, traversalTrace, resultEq, finalCounter⟩ :=
     executeTraversal sizes initialized pivot column pivotValid columnValid matrix rowsFit columnsFit capacity
       ((initTrace.readOnly_tape (dataTape 0) rfl).trans pivotEq) targetEq
       ((initTrace.readOnly_tape columnTape rfl).trans columnEq) workEq limitEq
       (fun parameter => (initTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter))
-      (fun name => initTrace.region name (regions name)) canonical
+      (fun name => initTrace.region name (regions name))
   have complete := initTrace.sequence (traversal enumeration)
     (traversalEntry ((FieldRow.scalarDomain enumeration).width Empty.elim))
-    (initialization_halt enumeration) traversalTrace
-  refine ⟨initTicks + traversalTicks + 1, final, ?_, ?_, resultEq, finalCanonical⟩
+    (initialization_halt) traversalTrace
+  refine ⟨initTicks + traversalTicks + 1, final, ?_, ?_, resultEq⟩
   · simp only [map_add, map_one]
     omega
   · simpa only [algorithm, algorithmEntry, algorithmExit] using complete

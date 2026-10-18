@@ -241,35 +241,24 @@ theorem body_runs (enumeration : Scalar ≃ Fin cardinality) :
               matrix (sizes 2))) ∧
         final (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes
           (StandardBinaryIncrement.next 0 sizes targetRow) ∧
-        (∀ name, StandardGaussJordanClearStep.readOnly name = false →
-          ∃ value : (domains enumeration (.inl name)).Carrier sizes,
-            final (.inl name) = encoded (domains enumeration (.inl name)) sizes value) ∧
         (∀ slot : Fin 3, final (.inr slot) = initial (.inr slot)) := by
   obtain ⟨bound, execute⟩ := StandardGaussJordanClearStep.runs enumeration
   refine ⟨bound, ?_⟩
   intro sizes initial sourceRow targetRow column sourceValid targetValid matrix
     columnsFit columnValid capacity sourceEq targetEq columnEq matrixEq headers regions
-  obtain ⟨ticks, localFinal, cost, localTrace, ⟨within, resultEq⟩, counterEq, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, ⟨within, resultEq⟩, counterEq⟩ :=
     execute sizes (fun name => initial (.inl name)) sourceRow targetRow column
       sourceValid targetValid matrix columnsFit columnValid capacity sourceEq targetEq columnEq
       matrixEq headers (fun name => regions (.inl name))
-  have trace := localTrace.wire bodyWiring
+  obtain ⟨final, trace, located, outside, immutable⟩ :=
+    localTrace.wire_restoring bodyWiring
     (fun name => (domains enumeration name).width sizes) readOnly
-    (fun _ => rfl) (fun _ premise => premise) initial (fun _ => 0)
-  have start : install bodyWiring (fun name => initial (.inl name)) initial = initial :=
-    install_self bodyWiring initial
-  have positions : install bodyWiring
-      (fun _ : StandardGaussJordanClearStep.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self bodyWiring _
-  rw [start, positions] at trace
-  refine ⟨ticks, install bodyWiring localFinal initial, cost, trace,
-    ⟨within, (install_at bodyWiring localFinal initial _).trans resultEq⟩,
-    (install_at bodyWiring localFinal initial _).trans counterEq, ?_, ?_⟩
-  · intro name writable
-    obtain ⟨value, encodedValue⟩ := canonical name writable
-    exact ⟨value, (install_at bodyWiring localFinal initial name).trans encodedValue⟩
+    (fun _ => rfl) (fun _ premise => premise) initial (fun _ => rfl)
+  refine ⟨ticks, final, cost, trace,
+    ⟨within, (located _).trans resultEq⟩,
+    (located _).trans counterEq, ?_⟩
   · intro slot
-    exact install_outside bodyWiring localFinal initial (.inr slot) (by
+    exact outside (.inr slot) (by
       rintro ⟨name, equal⟩
       cases equal)
 

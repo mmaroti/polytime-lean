@@ -53,9 +53,6 @@ theorem row_runs (writeSource : Bool) (enumeration : Scalar ≃ Fin cardinality)
         final (dataTape 5) = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (MatrixRows.transform writeSource operation coefficient matrix
             ⟨candidate.val, candidateValid⟩ ⟨pivot.val, pivotValid⟩) ∧
-        (∀ name, StandardMatrixRows.readOnly name = false →
-          ∃ value : (domains enumeration (rowWiring name)).Carrier sizes,
-            final (rowWiring name) = encoded (domains enumeration (rowWiring name)) sizes value) ∧
         (∀ name, name ∉ Set.range rowWiring → final name = initial name) ∧
         (∀ name, StandardMatrixRows.readOnly name = true →
           final (rowWiring name) = initial (rowWiring name)) := by
@@ -70,7 +67,7 @@ theorem row_runs (writeSource : Bool) (enumeration : Scalar ≃ Fin cardinality)
     fin_cases name <;> rfl
   change initial workingTape = encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length)
     sizes (matrixEquiv (Carrier := Scalar) sizes matrix) at matrixEq
-  obtain ⟨ticks, localFinal, cost, localTrace, resultEq, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, resultEq⟩ :=
     execute sizes (fun name => initial (rowWiring name)) candidate pivot candidateValid pivotValid
       coefficient (matrixEquiv sizes matrix) columnsFit capacity candidateEq pivotEq coefficientEq
       matrixEq headers (by
@@ -85,27 +82,15 @@ theorem row_runs (writeSource : Bool) (enumeration : Scalar ≃ Fin cardinality)
         ⟨candidate.val, candidateValid⟩ ⟨pivot.val, pivotValid⟩) := by
     exact resultEq.trans (congrArg (encoded (scalar.constant.arrayOfLength StandardMatrixEntry.length) sizes)
       (computed.trans (congrArg (matrixEquiv sizes) complete)))
-  have trace := localTrace.wire rowWiring
+  obtain ⟨final, trace, located, outside, immutable⟩ := localTrace.wire_restoring rowWiring
     (fun name => (domains enumeration name).width sizes) readOnly
     (by intro name; rw [sameDomain name])
-    (by intro name; fin_cases name <;> decide) initial (fun _ => 0)
-  have start : install rowWiring (fun name => initial (rowWiring name)) initial = initial :=
-    install_self rowWiring initial
-  have positions : install rowWiring (fun _ : StandardMatrixRows.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self rowWiring _
-  rw [start, positions] at trace
-  refine ⟨ticks, install rowWiring localFinal initial, cost, trace,
-    (install_at rowWiring localFinal initial (StandardMatrixRows.dataTape 5)).trans localResult,
-    ?_, ?_, ?_⟩
-  · intro name writable
-    obtain ⟨value, encodedValue⟩ := canonical name writable
-    rw [sameDomain name]
-    exact ⟨value, (install_at rowWiring localFinal initial name).trans encodedValue⟩
-  · intro name outside
-    exact install_outside rowWiring localFinal initial name outside
-  · intro name immutable
-    rw [install_at]
-    exact localTrace.readOnly_tape name immutable
+    (by intro name; fin_cases name <;> decide) initial (fun _ => rfl)
+  refine ⟨ticks, final, cost, trace,
+    (located (StandardMatrixRows.dataTape 5)).trans localResult,
+    ?_, ?_⟩
+  · exact outside
+  · exact immutable
 
 omit [Field Scalar] in
 /-- Commit a separate row-operation result to the caller's private matrix.
@@ -124,7 +109,7 @@ theorem commit_runs (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 3 �
     (fun name => (domains enumeration name).width sizes) readOnly rfl rfl rfl initial matrixEq region
 
 /-- The complete column-clear routine consumes the normalized private matrix
-immutably and writes its separate result, canonicalizing the shared scratch. -/
+immutably and writes its separate result into arbitrary writable regions. -/
 theorem clear_runs (enumeration : Scalar ≃ Fin cardinality) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
       (pivot column : Fin (2 ^ sizes 0))
@@ -140,18 +125,15 @@ theorem clear_runs (enumeration : Scalar ≃ Fin cardinality) :
       ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
         Runs (fun name => (domains enumeration name).width sizes) readOnly
           (clearColumn enumeration) ticks
-          (StandardGaussJordanClear.algorithmEntry (StandardGaussJordanClear.zeroBits enumeration).length
+          (StandardGaussJordanClear.algorithmEntry
             ((FieldRow.scalarDomain enumeration).width Empty.elim))
           (fun _ => 0) initial
-          (StandardGaussJordanClear.algorithmExit (StandardGaussJordanClear.zeroBits enumeration).length
+          (StandardGaussJordanClear.algorithmExit
             ((FieldRow.scalarDomain enumeration).width Empty.elim))
           (fun _ => 0) final ∧
         final resultTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes
           (MatrixOperations.clearColumn (Scalar := Scalar) matrix
             ⟨pivot.val, pivotValid⟩ ⟨column.val, columnValid⟩) ∧
-        (∀ name, StandardGaussJordanClear.readOnly name = false →
-          ∃ value : (domains enumeration (clearWiring name)).Carrier sizes,
-            final (clearWiring name) = encoded (domains enumeration (clearWiring name)) sizes value) ∧
         (∀ name, name ∉ Set.range clearWiring → final name = initial name) ∧
         (∀ name, StandardGaussJordanClear.readOnly name = true →
           final (clearWiring name) = initial (clearWiring name)) := by
@@ -159,10 +141,10 @@ theorem clear_runs (enumeration : Scalar ≃ Fin cardinality) :
   refine ⟨bound, ?_⟩
   intro sizes initial pivot column pivotValid columnValid matrix rowsFit columnsFit capacity
     pivotEq columnEq matrixEq headers regions
-  obtain ⟨ticks, localFinal, cost, localTrace, resultEq, canonical⟩ :=
+  obtain ⟨ticks, localFinal, cost, localTrace, resultEq⟩ :=
     execute sizes (fun name => initial (.inl name)) pivot column pivotValid columnValid matrix
       rowsFit columnsFit capacity pivotEq columnEq matrixEq headers (fun name => regions (.inl name))
-  have trace := localTrace.wire clearWiring
+  obtain ⟨final, trace, located, outside, immutable⟩ := localTrace.wire_restoring clearWiring
     (fun name => (domains enumeration name).width sizes) readOnly (fun _ => rfl)
     (by
       intro name premise
@@ -170,22 +152,11 @@ theorem clear_runs (enumeration : Scalar ≃ Fin cardinality) :
         else StandardGaussJordanClear.readOnly name) = true at premise
       split_ifs at premise
       exact premise)
-    initial (fun _ => 0)
-  have startEq : install clearWiring (fun name => initial (.inl name)) initial = initial :=
-    install_self clearWiring initial
-  have positions : install clearWiring (fun _ : StandardGaussJordanClear.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self clearWiring _
-  rw [startEq, positions] at trace
-  refine ⟨ticks, install clearWiring localFinal initial, cost, trace,
-    (install_at clearWiring localFinal initial _).trans resultEq, ?_, ?_, ?_⟩
-  · intro name writable
-    obtain ⟨value, encodedValue⟩ := canonical name writable
-    exact ⟨value, (install_at clearWiring localFinal initial name).trans encodedValue⟩
-  · intro name outside
-    exact install_outside clearWiring localFinal initial name outside
-  · intro name immutable
-    rw [install_at]
-    exact localTrace.readOnly_tape name immutable
+    initial (fun _ => rfl)
+  refine ⟨ticks, final, cost, trace,
+    (located _).trans resultEq, ?_, ?_⟩
+  · exact outside
+  · exact immutable
 
 end Polytime2.StandardGaussJordanPivot
 

@@ -80,7 +80,7 @@ theorem two_columns :
       final (.inl (.inr 4)) = encoded arrayDomain sizes (fun _ => true) ∧
       final (.inl (.inr 2)) = encoded (EncodedDomain.binaryNaturals 0) sizes (2 : Fin 4) := by
   obtain ⟨bound, execute⟩ := runs false scalar operation
-  obtain ⟨firstTicks, middle, firstCost, firstTrace, firstMatrix, firstResult, firstColumn, firstCanonical⟩ :=
+  obtain ⟨firstTicks, middle, firstCost, firstTrace, firstMatrix, firstResult, firstColumn⟩ :=
     execute sizes initial 0 0 0 (fun _ => false) false
       (by norm_num [array_length]) (by norm_num [array_length])
       (by decide) (by decide) (by decide) (by decide) (by decide)
@@ -91,7 +91,7 @@ theorem two_columns :
       (Function.update (Function.update (fun _ => false) zeroIndex false) zeroIndex true) at firstMatrix
     exact firstMatrix.trans (congrArg (encoded arrayDomain sizes) (Function.update_idem _ _ _))
   have firstColumnEq : middle (.inl (.inr 2)) = encoded (EncodedDomain.binaryNaturals 0) sizes (1 : Fin 4) := firstColumn
-  obtain ⟨secondTicks, final, secondCost, secondTrace, finalMatrix, finalResult, finalColumn, finalCanonical⟩ :=
+  obtain ⟨secondTicks, final, secondCost, secondTrace, finalMatrix, finalResult, finalColumn⟩ :=
     execute sizes middle 0 0 1 firstArray false
       (by norm_num [array_length]) (by norm_num [array_length])
       (by decide) (by decide) (by decide) (by decide) (by decide)
