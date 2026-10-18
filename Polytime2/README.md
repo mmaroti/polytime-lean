@@ -325,37 +325,74 @@ Implementation changes require no downstream proof edits when specifications
 and realizability statements stay unchanged. Lean may rebuild dependent modules;
 executable implementations are not a requirement.
 
-## Limits and next steps (remove completed steps)
+## Next steps (remove completed steps)
 
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
+The consolidation steps below are ordered by rough expected net line reduction;
+the estimates include new machinery, overlap, and should not be added together.
 
-### Size substitution
+### Scanning (~600 lines)
+
+Consolidate forward scanning, boundary handling, rewinding, and head restoration
+under a finite-memory scanner with configurable tape roles and termination
+actions. Start with a small pair of controllers and verify a net reduction;
+retain the distinction between blank termination and explicit slice widths.
+Reuse the existing `BinaryScan`, `StandardBitFold`, `ArraySeek`, and `Sweep`.
+
+### Arithmetic workspaces (~450 lines)
+
+Generalize `StandardBitFold` to represent live mathematical values while leaving
+private scratch subject only to region bounds. Apply it to multiplication and
+remainder, and reuse `Runs.whileValues` for gcd. Remove explicit scratch
+recurrences and their `Fits` proofs where only the accumulator or operands are
+needed; retain the mathematical arithmetic invariants.
+
+### Call frames (~350 lines)
+
+Share preservation of encoded live variables, size headers, and scratch regions
+across internal calls. Combine this with `Pipeline.runs` for the repeated call,
+commit, and advance sequences in `StandardMatrixRowStep`,
+`StandardGaussJordanClearStep`, and `StandardGaussJordanEliminationBody`.
+Replace their nested sequence proofs and per-tape preservation bookkeeping.
+
+### Array specializations (~300 lines)
+
+`ArraySeek` and `ArrayBlockCopy` already share navigation cores. Consolidate
+the remaining fixed-width and runtime-width seek, transfer, lookup, and update
+adapters, especially their duplicated encoded-array proofs. Parameterize the
+width-driven commands and reuse the encoding bridge; evaluate whether constant
+widths can use the runtime implementation with a privately prepared header.
+
+### Bounded traversal (~200 lines)
+
+Build on `Runs.whileRange` with a shared encoded binary counter and limit,
+comparison guard, and counter advancement. Replace repeated guard
+interpretation, counter-capacity, and preservation proofs in matrix row
+traversal, clear intervals, and elimination. Keep each algorithm's mathematical
+state invariant as a parameter.
+
+### Finite tables (~150 lines)
+
+Generalize `StandardFiniteTable` from two inputs and one output to arbitrary
+finite families with different fixed widths. Replace the separate
+`StandardRowCombine` controller and simplify `StandardFinitePredicate`, which
+already wraps the binary table through a private singleton input. Preserve the
+existing codecs.
+
+### Size substitution (~100 lines)
 
 Generalize polynomial reparameterization of domains, computations, and runtime
 bounds. Prepare derived unary size headers privately, sharing machinery with
 `withComputedWidth`, and replace the hard-coded `withInternalSize` substitution
 and specialized unary-sum preparation.
 
-### Finite tables
+### Domain views (~75 lines)
 
-Implement one finite-table construction for arbitrary finite input and output
-families, allowing different fixed widths. Make binary tables, predicates, and
-row combination specializations of it while preserving their existing codecs.
-
-### Scanning
-
-Consolidate forward scanning, boundary handling, rewinding, and head restoration
-under a finite-memory scanner with configurable tape roles and termination
-actions. Start with a small pair of controllers and verify a net reduction;
-retain the distinction between blank termination and explicit slice widths.
-
-### Domain views
-
-Use one generic transport mechanism for carrier changes, matrix flattening,
-widths, encodings, and contracts. Specialize unary domains from `unaryOfLength`
-and improve transport and simplification lemmas while retaining exact polynomial
-widths.
+Build on the domain-equality transport in `ofNamedLayout` to consolidate
+carrier changes, matrix flattening, and their encoding and contract proofs.
+Specialize unary domains from `unaryOfLength` and improve transport and
+simplification lemmas while retaining exact polynomial widths.
 
 ### Integer arithmetic
 
