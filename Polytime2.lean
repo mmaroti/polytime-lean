@@ -79,6 +79,7 @@ import Polytime2.StandardHead
 import Polytime2.ArrayCounter
 import Polytime2.ArraySeek
 import Polytime2.ArrayBlockCopy
+import Polytime2.ArrayUpdate
 import Polytime2.FixedArrayBlockCopy
 import Polytime2.RuntimeArrayBlockCopy
 import Polytime2.FixedArraySeek

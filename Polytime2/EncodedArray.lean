@@ -270,6 +270,82 @@ noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} 
       ArrayEncoding.bits (ArrayEncoding.encode (element.encode assignment) _ values) := by
   simp only [arrayOfLength, ofCodec, ArrayEncoding.bits_cast]
 
+/-- Lift a bounded raw-block lookup through the array codec once, independently
+of the controller, tape layout, or way the element width is supplied. -/
+theorem array_lookup_of_blocks (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (index : ℕ) (within : index < MvPolynomial.eval sizes length)
+    (array : (element.arrayOfLength length).Carrier sizes) (unit overhead : ℕ)
+    (property : ℕ → ℕ → List Bool → List Bool → Prop)
+    (blocks : ∀ before block after : List Bool,
+      before.length = index * element.width sizes → block.length = element.width sizes →
+      ∃ ticks, ticks ≤ index * unit + overhead ∧
+        property ticks (before ++ block ++ after).length (before ++ block ++ after) block) :
+    ∃ ticks, ticks ≤ MvPolynomial.eval sizes length * unit + overhead ∧
+      property ticks ((element.arrayOfLength length).width sizes)
+        (ArrayEncoding.bits ((element.arrayOfLength length).encode sizes array))
+        (ArrayEncoding.bits (element.encode sizes (array ⟨index, within⟩))) := by
+  obtain ⟨before, after, decomposition, prefixLength⟩ :=
+    ArrayEncoding.split_encode (element.encode sizes) _ array ⟨index, within⟩
+  let block := ArrayEncoding.bits (element.encode sizes (array ⟨index, within⟩))
+  have whole : ArrayEncoding.bits ((element.arrayOfLength length).encode sizes array) =
+      before ++ block ++ after := by simpa only [arrayOfLength_encode_bits] using decomposition
+  have wholeLength : (before ++ block ++ after).length = (element.arrayOfLength length).width sizes := by
+    rw [← whole]
+    exact List.length_ofFn
+  obtain ⟨ticks, cost, correct⟩ := blocks before block after prefixLength List.length_ofFn
+  refine ⟨ticks, cost.trans (Nat.add_le_add_right (Nat.mul_le_mul_right unit within.le) overhead), ?_⟩
+  rw [wholeLength] at correct
+  rw [← whole] at correct
+  exact correct
+
+/-- Lift separate-output block replacement without repeating codec decompositions
+or polynomial cost arithmetic in fixed-width and runtime-width adapters. -/
+theorem array_update_of_blocks (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (index : ℕ) (within : index < MvPolynomial.eval sizes length)
+    (array : (element.arrayOfLength length).Carrier sizes) (replacement : element.Carrier sizes)
+    (unit overhead : ℕ) (property : ℕ → ℕ → List Bool → List Bool → Prop)
+    (blocks : ∀ before block after : List Bool,
+      before.length = index * element.width sizes → block.length = element.width sizes →
+      (before ++ block ++ after).length = (element.arrayOfLength length).width sizes →
+      ∃ ticks, ticks ≤ index * unit + 2 * (before ++ block ++ after).length + overhead ∧
+        property ticks (before ++ block ++ after).length (before ++ block ++ after)
+          (before ++ ArrayEncoding.bits (element.encode sizes replacement) ++ after)) :
+    ∃ ticks, ticks ≤ MvPolynomial.eval sizes length * (unit + 2 * element.width sizes) + overhead ∧
+      property ticks ((element.arrayOfLength length).width sizes)
+        (ArrayEncoding.bits ((element.arrayOfLength length).encode sizes array))
+        (ArrayEncoding.bits ((element.arrayOfLength length).encode sizes
+          (Function.update array ⟨index, within⟩ replacement))) := by
+  obtain ⟨before, after, decomposition, prefixLength, updated⟩ :=
+    ArrayEncoding.split_encode_update (element.encode sizes) _ array ⟨index, within⟩ replacement
+  let block := ArrayEncoding.bits (element.encode sizes (array ⟨index, within⟩))
+  have whole : ArrayEncoding.bits ((element.arrayOfLength length).encode sizes array) =
+      before ++ block ++ after := by simpa only [arrayOfLength_encode_bits] using decomposition
+  have newWhole : ArrayEncoding.bits ((element.arrayOfLength length).encode sizes
+      (Function.update array ⟨index, within⟩ replacement)) =
+      before ++ ArrayEncoding.bits (element.encode sizes replacement) ++ after := by
+    simpa only [arrayOfLength, ofCodec, ArrayEncoding.bits_cast] using updated
+  have wholeLength : (before ++ block ++ after).length = (element.arrayOfLength length).width sizes := by
+    rw [← whole]
+    exact List.length_ofFn
+  obtain ⟨ticks, cost, correct⟩ := blocks before block after prefixLength List.length_ofFn wholeLength
+  refine ⟨ticks, ?_, ?_⟩
+  · have widthEq : (element.arrayOfLength length).width sizes =
+        MvPolynomial.eval sizes length * element.width sizes := by simp [arrayOfLength, ofCodec]
+    have bound := Nat.mul_le_mul_right unit within.le
+    calc
+      ticks ≤ index * unit + 2 * (before ++ block ++ after).length + overhead := cost
+      _ = index * unit + 2 * (MvPolynomial.eval sizes length * element.width sizes) + overhead := by
+        rw [wholeLength, widthEq]
+      _ ≤ MvPolynomial.eval sizes length * unit +
+          2 * (MvPolynomial.eval sizes length * element.width sizes) + overhead :=
+        Nat.add_le_add_right (Nat.add_le_add_right bound _) overhead
+      _ = _ := by simp [Nat.mul_add, Nat.mul_left_comm]
+  · rw [wholeLength] at correct
+    rw [← whole, ← newWhole] at correct
+    exact correct
+
 /-- Named-length arrays have the same consecutive element blocks. -/
 @[simp] theorem array_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (parameter : Parameter) (assignment : Parameter → ℕ)

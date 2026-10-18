@@ -108,7 +108,7 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
     (by
       intro name
       change (domainsSized element indexCapacity length (.inr name)).width assignment = _
-      fin_cases name <;> norm_num [domainsSized, widths, EncodedDomain.arrayOfLength,
+      fin_cases name <;> norm_num [domainsSized, widths, RuntimeArrayBlockCopy.widths, ArrayBlockCopy.widths, EncodedDomain.arrayOfLength,
         EncodedDomain.binaryNaturals, EncodedDomain.booleans, EncodedDomain.fixed,
         indexLength, EncodedDomain.unaryOfLength])
     (by intro name premise; exact premise) initial (fun _ => 0)

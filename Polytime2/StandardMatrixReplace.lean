@@ -153,13 +153,17 @@ theorem runs (element : EncodedDomain.{0, 0} (Fin 3)) (sizes : Fin 3 → ℕ)
       intro name
       simp only [updateWiring_apply]
       fin_cases name <;> norm_num [domains, StandardMatrixAddress.domains,
-        FixedArrayUpdate.widths, addressBitsLength, EncodedDomain.binaryNaturals,
+        FixedArrayUpdate.widths, ArrayUpdate.widths, ArrayBlockCopy.widths,
+        ArrayUpdate.insertSource, Fin.insertNth, Fin.succAboveCases,
+        Equiv.swap_apply_def, addressBitsLength, EncodedDomain.binaryNaturals,
         EncodedDomain.booleans, EncodedDomain.fixed])
     (by
       intro name premise
       simp only [updateWiring_apply] at premise
       fin_cases name <;> norm_num [readOnly, StandardMatrixAddress.readOnly,
-        FixedArrayUpdate.readOnly] at *)
+        FixedArrayUpdate.readOnly, ArrayUpdate.readOnly, ArrayBlockCopy.readOnly,
+        ArrayUpdate.insertSource, Fin.insertNth, Fin.succAboveCases,
+        Equiv.swap_apply_def] at *)
     middle final (by intro name; fin_cases name <;> rfl)
     (by
       intro name

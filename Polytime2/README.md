@@ -209,8 +209,11 @@ heads. Both element bit width and array length may be polynomial expressions in
 runtime sizes. Width evaluation prepares a private unary header, including from
 arbitrary scratch contents. Nested arrays support extracting and replacing whole
 rows through the same generic lookup and update certificates.
-Fixed and unary-width commands share binary navigation and indexed block-copy
-controllers. Replacement adds one array copy before the shared access routine.
+Fixed and unary-width commands share navigation and block-copy layouts, the
+encoded-array bridge, and a separate-output update controller. Transfer proofs
+handle lookup and replacement through the same direction parameter. Fixed
+commands retain their smaller tape sets and controller-dependent costs;
+converting them to unary-width commands would require a private width header.
 
 The general `Simulation` theorem transfers multi-tape certificates with
 polynomial input storage to polynomial-time finite TM0 machines. Intermediate
@@ -349,14 +352,6 @@ across internal calls. Combine this with `Pipeline.runs` for the repeated call,
 commit, and advance sequences in `StandardMatrixRowStep`,
 `StandardGaussJordanClearStep`, and `StandardGaussJordanEliminationBody`.
 Replace their nested sequence proofs and per-tape preservation bookkeeping.
-
-### Array specializations (~300 lines)
-
-`ArraySeek` and `ArrayBlockCopy` already share navigation cores. Consolidate
-the remaining fixed-width and runtime-width seek, transfer, lookup, and update
-adapters, especially their duplicated encoded-array proofs. Parameterize the
-width-driven commands and reuse the encoding bridge; evaluate whether constant
-widths can use the runtime implementation with a privately prepared header.
 
 ### Bounded traversal (~200 lines)
 

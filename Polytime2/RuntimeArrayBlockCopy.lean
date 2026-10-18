@@ -89,7 +89,7 @@ private theorem seek_runs (sourceIsArray : Bool) (elementWidth : ℕ)
     (frame elementWidth index ((Turing.Tape.move .right)^[value index * elementWidth] array) scalar
       (List.replicate index.length false) (word (List.replicate index.length false)) (data false))
     (by intro name; fin_cases name <;> rfl)
-    (by intro name; fin_cases name <;> simp [position, ArrayBlockCopy.position, RuntimeArraySeek.position, seekWiring_apply])
+    (by intro name; fin_cases name <;> simp [position, ArrayBlockCopy.position, ArraySeek.position, RuntimeArraySeek.position, seekWiring_apply])
     (by intro name outside; fin_cases name <;> first | rfl | exact False.elim (outside ⟨0, rfl⟩) | exact False.elim (outside ⟨1, rfl⟩) | exact False.elim (outside ⟨2, rfl⟩) | exact False.elim (outside ⟨3, rfl⟩))
     (by intro name; fin_cases name <;> rfl)
     (by intro name; fin_cases name <;> rfl)
@@ -116,36 +116,34 @@ private theorem transfer_runs (sourceIsArray : Bool) (elementWidth : ℕ)
     (List.replicate index.length false) (word (List.replicate index.length false)) (data false)
   let localWidth := fun name => widths elementWidth index.length (before ++ block ++ after).length (transferWiring sourceIsArray name)
   let localPosition := fun name => position before.length (transferWiring sourceIsArray name)
-  cases sourceIsArray with
-  | true =>
-    have trace := (UnaryCopy.runs (word block) scalar (by simpa [word, blockLength] using scalarLength)
-      (word before.reverse ++ [0]) (word after ++ [0]) [0] [0]
-      localWidth localPosition (by simp [localWidth, localPosition, widths, ArrayBlockCopy.widths,
-        position, ArrayBlockCopy.position, transferWiring_apply, word, blockLength])).wire_at_of_eq
-        (transferWiring true) (widths elementWidth index.length (before ++ block ++ after).length) (readOnly true)
-        (by intro name; rfl)
-        (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-        (position before.length) (position before.length) initial final
-        (by intro name; rfl) (by intro name; rfl) (by intro name outside; rfl)
-        (by intro name; fin_cases name <;> simp [initial, frame, ArrayBlockCopy.frame, ArrayBlockCopy.selectedArray, transferWiring_apply, UnaryCopy.frame, Binary.tape, word, List.map_append, List.append_assoc, buffer_padding, unary, CallingConvention.tape, buffer, blockLength])
-        (by intro name; fin_cases name <;> simp [final, frame, ArrayBlockCopy.frame, ArrayBlockCopy.selectedArray, transferWiring_apply, UnaryCopy.frame, Binary.tape, word, List.map_append, List.append_assoc, buffer_padding, unary, CallingConvention.tape, buffer, blockLength])
-        (by intro name outside; fin_cases name <;> first | rfl | exact False.elim (outside ⟨0, rfl⟩) | exact False.elim (outside ⟨1, rfl⟩) | exact False.elim (outside ⟨2, rfl⟩))
-    simpa only [initial, final, transfer, word, List.length_map, blockLength, Bool.true_eq_false, Bool.false_eq_true, ↓reduceIte] using trace
-  | false =>
-    obtain rfl := scalarInput rfl
-    have trace := (UnaryCopy.runs (word replacement) (word block) (by simp [word, blockLength, replacementLength])
-      [0] [0] (word before.reverse ++ [0]) (word after ++ [0])
-      localWidth localPosition (by simp [localWidth, localPosition, widths, ArrayBlockCopy.widths,
-        position, ArrayBlockCopy.position, transferWiring_apply, word, blockLength, replacementLength])).wire_at_of_eq
-        (transferWiring false) (widths elementWidth index.length (before ++ block ++ after).length) (readOnly false)
-        (by intro name; rfl)
-        (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-        (position before.length) (position before.length) initial final
-        (by intro name; rfl) (by intro name; rfl) (by intro name outside; rfl)
-        (by intro name; fin_cases name <;> simp [initial, frame, ArrayBlockCopy.frame, ArrayBlockCopy.selectedArray, transferWiring_apply, UnaryCopy.frame, Binary.tape, word, List.map_append, List.append_assoc, buffer_padding, unary, CallingConvention.tape, buffer, replacementLength])
-        (by intro name; fin_cases name <;> simp [final, frame, ArrayBlockCopy.frame, ArrayBlockCopy.selectedArray, transferWiring_apply, UnaryCopy.frame, Binary.tape, word, List.map_append, List.append_assoc, buffer_padding, unary, CallingConvention.tape, buffer, replacementLength])
-        (by intro name outside; fin_cases name <;> first | rfl | exact False.elim (outside ⟨0, rfl⟩) | exact False.elim (outside ⟨1, rfl⟩) | exact False.elim (outside ⟨2, rfl⟩))
-    simpa only [initial, final, transfer, word, List.length_map, replacementLength, Bool.true_eq_false, Bool.false_eq_true, ↓reduceIte] using trace
+  let source := if sourceIsArray then block else replacement
+  let target := if sourceIsArray then scalar else word block
+  have sourceLength : source.length = elementWidth := by cases sourceIsArray <;> assumption
+  have targetLength : target.length = elementWidth := by
+    cases sourceIsArray <;> simp_all [target, word]
+  have trace := (UnaryCopy.runs (word source) target (by simpa [word, sourceLength] using targetLength)
+    (if sourceIsArray then word before.reverse ++ [0] else [0])
+    (if sourceIsArray then word after ++ [0] else [0])
+    (if sourceIsArray then [0] else word before.reverse ++ [0])
+    (if sourceIsArray then [0] else word after ++ [0])
+    localWidth localPosition (by
+      cases sourceIsArray <;> simp [localWidth, localPosition, widths, ArrayBlockCopy.widths,
+        position, ArrayBlockCopy.position, transferWiring_apply, word, source, blockLength, replacementLength])).wire_at_of_eq
+      (transferWiring sourceIsArray) (widths elementWidth index.length (before ++ block ++ after).length) (readOnly sourceIsArray)
+      (by intro name; rfl)
+      (by intro name premise; cases sourceIsArray <;> fin_cases name <;> first | rfl | contradiction)
+      (position before.length) (position before.length) initial final
+      (by intro name; rfl) (by intro name; rfl) (by intro name outside; rfl)
+      (by
+        intro name
+        cases sourceIsArray <;> fin_cases name <;>
+          simp [source, target, initial, frame, ArrayBlockCopy.frame, ArrayBlockCopy.selectedArray, transferWiring_apply, UnaryCopy.frame, Binary.tape, word, List.map_append, List.append_assoc, buffer_padding, unary, CallingConvention.tape, buffer, blockLength, replacementLength, scalarInput])
+      (by
+        intro name
+        cases sourceIsArray <;> fin_cases name <;>
+          simp [source, final, frame, ArrayBlockCopy.frame, ArrayBlockCopy.selectedArray, transferWiring_apply, UnaryCopy.frame, Binary.tape, word, List.map_append, List.append_assoc, buffer_padding, unary, CallingConvention.tape, buffer, blockLength, replacementLength, scalarInput])
+      (by intro name outside; cases sourceIsArray <;> fin_cases name <;> first | rfl | exact False.elim (outside ⟨0, rfl⟩) | exact False.elim (outside ⟨1, rfl⟩) | exact False.elim (outside ⟨2, rfl⟩))
+  simpa only [initial, final, transfer, word, List.length_map, sourceLength] using trace
 
 theorem runs (sourceIsArray : Bool) (elementWidth : ℕ) (index before block after replacement : List Bool)
     (prefixLength : before.length = value index * elementWidth)

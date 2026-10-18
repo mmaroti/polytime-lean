@@ -31,20 +31,16 @@ private instance : Fact (4 ≤ 4) := ⟨by decide⟩
 
 abbrev Alphabet := CallingConvention.Alphabet (Fin 4)
 
-/-- Counter, decrement scratch, guard bit, and array cursor. -/
+/-- The width-specific command uses the common navigation layout. -/
 def frame (counter : List Bool) (scratch : List Symbol) (flag : Symbol)
-    (array : Turing.Tape Symbol) : Tapes Alphabet := fun name =>
-  if name = 0 then buffer (word counter)
-  else if name = 1 then buffer scratch
-  else if name = 2 then buffer [flag]
-  else array
+    (array : Turing.Tape Symbol) : Tapes Alphabet :=
+  ArraySeek.frame (fun _ => default) counter scratch flag array
 
-def widths (digits arrayWidth : ℕ) (name : Fin 4) : ℕ :=
-  if name = 3 then arrayWidth else if name = 2 then 1 else digits
+def widths (digits arrayWidth : ℕ) : Fin 4 → ℕ :=
+  ArraySeek.widths (fun _ => 0) digits arrayWidth
 
-def readOnly (name : Fin 4) : Bool := decide (name = 3)
-
-def position (offset : ℤ) (name : Fin 4) : ℤ := if name = 3 then offset else 0
+def readOnly : Fin 4 → Bool := ArraySeek.readOnly
+abbrev position := ArraySeek.position (tapeCount := 4)
 
 noncomputable def advance (elementWidth : ℕ) : Machine Alphabet (Fin (elementWidth + 1)) :=
   MultiTape.wire (oneTape (3 : Fin 4)) (Move.machine elementWidth .right)
@@ -69,29 +65,16 @@ private theorem advance_runs (elementWidth : ℕ) (bits : List Bool) (scratch : 
       0 (position (offset + elementWidth))
       (frame bits scratch flag ((Turing.Tape.move .right)^[elementWidth] array)) := by
   have moved := (StandardHead.move_runs elementWidth .right (fun _ : Unit => arrayWidth)
-    (fun _ : Unit => true) (fun _ : Unit => offset) (fun _ : Unit => array)).wire
-    (oneTape (3 : Fin 4)) (widths bits.length arrayWidth) readOnly
-    (by intro name; cases name; rfl) (by intro name premise; cases name; rfl)
-    (frame bits scratch flag array) (position offset)
-  have startPositions : install (oneTape (3 : Fin 4)) (fun _ : Unit => offset) (position offset) = position offset := by
-    exact install_self (oneTape (3 : Fin 4)) (position offset)
-  have finalPositions : install (oneTape (3 : Fin 4))
-      (fun name : Unit => offset + elementWidth * displacement (some Turing.Dir.right)) (position offset) =
-      position (offset + elementWidth) := by
-    funext name
-    fin_cases name <;> simp [position, install_one, displacement]
-  have startTapes : install (oneTape (3 : Fin 4)) (fun _ : Unit => array)
-      (frame bits scratch flag array) =
-      frame bits scratch flag array := by
-    exact install_self (oneTape (3 : Fin 4)) _
-  have finalTapes : install (oneTape (3 : Fin 4))
-      (fun name : Unit => (Turing.Tape.move .right)^[elementWidth] array)
-      (frame bits scratch flag array) =
-      frame bits scratch flag
-        ((Turing.Tape.move .right)^[elementWidth] array) := by
-    funext name
-    fin_cases name <;> simp [frame, install_one]
-  rw [startPositions, finalPositions, startTapes, finalTapes] at moved
+    (fun _ : Unit => true) (fun _ : Unit => offset) (fun _ : Unit => array)).wire_at_of_eq
+      (oneTape (3 : Fin 4)) (widths bits.length arrayWidth) readOnly
+      (by intro name; cases name; rfl) (by intro name premise; cases name; rfl)
+      (position offset) (position (offset + elementWidth))
+      (frame bits scratch flag array)
+      (frame bits scratch flag ((Turing.Tape.move .right)^[elementWidth] array))
+      (by intro name; cases name; rfl) (by intro name; cases name; simp [position, ArraySeek.position, displacement])
+      (by intro name outside; fin_cases name <;> first | rfl | exact False.elim (outside ⟨(), rfl⟩))
+      (by intro name; cases name; rfl) (by intro name; cases name; rfl)
+      (by intro name outside; fin_cases name <;> first | rfl | exact False.elim (outside ⟨(), rfl⟩))
   exact moved
 
 /-- Fixed-width movement instantiates the shared counter loop without size tapes. -/
@@ -104,25 +87,9 @@ theorem runs (elementWidth : ℕ) (bits : List Bool) (scratch : List Symbol)
       (exit elementWidth) (position (offset + value bits * elementWidth))
       (frame (List.replicate bits.length false) (word (List.replicate bits.length false)) (data false)
         ((Turing.Tape.move .right)^[value bits * elementWidth] array)) := by
-  have widthsEqual (digits arrayWidth : ℕ) : ArraySeek.widths (tapeCount := 4) (fun _ : Fin 4 => 0) digits arrayWidth = widths digits arrayWidth := by
-    funext name
-    fin_cases name <;> rfl
-  have readonlyEqual : ArraySeek.readOnly (tapeCount := 4) = readOnly := by
-    funext name
-    fin_cases name <;> rfl
-  have positionEqual (offset : ℤ) : ArraySeek.position (tapeCount := 4) offset = position offset := rfl
-  have frameEqual (bits : List Bool) (scratch : List Symbol) (flag : Symbol) (array : Turing.Tape Symbol) :
-      ArraySeek.frame (tapeCount := 4) (fun _ : Fin 4 => default) bits scratch flag array = frame bits scratch flag array := by
-    funext name
-    fin_cases name <;> rfl
-  have trace := ArraySeek.runs (tapeCount := 4) (fun _ : Fin 4 => default) (fun _ => 0) (advance elementWidth)
-    (Fin.last elementWidth) 0 elementWidth elementWidth
-    (by
-      intro bits scratch flag array arrayWidth offset
-      simpa only [widthsEqual, readonlyEqual, frameEqual, positionEqual, machine, entry, exit] using
-        advance_runs elementWidth bits scratch flag array arrayWidth offset)
+  exact ArraySeek.runs (tapeCount := 4) (fun _ => default) (fun _ => 0) (advance elementWidth)
+    (Fin.last elementWidth) 0 elementWidth elementWidth (advance_runs elementWidth)
     (by intro symbols; simp [advance, MultiTape.wire, Move.machine])
     bits scratch sameLength flag array arrayWidth offset
-  simpa only [widthsEqual, readonlyEqual, frameEqual, positionEqual, machine, entry, exit] using trace
 
 end Polytime2.FixedArraySeek
