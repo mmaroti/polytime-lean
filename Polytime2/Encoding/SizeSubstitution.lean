@@ -1,0 +1,91 @@
+/-
+Copyright (c) 2026 Miklos Maroti <mmaroti@math.u-szeged.hu>
+SPDX-License-Identifier: Apache-2.0
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-/
+
+import Polytime2.Encoding.EncodedDomain
+
+/-! # Polynomial substitution and majorization for size assignments
+
+An exact substitution transports domains. The same substitution bounds widths
+and runtimes at any smaller, possibly input-dependent, size assignment.
+-/
+
+namespace Polytime2.SizeSubstitution
+
+variable {Parameter NewParameter : Type}
+
+/-- Substitute one caller polynomial for every callee size parameter. -/
+noncomputable def polynomial (substitution : NewParameter → MvPolynomial Parameter ℕ)
+    (value : MvPolynomial NewParameter ℕ) : MvPolynomial Parameter ℕ :=
+  MvPolynomial.eval₂Hom MvPolynomial.C substitution value
+
+/-- The size assignment associated with an exact polynomial substitution. -/
+noncomputable def assignment (substitution : NewParameter → MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) : NewParameter → ℕ :=
+  fun parameter => MvPolynomial.eval sizes (substitution parameter)
+
+@[simp] theorem polynomial_eval (substitution : NewParameter → MvPolynomial Parameter ℕ)
+    (value : MvPolynomial NewParameter ℕ) (sizes : Parameter → ℕ) :
+    MvPolynomial.eval sizes (polynomial substitution value) =
+      MvPolynomial.eval (assignment substitution sizes) value := by
+  induction value using MvPolynomial.induction_on with
+  | C value => simp [polynomial]
+  | add left right leftEqual rightEqual =>
+    simpa [polynomial] using congrArg₂ (· + ·) leftEqual rightEqual
+  | mul_X value parameter equality =>
+    simpa [polynomial, assignment] using
+      congrArg (· * MvPolynomial.eval sizes (substitution parameter)) equality
+
+/-- Natural-coefficient polynomials are monotone in every size parameter. -/
+theorem eval_mono (value : MvPolynomial NewParameter ℕ)
+    {sizes bounds : NewParameter → ℕ} (bounded : ∀ parameter, sizes parameter ≤ bounds parameter) :
+    MvPolynomial.eval sizes value ≤ MvPolynomial.eval bounds value := by
+  induction value using MvPolynomial.induction_on with
+  | C value => simp
+  | add left right leftBound rightBound =>
+    simpa only [map_add] using Nat.add_le_add leftBound rightBound
+  | mul_X value parameter valueBound =>
+    simpa only [map_mul, MvPolynomial.eval_X] using Nat.mul_le_mul valueBound (bounded parameter)
+
+/-- Computed sizes need only polynomial upper bounds, not exact formulas. -/
+theorem eval_le (substitution : NewParameter → MvPolynomial Parameter ℕ)
+    (value : MvPolynomial NewParameter ℕ) (sizes : Parameter → ℕ)
+    (computed : NewParameter → ℕ)
+    (bounded : ∀ parameter, computed parameter ≤ MvPolynomial.eval sizes (substitution parameter)) :
+    MvPolynomial.eval computed value ≤ MvPolynomial.eval sizes (polynomial substitution value) := by
+  rw [polynomial_eval]
+  exact eval_mono value bounded
+
+end Polytime2.SizeSubstitution
+
+namespace Polytime2.EncodedDomain
+
+universe carrierLevel
+variable {Parameter NewParameter : Type} [Fintype Parameter] [Fintype NewParameter]
+
+/-- Reparameterization keeps the original carriers and canonical bits. -/
+noncomputable def substitute (domain : EncodedDomain.{0, carrierLevel} NewParameter)
+    (substitution : NewParameter → MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  ofCodec (fun sizes => domain.Carrier (SizeSubstitution.assignment substitution sizes))
+    (SizeSubstitution.polynomial substitution domain.widthPolynomial)
+    (fun sizes => domain.width (SizeSubstitution.assignment substitution sizes))
+    (fun sizes => (SizeSubstitution.polynomial_eval substitution domain.widthPolynomial sizes).symm)
+    (fun sizes => domain.encode (SizeSubstitution.assignment substitution sizes))
+    (fun sizes => domain.decode (SizeSubstitution.assignment substitution sizes))
+    (fun sizes => domain.decode_encode (SizeSubstitution.assignment substitution sizes))
+    (fun sizes => domain.encode_decode (SizeSubstitution.assignment substitution sizes))
+
+end Polytime2.EncodedDomain

@@ -41,6 +41,12 @@ theorem buffer_region (contents : List Symbol) : Region contents.length 0 (buffe
   | negSucc index =>
     rfl
 
+/-- Blank storage satisfies every live-region bound. -/
+theorem blank_region (width : ℕ) : Region width 0 (buffer []) := by
+  have empty := buffer_region ([] : List Symbol)
+  intro position outside
+  exact empty position (by simp only [List.length_nil]; omega)
+
 /-- A head at the start of any fixed blank-surrounded region is an admissible
 arbitrary writable buffer. Its interior need not encode a valid value yet. -/
 theorem Region.exists_buffer {width : ℕ} {tape : Turing.Tape Symbol}

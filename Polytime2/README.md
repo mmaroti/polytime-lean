@@ -60,6 +60,15 @@ Namespaces and declaration names are unchanged.
   includes preparation and output restoration in the polynomial runtime bound.
   `EncodedDomain.width_computable` supplies this evaluator for every domain,
   including arrays with runtime-dependent element widths.
+- `Realizable.atComputedSizes` calls a computation at input-dependent sizes
+  stored as bounded unary data. Its dependent input and output domains retain
+  the exact mathematical payloads, with binary zero padding to polynomial
+  capacities. Private header preparation, width evaluation, argument extraction,
+  execution, and result padding are included in the certificate, including zero
+  sizes and empty parameter or argument families. `Realizable.substitute`
+  handles fixed polynomial assignments using the same header compiler.
+  `Examples/DynamicSizes.lean` counts leading true flags and invokes a quadratic
+  evaluator at that actual count, with a standalone TM0 certificate.
 - Deterministic transitions over Mathlib's two-sided tapes, with separate
   alphabets, writes, and head movements for each tape.
 - Counted execution, controller embedding, and sequential composition with one
@@ -234,9 +243,9 @@ providing an executable compiler from operation tables.
 
 `Multisorted.lean` defines conversion-independent SMP inputs for a fixed finite
 catalogue `D_t`, with public sizes `n_t` for each sort and a generator count
-`g`. The carrier is exactly generators and a target in `∏ t, D_t ^ n_t`, encoded
-by ordinary records and arrays without inactive slots. `preparedDomain` adds
-encoded dependency masks. `IsPrepared` specifies ordered SI sorts,
+`g`. The carrier is exactly generators and a target in `∏ t, D_t ^ n_t`,
+encoded by ordinary records and arrays without inactive slots. `preparedDomain`
+adds encoded dependency masks. `IsPrepared` specifies ordered SI sorts,
 subdirectness, bounded earlier dependencies, and the full monolith graph
 isomorphisms agreeing with fixed catalogue lookups. `IsMember` states the
 ordinary membership question. Certified target access and standalone TM0 export
@@ -386,8 +395,11 @@ and preservation proofs.
 `Computation.Realizable.followedBy` feeds a result to a single-argument
 computation. `letThen` retains the original arguments alongside that result for
 the continuation; nested bindings describe DAGs. `withArguments` selects inputs
-injectively from a larger context. Callers prove domain and precondition
-compatibility mathematically. `withPrecondition` restricts admissible inputs.
+injectively from a larger context. `onResults` prepares every callee argument
+using certified computations on a shared context. `withRecordArgument` accepts
+the entire argument family on one record tape. Callers prove domain and
+precondition compatibility mathematically. `withPrecondition` restricts
+admissible inputs.
 `withSpecification` replaces a specification after proving agreement.
 `withConstantSizes` reuses a specialization-fixed computation alongside sizes.
 `reindexDomains` changes mathematical carriers through equivalences with the
@@ -469,13 +481,6 @@ commit, and advance sequences in `Matrices/RowStep.lean`,
 `GaussJordan/ClearStep.lean`, and `GaussJordan/EliminationBody.lean`.
 Replace their nested sequence proofs and per-tape preservation bookkeeping.
 
-### Size substitution (~100 lines)
-
-Generalize polynomial reparameterization of domains, computations, and runtime
-bounds. Prepare derived unary size headers privately, sharing machinery with
-`withComputedWidth`, and replace the hard-coded `withInternalSize` substitution
-and specialized unary-sum preparation.
-
 ### Domain views (~75 lines)
 
 Build on the domain-equality transport in `ofNamedLayout` to consolidate
@@ -492,16 +497,6 @@ needed for integer matrices, reusing generic arithmetic machinery.
 
 Develop higher-level algorithm notation over the certified mathematical
 composition rules, keeping machine witnesses and scratch layouts internal.
-
-### Computed sizes
-
-Extend certified composition to calls at input-dependent size assignments.
-Require certified computation of the new sizes in unary and polynomial bounds
-in the caller's sizes. Prepare immutable callee size tapes privately and
-transfer runtime bounds by polynomial majorization. Reuse size substitution
-and width evaluation; fixed polynomial substitutions should be a special case.
-Keep machines, scratch, and runtime witnesses hidden behind public composition
-rules, and handle zero sizes.
 
 ### Array packing
 
