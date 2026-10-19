@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.GaussJordan.EliminationBody
-import Polytime2.Machine.CallingConventionWhile
+import Polytime2.Arithmetic.TraversalLoop
 
 /-! # Polynomial execution of the outer elimination loop -/
 
@@ -64,97 +64,49 @@ theorem loop_runs [DecidableEq Scalar] (enumeration : Scalar ≃ Fin cardinality
   intro sizes initial start startWithin rowsFit columnsFit matrices pivots pivotBounds updateLaw
     capacity pivotEq counterEq matrixEq limitEq headers regions
   let width : TapeName → ℕ := fun name => (domains enumeration name).width sizes
-  let bodyStart := bodyEntry
-    ((FieldRow.scalarDomain enumeration).width Empty.elim)
-  let bodyStop := bodyExit
-    ((FieldRow.scalarDomain enumeration).width Empty.elim)
   let limit : Fin (2 ^ sizes 0) := ⟨sizes 2, columnsFit⟩
-  have sizeReadOnly (parameter : Fin 3) : readOnly (sizeTape parameter) = true := by
-    fin_cases parameter <;> decide
-  let representation (count : ℕ) (tapes : Tapes Alphabet) : Prop :=
-    ∃ counterFits : count < 2 ^ sizes 0,
-      tapes pivotTape = encoded (EncodedDomain.binaryNaturals 0) sizes (pivots count) ∧
-      tapes columnTape = encoded (EncodedDomain.binaryNaturals 0) sizes ⟨count, counterFits⟩ ∧
-      tapes workingTape = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes (matrices count) ∧
-      tapes limitTape = encoded (EncodedDomain.binaryNaturals 0) sizes limit ∧
-      (∀ parameter, tapes (sizeTape parameter) = unary (sizes parameter)) ∧
-      (∀ name, Region (width name) 0 (tapes name))
-  have executeGuarded : ∀ count, start.val ≤ count → count ≤ sizes 2 → ∀ tapes,
-      representation count tapes → ∃ ticks final, ticks ≤ MvPolynomial.eval sizes guardBound ∧
-        Runs width readOnly guard ticks BinarySubtraction.entry (fun _ => 0) tapes
-          BinarySubtraction.exit (fun _ => 0) final ∧
-        (representation count final ∧ continues (MultiTape.read final) = decide (count < sizes 2)) := by
-    intro count lower upper tapes represented
-    obtain ⟨counterFits, pivotEq, counterEq, matrixEq, limitEq, headers, regions⟩ := represented
-    obtain ⟨guardTicks, guarded, guardCost, guardTrace, flagEq, difference, guardOutside⟩ :=
-      executeGuard sizes tapes ⟨count, counterFits⟩ limit (headers 0) counterEq limitEq
-        (by simpa [width, domains, differenceTape] using regions differenceTape)
-        (by simpa [width, domains, guardTape, EncodedDomain.booleans, EncodedDomain.fixed,
-          EncodedDomain.ofCodec, show Nat.clog 2 2 = 1 from by decide] using regions guardTape)
-    have guardedRegions : ∀ name, Region (width name) 0 (guarded name) :=
-      fun name => guardTrace.region name (regions name)
-    have tested : continues (MultiTape.read guarded) = decide (count < sizes 2) := by
-      unfold continues MultiTape.read
-      rw [flagEq, encoded_booleans]
-      cases decide (count < sizes 2) <;> rfl
-    exact ⟨guardTicks, guarded, guardCost, guardTrace,
-      ⟨counterFits, (guardOutside pivotTape (by decide) (by decide)).trans pivotEq,
-        (guardOutside columnTape (by decide) (by decide)).trans counterEq,
-        (guardOutside workingTape (by decide) (by decide)).trans matrixEq,
-        (guardOutside limitTape (by decide) (by decide)).trans limitEq,
-        (fun parameter => (guardTrace.readOnly_tape (sizeTape parameter) (sizeReadOnly parameter)).trans
-          (headers parameter)), guardedRegions⟩, tested⟩
-  have executeAdvanced : ∀ count, start.val ≤ count → count < sizes 2 → ∀ tapes,
-      representation count tapes → ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bodyBound ∧
-        Runs width readOnly (body enumeration) ticks bodyStart (fun _ => 0) tapes
-          bodyStop (fun _ => 0) final ∧ representation (count + 1) final := by
-    intro count lower before tapes represented
-    obtain ⟨counterFits, pivotEq, counterEq, matrixEq, limitEq, headers, regions⟩ := represented
-    obtain ⟨bodyTicks, advanced, nextRow, nextColumn, bodyCost, bodyTrace, nextMatrixEq,
-        nextRowEq, nextRowValue, nextRowBound, nextCounterEq, nextCounterValue,
-        bodyOutside⟩ :=
-      executeBody sizes tapes (pivots count) ⟨count, counterFits⟩ (matrices count)
-        (pivotBounds count) before rowsFit columnsFit capacity
-        pivotEq
-        counterEq
-        matrixEq
-        headers regions
-    have nextFits : count + 1 < 2 ^ sizes 0 :=
-      lt_of_le_of_lt (Nat.succ_le_of_lt before) columnsFit
-    have sameCounter : nextColumn = (⟨count + 1, nextFits⟩ : Fin (2 ^ sizes 0)) :=
-      Fin.ext nextCounterValue
-    have sameRow : nextRow = pivots (count + 1) :=
-      Fin.ext (nextRowValue.trans (congrArg Prod.snd (updateLaw count before)))
-    have nextMatrix : advanced workingTape =
-        encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes (matrices (count + 1)) :=
-      nextMatrixEq.trans (congrArg (encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes)
-        (congrArg Prod.fst (updateLaw count before)))
-    have nextPivot : advanced pivotTape =
-        encoded (EncodedDomain.binaryNaturals 0) sizes (pivots (count + 1)) :=
-      nextRowEq.trans (congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes) sameRow)
-    have nextCounter : advanced columnTape =
-        encoded (EncodedDomain.binaryNaturals 0) sizes (⟨count + 1, nextFits⟩ : Fin (2 ^ sizes 0)) :=
-      nextCounterEq.trans (congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes) sameCounter)
-    exact ⟨bodyTicks, advanced, bodyCost, bodyTrace, nextFits, nextPivot, nextCounter, nextMatrix,
-      (bodyOutside 1 (by decide)).trans limitEq,
-      (fun parameter => (bodyTrace.readOnly_tape (sizeTape parameter) (sizeReadOnly parameter)).trans
-        (headers parameter)), (fun name => bodyTrace.region name (regions name))⟩
-  obtain ⟨ticks, final, cost, trace, represented, stopped⟩ :=
-    Runs.whileRange width readOnly guard (body enumeration)
-      BinarySubtraction.entry BinarySubtraction.exit bodyStart bodyStop continues representation
-      (fun count tapes => representation count tapes ∧
-        continues (MultiTape.read tapes) = decide (count < sizes 2))
-      start.val (sizes 2) (MvPolynomial.eval sizes guardBound) (MvPolynomial.eval sizes bodyBound)
-      startWithin guard_halt (body_halt enumeration) executeGuarded
-      (fun count lower before tapes valid => executeAdvanced count lower before tapes valid.1)
-      (fun _ _ _ _ valid => valid.2) initial
-      ⟨start.isLt, pivotEq, counterEq, matrixEq, limitEq, headers, regions⟩
-  obtain ⟨counterFits, finalPivot, finalCounter, finalMatrix, _, _, _⟩ := represented
-  refine ⟨ticks, final, ?_, trace, finalMatrix, finalPivot, finalCounter⟩
-  have remainingBound : sizes 2 - start.val + 1 ≤ sizes 2 + 1 := by omega
-  have boundedCost := cost.trans (Nat.add_le_add_right
-    (Nat.mul_le_mul_right (MvPolynomial.eval sizes guardBound + MvPolynomial.eval sizes bodyBound + 2)
-      remainingBound) 1)
-  simpa only [map_add, map_mul, map_one, map_ofNat, MvPolynomial.eval_X] using boundedCost
+  let invariant (count : ℕ) (tapes : Tapes Alphabet) : Prop :=
+    tapes (pivotTape) = encoded (EncodedDomain.binaryNaturals 0) sizes (pivots count) ∧
+    tapes (workingTape) = encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes (matrices count)
+  obtain ⟨ticks, final, cost, trace, finalValues, finalCounter⟩ :=
+    BinaryTraversal.range_runs 0 sizes width readOnly guardWiring guardBound bodyBound
+      (MvPolynomial.X 2) (executeGuard sizes)
+      (by change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = sizes 0; simp)
+      (by change (EncodedDomain.booleans (Parameter := Fin 3)).width sizes = 1
+          norm_num [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+      sizeTape rfl (by intro parameter; fin_cases parameter <;> decide)
+      (body enumeration) (bodyEntry ((FieldRow.scalarDomain enumeration).width Empty.elim))
+      (bodyExit ((FieldRow.scalarDomain enumeration).width Empty.elim)) (body_halt enumeration)
+      invariant (by
+        intro count tapes final preserved represented
+        obtain ⟨pivotEq, matrixEq⟩ := represented
+        exact ⟨(preserved (pivotTape) (by decide) (by decide)).trans pivotEq,
+          (preserved (workingTape) (by decide) (by decide)).trans matrixEq⟩)
+      start limit startWithin (by simp [limit])
+      (by
+        intro count counterFits lower before nextFits nextValue tapes represented counterEq limitEq headers regions
+        obtain ⟨pivotEq, matrixEq⟩ := represented
+        obtain ⟨bodyTicks, advanced, nextRow, nextColumn, bodyCost, bodyTrace, nextMatrixEq,
+            nextRowEq, nextRowValue, nextRowBound, nextCounterEq, nextCounterValue,
+            bodyOutside⟩ :=
+          executeBody sizes tapes (pivots count) ⟨count, counterFits⟩ (matrices count)
+            (pivotBounds count) before rowsFit columnsFit capacity
+            pivotEq counterEq matrixEq headers regions
+        have sameCounter : nextColumn = (⟨count + 1, nextFits⟩ : Fin (2 ^ sizes 0)) :=
+          Fin.ext nextCounterValue
+        have sameRow : nextRow = pivots (count + 1) :=
+          Fin.ext (nextRowValue.trans (congrArg Prod.snd (updateLaw count before)))
+        have nextMatrix : advanced workingTape =
+            encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes (matrices (count + 1)) :=
+          nextMatrixEq.trans (congrArg (encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes)
+            (congrArg Prod.fst (updateLaw count before)))
+        have nextPivot : advanced pivotTape =
+            encoded (EncodedDomain.binaryNaturals 0) sizes (pivots (count + 1)) :=
+          nextRowEq.trans (congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes) sameRow)
+        refine ⟨bodyTicks, advanced, bodyCost, bodyTrace, ?_, ?_, bodyOutside 1 (by decide)⟩
+        · exact ⟨nextPivot, nextMatrix⟩
+        · exact nextCounterEq.trans (congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes) sameCounter))
+      initial ⟨pivotEq, matrixEq⟩ counterEq limitEq headers regions
+  exact ⟨ticks, final, cost, trace, finalValues.2, finalValues.1, finalCounter⟩
 
 end Polytime2.StandardGaussJordanElimination

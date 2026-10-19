@@ -365,6 +365,14 @@ arrays, zero-width values, partial updates, and standalone TM0 export.
 `whileLoop` uses a mathematical invariant, decreasing measure, and existential
 polynomial bound. Its conserved answer equals the state when the guard stops;
 the library handles state copies, scratch, and all execution costs.
+`BinaryTraversal.comparison_runs` places a shared binary comparison in a named
+workspace. `BinaryTraversal.range_runs` combines that guard with a certified
+body and an arbitrary invariant over the live values. It maintains size headers
+and bounded scratch, proves that the counter advances without wrapping, and
+derives the polynomial cost for the whole interval, including empty intervals
+and nonzero starts.
+Matrix row traversal, Gauss–Jordan clear intervals, and outer elimination use
+this rule; their proofs retain only the live values and mathematical updates.
 Internal workspaces use `Runs.whileValues` for mathematical state families and
 `Runs.whileRange` for bounded traversals. Immutable context stays in the
 representations; only live variables require encoding proofs. `Initialization`
@@ -408,15 +416,6 @@ across internal calls. Combine this with `Pipeline.runs` for the repeated call,
 commit, and advance sequences in `Matrices/RowStep.lean`,
 `GaussJordan/ClearStep.lean`, and `GaussJordan/EliminationBody.lean`.
 Replace their nested sequence proofs and per-tape preservation bookkeeping.
-
-### Bounded traversal (~200 lines)
-
-The public array fold and bounded-iteration rules are implemented. Consolidate
-the remaining internal matrix loops using a shared encoded binary counter and
-limit, comparison guard, and counter advancement. Replace repeated guard
-interpretation, counter-capacity, and preservation proofs in matrix row
-traversal, clear intervals, and elimination. Keep each algorithm's mathematical
-state invariant as a parameter.
 
 ### Size substitution (~100 lines)
 

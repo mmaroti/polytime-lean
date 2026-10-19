@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Arithmetic.BoundedTraversal
 import Polytime2.Matrices.RowStep
 import Polytime2.Arithmetic.BinarySubtraction
 import Polytime2.Primitives.SizeReadContract
@@ -89,7 +90,7 @@ def result (symbols : Symbols Alphabet) : Bool := decide (symbols guardTape = Bi
   simp [guard, MultiTape.wire, BinarySubtraction.algorithm, BinarySubtraction.exit,
     StandardBinaryArithmetic.algorithm, StandardBinaryArithmetic.exit, MultiTape.withExit]
 
-/-- The guard compares bounded binary values and canonicalizes both outputs.
+/-- The guard compares bounded binary values and returns the Boolean result.
 Every tape except its difference and Boolean result stays unchanged. -/
 theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty) :
     ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ) (initial : Tapes Alphabet)
@@ -102,80 +103,14 @@ theorem guard_runs (scalar : EncodedDomain.{0, 0} Empty) :
         Runs (fun name => (domains scalar name).width sizes) readOnly guard ticks
           BinarySubtraction.entry (fun _ => 0) initial BinarySubtraction.exit (fun _ => 0) final ∧
         final guardTape = encoded EncodedDomain.booleans sizes (decide (column.val < limit.val)) ∧
-        (∃ value : Fin (2 ^ sizes 0), final differenceTape = encoded (EncodedDomain.binaryNaturals 0) sizes value) ∧
         (∀ name, name ≠ differenceTape → name ≠ guardTape → final name = initial name) := by
-  obtain ⟨bound, execute⟩ := BinarySubtraction.comparison_contract.wired_runs guardWiring
-  refine ⟨MvPolynomial.rename (fun _ : Unit => (0 : Fin 3)) bound, ?_⟩
-  intro sizes initial column limit header columnEq limitEq differenceRegion guardRegion
-  let localSizes : Unit → ℕ := fun _ => sizes 0
-  let input : Inputs BinarySubtraction.domains BinarySubtraction.argumentReadOnly localSizes := fun name => by
-    rcases name with ⟨name, readonly⟩
-    cases name with
-    | inl parameter => exact PUnit.unit
-    | inr name =>
-      by_cases first : name = 0
-      · subst name; exact column
-      · by_cases second : name = 1
-        · subst name; exact limit
-        · have writable : BinarySubtraction.argumentReadOnly (.inr name) = false := by
-            fin_cases name <;> first | rfl | contradiction
-          rw [writable] at readonly
-          contradiction
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute localSizes input (fun name => (domains scalar name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;>
-        simp [domains, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
-          BinarySubtraction.domains, StandardBinaryArithmetic.domains, EncodedDomain.unary,
-          EncodedDomain.binaryNaturals, EncodedDomain.booleans, EncodedDomain.fixed,
-          EncodedDomain.ofCodec, sizeTape, dataTape, limitTape, differenceTape, guardTape, localSizes])
-      (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      trivial
-      (by
-        intro name readonly
-        fin_cases name
-        · change initial (sizeTape 0) = encoded (EncodedDomain.unary ()) localSizes PUnit.unit
-          rw [encoded_unary]
-          exact header
-        · change initial (dataTape 2) = encoded (EncodedDomain.binaryNaturals ()) localSizes column
-          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
-            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using columnEq
-        · change initial (limitTape) = encoded (EncodedDomain.binaryNaturals ()) localSizes limit
-          simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
-            EncodedDomain.ArrayEncoding.bits_cast, localSizes] using limitEq
-        · contradiction
-        · contradiction)
-      (by
-        intro name writable
-        fin_cases name
-        · contradiction
-        · contradiction
-        · contradiction
-        · convert differenceRegion using 1 <;>
-            norm_num [domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] <;> rfl
-        · convert guardRegion using 1 <;>
-            norm_num [domains, guardTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] <;> rfl)
-      (by intro parameter; cases parameter; exact header)
-  refine ⟨ticks, final, ?_, trace, ?_, ?_, ?_⟩
-  · simpa only [MvPolynomial.eval_rename, localSizes, Function.comp_def] using cost
-  · have flag := canonical true
-    change final guardTape = encoded EncodedDomain.booleans localSizes (output true) at flag
-    change output true = decide (column.val < limit.val) at correct
-    rw [correct] at flag
-    simpa only [encoded, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
-      EncodedDomain.ArrayEncoding.bits_cast] using flag
-  · have result := canonical false
-    change final differenceTape = encoded (EncodedDomain.binaryNaturals ()) localSizes (output false) at result
-    refine ⟨output false, ?_⟩
-    simpa only [encoded, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
-      EncodedDomain.ArrayEncoding.bits_cast, localSizes] using result
-  · intro name notDifference notGuard
-    apply preserved_of_wiring guardWiring BinarySubtraction.argumentReadOnly initial final outside immutable
-    intro localName equal
-    fin_cases localName
-    · rfl
-    · rfl
-    · rfl
-    · exact False.elim (notDifference equal.symm)
-    · exact False.elim (notGuard equal.symm)
+  exact BinaryTraversal.comparison_runs 0 (fun sizes name => (domains scalar name).width sizes)
+    readOnly guardWiring
+    (by intro sizes name; fin_cases name <;>
+      simp [domains, StandardMatrixRowStep.domains, StandardMatrixRowEntry.domains,
+        BinarySubtraction.domains, StandardBinaryArithmetic.domains, EncodedDomain.unary,
+        EncodedDomain.binaryNaturals, EncodedDomain.booleans, EncodedDomain.fixed,
+        EncodedDomain.ofCodec, sizeTape, dataTape, limitTape, differenceTape, guardTape])
+    (by intro name premise; fin_cases name <;> first | rfl | contradiction)
 
 end Polytime2.StandardMatrixRows

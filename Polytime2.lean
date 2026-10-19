@@ -182,6 +182,9 @@ import Polytime2.Arrays.FoldContract
 import Polytime2.Computation.Traversal
 import Polytime2.Examples.Fold
 
+import Polytime2.Arithmetic.BoundedTraversal
+import Polytime2.Arithmetic.TraversalLoop
+
 /-! # Polytime2
 
 Root module for the second implementation alternative.

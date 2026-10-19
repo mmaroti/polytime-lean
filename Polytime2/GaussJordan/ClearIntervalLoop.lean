@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.GaussJordan.ClearInterval
-import Polytime2.Machine.CallingConventionWhile
+import Polytime2.Arithmetic.TraversalLoop
 
 /-! # Polynomial execution of a complete row-clear interval -/
 
@@ -66,98 +66,44 @@ theorem loop_runs (enumeration : Scalar ≃ Fin cardinality) :
   intro sizes initial sourceRow column start limit sourceValid columnValid limitWithin startWithin
     current updateLaw columnsFit capacity sourceEq counterEq columnEq matrixEq limitEq headers regions
   let width : TapeName → ℕ := fun name => (domains enumeration name).width sizes
-  let representation (count : ℕ) (tapes : Tapes Alphabet) : Prop :=
-    ∃ counterFits : count < 2 ^ sizes 0,
-      tapes (dataTape 0) = encoded (EncodedDomain.binaryNaturals 0) sizes sourceRow ∧
-      tapes (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes ⟨count, counterFits⟩ ∧
-      tapes columnTape = encoded (EncodedDomain.binaryNaturals 0) sizes column ∧
-      tapes workingTape = encoded (domains enumeration workingTape) sizes (current count) ∧
-      tapes limitTape = encoded (EncodedDomain.binaryNaturals 0) sizes limit ∧
-      (∀ parameter, tapes (sizeTape parameter) = unary (sizes parameter)) ∧
-      (∀ name, Region (width name) 0 (tapes name))
-  have executeGuarded : ∀ count, start.val ≤ count → count ≤ limit.val → ∀ tapes,
-      representation count tapes → ∃ ticks final, ticks ≤ MvPolynomial.eval sizes guardBound ∧
-        Runs width readOnly guard ticks BinarySubtraction.entry (fun _ => 0) tapes
-          BinarySubtraction.exit (fun _ => 0) final ∧
-        (representation count final ∧ result (MultiTape.read final) = decide (count < limit.val)) := by
-    intro count lower upper tapes represented
-    obtain ⟨counterFits, sourceEq, counterEq, columnEq, matrixEq, limitEq, headers,
-      regions⟩ := represented
-    obtain ⟨guardTicks, guarded, guardCost, guardTrace, flagEq, difference, guardOutside⟩ :=
-      executeGuard sizes tapes ⟨count, counterFits⟩ limit (headers 0) counterEq limitEq
-        (by simpa [width, domains, differenceTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using regions differenceTape)
-        (by simpa [width, domains, guardTape, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec,
-          show Nat.clog 2 2 = 1 from by decide] using regions guardTape)
-    have guardedRegions : ∀ name, Region (width name) 0 (guarded name) :=
-      fun name => guardTrace.region name (regions name)
-    have tested : result (MultiTape.read guarded) = decide (count < limit.val) := by
-      unfold result MultiTape.read
-      rw [flagEq, encoded_booleans]
-      cases decide (count < limit.val) <;> rfl
-    exact ⟨guardTicks, guarded, guardCost, guardTrace,
-      ⟨counterFits, (guardTrace.readOnly_tape (dataTape 0) rfl).trans sourceEq,
-        (guardOutside (dataTape 1) (by decide) (by decide)).trans counterEq,
-        (guardTrace.readOnly_tape columnTape rfl).trans columnEq,
-        (guardOutside workingTape (by decide) (by decide)).trans matrixEq,
-        (guardTrace.readOnly_tape limitTape rfl).trans limitEq,
-        (fun parameter => (guardTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)),
-        guardedRegions⟩, tested⟩
-  have executeAdvanced : ∀ count, start.val ≤ count → count < limit.val → ∀ tapes,
-      representation count tapes → ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bodyBound ∧
-        Runs width readOnly (body enumeration) ticks
-          (StandardGaussJordanClearStep.entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
-          (fun _ => 0) tapes
-          (StandardGaussJordanClearStep.exit ((FieldRow.scalarDomain enumeration).width Empty.elim))
-          (fun _ => 0) final ∧ representation (count + 1) final := by
-    intro count lower before tapes represented
-    obtain ⟨counterFits, sourceEq, counterEq, columnEq, matrixEq, limitEq, headers,
-      regions⟩ := represented
-    have targetValid : count < sizes 1 := lt_of_lt_of_le before limitWithin
-    obtain ⟨bodyTicks, advanced, bodyCost, bodyTrace, ⟨within, nextMatrixEq⟩,
-        nextCounterEq, bodyOutside⟩ :=
-      executeBody sizes tapes sourceRow ⟨count, counterFits⟩ column sourceValid targetValid
-        (current count) columnsFit columnValid capacity
-        sourceEq
-        counterEq
-        columnEq
-        matrixEq
-        headers
-        regions
-    have nextFits : count + 1 < 2 ^ sizes 0 := by have fits := limit.isLt; omega
-    have nextValue : StandardBinaryIncrement.next 0 sizes ⟨count, counterFits⟩ =
-        (⟨count + 1, nextFits⟩ : Fin (2 ^ sizes 0)) := by
-      apply Fin.ext
-      exact Nat.mod_eq_of_lt nextFits
-    rw [nextValue] at nextCounterEq
-    have nextMatrix : advanced workingTape = encoded (domains enumeration workingTape) sizes
-        (current (count + 1)) :=
-      nextMatrixEq.trans (congrArg (encoded (domains enumeration workingTape) sizes)
-        (updateLaw count before lower))
-    exact ⟨bodyTicks, advanced, bodyCost, bodyTrace,
-      ⟨nextFits, (bodyTrace.readOnly_tape (dataTape 0) rfl).trans sourceEq, nextCounterEq,
-        (bodyTrace.readOnly_tape columnTape rfl).trans columnEq, nextMatrix,
-        (bodyOutside 0).trans limitEq,
-        (fun parameter => (bodyTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)),
-        (fun name => bodyTrace.region name (regions name))⟩⟩
-  obtain ⟨ticks, final, cost, trace, represented, stopped⟩ :=
-    Runs.whileRange width readOnly guard (body enumeration)
-      BinarySubtraction.entry BinarySubtraction.exit
+  let invariant (count : ℕ) (tapes : Tapes Alphabet) : Prop :=
+    tapes (dataTape 0) = encoded (EncodedDomain.binaryNaturals 0) sizes sourceRow ∧
+    tapes (columnTape) = encoded (EncodedDomain.binaryNaturals 0) sizes column ∧
+    tapes (workingTape) = encoded (domains enumeration workingTape) sizes (current count)
+  obtain ⟨ticks, final, cost, trace, finalValues, finalCounter⟩ :=
+    BinaryTraversal.range_runs 0 sizes width readOnly guardWiring guardBound bodyBound
+      (MvPolynomial.X 1) (executeGuard sizes)
+      (by change (EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes = sizes 0; simp)
+      (by change (EncodedDomain.booleans (Parameter := Fin 3)).width sizes = 1
+          norm_num [EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec])
+      sizeTape rfl (by intro parameter; rfl) (body enumeration)
       (StandardGaussJordanClearStep.entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
       (StandardGaussJordanClearStep.exit ((FieldRow.scalarDomain enumeration).width Empty.elim))
-      result representation
-      (fun count tapes => representation count tapes ∧
-        result (MultiTape.read tapes) = decide (count < limit.val))
-      start.val limit.val (MvPolynomial.eval sizes guardBound) (MvPolynomial.eval sizes bodyBound)
-      startWithin guard_halt (body_halt enumeration) executeGuarded
-      (fun count lower before tapes valid => executeAdvanced count lower before tapes valid.1)
-      (fun _ _ _ _ valid => valid.2) initial
-      ⟨start.isLt, sourceEq, counterEq, columnEq, matrixEq, limitEq, headers, regions⟩
-  obtain ⟨counterFits, _, finalCounter, _, finalMatrix, _, _, _⟩ := represented
-  refine ⟨ticks, final, ?_, trace, finalMatrix, finalCounter⟩
-  have remainingBound : limit.val - start.val + 1 ≤ sizes 1 + 1 := by omega
-  have boundedCost := cost.trans (Nat.add_le_add_right
-    (Nat.mul_le_mul_right (MvPolynomial.eval sizes guardBound + MvPolynomial.eval sizes bodyBound + 2)
-      remainingBound) 1)
-  simpa only [map_add, map_mul, map_one, map_ofNat, MvPolynomial.eval_X] using boundedCost
+      (body_halt enumeration) invariant (by
+        intro count tapes final preserved represented
+        obtain ⟨sourceEq, columnEq, matrixEq⟩ := represented
+        exact ⟨(preserved (dataTape 0) (by decide) (by decide)).trans sourceEq,
+          (preserved (columnTape) (by decide) (by decide)).trans columnEq,
+          (preserved (workingTape) (by decide) (by decide)).trans matrixEq⟩)
+      start limit startWithin (by simpa only [MvPolynomial.eval_X] using limitWithin)
+      (by
+        intro count counterFits lower before nextFits nextValue tapes represented counterEq limitEq headers regions
+        obtain ⟨sourceEq, columnEq, matrixEq⟩ := represented
+        have targetValid : count < sizes 1 := lt_of_lt_of_le before limitWithin
+        obtain ⟨bodyTicks, advanced, bodyCost, bodyTrace, ⟨within, nextMatrixEq⟩,
+            nextCounterEq, bodyOutside⟩ :=
+          executeBody sizes tapes sourceRow ⟨count, counterFits⟩ column sourceValid targetValid
+            (current count) columnsFit columnValid capacity
+            sourceEq counterEq columnEq matrixEq headers regions
+        rw [nextValue] at nextCounterEq
+        have nextMatrix : advanced workingTape = encoded (domains enumeration workingTape) sizes
+            (current (count + 1)) :=
+          nextMatrixEq.trans (congrArg (encoded (domains enumeration workingTape) sizes)
+            (updateLaw count before lower))
+        refine ⟨bodyTicks, advanced, bodyCost, bodyTrace, ?_, nextCounterEq, bodyOutside 0⟩
+        exact ⟨(bodyTrace.readOnly_tape (dataTape 0) rfl).trans sourceEq,
+          (bodyTrace.readOnly_tape columnTape rfl).trans columnEq, nextMatrix⟩)
+      initial ⟨sourceEq, columnEq, matrixEq⟩ counterEq limitEq headers regions
+  exact ⟨ticks, final, cost, trace, finalValues.2.2, finalCounter⟩
 
 end Polytime2.StandardGaussJordanClearInterval
