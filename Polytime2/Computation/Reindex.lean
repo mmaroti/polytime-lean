@@ -107,5 +107,65 @@ theorem reindexDomains {computation : Computation.{carrierLevel} Parameter Input
     refine ⟨valid, ?_⟩
     exact congrArg (outputEquivalence sizes).symm correct
 
+/-- Change a computed result's mathematical interpretation when its exact bits
+agree. Unlike an equivalence of domains, this also permits proper subdomains. -/
+theorem withEncodedOutput {computation : Computation.{carrierLevel} Parameter InputName}
+    (realizable : computation.Realizable)
+    (outputDomain : EncodedDomain.{0, carrierLevel} Parameter)
+    (compute : ∀ sizes, {arguments : computation.Arguments sizes //
+      computation.precondition sizes arguments} → outputDomain.Carrier sizes)
+    (sameWidth : ∀ sizes, outputDomain.width sizes = computation.outputDomain.width sizes)
+    (sameEncoding : ∀ sizes arguments,
+      encoded outputDomain sizes (compute sizes arguments) =
+        encoded computation.outputDomain sizes (computation.compute sizes arguments)) :
+    (Computation.mk computation.inputDomains outputDomain computation.precondition compute).Realizable := by
+  classical
+  obtain ⟨Scratch, finiteScratch, scratch, State, finiteState, machine, entry, exit, certificate⟩ := realizable
+  let scratchFinite := finiteScratch
+  let stateFinite := finiteState
+  let target := Computation.mk computation.inputDomains outputDomain computation.precondition compute
+  refine ⟨Scratch, finiteScratch, scratch, State, finiteState, machine, entry, exit, ?_⟩
+  obtain ⟨sizeReadonly, outputWritable, halt, bound, execute⟩ := certificate
+  refine ⟨sizeReadonly, outputWritable, halt, bound, ?_⟩
+  intro sizes input initial valid represented headers
+  let sourceInput : Inputs (Internal.domains computation scratch) (Internal.readOnly computation) sizes := by
+    intro name
+    rcases name with ⟨name, immutable⟩
+    rcases name with parameter | argument | result | scratchName
+    · exact input ⟨.inl parameter, rfl⟩
+    · exact input ⟨.inr (.inl argument), rfl⟩
+    · contradiction
+    · contradiction
+  have widths (name : Internal.TapeName computation Scratch) :
+      (Internal.domains target scratch name).width sizes =
+        (Internal.domains computation scratch name).width sizes := by
+    rcases name with parameter | argument | result | scratchName <;> first | rfl | exact sameWidth sizes
+  have sourceEntry : Entry (Internal.domains computation scratch) (Internal.readOnly computation)
+      sizes sourceInput initial := by
+    constructor
+    · intro name immutable
+      rcases name with parameter | argument | result | scratchName
+      · exact represented.1 (.inl parameter) rfl
+      · exact represented.1 (.inr (.inl argument)) rfl
+      · contradiction
+      · contradiction
+    · intro name writable
+      obtain ⟨old, length, equal⟩ := represented.2 name writable
+      exact ⟨old, length.trans (widths name), equal⟩
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
+    execute sizes sourceInput initial valid sourceEntry headers
+  have trace := trace.regions (fun name => (Internal.domains target scratch name).width sizes)
+    (fun _ => 0) (by intro name writable; rw [widths]; simp)
+  simp only [zero_add] at trace
+  refine ⟨ticks, (fun _ => compute sizes ⟨Internal.arguments target scratch sizes input, valid⟩),
+    final, cost, trace, ⟨valid, rfl⟩, ?_⟩
+  intro name
+  cases name
+  have equal := correct.2
+  have result := canonical ()
+  change final (Internal.outputTape target) = encoded computation.outputDomain sizes (output ()) at result
+  rw [equal] at result
+  exact result.trans (sameEncoding sizes ⟨Internal.arguments target scratch sizes input, valid⟩).symm
+
 end Realizable
 end Polytime2.Computation

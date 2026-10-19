@@ -187,19 +187,19 @@ theorem runs (beforeBits afterBits : List Bool) (valid : afterBits = [] → befo
 def fromEnd : Machine Alphabet (Sum (Fin 2) (Fin 3)) :=
   MultiTape.sequence (Move.machine 1 .left) machine 1
 
-/-- Returning from the end also works for an empty data region. -/
-theorem fromEnd_runs (bits : List Bool) :
+/-- Return over a known binary prefix, preserving any following symbols. -/
+theorem fromPrefix_runs (bits : List Bool) (right : List Symbol) :
     Runs (fun _ : Unit => bits.length) (fun _ => true) fromEnd (bits.length + 3)
       (.inl 1) (fun _ => (bits.length : ℤ))
-      (Binary.tape (word bits.reverse ++ [0]) [0])
-      (.inr 2) (fun _ => 0) (fun _ => buffer (word bits)) := by
-  let initial := Binary.tape (word bits.reverse ++ [0]) [0]
+      (Binary.tape (word bits.reverse ++ [0]) right)
+      (.inr 2) (fun _ => 0) (fun _ => buffer (word bits ++ right)) := by
+  let initial := Binary.tape (word bits.reverse ++ [0]) right
   have leftward := StandardHead.move_runs 1 .left (fun _ : Unit => bits.length)
     (fun _ => true) (fun _ => (bits.length : ℤ)) initial
   have scan : Runs (fun _ : Unit => bits.length) (fun _ => true) machine (bits.length + 1)
       1 (fun _ => (bits.length : ℤ) - 1)
       (fun name => (initial name).move .left)
-      2 (fun _ => 0) (fun _ => buffer (word bits)) := by
+      2 (fun _ => 0) (fun _ => buffer (word bits ++ right)) := by
     cases reversed : bits.reverse with
     | nil =>
       have empty : bits = [] := List.reverse_eq_nil_iff.mp reversed
@@ -208,39 +208,41 @@ theorem fromEnd_runs (bits : List Bool) :
         (actions := fun _ => (0, some Turing.Dir.right))
         (by simp [machine, initial, Binary.tape, word, MultiTape.read]) (by intro name premise; rfl)
       have moved : act (fun _ : Unit => (0, some Turing.Dir.right))
-          (fun name => (initial name).move Turing.Dir.left) = fun _ => buffer [] := by
+          (fun name => (initial name).move Turing.Dir.left) = fun _ => buffer right := by
         funext name
         simp [initial, Binary.tape, word, MultiTape.act, Turing.Tape.write_mk',
           Turing.Tape.move_left_mk', Turing.Tape.move_right_mk', Turing.ListBlank.cons_mk]
-        exact buffer_padding []
+        exact buffer_left_blank right
       rw [moved]
       simpa [displacement, word] using
-        Runs.zero (machine := machine) 2 (fun _ : Unit => (0 : ℤ)) (fun _ => buffer [])
+        Runs.zero (machine := machine) 2 (fun _ : Unit => (0 : ℤ)) (fun _ => buffer right)
     | cons bit rest =>
       have recover : bits = rest.reverse ++ [bit] := by
         have inverse := congrArg List.reverse reversed
         simpa using inverse
       have nonblank : data bit ≠ 0 := by cases bit <;> decide
-      have trace := rewind_runs rest (data bit) nonblank [0] bits.length
+      have trace := rewind_runs rest (data bit) nonblank right bits.length
       have length : bits.length = rest.length + 1 := by rw [recover]; simp
-      have clean : buffer (word rest.reverse ++ data bit :: [0]) =
-          buffer (word rest.reverse ++ [data bit]) := by
-        rw [show word rest.reverse ++ data bit :: [0] =
-          (word rest.reverse ++ [data bit]) ++ [0] by simp]
-        exact buffer_append_blank _
-      rw [clean] at trace
       simp only [initial, Binary.tape, reversed, word, List.map_cons, List.cons_append,
         Turing.Tape.move_left_mk', Turing.ListBlank.head_mk, List.headI_cons,
         Turing.ListBlank.tail_mk, List.tail_cons, Turing.ListBlank.cons_mk]
       rw [length, recover]
       simp only [Nat.cast_add, Nat.cast_one, add_sub_cancel_right,
-        List.map_append, List.map_reverse, List.map_singleton]
+        List.map_append, List.map_reverse, List.map_singleton, List.append_assoc]
       rw [length] at trace
       convert trace using 1 <;> first | rfl | omega | (funext name; simp [word, List.map_reverse])
   simp only [Nat.cast_one, one_mul, displacement] at leftward
   have complete := leftward.sequence machine (1 : Fin 3)
     (by intro symbols; simp [Move.machine]) scan
   convert complete using 1 <;> first | rfl | omega
+
+/-- Returning from the end also works for an empty data region. -/
+theorem fromEnd_runs (bits : List Bool) :
+    Runs (fun _ : Unit => bits.length) (fun _ => true) fromEnd (bits.length + 3)
+      (.inl 1) (fun _ => (bits.length : ℤ))
+      (Binary.tape (word bits.reverse ++ [0]) [0])
+      (.inr 2) (fun _ => 0) (fun _ => buffer (word bits)) := by
+  simpa only [buffer_append_blank] using fromPrefix_runs bits [0]
 
 end BlankReturn
 end Polytime2.StandardHead

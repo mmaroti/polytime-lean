@@ -41,13 +41,6 @@ def machine : Machine (fun _ : Bool => Symbol) (Fin 3) := fun state symbols =>
     else some (1, fun name => (symbols name, some .left))
   | _ => none
 
-private def copyDigit (_memory : Unit) (bit : Bool) : Unit × Bool := ((), bit)
-
-private theorem copy_run (bits : List Bool) : BinaryScan.run copyDigit () bits = ((), bits) := by
-  induction bits with
-  | nil => rfl
-  | cons bit bits hypothesis => simp [BinaryScan.run, copyDigit, hypothesis]
-
 private def copyState : RestoringScan.State Unit → Fin 3
   | .inl _ => 0
   | .inr (_, false) => 1
@@ -55,10 +48,10 @@ private def copyState : RestoringScan.State Unit → Fin 3
 
 private theorem copy_transition (state : RestoringScan.State Unit) (symbols : Symbols (fun _ : Bool => Symbol))
     (next : RestoringScan.State Unit) (actions : Actions (fun _ : Bool => Symbol))
-    (instruction : RestoringScan.machine copyDigit state symbols = some (next, actions)) :
+    (instruction : RestoringScan.machine BinaryScan.copy state symbols = some (next, actions)) :
     machine (copyState state) symbols = some (copyState next, actions) := by
   have same : machine (copyState state) symbols =
-      (RestoringScan.machine copyDigit state symbols).map
+      (RestoringScan.machine BinaryScan.copy state symbols).map
         (fun command => (copyState command.1, command.2)) := by
     have preserved (blank : symbols false ≠ 0) : data (symbols false == 2) = symbols false := by
       generalize equal : symbols false = symbol at *
@@ -67,7 +60,7 @@ private theorem copy_transition (state : RestoringScan.State Unit) (symbols : Sy
     · cases memory
       by_cases blank : symbols false = 0
       · simp [RestoringScan.machine, machine, copyState, blank]
-      · simp [RestoringScan.machine, machine, copyState, copyDigit, blank, preserved blank]
+      · simp [RestoringScan.machine, machine, copyState, BinaryScan.copy, blank, preserved blank]
     · cases finished <;> by_cases blank : symbols false = 0 <;>
         simp [RestoringScan.machine, machine, copyState, blank]
   rw [same, instruction]
@@ -82,9 +75,9 @@ theorem steps (bits : List Bool) (old : List Symbol)
         (0 :: targetLeft) (old ++ 0 :: targetRight))
       (2, frame (0 :: sourceLeft) (word bits ++ 0 :: sourceRight)
         (0 :: targetLeft) (word bits ++ 0 :: targetRight)) := by
-  have trace := (RestoringScan.steps copyDigit () bits old sameLength
+  have trace := (RestoringScan.steps BinaryScan.copy () bits old sameLength
     sourceLeft sourceRight targetLeft targetRight).rename copyState copy_transition
-  simpa only [copy_run, copyState] using trace
+  simpa only [BinaryScan.copy_run, copyState] using trace
 
 open CallingConvention
 
@@ -94,8 +87,8 @@ theorem runs (bits : List Bool) (old : List Symbol) (sameLength : old.length = b
       (2 * bits.length + 2) 0 (fun _ => 0)
       (frame [0] (word bits ++ [0]) [0] (old ++ [0]))
       2 (fun _ => 0) (frame [0] (word bits ++ [0]) [0] (word bits ++ [0])) := by
-  have trace := (RestoringScan.runs copyDigit () bits old sameLength).rename copyState copy_transition
-  simpa only [copy_run, copyState] using trace
+  have trace := (RestoringScan.runs BinaryScan.copy () bits old sameLength).rename copyState copy_transition
+  simpa only [BinaryScan.copy_run, copyState] using trace
 
 -- parameterLevel: size names bounding the runtime number of copied bits.
 universe parameterLevel

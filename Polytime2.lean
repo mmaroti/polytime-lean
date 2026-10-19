@@ -18,6 +18,9 @@ limitations under the License.
 import Polytime2.Machine.Basic
 import Polytime2.Computation.Basic
 import Polytime2.Computation.Realizable
+import Polytime2.Computation.Records
+import Polytime2.Computation.Variants
+import Polytime2.Examples.Records
 import Polytime2.TM0.Computation
 import Polytime2.Computation.Composition
 import Polytime2.Computation.Constant

@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Realizable
+import Polytime2.Computation.Composition
 
 /-! # Conditional computations with validity required only in the selected branch -/
 
@@ -174,6 +175,29 @@ theorem choose {first second : Computation.{0} Parameter InputName}
     · intro name; cases name
       exact correct.trans ((encoding _ _ outputEqual _).trans
         (congrArg (encoded first.outputDomain sizes) result.symm))
+
+/-- Split a realizability proof by a certified Boolean test of the inputs. Only
+the selected branch must satisfy its strengthened mathematical precondition. -/
+theorem byCases (computation : Computation.{0} Parameter InputName)
+    (condition : ∀ sizes, computation.Arguments sizes → Bool)
+    (guardRealizable : (Computation.mk computation.inputDomains EncodedDomain.booleans
+      computation.precondition (fun sizes arguments => condition sizes arguments.val)).Realizable)
+    (whenTrue : (computation.withPrecondition
+      (fun sizes arguments => computation.precondition sizes arguments ∧ condition sizes arguments = true)
+      (fun _ _ valid => valid.1)).Realizable)
+    (whenFalse : (computation.withPrecondition
+      (fun sizes arguments => computation.precondition sizes arguments ∧ condition sizes arguments = false)
+      (fun _ _ valid => valid.1)).Realizable) : computation.Realizable := by
+  have branches := whenTrue.choose whenFalse (fun _ => rfl) rfl
+  have combined := guardRealizable.letThen branches (fun _ => rfl) rfl (by
+    intro sizes arguments valid
+    cases value : condition sizes arguments <;> simpa [Computation.choose, Computation.withPrecondition, value] using valid)
+  exact combined.withSpecification computation.precondition computation.compute
+    (by intros; assumption)
+    (by
+      intro sizes arguments valid
+      simp only [Computation.letThen, Computation.choose, Computation.withPrecondition]
+      split <;> rfl)
 
 end Realizable
 end Polytime2.Computation

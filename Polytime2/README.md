@@ -36,6 +36,22 @@ Namespaces and declaration names are unchanged.
   the existing scalar codecs; examples cover tagged carriers and runtime bit
   widths.
   Encoding and decoding remain mathematical specifications.
+- Heterogeneous records concatenate their field encodings directly. Their width
+  is the sum of the field polynomials. Certified construction uses one input
+  tape per field; projection uses one record input and one field output.
+  Widths may depend on runtime sizes, including for nested array fields.
+- Variants store a binary discriminator followed by every alternative's field.
+  Inactive fields contain zero bits; decoding rejects nonzero inactive fields.
+  The exact width is the discriminator width plus all alternative widths.
+  Certified operations include injection, tag extraction and tests, projection
+  with a matching-tag precondition, and case analysis requiring only the
+  selected branch's precondition. No delimiters occur inside either encoding.
+- Record arities and variant catalogues are fixed by specialization. Polynomial
+  offset and length headers are private. `recordOutputs` and `pairOutputs`
+  collect certified results from shared immutable arguments; `withEncodedOutput`
+  changes a result's mathematical interpretation when its canonical bits agree.
+  `Examples/Records.lean` covers runtime widths, nested arrays, empty families,
+  zero-width payloads, inactive-field rejection, and standalone TM0 export.
 - Every fixed width polynomial has a certified finite unary evaluator. It
   receives one immutable unary size tape per parameter, prepares its private
   copies, and returns exactly that many unary ones with restored public heads.

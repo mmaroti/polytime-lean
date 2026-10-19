@@ -44,6 +44,14 @@ def run (update : Memory → Bool → Memory × Bool) : Memory → List Bool →
   | nil => rfl
   | cons bit bits hypothesis => simpa only [run, List.length_cons] using congrArg Nat.succ (hypothesis _)
 
+/-- Copy each digit without retaining runtime memory. -/
+def copy (_memory : Unit) (bit : Bool) : Unit × Bool := ((), bit)
+
+@[simp] theorem copy_run (bits : List Bool) : run copy () bits = ((), bits) := by
+  induction bits with
+  | nil => rfl
+  | cons bit bits hypothesis => simp [run, copy, hypothesis]
+
 /-- Add a carry to one binary digit, retaining any carry for the next digit. -/
 def increment (carry bit : Bool) : Bool × Bool := (carry && bit, carry != bit)
 

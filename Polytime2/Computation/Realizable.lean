@@ -210,6 +210,16 @@ def Computation.Realizable (computation : Computation.{carrierLevel} Parameter I
                 (Internal.arguments computation scratchDomains sizes input))
               (Internal.resultCorrect computation scratchDomains)
 
+/-- An empty admissible input set needs only a halted finite machine. -/
+theorem Computation.Realizable.ofFalsePrecondition
+    (computation : Computation.{carrierLevel} Parameter InputName)
+    (impossible : ∀ sizes arguments, ¬computation.precondition sizes arguments) : computation.Realizable := by
+  refine ⟨Empty, inferInstance, Empty.elim, Unit, inferInstance,
+    (fun _ _ => none), (), (), ?_⟩
+  refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; rfl), 0, ?_⟩
+  intro sizes input initial valid represented headers
+  exact False.elim (impossible sizes (Internal.arguments computation Empty.elim sizes input) valid)
+
 /-- Strengthen a precondition without inspecting the reused realization. -/
 theorem Computation.Realizable.withPrecondition
     {computation : Computation.{carrierLevel} Parameter InputName}

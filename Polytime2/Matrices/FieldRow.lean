@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Arrays.MapContract
+import Polytime2.Encoding.Records
 import Polytime2.Matrices.RowCombine
 import Mathlib.Algebra.Field.Defs
 
@@ -24,7 +25,7 @@ import Mathlib.Algebra.Field.Defs
 The field presentation is fixed by the specialization. Coefficients and source
 rows are immutable; results occupy separate tapes with arbitrary initial data.
 For binary row operations, each array entry is a pair of source and target
-values. Its fixed presentation hides the scalar-pair bit layout.
+values. Their encoding concatenates the two scalar fields.
 -/
 
 namespace Polytime2.FieldRow
@@ -40,7 +41,7 @@ noncomputable def scalarDomain (enumeration : Scalar ≃ Fin cardinality) : Enco
   EncodedDomain.fixed enumeration
 
 noncomputable def pairDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
-  EncodedDomain.fixed ((enumeration.prodCongr enumeration).trans finProdFinEquiv)
+  (scalarDomain enumeration).prod (scalarDomain enumeration)
 
 def scale (coefficient value : Scalar) : Scalar := coefficient * value
 def normalize (coefficient value : Scalar) : Scalar := coefficient⁻¹ * value

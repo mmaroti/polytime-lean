@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Arrays.Operations
 import Polytime2.Matrices.FieldRow
+import Polytime2.Computation.Records
 
 /-! # Mathematical array maps and finite-field row scaling -/
 
@@ -48,5 +49,11 @@ example (length : MvPolynomial Parameter ℕ) :
     (arrayMap (EncodedDomain.fixed (Equiv.refl (Fin 1)))
       (EncodedDomain.fixed (Equiv.refl (Fin 1))) length (fun _ _ value => value)).Realizable :=
   arrayMap_realizable _ _ _ _
+
+-- Scalar pairs used by row maps have the generic certified pair operations.
+example (second : Bool) :
+    (pairProjection (FieldRow.scalarDomain (Fintype.equivFin Scalar))
+      (FieldRow.scalarDomain (Fintype.equivFin Scalar)) second).Realizable :=
+  pairProjection_realizable _ _ _
 
 end Polytime2.Examples.ArrayMaps

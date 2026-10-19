@@ -93,6 +93,66 @@ theorem steps (components : ∀ index, Machine Alphabet (LocalState index))
   simpa using suffix count 0 (by simp) initial represented
 
 /-- A fixed pipeline also preserves immutable inputs and blank surroundings
+at every transition. Head positions may vary between stages. -/
+theorem runs_at (width : TapeName → ℕ) (readOnly : TapeName → Bool)
+    (components : ∀ index, Machine (CallingConvention.Alphabet TapeName) (LocalState index))
+    (entries exits : ∀ index, LocalState index)
+    (representation : Fin (count + 1) → Tapes (CallingConvention.Alphabet TapeName) → Prop)
+    (headPosition : Fin (count + 1) → TapeName → ℤ)
+    (allowance : ℕ)
+    (halt : ∀ index symbols, components index (exits index) symbols = none)
+    (execute : ∀ index tapes, representation ⟨index.val, by omega⟩ tapes →
+      ∃ ticks final, ticks ≤ allowance ∧ CallingConvention.Runs width readOnly
+        (components index) ticks (entries index) (headPosition ⟨index.val, by omega⟩) tapes
+        (exits index) (headPosition ⟨index.val + 1, by omega⟩) final ∧ representation ⟨index.val + 1, by omega⟩ final)
+    (initial : Tapes (CallingConvention.Alphabet TapeName)) (represented : representation 0 initial) :
+    ∃ ticks final, ticks ≤ count * (allowance + 1) ∧
+      CallingConvention.Runs width readOnly (machine components entries) ticks
+        (position entries 0) (headPosition 0) initial none (headPosition (Fin.last count)) final ∧
+      representation (Fin.last count) final := by
+  have suffix : ∀ remaining (index : Fin (count + 1)), count - index.val = remaining →
+      ∀ tapes, representation index tapes →
+      ∃ ticks final, ticks ≤ remaining * (allowance + 1) ∧
+        CallingConvention.Runs width readOnly (machine components entries) ticks
+          (position entries index) (headPosition index) tapes none (headPosition (Fin.last count)) final ∧
+        representation (Fin.last count) final := by
+    intro remaining
+    induction remaining with
+    | zero =>
+      intro index equal tapes valid
+      have finished : index = Fin.last count := Fin.ext (by have bounded := index.isLt; simp; omega)
+      subst index
+      refine ⟨0, tapes, by omega, ?_, valid⟩
+      simpa [position] using CallingConvention.Runs.zero
+        (machine := machine components entries) none (headPosition (Fin.last count)) tapes
+    | succ remaining hypothesis =>
+      intro index equal tapes valid
+      have active : index.val < count := by omega
+      let stage : Fin count := ⟨index.val, active⟩
+      obtain ⟨stageTicks, middle, cost, trace, nextValid⟩ := execute stage tapes valid
+      have lifted := trace.rename (fun state => some (⟨stage, state⟩ : (i : Fin count) × LocalState i))
+        (target := machine components entries)
+        (by intro state symbols next actions transition; simp [machine, transition])
+      have handover : CallingConvention.Runs width readOnly (machine components entries) 1
+          (some ⟨stage, exits stage⟩) (headPosition ⟨index.val + 1, by omega⟩) middle
+          (position entries ⟨index.val + 1, by omega⟩) (headPosition ⟨index.val + 1, by omega⟩) middle := by
+        apply CallingConvention.Runs.next
+          (nextState := position entries ⟨index.val + 1, by omega⟩)
+          (actions := stationary (read middle))
+          (by simp [machine, halt, stage]) (by intro name premise; rfl)
+        simpa only [stationary, CallingConvention.displacement, add_zero, act_stationary] using
+          CallingConvention.Runs.zero (machine := machine components entries)
+            (position entries ⟨index.val + 1, by omega⟩) (headPosition ⟨index.val + 1, by omega⟩) middle
+      obtain ⟨restTicks, final, restCost, restTrace, finalValid⟩ :=
+        hypothesis ⟨index.val + 1, by omega⟩ (by change count - (index.val + 1) = remaining; omega) middle nextValid
+      refine ⟨stageTicks + (1 + restTicks), final, ?_, ?_, finalValid⟩
+      · nlinarith
+      · have started : position entries index = some ⟨stage, entries stage⟩ := by simp [position, active, stage]
+        rw [started]
+        exact lifted.trans (handover.trans restTrace)
+  simpa using suffix count 0 (by simp) initial represented
+
+/-- A fixed pipeline also preserves immutable inputs and blank surroundings
 at every transition. Component heads return to zero before each handover. -/
 theorem runs (width : TapeName → ℕ) (readOnly : TapeName → Bool)
     (components : ∀ index, Machine (CallingConvention.Alphabet TapeName) (LocalState index))
@@ -108,48 +168,9 @@ theorem runs (width : TapeName → ℕ) (readOnly : TapeName → Bool)
     ∃ ticks final, ticks ≤ count * (allowance + 1) ∧
       CallingConvention.Runs width readOnly (machine components entries) ticks
         (position entries 0) (fun _ => 0) initial none (fun _ => 0) final ∧
-      representation (Fin.last count) final := by
-  have suffix : ∀ remaining (index : Fin (count + 1)), count - index.val = remaining →
-      ∀ tapes, representation index tapes →
-      ∃ ticks final, ticks ≤ remaining * (allowance + 1) ∧
-        CallingConvention.Runs width readOnly (machine components entries) ticks
-          (position entries index) (fun _ => 0) tapes none (fun _ => 0) final ∧
-        representation (Fin.last count) final := by
-    intro remaining
-    induction remaining with
-    | zero =>
-      intro index equal tapes valid
-      have finished : index = Fin.last count := Fin.ext (by have bounded := index.isLt; simp; omega)
-      subst index
-      refine ⟨0, tapes, by omega, ?_, valid⟩
-      simpa [position] using CallingConvention.Runs.zero
-        (machine := machine components entries) none (fun _ => 0) tapes
-    | succ remaining hypothesis =>
-      intro index equal tapes valid
-      have active : index.val < count := by omega
-      let stage : Fin count := ⟨index.val, active⟩
-      obtain ⟨stageTicks, middle, cost, trace, nextValid⟩ := execute stage tapes valid
-      have lifted := trace.rename (fun state => some (⟨stage, state⟩ : (i : Fin count) × LocalState i))
-        (target := machine components entries)
-        (by intro state symbols next actions transition; simp [machine, transition])
-      have handover : CallingConvention.Runs width readOnly (machine components entries) 1
-          (some ⟨stage, exits stage⟩) (fun _ => 0) middle
-          (position entries ⟨index.val + 1, by omega⟩) (fun _ => 0) middle := by
-        apply CallingConvention.Runs.next
-          (nextState := position entries ⟨index.val + 1, by omega⟩)
-          (actions := stationary (read middle))
-          (by simp [machine, halt, stage]) (by intro name premise; rfl)
-        simpa only [stationary, CallingConvention.displacement, add_zero, act_stationary] using
-          CallingConvention.Runs.zero (machine := machine components entries)
-            (position entries ⟨index.val + 1, by omega⟩) (fun _ => 0) middle
-      obtain ⟨restTicks, final, restCost, restTrace, finalValid⟩ :=
-        hypothesis ⟨index.val + 1, by omega⟩ (by change count - (index.val + 1) = remaining; omega) middle nextValid
-      refine ⟨stageTicks + (1 + restTicks), final, ?_, ?_, finalValid⟩
-      · nlinarith
-      · have started : position entries index = some ⟨stage, entries stage⟩ := by simp [position, active, stage]
-        rw [started]
-        exact lifted.trans (handover.trans restTrace)
-  simpa using suffix count 0 (by simp) initial represented
+      representation (Fin.last count) final :=
+  runs_at width readOnly components entries exits representation (fun _ _ => 0)
+    allowance halt execute initial represented
 
 /-- Formatting distinct writable destinations needs only their preserved
 regions and immutable source tapes. The finite pipeline establishes every

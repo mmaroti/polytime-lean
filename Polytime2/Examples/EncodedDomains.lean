@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Arithmetic.BinaryScan
 import Polytime2.Encoding.BinaryEncoding
+import Polytime2.Encoding.Records
 import Mathlib.Data.Fintype.EquivFin
 
 /-! # Encoded domains at scalar machine boundaries
@@ -71,11 +72,14 @@ example : (EncodedDomain.fixed (Parameter := Unit) (Equiv.refl (Fin 3))).decode
       some (2 : Fin 3) := by
   simp [EncodedDomain.fixed, EncodedDomain.ofCodec, BitVec.cast]
 
-/-- A family of finite carriers is specialization data. The tagged union's
-chosen enumeration is fixed independently of the number of coordinates. -/
+/-- A family of finite carriers is specialization data. The tag and zero-filled
+alternative fields are fixed independently of the number of coordinates. -/
 noncomputable def taggedDomain {SortName : Type} [Fintype SortName]
     (Carrier : SortName → Type) [∀ sort, Fintype (Carrier sort)] : EncodedDomain Parameter :=
-  EncodedDomain.fixed (Fintype.equivFin (Σ sort, Carrier sort))
+  (EncodedDomain.variant (Fintype.card SortName) (fun index =>
+    EncodedDomain.fixed (Fintype.equivFin (Carrier ((Fintype.equivFin SortName).symm index))))).reindex
+      (fun _ => Σ sort, Carrier sort)
+      (fun _ => (Equiv.sigmaCongrLeft (Fintype.equivFin SortName).symm).symm)
 
 example {SortName : Type} [Fintype SortName] (Carrier : SortName → Type)
     [∀ sort, Fintype (Carrier sort)] (assignment : Parameter → ℕ)
