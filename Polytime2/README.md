@@ -480,6 +480,50 @@ needed for integer matrices, reusing generic arithmetic machinery.
 Develop higher-level algorithm notation over the certified mathematical
 composition rules, keeping machine witnesses and scratch layouts internal.
 
+### Multisorted interface
+
+Define the natural mathematical SMP input for a specialization-fixed catalogue
+of algebras `D_t`: public sizes are one multiplicity `n_t` per sort and the
+generator count `g`. Generators and target lie in `∏ t, D_t ^ n_t`, allowing
+zero multiplicities. The parameter type and its cardinality may depend on the
+specialization. Encode this directly using existing records and arrays.
+Describe prepared inputs by predicates on this data, including the monolith
+graph guarantees and bounded dependency data or fixed catalogue lookups.
+Keep this interface independent of the original instance and its conversion;
+public consumers should not require padded slots. Implement the following
+steps in order, exposing reusable rules rather than SMP-specific machinery.
+
+### Computed sizes
+
+Extend certified composition to calls at input-dependent size assignments.
+Require certified computation of the new sizes in unary and polynomial bounds
+in the caller's sizes. Prepare immutable callee size tapes privately and
+transfer runtime bounds by polynomial majorization. Reuse size substitution
+and width evaluation; fixed polynomial substitutions should be a special case.
+Keep machines, scratch, and runtime witnesses hidden behind public composition
+rules, and handle zero sizes.
+
+### Array packing
+
+Develop certified stable packing of an array selected by a Boolean mask, with
+the active count and correspondence between original and packed indices.
+Support runtime-dependent element widths and reuse scans, prefix counts, and
+array operations. Connect the bounded-capacity representation to an exact-length
+array at the computed count through the computed-size composition rule. Share
+the selection and index correspondence across related arrays, so generators,
+targets, and dependency indices remain aligned. Keep capacity padding private.
+
+### Prepared conversion
+
+Use the multisorted interface, computed-size calls, and generic packing to
+convert the current padded SMP output to exact sort arrays at sizes
+`n_1, ..., n_k, g`. Transport the stored values, dependency coordinates, and
+monolith guarantees, retaining the explicit coordinate-obstruction outcome.
+Prove that preparation followed by any certified consumer of the prepared
+interface is polynomial in the original `n, g`, using the existing bounds on
+sort counts. Replace superseded adapters and proofs rather than maintaining
+parallel public SMP representations.
+
 ### Algebra targets
 
 Build consumers of the monolith-prepared SMP instance and implement Smith
