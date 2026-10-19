@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardMatrixRowsContract
+import Polytime2.Matrices.RowsContract
 
 /-! # Complete row traversal with arbitrary initial writable contents -/
 

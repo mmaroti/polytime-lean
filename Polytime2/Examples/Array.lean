@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Composition
-import Polytime2.Computations.Array
+import Polytime2.Arrays.Operations
 
 /-! # Array access through public mathematical certificates
 

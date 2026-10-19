@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.MatrixEntry
+import Polytime2.Matrices.EntryOperations
 
 /-! # Mathematical matrix lookup by row and column -/
 

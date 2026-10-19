@@ -7,6 +7,27 @@ generalization is a mathematical width function with a certified polynomial-time
 unary evaluator. Avoid requiring only a polynomial upper bound: it does not
 supply the operational width computation needed by generic tape algorithms.
 
+## Directory layout
+
+| Directory | Contents |
+| --- | --- |
+| `Machine/` | Multi-tape semantics, wiring, costs, storage, and conventions. |
+| `Encoding/` | Bit encodings, encoded domains and arrays, width evaluation. |
+| `Computation/` | Specifications, realizability, composition, and layouts. |
+| `Primitives/` | Head movement, copying, scans, size reading, finite tables. |
+| `Arithmetic/` | Binary arithmetic, counters, multiplication, and gcd. |
+| `Arrays/` | Fixed/runtime-width access, copying, updates, and indexed maps. |
+| `Matrices/` | Addressing, entry access, row access, and row operations. |
+| `GaussJordan/` | Pivot search, column clearing, and elimination. |
+| `TM0/` | Simulation, serialization, input/output handling, and export. |
+| `Examples/` | Examples exercising the framework and algorithms. |
+
+Concrete computation interfaces live beside their implementations, usually in
+`Operations.lean`; `Computation/` contains the abstract machinery. Foundational
+modules use `Basic.lean`. File names omit the former `Standard` prefix;
+mathematical helpers use descriptive names where needed to avoid collisions.
+Namespaces and declaration names are unchanged.
+
 ## Implemented and proved
 
 - Abstract encoded domains combine mathematical carrier families, exact bit
@@ -355,8 +376,8 @@ the estimates include new machinery, overlap, and should not be added together.
 
 Share preservation of encoded live variables, size headers, and scratch regions
 across internal calls. Combine this with `Pipeline.runs` for the repeated call,
-commit, and advance sequences in `StandardMatrixRowStep`,
-`StandardGaussJordanClearStep`, and `StandardGaussJordanEliminationBody`.
+commit, and advance sequences in `Matrices/RowStep.lean`,
+`GaussJordan/ClearStep.lean`, and `GaussJordan/EliminationBody.lean`.
 Replace their nested sequence proofs and per-tape preservation bookkeeping.
 
 ### Bounded traversal (~200 lines)

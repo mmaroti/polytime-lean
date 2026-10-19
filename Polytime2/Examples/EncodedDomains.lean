@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardBinaryScan
-import Polytime2.BinaryEncoding
+import Polytime2.Arithmetic.BinaryScan
+import Polytime2.Encoding.BinaryEncoding
 import Mathlib.Data.Fintype.EquivFin
 
 /-! # Encoded domains at scalar machine boundaries

@@ -16,10 +16,10 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Composition
-import Polytime2.Computations.MatrixRows
-import Polytime2.Computations.Counter
-import Polytime2.FieldRow
-import Polytime2.MatrixRowField
+import Polytime2.Matrices.RowsOperations
+import Polytime2.Arithmetic.CounterOperations
+import Polytime2.Matrices.FieldRow
+import Polytime2.Matrices.RowField
 import Mathlib.Data.ZMod.Basic
 
 /-! # Finite-field row operations through mathematical certificates -/

@@ -15,9 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Complexity
-import Polytime2.Wiring
-import Polytime2.BinaryAddition
+import Polytime2.Machine.Complexity
+import Polytime2.Machine.Wiring
+import Polytime2.Arithmetic.BinaryAddition
 
 /-! # Arithmetic with arbitrary preserved caller tapes
 

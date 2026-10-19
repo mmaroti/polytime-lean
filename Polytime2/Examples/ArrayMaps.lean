@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.Array
-import Polytime2.FieldRow
+import Polytime2.Arrays.Operations
+import Polytime2.Matrices.FieldRow
 
 /-! # Mathematical array maps and finite-field row scaling -/
 

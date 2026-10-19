@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.IndexedMap
+import Polytime2.Arrays.IndexedMap
 
 /-! # Indexed finite maps and sequential catalogue operations -/
 

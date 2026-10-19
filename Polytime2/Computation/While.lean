@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.CallingConventionWhile
-import Polytime2.Computations.Counter
+import Polytime2.Machine.CallingConventionWhile
+import Polytime2.Arithmetic.CounterOperations
 
 /-! # Mathematical while loops behind existential certificates -/
 

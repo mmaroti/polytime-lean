@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardPivotSearchAlgorithm
+import Polytime2.GaussJordan.PivotSearchAlgorithm
 
 /-! # Preparing a pivot workspace and executing its first guard -/
 

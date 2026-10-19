@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation
-import Polytime2.CallingConventionRegions
+import Polytime2.Computation.Basic
+import Polytime2.Machine.CallingConventionRegions
 
 /-! # Existential polynomial-time realizability
 

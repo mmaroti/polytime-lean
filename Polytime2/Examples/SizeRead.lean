@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.Size
+import Polytime2.Primitives.SizeOperations
 
 /-! # Unary sizes read through arbitrary fixed-width output regions -/
 

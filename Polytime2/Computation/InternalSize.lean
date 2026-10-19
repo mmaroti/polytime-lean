@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Realizable
-import Polytime2.StandardUnarySum
+import Polytime2.Primitives.UnarySum
 
 /-! # Hiding a counter-capacity size behind two public dimensions
 

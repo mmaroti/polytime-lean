@@ -16,9 +16,9 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Composition
-import Polytime2.Computations.Counter
-import Polytime2.Computations.Constant
-import Polytime2.Computations.FiniteTable
+import Polytime2.Arithmetic.CounterOperations
+import Polytime2.Primitives.ConstantOperations
+import Polytime2.Primitives.FiniteOperations
 
 /-! # Public specifications compose without exposing implementation witnesses -/
 

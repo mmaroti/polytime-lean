@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
-import Polytime2.StandardBinaryScan
+import Polytime2.Arithmetic.BinaryScan
 
 /-! # Packaging existing unary routines without exposing their tape names -/
 

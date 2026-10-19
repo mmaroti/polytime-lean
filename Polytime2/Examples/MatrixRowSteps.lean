@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardMatrixRowStep
-import Polytime2.Pipeline
+import Polytime2.Matrices.RowStep
+import Polytime2.Machine.Pipeline
 
 /-! # Consecutive row steps reuse their working matrix and counter -/
 

@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.Matrix
+import Polytime2.Matrices.Operations
 
 /-! # Rectangular matrix access through mathematical certificates -/
 

@@ -15,11 +15,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.TM0
-import Polytime2.Computations.Constant
-import Polytime2.Computations.Counter
-import Polytime2.Computations.Gcd
-import Polytime2.Computations.GaussJordan
+import Polytime2.TM0.Computation
+import Polytime2.Primitives.ConstantOperations
+import Polytime2.Arithmetic.CounterOperations
+import Polytime2.Arithmetic.GcdOperations
+import Polytime2.GaussJordan.Operations
 
 /-! # Complete single-tape exports through the public mathematical interface
 

@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Composition
-import Polytime2.Computations.MatrixEntry
+import Polytime2.Matrices.EntryOperations
 
 /-! # Matrix replacement followed by lookup through public composition rules -/
 

@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.FiniteTable
+import Polytime2.Primitives.FiniteOperations
 
 /-! # Finite tables through mathematical specifications -/
 

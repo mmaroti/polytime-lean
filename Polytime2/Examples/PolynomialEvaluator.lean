@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.PolynomialEvaluator
-import Polytime2.EncodedArray
+import Polytime2.Encoding.PolynomialEvaluator
+import Polytime2.Encoding.EncodedArray
 
 /-! # Width evaluation with runtime sizes
 

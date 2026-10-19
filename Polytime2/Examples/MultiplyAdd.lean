@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computations.Arithmetic
+import Polytime2.Arithmetic.Operations
 
 /-! # Compound arithmetic through existential computation certificates -/
 

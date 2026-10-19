@@ -17,8 +17,8 @@ limitations under the License.
 
 import Polytime2.Computation.Branch
 import Polytime2.Computation.Composition
-import Polytime2.Computations.Arithmetic
-import Polytime2.Computations.Counter
+import Polytime2.Arithmetic.Operations
+import Polytime2.Arithmetic.CounterOperations
 
 /-! # Arithmetic through mathematical specifications and existential certificates -/
 

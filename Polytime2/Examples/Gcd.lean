@@ -16,8 +16,8 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Composition
-import Polytime2.Computations.Counter
-import Polytime2.Computations.Gcd
+import Polytime2.Arithmetic.CounterOperations
+import Polytime2.Arithmetic.GcdOperations
 
 /-! # Gcd through its public mathematical specification -/
 

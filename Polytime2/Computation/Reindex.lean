@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Realizable
-import Polytime2.EncodedArray
+import Polytime2.Encoding.EncodedArray
 
 /-! # Changing mathematical domains without changing their encoded bits -/
 

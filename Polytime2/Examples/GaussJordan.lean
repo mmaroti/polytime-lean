@@ -16,8 +16,8 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Composition
-import Polytime2.Computations.Counter
-import Polytime2.Computations.GaussJordan
+import Polytime2.Arithmetic.CounterOperations
+import Polytime2.GaussJordan.Operations
 import Mathlib.Data.ZMod.Basic
 
 /-! # Public finite-field elimination and composition

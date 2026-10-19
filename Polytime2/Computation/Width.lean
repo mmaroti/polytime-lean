@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Realizable
-import Polytime2.PolynomialEvaluator
+import Polytime2.Encoding.PolynomialEvaluator
 
 /-! # Preparing and hiding a polynomial unary width input -/
 

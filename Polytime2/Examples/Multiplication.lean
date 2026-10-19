@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.StandardBinaryMultiplication
+import Polytime2.Arithmetic.BinaryMultiplication
 
 /-! # Multiplication from blank output and scratch regions -/
 
