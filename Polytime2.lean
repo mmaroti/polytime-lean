@@ -177,6 +177,11 @@ import Polytime2.Arrays.TableTraversal
 import Polytime2.Matrices.FieldRow
 import Polytime2.Matrices.RowField
 
+import Polytime2.Arrays.Fold
+import Polytime2.Arrays.FoldContract
+import Polytime2.Computation.Traversal
+import Polytime2.Examples.Fold
+
 /-! # Polytime2
 
 Root module for the second implementation alternative.

@@ -349,6 +349,19 @@ compatibility mathematically. `withPrecondition` restricts admissible inputs.
 same widths and encoded bits. Matrix access reuses array computations this way.
 `choose` reads a Boolean argument and requires only the selected branch's
 precondition; uncalled branch scratch stays arbitrary.
+`arrayFold_realizable` traverses an immutable array while updating an
+accumulator through a certified computation. Applications supply the update's
+precondition, an indexed invariant, and initialization and preservation proofs;
+`arrayFold_total_realizable` omits those obligations for total updates.
+Element widths, accumulator widths, and array lengths may depend on sizes.
+`boundedIteration_realizable` derives polynomially bounded repetition from the
+fold, allocating its zero-bit traversal array privately. Both rules hide
+counters, temporary values, copies, width headers, and polynomial costs.
+`ArrayFold.prefix_invariant` and `boundedIteration_invariant` supply the
+mathematical correctness arguments; `withSpecification` can expose a proved
+answer instead of the fold expression.
+`Examples/Fold.lean` covers runtime-width words, immutable context, empty
+arrays, zero-width values, partial updates, and standalone TM0 export.
 `whileLoop` uses a mathematical invariant, decreasing measure, and existential
 polynomial bound. Its conserved answer equals the state when the guard stops;
 the library handles state copies, scratch, and all execution costs.
@@ -398,8 +411,9 @@ Replace their nested sequence proofs and per-tape preservation bookkeeping.
 
 ### Bounded traversal (~200 lines)
 
-Build on `Runs.whileRange` with a shared encoded binary counter and limit,
-comparison guard, and counter advancement. Replace repeated guard
+The public array fold and bounded-iteration rules are implemented. Consolidate
+the remaining internal matrix loops using a shared encoded binary counter and
+limit, comparison guard, and counter advancement. Replace repeated guard
 interpretation, counter-capacity, and preservation proofs in matrix row
 traversal, clear intervals, and elimination. Keep each algorithm's mathematical
 state invariant as a parameter.

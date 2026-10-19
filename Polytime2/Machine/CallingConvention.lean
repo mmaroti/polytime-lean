@@ -588,21 +588,9 @@ theorem Runs.preserves {width : TapeName → ℕ} {readOnly : TapeName → Bool}
       simpa [MultiTape.read] using allowed name readOnlyProof
     next different => rfl
 
-/-- A routine that restores its heads restores each read-only tape exactly.
-This supplies canonical inputs when composing encoded-domain routines. -/
-theorem Runs.readOnly_tape {width : TapeName → ℕ} {readOnly : TapeName → Bool}
-    {machine : Machine (Alphabet TapeName) State}
-    {ticks state finalState position tapes finalTapes}
-    (trace : Runs width readOnly machine ticks state position tapes
-      finalState position finalTapes)
-    (name : TapeName) (immutable : readOnly name = true) :
-    finalTapes name = tapes name := by
-  have cells : ∀ index : ℤ, (finalTapes name).nth index = (tapes name).nth index := by
-    intro index
-    simpa only [add_sub_cancel_right] using
-      trace.preserves name (index + position name) (Or.inl immutable)
-  generalize finalEq : finalTapes name = finalTape at cells ⊢
-  generalize initialEq : tapes name = initialTape at cells ⊢
+/-- Tape equality follows from equality of all relative cells. -/
+theorem tape_eq_of_nth (finalTape initialTape : Turing.Tape Symbol)
+    (cells : ∀ index : ℤ, finalTape.nth index = initialTape.nth index) : finalTape = initialTape := by
   cases finalTape with
   | mk finalHead finalLeft finalRight =>
     cases initialTape with
@@ -613,6 +601,30 @@ theorem Runs.readOnly_tape {width : TapeName → ℕ} {readOnly : TapeName → B
       have right : finalRight = initialRight := Turing.ListBlank.ext (fun index =>
         cells (index + 1 : ℕ))
       congr
+
+/-- A preserved input can be identified at a different final head position.
+Only the cell alignment is proof data; no cursor value is stored by this rule. -/
+theorem Runs.readOnly_tape_match {width : TapeName → ℕ} {readOnly : TapeName → Bool}
+    {machine : Machine (Alphabet TapeName) State}
+    {ticks state finalState position finalPosition tapes finalTapes}
+    (trace : Runs width readOnly machine ticks state position tapes finalState finalPosition finalTapes)
+    (name : TapeName) (immutable : readOnly name = true) (expected : Turing.Tape Symbol)
+    (aligned : ∀ index : ℤ, expected.nth (index - finalPosition name) =
+      (tapes name).nth (index - position name)) : finalTapes name = expected := by
+  apply tape_eq_of_nth
+  intro index
+  have preserved := trace.preserves name (index + finalPosition name) (Or.inl immutable)
+  have expected := aligned (index + finalPosition name)
+  simp only [add_sub_cancel_right] at preserved expected
+  exact preserved.trans expected.symm
+
+/-- A routine that restores its heads restores each read-only tape exactly. -/
+theorem Runs.readOnly_tape {width : TapeName → ℕ} {readOnly : TapeName → Bool}
+    {machine : Machine (Alphabet TapeName) State}
+    {ticks state finalState position tapes finalTapes}
+    (trace : Runs width readOnly machine ticks state position tapes finalState position finalTapes)
+    (name : TapeName) (immutable : readOnly name = true) : finalTapes name = tapes name :=
+  trace.readOnly_tape_match name immutable (tapes name) (fun _ => rfl)
 
 -- targetTapeLevel: the enclosing collection used by a restoring call.
 universe targetTapeLevel

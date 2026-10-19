@@ -28,20 +28,6 @@ namespace Polytime2.CallingConvention
 open MultiTape
 open Binary (Symbol word)
 
-private theorem tape_eq_of_nth (first second : Turing.Tape Symbol)
-    (agreement : ∀ index : ℤ, first.nth index = second.nth index) : first = second := by
-  cases first with
-  | mk firstHead firstLeft firstRight =>
-    cases second with
-    | mk secondHead secondLeft secondRight =>
-      have headEq : firstHead = secondHead := agreement 0
-      have leftEq : firstLeft = secondLeft := Turing.ListBlank.ext (fun index => agreement (.negSucc index))
-      have rightEq : firstRight = secondRight := Turing.ListBlank.ext (fun index => agreement (index + 1 : ℕ))
-      cases headEq
-      cases leftEq
-      cases rightEq
-      rfl
-
 /-- An arbitrary buffer has blank surroundings, even with interior blanks. -/
 theorem buffer_region (contents : List Symbol) : Region contents.length 0 (buffer contents) := by
   intro index outside
