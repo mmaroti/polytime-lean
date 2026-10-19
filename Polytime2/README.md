@@ -232,6 +232,19 @@ empty-coordinate sentinel. Specialization uses finite mathematical choices;
 the result proves existence of a machine for each fixed algebra, rather than
 providing an executable compiler from operation tables.
 
+`Multisorted.lean` defines conversion-independent SMP inputs for a fixed finite
+catalogue `D_t`, with public sizes `n_t` for each sort and a generator count
+`g`. The carrier is exactly generators and a target in `∏ t, D_t ^ n_t`, encoded
+by ordinary records and arrays without inactive slots. `preparedDomain` adds
+encoded dependency masks. `IsPrepared` specifies ordered SI sorts,
+subdirectness, bounded earlier dependencies, and the full monolith graph
+isomorphisms agreeing with fixed catalogue lookups. `IsMember` states the
+ordinary membership question. Certified target access and standalone TM0 export
+reuse public composition. `MultisortedExample.lean` covers two different finite
+rings, absent sorts, and empty catalogues. Adapting the existing padded
+preparation output to this interface remains the computed-size and packing work
+listed below.
+
 Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
 All algorithmic dependencies are defined within this implementation.
@@ -479,19 +492,6 @@ needed for integer matrices, reusing generic arithmetic machinery.
 
 Develop higher-level algorithm notation over the certified mathematical
 composition rules, keeping machine witnesses and scratch layouts internal.
-
-### Multisorted interface
-
-Define the natural mathematical SMP input for a specialization-fixed catalogue
-of algebras `D_t`: public sizes are one multiplicity `n_t` per sort and the
-generator count `g`. Generators and target lie in `∏ t, D_t ^ n_t`, allowing
-zero multiplicities. The parameter type and its cardinality may depend on the
-specialization. Encode this directly using existing records and arrays.
-Describe prepared inputs by predicates on this data, including the monolith
-graph guarantees and bounded dependency data or fixed catalogue lookups.
-Keep this interface independent of the original instance and its conversion;
-public consumers should not require padded slots. Implement the following
-steps in order, exposing reusable rules rather than SMP-specific machinery.
 
 ### Computed sizes
 

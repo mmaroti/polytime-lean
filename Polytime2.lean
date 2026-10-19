@@ -186,6 +186,7 @@ import Polytime2.Arithmetic.TraversalLoop
 
 import Polytime2.Examples.SMP.AllImages
 import Polytime2.Examples.SMP.RingExample
+import Polytime2.Examples.SMP.MultisortedExample
 import Polytime2.Examples.SMP.DistinctDependencies
 import Polytime2.Examples.SMP.MonolithCatalogue
 
