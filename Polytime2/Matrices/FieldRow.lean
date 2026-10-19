@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Arrays.MapContract
+import Polytime2.Arrays.Operations
 import Polytime2.Encoding.Records
 import Polytime2.Matrices.RowCombine
 import Mathlib.Algebra.Field.Defs
@@ -32,9 +32,7 @@ namespace Polytime2.FieldRow
 
 open CallingConvention
 
--- parameterLevel: unary size names; Scalar: the fixed field carrier.
-universe parameterLevel
-variable {Parameter : Type parameterLevel} [Fintype Parameter]
+variable {Parameter : Type} [Fintype Parameter]
 variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
 
 noncomputable def scalarDomain (enumeration : Scalar ≃ Fin cardinality) : EncodedDomain Empty :=
@@ -68,52 +66,30 @@ theorem combine_contract (enumeration : Scalar ≃ Fin cardinality)
 /-- Multiplication by any coefficient, including zero, maps the whole row. -/
 theorem scale_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
-    let domain := scalarDomain enumeration
-    CallingConvention.Realizes (StandardArrayMap.domains domain domain length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
-      (StandardArrayMap.algorithm domain domain (fun _ => scale (Scalar := Scalar)))
-      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output () =
-        fun index => scale (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
-  StandardArrayMap.contract (scalarDomain enumeration) (scalarDomain enumeration) length (fun _ => scale (Scalar := Scalar))
+    (Computation.arrayMap (scalarDomain enumeration) (scalarDomain enumeration) length
+      (fun _ => scale (Scalar := Scalar))).Realizable :=
+  Computation.arrayMap_realizable _ _ _ _
 
-/-- Pivot inversion is part of the fixed field table, with no runtime arithmetic
-oracle. A nonzero-pivot assumption belongs to the caller's correctness proof. -/
+/-- Pivot inversion is part of the fixed field table. -/
 theorem normalize_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
-    let domain := scalarDomain enumeration
-    CallingConvention.Realizes (StandardArrayMap.domains domain domain length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
-      (StandardArrayMap.algorithm domain domain (fun _ => normalize (Scalar := Scalar)))
-      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output () =
-        fun index => normalize (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
-  StandardArrayMap.contract (scalarDomain enumeration) (scalarDomain enumeration) length (fun _ => normalize (Scalar := Scalar))
+    (Computation.arrayMap (scalarDomain enumeration) (scalarDomain enumeration) length
+      (fun _ => normalize (Scalar := Scalar))).Realizable :=
+  Computation.arrayMap_realizable _ _ _ _
 
 /-- The source component is retained, and the target receives its scaled sum. -/
 theorem add_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
-    CallingConvention.Realizes
-      (StandardArrayMap.domains (scalarDomain enumeration) (pairDomain enumeration) length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
-      (StandardArrayMap.algorithm (scalarDomain enumeration) (pairDomain enumeration) (fun _ => add (Scalar := Scalar)))
-      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output () =
-        fun index => add (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
-  StandardArrayMap.contract (scalarDomain enumeration) (pairDomain enumeration) length (fun _ => add (Scalar := Scalar))
+    (Computation.arrayMap (scalarDomain enumeration) (pairDomain enumeration) length
+      (fun _ => add (Scalar := Scalar))).Realizable :=
+  Computation.arrayMap_realizable _ _ _ _
 
 omit [Field Scalar] in
-/-- Swapping also covers identical mathematical rows. Both result components
-are written to the separate output array; every input remains unchanged. -/
+/-- Swapping also covers identical mathematical rows. -/
 theorem swap_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
-    CallingConvention.Realizes
-      (StandardArrayMap.domains (scalarDomain enumeration) (pairDomain enumeration) length)
-      StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
-      (StandardArrayMap.algorithm (scalarDomain enumeration) (pairDomain enumeration) (fun _ => swap (Scalar := Scalar)))
-      StandardArrayMap.entry StandardArrayMap.exit (fun _ _ => True)
-      (fun _ input output => output () =
-        fun index => swap (Scalar := Scalar) (input ⟨.inr 0, rfl⟩) (input ⟨.inr 1, rfl⟩ index)) :=
-  StandardArrayMap.contract (scalarDomain enumeration) (pairDomain enumeration) length (fun _ => swap (Scalar := Scalar))
+    (Computation.arrayMap (scalarDomain enumeration) (pairDomain enumeration) length
+      (fun _ => swap (Scalar := Scalar))).Realizable :=
+  Computation.arrayMap_realizable _ _ _ _
 
 end Polytime2.FieldRow

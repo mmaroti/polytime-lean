@@ -18,7 +18,9 @@ limitations under the License.
 import Polytime2.Computation.Layout
 import Polytime2.Arrays.RuntimeLookupContract
 import Polytime2.Arrays.RuntimeUpdateContract
-import Polytime2.Arrays.MapContract
+import Polytime2.Arrays.Transform
+import Polytime2.Computation.Constant
+import Polytime2.Primitives.FiniteOperations
 
 /-! # Fixed-length array lookup and update with existential implementations -/
 
@@ -84,12 +86,6 @@ private def arrayPlacement {InputName : Type} (arity : ℕ) (enumeration : Fin a
       · cases result; simp [recover]
     intro first second equal
     exact Option.some.inj ((recovered first).symm.trans ((congrArg recover equal).trans (recovered second)))⟩
-
-private def mapPlacement : PublicTape Parameter Bool ↪ Parameter ⊕ Fin 3 :=
-  (Function.Embedding.refl Parameter).sumMap
-    ⟨(fun role => match role with | .inl false => 0 | .inl true => 1 | .inr _ => 2), by
-      intro first second equal
-      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
 end Realizable.Internal
 
@@ -162,28 +158,23 @@ theorem arrayUpdate_realizable (element : EncodedDomain Parameter) (indexCapacit
   Realizable.withComputedWidth (arrayUpdate element indexCapacity length) element.widthPolynomial
     (arrayUpdate_withUnaryWidth_realizable element indexCapacity length)
 
-open Realizable.Internal in
-theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain Empty)
+theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain.{0, 0} Empty)
     (length : MvPolynomial Parameter ℕ)
     (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
     (arrayMap parameterDomain elementDomain length operation).Realizable := by
-  refine ofNamedLayout (arrayMap parameterDomain elementDomain length operation)
-    (StandardArrayMap.domains parameterDomain elementDomain length)
-    StandardArrayMap.argumentReadOnly StandardArrayMap.sizeTapes StandardArrayMap.outputTapes
-    (StandardArrayMap.algorithm parameterDomain elementDomain operation) StandardArrayMap.entry StandardArrayMap.exit
-    _ _ (StandardArrayMap.contract parameterDomain elementDomain length operation) mapPlacement
-    (by rintro (parameter | argument | result) <;> first | rfl | (cases argument <;> rfl))
-    (by rintro (parameter | argument | result) <;> first | rfl | (cases argument <;> rfl))
-    (by
-      intro name outside
-      cases name with
-      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
-      | inr name => fin_cases name <;> first
-        | rfl
-        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
-        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
-    (by intro parameter; rfl) () rfl (by intro sizes input valid; trivial) ?_
-  intro sizes input valid output correct
-  exact congrArg (encoded (elementDomain.constant.arrayOfLength length) sizes) correct
+  let context : Unit → EncodedDomain Parameter := fun _ => parameterDomain.constant
+  let element : EncodedDomain Parameter := elementDomain.constant
+  let update := fun sizes (values : ∀ name, (context name).Carrier sizes) (value : element.Carrier sizes) =>
+    operation Empty.elim (values ()) value
+  have step := ((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes
+    (Parameter := Parameter)).withArguments (arrayTransformStep context element element update).inputDomains
+      ⟨(fun choice => if choice then (Sum.inr () : Unit ⊕ Unit) else .inl ()), by
+        intro first second equal; cases first <;> cases second <;> simp_all⟩
+      (by intro choice; cases choice <;> rfl)
+  have mapped := arrayTransform_realizable context element element length update step
+  exact mapped.withArguments (arrayMap parameterDomain elementDomain length operation).inputDomains
+    ⟨(fun name => match name with | .inl _ => false | .inr _ => true), by
+      rintro (⟨⟩ | ⟨⟩) (⟨⟩ | ⟨⟩) equal <;> first | rfl | cases equal⟩
+    (by rintro (name | name); cases name; rfl; cases name; rfl)
 
 end Polytime2.Computation

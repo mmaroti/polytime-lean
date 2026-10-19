@@ -125,7 +125,6 @@ import Polytime2.Machine.Pipeline
 import Polytime2.Primitives.Initialization
 import Polytime2.Examples.Arithmetic
 import Polytime2.Examples.FiniteTables
-import Polytime2.Arrays.MapContract
 import Polytime2.Examples.ArrayMaps
 import Polytime2.Matrices.RowCombine
 import Polytime2.Examples.RowCombine
@@ -173,7 +172,6 @@ import Polytime2.TM0.TM0Input
 import Polytime2.TM0.Array
 import Polytime2.Matrices.Basic
 import Polytime2.GaussJordan.Basic
-import Polytime2.Arrays.TableTraversal
 import Polytime2.Matrices.FieldRow
 import Polytime2.Matrices.RowField
 
@@ -181,9 +179,15 @@ import Polytime2.Arrays.Fold
 import Polytime2.Arrays.FoldContract
 import Polytime2.Computation.Traversal
 import Polytime2.Examples.Fold
+import Polytime2.Examples.Transform
 
 import Polytime2.Arithmetic.BoundedTraversal
 import Polytime2.Arithmetic.TraversalLoop
+
+import Polytime2.Examples.SMP.AllImages
+import Polytime2.Examples.SMP.RingExample
+import Polytime2.Examples.SMP.DistinctDependencies
+import Polytime2.Examples.SMP.MonolithCatalogue
 
 /-! # Polytime2
 

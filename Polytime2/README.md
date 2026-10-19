@@ -31,7 +31,8 @@ Namespaces and declaration names are unchanged.
 ## Implemented and proved
 
 - Abstract encoded domains combine mathematical carrier families, exact bit
-  widths given by concrete multivariate polynomials over `ℕ`, canonical encoding
+  widths given by concrete multivariate polynomials over `ℕ`, canonical
+  encoding
   and partial decoding, and round-trip laws. Fixed finite presentations supply
   the existing scalar codecs; examples cover tagged carriers and runtime bit
   widths.
@@ -200,6 +201,37 @@ Namespaces and declaration names are unchanged.
   TM0 machine, including preparation, simulation, extraction, and startup in
   its polynomial bound. Empty blocks and absent size or input tapes are covered.
 
+The SMP development in `Examples/SMP/` proves coordinate-image restriction,
+finite subdirect SI decomposition, membership transport, and global monolith
+graph equality. Polynomial-time certificates cover all coordinate images and
+padded SI blocks for every generator and target. The full fixed catalogue
+contains every monolith dependency as a quotient of the same original image
+algebra, with a smaller
+congruence count and a proved graph equation for the generated global relation.
+A fixed catalogue rank places dependencies earlier. Certified exact sort counts
+are stored with padded sort arrays in this order, retaining a target-acceptance
+bit per original coordinate even when there are no SI sorts. Certified output
+values agree with the global embedding. Active padded slots are in bijection
+with the mathematical factors, and stored sort counts sum to their cardinality.
+Distinct dependency sets have the fixed bound and contain only earlier slots.
+The monolith quotient is isomorphic to the projection onto distinct dependency
+coordinates, with full graph equality, and the original generated algebra is
+isomorphic to the generated SI relation. `Specification.lean` combines the
+rejection/prepared outcome, structural guarantees, output agreement, exact
+counts, and polynomial-time certificates. A certified selector returns an
+explicit rejected coordinate or the all-accepted sentinel, preserving the
+ordered instance data. Dense mathematical sort-local correspondence is proved
+against the stored counts. Monolith quotient maps, dependency masks, and graph
+maps have certified fixed-catalogue lookups. Certified runtime position tables
+record the dense index of each active padded slot.
+`denseConversion_implements` combines the complete output
+contract with multi-tape realizability and standalone TM0 export, using only
+the coordinate and generator counts as public size parameters.
+`RingExample.lean` specializes the construction to `ZMod 4` and checks the
+empty-coordinate sentinel. Specialization uses finite mathematical choices;
+the result proves existence of a machine for each fixed algebra, rather than
+providing an executable compiler from operation tables.
+
 Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
 All algorithmic dependencies are defined within this implementation.
@@ -354,6 +386,13 @@ accumulator through a certified computation. Applications supply the update's
 precondition, an indexed invariant, and initialization and preservation proofs;
 `arrayFold_total_realizable` omits those obligations for total updates.
 Element widths, accumulator widths, and array lengths may depend on sizes.
+`arrayTransform_realizable` lifts a total certified element computation to an
+array, with immutable context and different runtime-dependent input and output
+widths. A fold collects raw encoded blocks in a private queue, so the output
+domain needs no default element. Record projection and construction implement
+the queue; finite-table array maps specialize this same construction.
+`Examples/Transform.lean` covers different widths, empty carriers, and TM0
+export.
 `boundedIteration_realizable` derives polynomially bounded repetition from the
 fold, allocating its zero-bit traversal array privately. Both rules hide
 counters, temporary values, copies, width headers, and polynomial costs.
@@ -443,8 +482,8 @@ composition rules, keeping machine witnesses and scratch layouts internal.
 
 ### Algebra targets
 
-Implement the SMP targets and Smith normal form using the shared computation
-framework and generic integer-matrix operations.
+Build consumers of the monolith-prepared SMP instance and implement Smith
+normal form using the shared framework and generic integer-matrix operations.
 
 The simulator's raw transport certificate remains internal.
 
