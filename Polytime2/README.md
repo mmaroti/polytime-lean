@@ -48,9 +48,10 @@ Namespaces and declaration names are unchanged.
   with a matching-tag precondition, and case analysis requiring only the
   selected branch's precondition. No delimiters occur inside either encoding.
 - Record arities and variant catalogues are fixed by specialization. Polynomial
-  offset and length headers are private. `recordOutputs` and `pairOutputs`
-  collect certified results from shared immutable arguments; `withEncodedOutput`
-  changes a result's mathematical interpretation when its canonical bits agree.
+  offset and length headers are private. `recordOutputs`, `namedRecordOutputs`,
+  and `pairOutputs` collect certified results from shared immutable arguments;
+  `withEncodedOutput` changes a result's mathematical interpretation when its
+  canonical bits agree.
   `Examples/Records.lean` covers runtime widths, nested arrays, empty families,
   zero-width payloads, inactive-field rejection, and standalone TM0 export.
 - Every fixed width polynomial has a certified finite unary evaluator. It
@@ -482,22 +483,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Named record outputs (~20–50 net lines removed)
-
-**Add named record output assembly as a thin derived theorem.**
-
-The same pattern occurs in
-[ComputedFrame](Computation/ComputedFrame.lean),
-[ComputedProjection](Computation/ComputedProjection.lean),
-[PackingCall](Arrays/PackingCall.lean),
-and [PreparedCounts](Examples/SMP/PreparedCounts.lean):
-
-choose `Fintype.equivFin`, invoke `recordOutputs`, and reinterpret the
-result as a named record.
-
-A generic `namedRecordOutputs` theorem can encapsulate this. It reuses
-the existing record implementation and requires no new structure.
 
 ### Domain transport (~100–200 net lines removed)
 

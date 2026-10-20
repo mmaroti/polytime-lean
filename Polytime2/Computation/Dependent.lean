@@ -59,6 +59,23 @@ theorem namedRecordProjection_realizable (fields : Name → EncodedDomain Parame
       (fun index => fields (enumeration.symm index))).encode sizes sourceValues) = _
   simpa only [sourceValues, Equiv.piCongrLeft_symm_apply] using split
 
+/-- Assemble named results from shared immutable inputs using the existing
+record codec; the field enumeration stays inside this proof. -/
+theorem Realizable.namedRecordOutputs {InputName : Type} [Fintype InputName]
+    (inputDomains : InputName → EncodedDomain Parameter)
+    (fields : Name → EncodedDomain Parameter)
+    (precondition : ∀ sizes, ((name : InputName) → (inputDomains name).Carrier sizes) → Prop)
+    (results : ∀ name sizes, {arguments // precondition sizes arguments} → (fields name).Carrier sizes)
+    (realizable : ∀ name, (Computation.mk inputDomains (fields name) precondition (results name)).Realizable) :
+    (Computation.mk inputDomains (EncodedDomain.namedRecord fields) precondition
+      (fun sizes arguments name => results name sizes arguments)).Realizable := by
+  let enumeration := Fintype.equivFin Name
+  have packed := Realizable.recordOutputs inputDomains (Fintype.card Name)
+    (fun index => fields (enumeration.symm index)) precondition
+    (fun index => results (enumeration.symm index)) (fun index => realizable (enumeration.symm index))
+  exact packed.withEncodedOutput (EncodedDomain.namedRecord fields)
+    (fun sizes arguments name => results name sizes arguments) (fun _ => rfl) (by intros; rfl)
+
 section BoundedPairs
 
 variable (index : EncodedDomain Parameter)

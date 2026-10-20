@@ -212,15 +212,7 @@ theorem onResults {ContextName : Type} [Fintype ContextName]
     (producers : ∀ name,
       (Computation.mk context (computation.inputDomains name) allowed (results name)).Realizable) :
     (computation.onResults context allowed results valid).Realizable := by
-  classical
-  let enumeration := Fintype.equivFin InputName
-  have packed := Realizable.recordOutputs context (Fintype.card InputName)
-    (fun index => computation.inputDomains (enumeration.symm index)) allowed
-    (fun index => results (enumeration.symm index)) (fun index => producers (enumeration.symm index))
-  have named := packed.withEncodedOutput (EncodedDomain.namedRecord computation.inputDomains)
-    (fun sizes arguments name => results name sizes arguments) (fun _ => rfl) (by
-      intro sizes arguments
-      rfl)
+  have named := Realizable.namedRecordOutputs context computation.inputDomains allowed results producers
   exact named.followedBy realizable.withRecordArgument rfl (by
     intro sizes arguments premise
     exact valid sizes ⟨arguments, premise⟩)

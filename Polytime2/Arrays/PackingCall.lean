@@ -74,28 +74,19 @@ private theorem packingSizeRecord_realizable {InputName : Type} [Fintype InputNa
     (countReady : (Computation.mk inputs (boundedUnary length) allowed retained).Realizable) :
     (Computation.mk inputs (computedSizeDomain (packingCallBounds length)) allowed
       (fun sizes arguments => packingCallSizes length sizes (retained sizes arguments))).Realizable := by
-  classical
-  let names := Parameter ⊕ Unit
-  let bounds := packingCallBounds length
   let sizesResult sizes arguments := packingCallSizes length sizes (retained sizes arguments)
-  have fieldReady name : (Computation.mk inputs (boundedUnary (bounds name)) allowed
-      (fun sizes arguments => sizesResult sizes arguments name)).Realizable := by
-    cases name with
-    | inl parameter =>
-      have evaluated := (polynomialUnarySize_realizable (MvPolynomial.X parameter)).onResults
-        inputs allowed (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
-      exact evaluated.withSpecification allowed
-        (fun sizes arguments => sizesResult sizes arguments (.inl parameter)) (by intros; trivial) (by
-          intro sizes arguments valid
-          apply Fin.ext
-          exact MvPolynomial.eval_X parameter)
-    | inr singleton => cases singleton; exact countReady
-  let enumeration := Fintype.equivFin names
-  have fields := Realizable.recordOutputs inputs (Fintype.card names)
-    (fun index => boundedUnary (bounds (enumeration.symm index))) allowed
-    (fun index sizes arguments => sizesResult sizes arguments (enumeration.symm index))
-    (fun index => fieldReady (enumeration.symm index))
-  exact fields.withEncodedOutput (computedSizeDomain bounds) sizesResult (fun _ => rfl) (by intros; rfl)
+  apply Realizable.namedRecordOutputs
+  intro name
+  cases name with
+  | inl parameter =>
+    have evaluated := (polynomialUnarySize_realizable (MvPolynomial.X parameter)).onResults
+      inputs allowed (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
+    exact evaluated.withSpecification allowed
+      (fun sizes arguments => sizesResult sizes arguments (.inl parameter)) (by intros; trivial) (by
+        intro sizes arguments valid
+        apply Fin.ext
+        exact MvPolynomial.eval_X parameter)
+  | inr singleton => cases singleton; exact countReady
 
 /-- Convert an existing exact packed array to the standard computed-size call
 frame. The count is read from the value, without repeating packing. -/

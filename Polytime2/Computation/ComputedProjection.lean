@@ -46,7 +46,6 @@ noncomputable def projectComputedFrame (bounds : NewParameter → MvPolynomial P
 
 theorem projectComputedFrame_realizable (bounds : NewParameter → MvPolynomial Parameter ℕ)
     (payload : EncodedDomain NewParameter) : (projectComputedFrame bounds payload).Realizable := by
-  classical
   let computation := projectComputedFrame bounds payload
   let fullBounds := extendedSizeBounds bounds
   let renamed := payload.renameParameters (Sum.inr : NewParameter → Parameter ⊕ NewParameter)
@@ -54,17 +53,12 @@ theorem projectComputedFrame_realizable (bounds : NewParameter → MvPolynomial 
   let index := computedSizeDomain bounds
   let sizesResult sizes (arguments : {arguments : computation.Arguments sizes // computation.precondition sizes arguments}) :=
     fun name => (arguments.val ()).1 (.inr name)
-  have fieldReady name : (Computation.mk computation.inputDomains (boundedUnary (bounds name))
-      computation.precondition (fun sizes arguments => sizesResult sizes arguments name)).Realizable :=
-    (readComputedSize_realizable fullBounds renamed (.inr name)).withSpecification
+  have indexReady : (Computation.mk computation.inputDomains index computation.precondition sizesResult).Realizable := by
+    apply Realizable.namedRecordOutputs
+    intro name
+    exact (readComputedSize_realizable fullBounds renamed (.inr name)).withSpecification
       computation.precondition (fun sizes arguments => sizesResult sizes arguments name)
       (by intros; trivial) (by intros; rfl)
-  let enumeration := Fintype.equivFin NewParameter
-  have fields := Realizable.recordOutputs computation.inputDomains (Fintype.card NewParameter)
-    (fun position => boundedUnary (bounds (enumeration.symm position))) computation.precondition
-    (fun position sizes arguments => sizesResult sizes arguments (enumeration.symm position))
-    (fun position => fieldReady (enumeration.symm position))
-  have indexReady := fields.withEncodedOutput index sizesResult (fun _ => rfl) (by intros; rfl)
   let bitsResult sizes (arguments : {arguments : computation.Arguments sizes // computation.precondition sizes arguments}) :=
     (payload.encode (computedSizeAssignment bounds sizes (sizesResult sizes arguments))
       (arguments.val ()).2).setWidth (MvPolynomial.eval sizes capacity)

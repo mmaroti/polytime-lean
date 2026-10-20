@@ -71,16 +71,15 @@ theorem extendedSizeFrame_realizable
     (bounds : PayloadParameter → MvPolynomial HostParameter ℕ)
     (payload : EncodedDomain HostParameter) :
     (extendedSizeFrame bounds payload).Realizable := by
-  classical
   let computation := extendedSizeFrame bounds payload
   let names := HostParameter ⊕ PayloadParameter
   let fullBounds := extendedSizeBounds bounds
   let index := computedSizeDomain fullBounds
   let result sizes (arguments : {arguments : computation.Arguments sizes // True}) :=
     extendedSizeValues bounds sizes (arguments.val false)
-  have fieldReady name : (Computation.mk computation.inputDomains
-      (EncodedDomain.boundedUnary (fullBounds name)) computation.precondition
-      (fun sizes arguments => result sizes arguments name)).Realizable := by
+  have indexReady : (Computation.mk computation.inputDomains index computation.precondition result).Realizable := by
+    apply Realizable.namedRecordOutputs
+    intro name
     cases name with
     | inl parameter =>
       have evaluated := (polynomialUnarySize_realizable (MvPolynomial.X parameter)).onResults
@@ -97,12 +96,6 @@ theorem extendedSizeFrame_realizable
           computation.inputDomains computation.precondition
           (fun _ => fun sizes arguments => arguments.val false) (by intros; trivial)
           (fun _ => Realizable.argument computation.inputDomains false computation.precondition)
-  let enumeration := Fintype.equivFin names
-  have fields := Realizable.recordOutputs computation.inputDomains (Fintype.card names)
-    (fun position => EncodedDomain.boundedUnary (fullBounds (enumeration.symm position)))
-    computation.precondition (fun position sizes arguments => result sizes arguments (enumeration.symm position))
-    (fun position => fieldReady (enumeration.symm position))
-  have indexReady := fields.withEncodedOutput index result (fun _ => rfl) (by intros; rfl)
   have pair := Realizable.pairOutputs computation.inputDomains index payload computation.precondition
     result (fun _ arguments => arguments.val true) indexReady
     (Realizable.argument computation.inputDomains true computation.precondition)

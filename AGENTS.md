@@ -17,6 +17,8 @@
   minimum. Always try to reuse Lean structures from Mathlib.
 - When a structure or theorem or any other artifact is no longer needed or
   used, then remove it and its documentation.
+- After each completed goal report the number of Lean code lines added and
+  removed.
 
 # Mathematical interfaces
 

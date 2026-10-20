@@ -48,11 +48,9 @@ private noncomputable def leadingRecord (capacity : MvPolynomial Unit ℕ) : Com
 
 private theorem leadingRecord_realizable (capacity : MvPolynomial Unit ℕ) :
     (leadingRecord capacity).Realizable := by
-  have packed := Computation.Realizable.recordOutputs (leadingUnarySize capacity).inputDomains
-    (Fintype.card Unit) (fun _ => boundedUnary capacity) (fun _ _ => True)
+  exact Computation.Realizable.namedRecordOutputs (leadingUnarySize capacity).inputDomains
+    (fun _ : Unit => boundedUnary capacity) (fun _ _ => True)
     (fun _ => (leadingUnarySize capacity).compute) (fun _ => leadingUnarySize_realizable capacity)
-  exact packed.withEncodedOutput (computedSizeDomain (bounds capacity))
-    (leadingRecord capacity).compute (fun _ => rfl) (by intros; rfl)
 
 private noncomputable def emptyFrame (capacity : MvPolynomial Unit ℕ) : Computation Unit Unit where
   inputDomains _ := computedSizeDomain (bounds capacity)

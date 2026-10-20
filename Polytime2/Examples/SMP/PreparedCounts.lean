@@ -76,26 +76,17 @@ noncomputable def sizeComputation (coordinates generators : MvPolynomial HostPar
 
 theorem sizeComputation_realizable (coordinates generators : MvPolynomial HostParameter ℕ) :
     (sizeComputation (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
-  classical
   let computation := sizeComputation (L := L) (Carrier := Carrier) coordinates generators
-  let bounds := sizeBounds (L := L) (Carrier := Carrier) coordinates generators
-  let names := Multisorted.Parameter (Nat.card (SICatalogue L Carrier))
-  have fieldReady parameter : (Computation.mk computation.inputDomains (EncodedDomain.boundedUnary (bounds parameter))
-      computation.precondition (fun hostSizes arguments => computation.compute hostSizes arguments parameter)).Realizable := by
-    cases parameter with
-    | inl sort =>
-      exact (catalogueFlags_realizable coordinates (entry sort)).followedBy
-        (packingCount_realizable coordinates) rfl (by intros; trivial)
-    | inr singleton =>
-      cases singleton
-      exact (polynomialUnarySize_realizable generators).onResults computation.inputDomains computation.precondition
-        (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
-  let enumeration := Fintype.equivFin names
-  have fields := Realizable.recordOutputs computation.inputDomains (Fintype.card names)
-    (fun position => EncodedDomain.boundedUnary (bounds (enumeration.symm position))) computation.precondition
-    (fun position hostSizes arguments => computation.compute hostSizes arguments (enumeration.symm position))
-    (fun position => fieldReady (enumeration.symm position))
-  exact fields.withEncodedOutput computation.outputDomain computation.compute (fun _ => rfl) (by intros; rfl)
+  apply Realizable.namedRecordOutputs
+  intro parameter
+  cases parameter with
+  | inl sort =>
+    exact (catalogueFlags_realizable coordinates (entry sort)).followedBy
+      (packingCount_realizable coordinates) rfl (by intros; trivial)
+  | inr singleton =>
+    cases singleton
+    exact (polynomialUnarySize_realizable generators).onResults computation.inputDomains computation.precondition
+      (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
 
 /-- On the actual generated coordinate images, the certified sizes are exactly
 the mathematical dimensions used by the exact multisorted product. -/
