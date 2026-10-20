@@ -19,6 +19,7 @@ import Polytime2.TM0.Computation
 import Polytime2.Primitives.ConstantOperations
 import Polytime2.Arithmetic.CounterOperations
 import Polytime2.Arithmetic.GcdOperations
+import Polytime2.Arithmetic.RemainderOperations
 import Polytime2.GaussJordan.Operations
 
 /-! # Complete single-tape exports through the public mathematical interface
@@ -46,6 +47,9 @@ example : (copy (EncodedDomain.binaryNaturals ())).TM0Realizable :=
 
 /-- Both gcd operands are supplied as separate delimited argument blocks. -/
 example : gcd.TM0Realizable := gcd_realizable.tm0
+
+/-- Private operand widening and result extraction are included in the export. -/
+example : binaryRemainder.TM0Realizable := binaryRemainder_realizable.tm0
 
 /-- The external theorem needs only the fixed field and its two dimensions. -/
 example {Scalar : Type} [Field Scalar] [DecidableEq Scalar] {cardinality : ℕ}

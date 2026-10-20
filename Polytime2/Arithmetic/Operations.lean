@@ -20,7 +20,7 @@ import Polytime2.Computation.Composition
 import Polytime2.Arithmetic.BinaryAddition
 import Polytime2.Arithmetic.BinarySubtraction
 import Polytime2.Arithmetic.BinaryMultiplication
-import Polytime2.Arithmetic.BinaryRemainder
+import Polytime2.Arithmetic.RemainderOperations
 
 /-! # Mathematical bounded arithmetic with hidden finite implementations -/
 
@@ -67,12 +67,6 @@ noncomputable def binaryMultiply : Computation Bool Bool where
   outputDomain := EncodedDomain.binaryNaturals false
   precondition sizes arguments := (arguments false).val * (arguments true).val < 2 ^ sizes false
   compute _ arguments := ⟨(arguments.val false).val * (arguments.val true).val, arguments.property⟩
-
-/-- A positive divisor reserves the shift bit needed by binary long remainder. -/
-noncomputable def binaryRemainder : Computation Unit Bool := binarySpecification
-  (fun sizes arguments => 0 < (arguments true).val ∧ 2 * (arguments true).val ≤ 2 ^ sizes ())
-  (fun _ arguments => ⟨(arguments.val false).val % (arguments.val true).val,
-    lt_trans (Nat.mod_lt _ arguments.property.1) (arguments.val true).isLt⟩)
 
 /-- Arguments are the two summands and the independent-width multiplier.
 The intermediate sum and final product must fit the declared capacity. -/
@@ -151,12 +145,6 @@ private def multiplicationPlacement : PublicTape Bool Bool ↪ Bool ⊕ Fin 6 :=
       intro first second equal
       fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
-private def remainderPlacement : PublicTape Unit Bool ↪ Unit ⊕ Fin 7 :=
-  (Function.Embedding.refl Unit).sumMap
-    ⟨(fun role => match role with | .inl false => 6 | .inl true => 1 | .inr _ => 0), by
-      intro first second equal
-      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-
 end Realizable.Internal
 
 open Realizable.Internal in
@@ -222,26 +210,6 @@ theorem binaryMultiply_realizable : binaryMultiply.Realizable := by
     (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
   intro sizes input valid output correct
   apply congrArg (encoded (EncodedDomain.binaryNaturals false) sizes)
-  apply Fin.ext
-  exact correct
-
-open Realizable.Internal in
-theorem binaryRemainder_realizable : binaryRemainder.Realizable := by
-  refine ofNamedLayout binaryRemainder StandardBinaryRemainder.domains StandardBinaryRemainder.argumentReadOnly
-    StandardBinaryRemainder.sizeTapes StandardBinaryRemainder.outputTapes StandardBinaryRemainder.algorithm StandardBinaryRemainder.entry StandardBinaryRemainder.exit
-    _ _ StandardBinaryRemainder.contract remainderPlacement
-    (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
-    (by
-      intro name outside
-      cases name with
-      | inl parameter => exact False.elim (outside ⟨.inl parameter, rfl⟩)
-      | inr name => fin_cases name <;> first
-        | rfl
-        | exact False.elim (outside ⟨.inr (.inl false), rfl⟩)
-        | exact False.elim (outside ⟨.inr (.inl true), rfl⟩))
-    (by intro parameter; rfl) () rfl (by intro sizes input valid; exact valid) ?_
-  intro sizes input valid output correct
-  apply congrArg (encoded (EncodedDomain.binaryNaturals ()) sizes)
   apply Fin.ext
   exact correct
 

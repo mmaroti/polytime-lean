@@ -139,6 +139,26 @@ example : (binaryMultiply.compute (fun | false => 0 | true => 3)
 
 example : (binaryRemainder.compute (fun _ => 4)
     ⟨(fun | false => (13 : Fin 16) | true => (5 : Fin 16)),
-      by change 0 < 5 ∧ 2 * 5 ≤ 16; decide⟩ : Fin 16) = (3 : Fin 16) := rfl
+      by change 0 < 5; decide⟩ : Fin 16) = (3 : Fin 16) := rfl
+
+-- Divisors may occupy the highest bit; no shift-bit condition is public.
+example : (binaryRemainder.compute (fun _ => 4)
+    ⟨(fun | false => (13 : Fin 16) | true => (15 : Fin 16)), by change 0 < 15; decide⟩ : Fin 16) = (13 : Fin 16) := rfl
+example : (binaryRemainder.compute (fun _ => 4)
+    ⟨(fun | false => (13 : Fin 16) | true => (8 : Fin 16)), by change 0 < 8; decide⟩ : Fin 16) = (5 : Fin 16) := rfl
+example : (binaryRemainder.compute (fun _ => 4)
+    ⟨(fun _ => (15 : Fin 16)), by change 0 < 15; decide⟩ : Fin 16) = (0 : Fin 16) := rfl
+example : (binaryRemainder.compute (fun _ => 4)
+    ⟨(fun | false => (0 : Fin 16) | true => (15 : Fin 16)), by change 0 < 15; decide⟩ : Fin 16) = (0 : Fin 16) := rfl
+example : (binaryRemainder.compute (fun _ => 1)
+    ⟨(fun _ => (1 : Fin 2)), by change 0 < 1; decide⟩ : Fin 2) = (0 : Fin 2) := rfl
+
+-- Width zero admits no positive divisor, as required mathematically.
+example (arguments : binaryRemainder.Arguments (fun _ => 0)) :
+    ¬ binaryRemainder.precondition (fun _ => 0) arguments := by
+  change ¬ 0 < (arguments true).val
+  have bound := (arguments true).isLt
+  norm_num at bound
+  omega
 
 end Polytime2.Examples.Arithmetic

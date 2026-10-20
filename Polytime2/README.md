@@ -129,6 +129,11 @@ The directory reorganization preserved namespaces and declaration names.
   bound, preserved operands, restored heads, and fixed-width scratch. A shift
   and subtraction followed by selection process each dividend bit once, using
   separate result tapes and finite carry or borrow memory.
+  Public [binaryRemainder](Arithmetic/RemainderOperations.lean) requires only a
+  positive divisor and returns at the operands' original width. Private zero
+  extension, the extra width header, execution, and result extraction are
+  included in its polynomial certificate.
+  The capacity-sensitive controller remains an internal building block.
 - `StandardBitFold.runsValues` tracks live multiplication and remainder
   accumulators through representation predicates. Private scratch needs only
   region bounds. Gcd uses `Runs.whileValues` for two live operands, without
@@ -519,19 +524,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Remainder capacity (~40–90 net lines added)
-
-**Remove the long-division restriction from public remainder.**
-
-[binaryRemainder](Arithmetic/Operations.lean)
-requires both a positive divisor and
-`2 * divisor ≤ 2 ^ capacity`. The latter reserves a shift bit for the
-implementation; it is not a mathematical requirement for remainder.
-
-Widen operands privately, call the existing implementation, and return
-the result at the original width. The public precondition should only
-require the chosen mathematical divisor condition.
 
 ### Dependency sets (~20–70 net lines added)
 

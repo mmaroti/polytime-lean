@@ -40,6 +40,14 @@ theorem bits_setWidth {width capacity : ℕ} (bits : BitVec width) (fits : width
     · have outside : width ≤ position := Nat.le_of_not_gt inside
       simp [ArrayEncoding.bits, List.getElem_append, inside, BitVec.getLsbD_of_ge bits position outside]
 
+/-- Truncation retains exactly the requested prefix of the canonical bits. -/
+theorem bits_setWidth_take {width length : ℕ} (bits : BitVec width) (fits : length ≤ width) :
+    ArrayEncoding.bits (bits.setWidth length) = (ArrayEncoding.bits bits).take length := by
+  apply List.ext_getElem
+  · simp [ArrayEncoding.bits, Nat.min_eq_left fits]
+  · intro position leftWithin rightWithin
+    simp [ArrayEncoding.bits, -BitVec.getLsbD_eq_getElem]
+
 /-- Polynomial-capacity zero padding retains every mathematical payload. -/
 theorem encode_setWidth_injective (domain : EncodedDomain Parameter) (sizes : Parameter → ℕ)
     (capacity : ℕ) (fits : domain.width sizes ≤ capacity) :

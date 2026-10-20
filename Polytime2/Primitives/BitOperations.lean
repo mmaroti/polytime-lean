@@ -20,8 +20,11 @@ import Polytime2.Computation.Arguments
 import Polytime2.Computation.Width
 import Polytime2.Computation.Reindex
 import Polytime2.Encoding.Records
+import Polytime2.Computation.Records
+import Polytime2.Arithmetic.CounterOperations
+import Polytime2.Encoding.Dependent
 
-/-! # Certified bit-preserving maps and polynomial zero words -/
+/-! # Certified bit maps, polynomial zero words, and zero extension -/
 
 namespace Polytime2.Computation
 
@@ -29,7 +32,7 @@ open CallingConvention
 
 variable {Parameter : Type} [Fintype Parameter]
 
-/-- A total mathematical map implemented by copying the same canonical bits. -/
+/-- A total mathematical map between encoded domains. -/
 def encodingMap (source target : EncodedDomain Parameter)
     (compute : ∀ sizes, source.Carrier sizes → target.Carrier sizes) : Computation Parameter Unit :=
   unaryMap source target (fun _ _ => True) (fun sizes value => compute sizes value.val)
@@ -111,6 +114,39 @@ theorem zeroBits_realizable (polynomial : MvPolynomial Parameter ℕ) : (zeroBit
   apply Realizable.withComputedWidth (zeroBits polynomial) polynomial
   exact clearing.withArguments (zeroBits polynomial |>.withUnaryWidth polynomial).inputDomains
     ⟨Sum.inr, Sum.inr_injective⟩ (fun _ => rfl)
+
+/-- Appending a polynomial number of zero bits realizes any mathematical map
+with that canonical encoding. Existing record construction supplies the copy. -/
+theorem zeroExtendEncoding_realizable (source target : EncodedDomain.{0, 0} Parameter)
+    (extra : MvPolynomial Parameter ℕ)
+    (compute : ∀ sizes, source.Carrier sizes → target.Carrier sizes)
+    (sameWidth : ∀ sizes, target.width sizes = source.width sizes + MvPolynomial.eval sizes extra)
+    (sameBits : ∀ sizes value,
+      EncodedDomain.ArrayEncoding.bits (target.encode sizes (compute sizes value)) =
+        EncodedDomain.ArrayEncoding.bits (source.encode sizes value) ++
+          List.replicate (MvPolynomial.eval sizes extra) false) :
+    (encodingMap source target compute).Realizable := by
+  let inputs : Unit → EncodedDomain.{0, 0} Parameter := fun _ => source
+  let zeros := EncodedDomain.bitVectors extra
+  have allocated := (zeroBits_realizable extra).withArguments inputs
+    ⟨Empty.elim, by intro impossible; exact impossible.elim⟩ (by intro impossible; exact impossible.elim)
+  have pair := Realizable.pairOutputs inputs source zeros (fun _ _ => True)
+    (fun _ arguments => arguments.val ())
+    (fun sizes _ => BitVec.ofNat (MvPolynomial.eval sizes extra) 0) (copy_realizable source) allocated
+  exact pair.withEncodedOutput target (encodingMap source target compute).compute
+    (by intro sizes; simpa [zeros, EncodedDomain.width, EncodedDomain.prod] using sameWidth sizes)
+    (by
+      intro sizes arguments
+      apply congrArg (fun bits => CallingConvention.buffer (Binary.word bits))
+      rw [EncodedDomain.bits_prod_encode]
+      change EncodedDomain.ArrayEncoding.bits (target.encode sizes (compute sizes (arguments.val ()))) =
+        EncodedDomain.ArrayEncoding.bits (source.encode sizes (arguments.val ())) ++
+          EncodedDomain.ArrayEncoding.bits (BitVec.ofNat (MvPolynomial.eval sizes extra) 0)
+      have zeroWord : EncodedDomain.ArrayEncoding.bits (BitVec.ofNat (MvPolynomial.eval sizes extra) 0) =
+          List.replicate (MvPolynomial.eval sizes extra) false := by
+        simp [EncodedDomain.ArrayEncoding.bits, BitVec.getLsbD, BitVec.toNat_ofNat]
+      rw [zeroWord]
+      exact sameBits sizes (arguments.val ()))
 
 /-- Initialize a polynomial-length array of polynomial-width zero words. -/
 noncomputable def zeroBitArray (width length : MvPolynomial Parameter ℕ) : Computation Parameter Empty where
