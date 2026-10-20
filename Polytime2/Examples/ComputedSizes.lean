@@ -63,9 +63,9 @@ example : ((copy wordDomain).substitute
     (fun _ : Unit => (MvPolynomial.X ()) ^ 2)).TM0Realizable :=
   ((copy_realizable wordDomain).substitute _).tm0
 
-/-- The full dependent call exports to a one-tape TM0 machine. -/
-example : ((copy wordDomain).atComputedSizes bounds).TM0Realizable :=
-  ((copy_realizable wordDomain).atComputedSizes bounds).tm0
+/-- A unary dependent call needs no singleton argument record and exports to TM0. -/
+example : ((copy wordDomain).atComputedUnarySizes bounds).TM0Realizable :=
+  ((copy_realizable wordDomain).atComputedUnarySizes bounds).tm0
 
 /-- Empty parameter and argument families need no special operational case. -/
 example : ((polynomialUnarySize (Parameter := Empty) 0).atComputedSizes
@@ -74,15 +74,15 @@ example : ((polynomialUnarySize (Parameter := Empty) 0).atComputedSizes
 
 /-- The callee sees the chosen count, never the upper capacity in its place. -/
 example (sizes : Unit → ℕ)
-    (input : ((copy wordDomain).atComputedSizes bounds).inputDomains () |>.Carrier sizes) :
-    (((copy wordDomain).atComputedSizes bounds).compute sizes ⟨(fun _ => input), trivial⟩).2 = input.2 () := rfl
+    (input : ((copy wordDomain).atComputedUnarySizes bounds).inputDomains () |>.Carrier sizes) :
+    (((copy wordDomain).atComputedUnarySizes bounds).compute sizes ⟨(fun _ => input), trivial⟩).2 = input.2 := rfl
 
 /-- Call-frame round trips preserve actual dependent mathematical arguments. -/
 example (sizes : Unit → ℕ)
-    (input : ((copy wordDomain).atComputedSizes bounds).inputDomains () |>.Carrier sizes) :
-    (((copy wordDomain).atComputedSizes bounds).inputDomains ()).decode sizes
-      ((((copy wordDomain).atComputedSizes bounds).inputDomains ()).encode sizes input) = some input :=
-  (((copy wordDomain).atComputedSizes bounds).inputDomains ()).decode_encode sizes input
+    (input : ((copy wordDomain).atComputedUnarySizes bounds).inputDomains () |>.Carrier sizes) :
+    (((copy wordDomain).atComputedUnarySizes bounds).inputDomains ()).decode sizes
+      ((((copy wordDomain).atComputedUnarySizes bounds).inputDomains ()).encode sizes input) = some input :=
+  (((copy wordDomain).atComputedUnarySizes bounds).inputDomains ()).decode_encode sizes input
 
 /-- A bound on a computed count majorizes every callee polynomial, not only
 linear storage sizes. -/

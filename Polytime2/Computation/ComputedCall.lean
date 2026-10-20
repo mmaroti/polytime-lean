@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.ComputedSizes
+import Polytime2.Computation.ComputedRecord
 import Polytime2.Computation.PaddedCallRealizable
 
 /-! # Certified composition at input-dependent size assignments
@@ -99,5 +100,19 @@ theorem atComputedSizes {computation : Computation NewParameter InputName}
   have paired := Realizable.pairOutputs context index (bitVectors outputCapacity) allowed
     (fun _ arguments => (arguments.val ()).1) result indexReady exactResult
   exact paired.withEncodedOutput target.outputDomain target.compute (fun _ => rfl) (by intros; rfl)
+
+/-- The unary call prepares its singleton argument record internally and keeps
+the consumer's own precondition at the actual stored size assignment. -/
+theorem atComputedUnarySizes {computation : Computation NewParameter Unit}
+    (realizable : computation.Realizable) (bounds : NewParameter → MvPolynomial Parameter ℕ) :
+    (computation.atComputedUnarySizes bounds).Realizable := by
+  let target := computation.atComputedUnarySizes bounds
+  have framed := (recordComputedFrame_realizable bounds (computation.inputDomains ())).withPrecondition
+    target.precondition (by intros; trivial)
+  have called := framed.followedBy (realizable.atComputedSizes bounds) rfl (by
+    intro sizes arguments valid
+    exact valid)
+  exact called.withSpecification target.precondition target.compute
+    (by intros; assumption) (by intros; rfl)
 
 end Polytime2.Computation.Realizable

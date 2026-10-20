@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Examples.SMP.PreparedInput
-import Polytime2.Computation.ComputedRecord
+import Polytime2.Computation.ComputedCall
 import Polytime2.Computation.ComputedProjection
 
 /-! # Exact SMP preparation at the original size assignment -/
@@ -53,12 +53,8 @@ theorem prepareConverted_realizable (coordinates generators : MvPolynomial Param
     (prepareConverted (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
   let bounds := sizeBounds (L := L) (Carrier := Carrier) coordinates generators
   let fullBounds := extendedSizeBounds bounds
-  let packed := (packedDomain (L := L) (Carrier := Carrier) coordinates generators).renameParameters
-    (Sum.inl : Parameter → WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))
-  have framed := (packedFrame_realizable (L := L) (Carrier := Carrier) coordinates generators).followedBy
-    (recordComputedFrame_realizable fullBounds packed) rfl (by intros; trivial)
-  have called := framed.followedBy
-    ((preparedPayload_realizable (L := L) (Carrier := Carrier) coordinates generators).atComputedSizes fullBounds)
+  have called := (packedFrame_realizable (L := L) (Carrier := Carrier) coordinates generators).followedBy
+    ((preparedPayload_realizable (L := L) (Carrier := Carrier) coordinates generators).atComputedUnarySizes fullBounds)
     rfl (by
       intro sizes arguments valid
       exact ⟨⟨(by intro sort; rfl), rfl⟩, (by intro sort; rfl)⟩)

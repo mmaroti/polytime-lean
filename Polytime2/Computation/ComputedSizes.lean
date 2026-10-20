@@ -92,6 +92,18 @@ noncomputable def atComputedSizes (computation : Computation NewParameter InputN
     computation.compute (computedSizeAssignment bounds sizes (arguments.val ()).1)
       ⟨(arguments.val ()).2, arguments.property⟩⟩
 
+/-- Invoke a unary computation on a value at its stored size assignment. The
+result retains those sizes, and callers supply no singleton argument record. -/
+noncomputable def atComputedUnarySizes (computation : Computation NewParameter Unit)
+    (bounds : NewParameter → MvPolynomial Parameter ℕ) : Computation Parameter Unit where
+  inputDomains _ := atComputedSizeDomain bounds (computation.inputDomains ())
+  outputDomain := atComputedSizeDomain bounds computation.outputDomain
+  precondition sizes arguments := computation.precondition
+    (computedSizeAssignment bounds sizes (arguments ()).1) (fun _ => (arguments ()).2)
+  compute sizes arguments := ⟨(arguments.val ()).1,
+    computation.compute (computedSizeAssignment bounds sizes (arguments.val ()).1)
+      ⟨(fun _ => (arguments.val ()).2), arguments.property⟩⟩
+
 /-- Exact polynomial sizes are the maximal values of their bounded unary
 domains. -/
 noncomputable def polynomialUnarySize (capacity : MvPolynomial Parameter ℕ) : Computation Parameter Empty where

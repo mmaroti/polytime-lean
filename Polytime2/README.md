@@ -248,6 +248,10 @@ rectangular array product maps construct the masks. Extended computed-size
 frames retain original dimensions only while constructing the result; their
 projection removes those dimensions before exposing the prepared frame.
 Singleton argument records reuse identical canonical bits.
+`atComputedUnarySizes` invokes any certified unary computation on a value at
+its stored sizes and retains those sizes with the result. It hides singleton
+argument records and preserves the consumer's own precondition. Prepared SMP
+consumers and preparation itself specialize this generic operation.
 Packed-array extraction shares one field-copy theorem, including size-dependent
 element conversions with identical canonical bits.
 
@@ -488,19 +492,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Computed-size consumers (~0–20 net lines added)
-
-**Move generic computed-size consumer lifting out of SMP.**
-
-[runPreparedConsumer](Examples/SMP/PreparedConsumer.lean)
-contains no essential SMP operation. It packages a unary argument,
-invokes `atComputedSizes`, and retains the actual sizes with the result.
-
-Make this a generic unary computed-size call operation, implemented
-using `recordComputedFrame` and `atComputedSizes`. Prepared consumers
-become a specialization. This directly supports future algorithms
-consuming input-dependent dimensions.
 
 ### Call frames (~250–450 net lines removed)
 
