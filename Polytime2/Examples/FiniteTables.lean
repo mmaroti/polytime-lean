@@ -27,7 +27,7 @@ private noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.f
 
 noncomputable def addition : Polytime2.Computation Empty Bool :=
   finiteTable threeElements threeElements threeElements
-    (fun _ (first : Fin 3) (second : Fin 3) => first + second)
+    (fun (first : Fin 3) (second : Fin 3) => first + second)
 
 example : addition.Realizable := finiteTable_realizable threeElements threeElements threeElements _
 example : (addition.compute Empty.elim
@@ -36,7 +36,7 @@ example : (addition.compute Empty.elim
 -- Singleton domains have zero-bit arguments and results.
 example : (finiteTable (EncodedDomain.fixed (Equiv.refl (Fin 1)))
     (EncodedDomain.fixed (Equiv.refl (Fin 1))) (EncodedDomain.fixed (Equiv.refl (Fin 1)))
-    (fun _ first _ => first)).Realizable := finiteTable_realizable _ _ _ _
+    (fun first _ => first)).Realizable := finiteTable_realizable _ _ _ _
 
 /-- Four arguments include different widths and a zero-bit singleton. -/
 private noncomputable def mixedInputs : Fin 4 → EncodedDomain Empty
@@ -63,6 +63,6 @@ example : CallingConvention.Realizes (FiniteTable.domains mixedInputs mixedOutpu
 
 -- A nullary operation has no input tapes and writes its result directly.
 example : (finiteOperation (fun name : Empty => nomatch name) EncodedDomain.booleans
-    (fun _ _ => true)).Realizable := finiteOperation_realizable _ _ _
+    (fun _ => true)).Realizable := finiteOperation_realizable _ _ _
 
 end Polytime2.Examples.FiniteTables

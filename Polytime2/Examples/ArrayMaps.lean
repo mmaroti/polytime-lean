@@ -32,7 +32,7 @@ variable {Scalar : Type} [Field Scalar] [Fintype Scalar]
 noncomputable def scaledRow (length : MvPolynomial Parameter ℕ) : Polytime2.Computation Parameter Bool :=
   arrayMap (FieldRow.scalarDomain (Fintype.equivFin Scalar))
     (FieldRow.scalarDomain (Fintype.equivFin Scalar)) length
-    (fun _ (coefficient value : Scalar) => coefficient * value)
+    (fun (coefficient value : Scalar) => coefficient * value)
 
 theorem scaledRow_realizable (length : MvPolynomial Parameter ℕ) :
     (scaledRow (Scalar := Scalar) length).Realizable := arrayMap_realizable _ _ _ _
@@ -47,7 +47,7 @@ theorem scaledRow_correct (length : MvPolynomial Parameter ℕ) (sizes : Paramet
 -- Mapping also covers empty arrays and arrays of zero-bit singleton elements.
 example (length : MvPolynomial Parameter ℕ) :
     (arrayMap (EncodedDomain.fixed (Equiv.refl (Fin 1)))
-      (EncodedDomain.fixed (Equiv.refl (Fin 1))) length (fun _ _ value => value)).Realizable :=
+      (EncodedDomain.fixed (Equiv.refl (Fin 1))) length (fun _ value => value)).Realizable :=
   arrayMap_realizable _ _ _ _
 
 -- Scalar pairs used by row maps have the generic certified pair operations.

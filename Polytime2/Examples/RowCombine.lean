@@ -26,7 +26,7 @@ open Polytime2.Computation
 private noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
 noncomputable def linearCombination : Polytime2.Computation Empty (Fin 3) :=
-  finiteTernary threeElements (fun _ (coefficient source target : Fin 3) => coefficient * source + target)
+  finiteTernary threeElements (fun (coefficient source target : Fin 3) => coefficient * source + target)
 
 theorem linearCombination_realizable : linearCombination.Realizable := finiteTernary_realizable _ _
 
@@ -34,6 +34,6 @@ example : (linearCombination.compute Empty.elim
     ⟨![ (2 : Fin 3), (1 : Fin 3), (1 : Fin 3) ], True.intro⟩ : Fin 3) = (0 : Fin 3) := rfl
 
 example : (finiteTernary (EncodedDomain.fixed (Equiv.refl (Fin 1)))
-    (fun _ first _ _ => first)).Realizable := finiteTernary_realizable _ _
+    (fun first _ _ => first)).Realizable := finiteTernary_realizable _ _
 
 end Polytime2.Examples.RowCombine

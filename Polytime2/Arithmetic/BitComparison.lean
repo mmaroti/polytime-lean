@@ -45,7 +45,7 @@ noncomputable def booleanOperation (operation : (Argument → Bool) → Bool) :
 theorem booleanOperation_realizable (operation : (Argument → Bool) → Bool) :
     (booleanOperation (Parameter := Parameter) operation).Realizable := by
   have table := (finiteOperation_realizable (fun _ : Argument => (booleans : EncodedDomain Empty))
-    booleans (fun _ arguments => operation arguments)).withConstantSizes (Parameter := Parameter)
+    booleans operation).withConstantSizes (Parameter := Parameter)
   exact table.reindexDomains (fun _ => booleans) booleans (fun _ _ => Equiv.refl Bool)
     (fun _ => Equiv.refl Bool)
     (by intros; simp [withConstantSizes, finiteOperation, booleans, EncodedDomain.width])

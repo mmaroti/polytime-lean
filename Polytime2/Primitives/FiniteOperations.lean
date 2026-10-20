@@ -31,12 +31,14 @@ variable {Argument : Type} [Fintype Argument]
 /-- Arbitrarily many separate fixed encoded arguments compute one result. -/
 def finiteOperation (inputs : Argument → EncodedDomain.{0, carrierLevel} Empty)
     (output : EncodedDomain.{0, carrierLevel} Empty)
-    (operation : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → output.Carrier sizes) :
+    (operation : ((name : Argument) → (inputs name).Carrier Empty.elim) → output.Carrier Empty.elim) :
     Computation Empty Argument where
   inputDomains := inputs
   outputDomain := output
   precondition _ _ := True
-  compute sizes arguments := operation sizes arguments.val
+  compute sizes arguments := by
+    cases Subsingleton.elim sizes Empty.elim
+    exact operation arguments.val
 
 namespace Realizable.Internal
 
@@ -64,13 +66,14 @@ open Realizable.Internal in
 /-- Every specialization-fixed family operation uses the same finite table. -/
 theorem finiteOperation_realizable (inputs : Argument → EncodedDomain.{0, carrierLevel} Empty)
     (output : EncodedDomain.{0, carrierLevel} Empty)
-    (operation : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → output.Carrier sizes) :
+    (operation : ((name : Argument) → (inputs name).Carrier Empty.elim) → output.Carrier Empty.elim) :
     (finiteOperation inputs output operation).Realizable := by
   classical
   let sourceInputs := fun name => inputs ((Fintype.equivFin Argument).symm name)
   let sourceOutputs := fun _ : Fin 1 => output
   let sourceOperation := fun sizes (values : ∀ name, (sourceInputs name).Carrier sizes) (_ : Fin 1) =>
-    operation sizes (fun name => by simpa [sourceInputs] using values (Fintype.equivFin Argument name))
+    (finiteOperation inputs output operation).compute sizes
+      ⟨(fun name => by simpa [sourceInputs, finiteOperation] using values (Fintype.equivFin Argument name)), trivial⟩
   refine ofNamedLayout (finiteOperation inputs output operation)
     (FiniteTable.domains sourceInputs sourceOutputs) FiniteTable.readOnly
     FiniteTable.sizeTapes FiniteTable.outputTapes
@@ -98,45 +101,35 @@ theorem finiteOperation_realizable (inputs : Argument → EncodedDomain.{0, carr
 
 /-- False and true name the two arguments, whose carrier types may differ. -/
 def finiteTable (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLevel} Empty)
-    (operation : ∀ sizes, firstDomain.Carrier sizes → secondDomain.Carrier sizes →
-      outputDomain.Carrier sizes) : Computation Empty Bool where
-  inputDomains | false => firstDomain | true => secondDomain
-  outputDomain := outputDomain
-  precondition _ _ := True
-  compute sizes arguments := operation sizes (arguments.val false) (arguments.val true)
+    (operation : firstDomain.Carrier Empty.elim → secondDomain.Carrier Empty.elim →
+      outputDomain.Carrier Empty.elim) : Computation Empty Bool :=
+  finiteOperation (fun | false => firstDomain | true => secondDomain) outputDomain
+    (fun values => operation (values false) (values true))
 
 theorem finiteTable_realizable
     (firstDomain secondDomain outputDomain : EncodedDomain.{0, carrierLevel} Empty)
-    (operation : ∀ sizes, firstDomain.Carrier sizes → secondDomain.Carrier sizes →
-      outputDomain.Carrier sizes) : (finiteTable firstDomain secondDomain outputDomain operation).Realizable :=
-  finiteOperation_realizable (Argument := Bool) (fun | false => firstDomain | true => secondDomain) outputDomain
-    (fun sizes values => operation sizes (values false) (values true))
+    (operation : firstDomain.Carrier Empty.elim → secondDomain.Carrier Empty.elim →
+      outputDomain.Carrier Empty.elim) : (finiteTable firstDomain secondDomain outputDomain operation).Realizable :=
+  finiteOperation_realizable _ _ _
 
 /-- A unary specialization-fixed predicate returns a single Boolean. -/
 noncomputable def finitePredicate (domain : EncodedDomain.{0, 0} Empty)
-    (predicate : ∀ sizes, domain.Carrier sizes → Bool) : Computation Empty Unit :=
-  unaryMap domain EncodedDomain.booleans (fun _ _ => True)
-    (fun sizes value => predicate sizes value.val)
+    (predicate : domain.Carrier Empty.elim → Bool) : Computation Empty Unit :=
+  finiteOperation (fun _ => domain) EncodedDomain.booleans (fun values => predicate (values ()))
 
 theorem finitePredicate_realizable (domain : EncodedDomain.{0, 0} Empty)
-    (predicate : ∀ sizes, domain.Carrier sizes → Bool) :
-    (finitePredicate domain predicate).Realizable :=
-  finiteOperation_realizable (fun _ : Unit => domain) EncodedDomain.booleans
-    (fun sizes values => predicate sizes (values ()))
+    (predicate : domain.Carrier Empty.elim → Bool) :
+    (finitePredicate domain predicate).Realizable := finiteOperation_realizable _ _ _
 
 /-- Three separate arguments from one fixed domain compute one mathematical result. -/
 def finiteTernary (domain : EncodedDomain.{0, carrierLevel} Empty)
-    (operation : ∀ sizes, domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes) :
-    Computation Empty (Fin 3) where
-  inputDomains _ := domain
-  outputDomain := domain
-  precondition _ _ := True
-  compute sizes arguments := operation sizes (arguments.val 0) (arguments.val 1) (arguments.val 2)
+    (operation : domain.Carrier Empty.elim → domain.Carrier Empty.elim →
+      domain.Carrier Empty.elim → domain.Carrier Empty.elim) : Computation Empty (Fin 3) :=
+  finiteOperation (fun _ => domain) domain (fun values => operation (values 0) (values 1) (values 2))
 
 theorem finiteTernary_realizable (domain : EncodedDomain.{0, carrierLevel} Empty)
-    (operation : ∀ sizes, domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes → domain.Carrier sizes) :
-    (finiteTernary domain operation).Realizable :=
-  finiteOperation_realizable (fun _ : Fin 3 => domain) domain
-    (fun sizes values => operation sizes (values 0) (values 1) (values 2))
+    (operation : domain.Carrier Empty.elim → domain.Carrier Empty.elim →
+      domain.Carrier Empty.elim → domain.Carrier Empty.elim) :
+    (finiteTernary domain operation).Realizable := finiteOperation_realizable _ _ _
 
 end Polytime2.Computation

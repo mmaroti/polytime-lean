@@ -15,13 +15,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Composition
+import Polytime2.Computation.Conditional
 import Polytime2.Computation.Constant
 import Polytime2.Arrays.Operations
 import Polytime2.Primitives.FiniteOperations
 import Polytime2.Primitives.ConstantOperations
 
 /-! # Indexed finite operations through mathematical certificates -/
+
+set_option backward.isDefEq.respectTransparency false
 
 namespace Polytime2.Computation
 
@@ -32,8 +34,8 @@ noncomputable section IndexedComputations
 /-- Arguments are the index, immutable array, and finite scalar parameter. -/
 def indexedMap (parameterDomain elementDomain : EncodedDomain Empty)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
-    (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes →
-      elementDomain.Carrier sizes) : Computation Parameter (Fin 3) where
+    (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim →
+      elementDomain.Carrier Empty.elim) : Computation Parameter (Fin 3) where
   inputDomains
     | 0 => EncodedDomain.binaryNaturals indexCapacity
     | 1 => elementDomain.constant.arrayOfLength length
@@ -42,7 +44,7 @@ def indexedMap (parameterDomain elementDomain : EncodedDomain Empty)
   precondition sizes arguments := (arguments 0).val < MvPolynomial.eval sizes length
   compute _ arguments := Function.update (arguments.val 1)
     ⟨(arguments.val 0).val, arguments.property⟩
-    (operation Empty.elim (arguments.val 2)
+    (operation (arguments.val 2)
       (arguments.val 1 ⟨(arguments.val 0).val, arguments.property⟩))
 
 /-- Two fixed maps act sequentially on selected coordinates in an active prefix.
@@ -50,7 +52,7 @@ Arguments are the first index, second index, active count, and immutable array.
 Coincident indices apply the second map to the first map's result. -/
 def catalogueMaps (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ)
-    (first second : ∀ sizes, elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
+    (first second : elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
     Computation Parameter (Fin 4) where
   inputDomains
     | 0 | 1 | 2 => EncodedDomain.binaryNaturals indexCapacity
@@ -61,94 +63,82 @@ def catalogueMaps (elementDomain : EncodedDomain Empty) (indexCapacity : Paramet
   compute _ arguments :=
     let firstIndex := ⟨(arguments.val 0).val, lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩
     let secondIndex := ⟨(arguments.val 1).val, lt_of_lt_of_le arguments.property.2.2 arguments.property.1⟩
-    let middle := Function.update (arguments.val 3) firstIndex (first Empty.elim (arguments.val 3 firstIndex))
-    Function.update middle secondIndex (second Empty.elim (middle secondIndex))
+    let middle := Function.update (arguments.val 3) firstIndex (first (arguments.val 3 firstIndex))
+    Function.update middle secondIndex (second (middle secondIndex))
 
 theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Empty)
     (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
-    (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes →
-      elementDomain.Carrier sizes) :
+    (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim →
+      elementDomain.Carrier Empty.elim) :
     (indexedMap parameterDomain elementDomain indexCapacity length operation).Realizable := by
   let computation := indexedMap parameterDomain elementDomain indexCapacity length operation
-  let lookupSelection : Bool ↪ Fin 3 :=
-    ⟨(fun flag => if flag then 1 else 0), by
-      intro first second equal
-      cases first <;> cases second <;> simp_all⟩
-  let lookup := (arrayLookup elementDomain.constant indexCapacity length).withArguments
-    computation.inputDomains lookupSelection (by intro flag; cases flag <;> rfl)
-  let context : Fin 3 ⊕ Unit → EncodedDomain Parameter :=
-    Sum.elim computation.inputDomains (fun _ => elementDomain.constant)
-  let tableSelection : Bool ↪ Fin 3 ⊕ Unit :=
-    ⟨(fun flag => if flag then .inr () else .inl 2), by
-      intro first second equal
-      cases first <;> cases second <;> simp_all⟩
-  let table := (((finiteTable parameterDomain elementDomain elementDomain operation).withConstantSizes).withArguments
-    context tableSelection (by intro flag; cases flag <;> rfl)).withPrecondition
-      (fun sizes arguments => (arguments (.inl 0)).val < MvPolynomial.eval sizes length)
-      (by intro sizes arguments valid; trivial)
-  let updateContext : (Fin 3 ⊕ Unit) ⊕ Unit → EncodedDomain Parameter :=
-    Sum.elim context (fun _ => elementDomain.constant)
-  let updateSelection : Fin 3 ↪ (Fin 3 ⊕ Unit) ⊕ Unit :=
-    ⟨(fun | 0 => .inl (.inl 0) | 1 => .inl (.inl 1) | 2 => .inr ()), by
-      intro first second equal
-      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-  let update := (arrayUpdate elementDomain.constant indexCapacity length).withArguments
-    updateContext updateSelection (by intro name; fin_cases name <;> rfl)
-  have lookupRealizable : lookup.Realizable :=
-    (arrayLookup_realizable elementDomain.constant indexCapacity length).withArguments _ _ _
-  have tableRealizable : table.Realizable :=
-    (((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes).withArguments _ _ _).withPrecondition _ _
-  have updateRealizable : update.Realizable :=
-    (arrayUpdate_realizable elementDomain.constant indexCapacity length).withArguments _ _ _
-  let continuation := table.letThen update (by intro name; rfl) rfl
-    (by intro sizes arguments valid; exact valid)
-  have continuationRealizable : continuation.Realizable :=
-    tableRealizable.letThen updateRealizable _ _ _
-  exact lookupRealizable.letThen continuationRealizable (by intro name; rfl) rfl
-    (by intro sizes arguments valid; exact valid)
+  have lookup := (arrayLookup_realizable elementDomain.constant indexCapacity length).onResults
+    computation.inputDomains computation.precondition
+    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 1)
+    (by intro sizes arguments; exact arguments.property) (by
+      intro choice
+      cases choice
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+  have mapped := ((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes).onResults
+    computation.inputDomains computation.precondition
+    (fun choice sizes arguments => match choice with
+      | false => arguments.val 2
+      | true => arguments.val 1 ⟨(arguments.val 0).val, arguments.property⟩)
+    (by intros; trivial) (by
+      intro choice
+      cases choice
+      · exact Realizable.argument computation.inputDomains 2 computation.precondition
+      · exact lookup)
+  exact (arrayUpdate_realizable elementDomain.constant indexCapacity length).onResults
+    computation.inputDomains computation.precondition
+    (fun name _ arguments => match name with
+      | 0 => arguments.val 0
+      | 1 => arguments.val 1
+      | 2 => operation (arguments.val 2)
+          (arguments.val 1 ⟨(arguments.val 0).val, arguments.property⟩))
+    (by intro sizes arguments; exact arguments.property) (by
+      intro name
+      fin_cases name
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition
+      · exact mapped)
 
 theorem catalogueMaps_realizable (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
     (length : MvPolynomial Parameter ℕ)
-    (first second : ∀ sizes, elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
+    (first second : elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
     (catalogueMaps elementDomain indexCapacity length first second).Realizable := by
   let computation := catalogueMaps elementDomain indexCapacity length first second
   let singleton : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
-  let noArguments : Empty ↪ Fin 4 := ⟨Empty.elim, by intro empty; exact Empty.elim empty⟩
-  let unitValue := (((constant singleton (fun _ => (0 : Fin 1))).withConstantSizes).withArguments
-    computation.inputDomains noArguments (by intro empty; exact Empty.elim empty)).withPrecondition
-      computation.precondition (by intro sizes arguments valid; trivial)
-  let context : Fin 4 ⊕ Unit → EncodedDomain Parameter :=
-    Sum.elim computation.inputDomains (fun _ => singleton.constant)
-  let firstSelection : Fin 3 ↪ Fin 4 ⊕ Unit :=
-    ⟨(fun | 0 => .inl 0 | 1 => .inl 3 | 2 => .inr ()), by
-      intro first second equal
-      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-  let firstCall := ((indexedMap singleton elementDomain indexCapacity length
-    (fun sizes _ value => first sizes value)).withArguments context firstSelection
-      (by intro name; fin_cases name <;> rfl)).withPrecondition
-        (fun sizes arguments => computation.precondition sizes (fun name => arguments (.inl name)))
-        (by intro sizes arguments valid; exact lt_of_lt_of_le valid.2.1 valid.1)
-  let secondContext : (Fin 4 ⊕ Unit) ⊕ Unit → EncodedDomain Parameter :=
-    Sum.elim context (fun _ => elementDomain.constant.arrayOfLength length)
-  let secondSelection : Fin 3 ↪ (Fin 4 ⊕ Unit) ⊕ Unit :=
-    ⟨(fun | 0 => .inl (.inl 1) | 1 => .inr () | 2 => .inl (.inr ())), by
-      intro first second equal
-      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-  let secondCall := (indexedMap singleton elementDomain indexCapacity length
-    (fun sizes _ value => second sizes value)).withArguments secondContext secondSelection
-      (by intro name; fin_cases name <;> rfl)
-  have unitRealizable : unitValue.Realizable :=
-    (((constant_realizable singleton (fun _ => (0 : Fin 1))).withConstantSizes).withArguments _ _ _).withPrecondition _ _
-  have firstRealizable : firstCall.Realizable :=
-    ((indexedMap_realizable singleton elementDomain indexCapacity length _).withArguments _ _ _).withPrecondition _ _
-  have secondRealizable : secondCall.Realizable :=
-    (indexedMap_realizable singleton elementDomain indexCapacity length _).withArguments _ _ _
-  let continuation := firstCall.letThen secondCall (by intro name; rfl) rfl
-    (by intro sizes arguments valid; exact lt_of_lt_of_le valid.2.2 valid.1)
-  have continuationRealizable : continuation.Realizable :=
-    firstRealizable.letThen secondRealizable _ _ _
-  exact unitRealizable.letThen continuationRealizable (by intro name; rfl) rfl
-    (by intro sizes arguments valid; exact valid)
+  have unitReady := ((constant_realizable singleton (fun _ => (0 : Fin 1))).withConstantSizes).onResults
+    computation.inputDomains computation.precondition (fun impossible => impossible.elim)
+    (by intros; trivial) (fun impossible => impossible.elim)
+  have firstReady := (indexedMap_realizable singleton elementDomain indexCapacity length
+    (fun _ value => first value)).onResults computation.inputDomains computation.precondition
+    (fun name _ arguments => match name with | 0 => arguments.val 0 | 1 => arguments.val 3 | 2 => (0 : Fin 1))
+    (by intro sizes arguments; exact lt_of_lt_of_le arguments.property.2.1 arguments.property.1)
+    (by
+      intro name
+      fin_cases name
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 3 computation.precondition
+      · exact unitReady)
+  exact (indexedMap_realizable singleton elementDomain indexCapacity length
+    (fun _ value => second value)).onResults computation.inputDomains computation.precondition
+    (fun name _ arguments => match name with
+      | 0 => arguments.val 1
+      | 1 => Function.update (arguments.val 3)
+          ⟨(arguments.val 0).val, lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩
+          (first (arguments.val 3 ⟨(arguments.val 0).val,
+            lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩))
+      | 2 => (0 : Fin 1))
+    (by intro sizes arguments; exact lt_of_lt_of_le arguments.property.2.2 arguments.property.1)
+    (by
+      intro name
+      fin_cases name
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition
+      · exact firstReady
+      · exact unitReady)
 
 end IndexedComputations
 end Polytime2.Computation

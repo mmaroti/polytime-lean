@@ -107,7 +107,7 @@ theorem checkedQuotientBlock_none (subalgebra : L.Substructure Carrier) (value :
 noncomputable def quotientBlockComputation : Computation Empty Bool :=
   finiteTable (subalgebraDomain L Carrier) (elementDomain Carrier)
     (elementDomain (Option (SIBlock L Carrier)))
-    (fun _ subalgebra value => checkedQuotientBlock subalgebra value)
+    (fun subalgebra value => checkedQuotientBlock subalgebra value)
 
 theorem quotientBlockComputation_realizable :
     (quotientBlockComputation (L := L) (Carrier := Carrier)).Realizable :=

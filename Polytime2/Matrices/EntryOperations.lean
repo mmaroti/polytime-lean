@@ -15,13 +15,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Composition
+import Polytime2.Computation.Conditional
 import Polytime2.Arrays.Operations
 import Polytime2.Matrices.AddressOperations
 import Polytime2.Matrices.RowsPresentation
 import Polytime2.Computation.Reindex
 
 /-! # Row-and-column access to ordinary mathematical matrices -/
+
+set_option backward.isDefEq.respectTransparency false
 
 namespace Polytime2.Computation
 
@@ -79,39 +81,33 @@ private theorem lookup_realizable (scalar : EncodedDomain Empty) : (lookup scala
 
 theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
   let computation := matrixEntry scalar
-  let addressSelection : Bool ↪ Fin 3 :=
-    ⟨(fun flag => if flag then 1 else 0), by
-      intro first second equal
-      cases first <;> cases second <;> simp_all⟩
-  let address := (matrixAddress.withArguments computation.inputDomains addressSelection
-    (by intro flag; cases flag <;> rfl)).withPrecondition computation.precondition
-      (by
-        intro sizes arguments valid
-        refine ⟨valid.1, lt_of_lt_of_le ?_ valid.2.2.2⟩
-        have rowValid := valid.2.1
-        have columnValid := valid.2.2.1
-        change (arguments 0).val * sizes 2 + (arguments 1).val < sizes 1 * sizes 2
-        nlinarith)
-  let context : Fin 3 ⊕ Unit → EncodedDomain (Fin 3) :=
-    Sum.elim computation.inputDomains (fun _ => EncodedDomain.binaryNaturals 0)
-  let selection : Bool ↪ Fin 3 ⊕ Unit :=
-    ⟨(fun flag => if flag then .inl 2 else .inr ()), by
-      intro first second equal
-      cases first <;> cases second <;> simp_all⟩
-  let access := (lookup scalar).withArguments context selection
-    (by intro flag; cases flag <;> rfl)
-  have addressRealizable : address.Realizable :=
-    (matrixAddress_realizable.withArguments _ _ _).withPrecondition _ _
-  have accessRealizable : access.Realizable := (lookup_realizable scalar).withArguments _ _ _
-  let composed := address.letThen access (by intro name; rfl) rfl
+  have address := matrixAddress_realizable.onResults computation.inputDomains computation.precondition
+    (fun flag _ arguments => if flag then arguments.val 1 else arguments.val 0)
     (by
-      intro sizes arguments valid
-      change (arguments 0).val * sizes 2 + (arguments 1).val < MvPolynomial.eval sizes StandardMatrixEntry.length
-      have rowValid := valid.2.1
-      have columnValid := valid.2.2.1
-      simp only [StandardMatrixEntry.length, MvPolynomial.eval_mul, MvPolynomial.eval_X]
-      nlinarith)
-  have realizable : composed.Realizable := addressRealizable.letThen accessRealizable _ _ _
+      intro sizes arguments
+      exact ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
+        arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩)
+    (by
+      intro flag
+      cases flag
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+  have realizable := (lookup_realizable scalar).onResults computation.inputDomains computation.precondition
+    (fun choice sizes arguments => match choice with
+      | true => arguments.val 2
+      | false => matrixAddress.compute sizes ⟨(fun flag => if flag then arguments.val 1 else arguments.val 0),
+          ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
+            arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩⟩)
+    (by
+      intro sizes arguments
+      change (arguments.val 0).val * sizes 2 + (arguments.val 1).val <
+        MvPolynomial.eval sizes StandardMatrixEntry.length
+      exact StandardMatrixEntry.index_lt sizes _ _ arguments.property.2.1 arguments.property.2.2.1)
+    (by
+      intro choice
+      cases choice
+      · exact address
+      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
   exact realizable.withSpecification computation.precondition computation.compute
     (by intro sizes arguments valid; exact valid)
     (by
@@ -148,39 +144,35 @@ private theorem update_realizable (scalar : EncodedDomain Empty) : (update scala
 
 theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace scalar).Realizable := by
   let computation := matrixReplace scalar
-  let addressSelection : Bool ↪ Fin 4 :=
-    ⟨(fun flag => if flag then 1 else 0), by
-      intro first second equal
-      cases first <;> cases second <;> simp_all⟩
-  let address := (matrixAddress.withArguments computation.inputDomains addressSelection
-    (by intro flag; cases flag <;> rfl)).withPrecondition computation.precondition
-      (by
-        intro sizes arguments valid
-        refine ⟨valid.1, lt_of_lt_of_le ?_ valid.2.2.2⟩
-        have rowValid := valid.2.1
-        have columnValid := valid.2.2.1
-        change (arguments 0).val * sizes 2 + (arguments 1).val < sizes 1 * sizes 2
-        nlinarith)
-  let context : Fin 4 ⊕ Unit → EncodedDomain (Fin 3) :=
-    Sum.elim computation.inputDomains (fun _ => EncodedDomain.binaryNaturals 0)
-  let selection : Fin 3 ↪ Fin 4 ⊕ Unit :=
-    ⟨(fun | 0 => .inr () | 1 => .inl 2 | 2 => .inl 3), by
-      intro first second equal
-      fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-  let access := (update scalar).withArguments context selection
-    (by intro name; fin_cases name <;> rfl)
-  have addressRealizable : address.Realizable :=
-    (matrixAddress_realizable.withArguments _ _ _).withPrecondition _ _
-  have accessRealizable : access.Realizable := (update_realizable scalar).withArguments _ _ _
-  let composed := address.letThen access (by intro name; rfl) rfl
+  have address := matrixAddress_realizable.onResults computation.inputDomains computation.precondition
+    (fun flag _ arguments => if flag then arguments.val 1 else arguments.val 0)
     (by
-      intro sizes arguments valid
-      change (arguments 0).val * sizes 2 + (arguments 1).val < MvPolynomial.eval sizes StandardMatrixEntry.length
-      have rowValid := valid.2.1
-      have columnValid := valid.2.2.1
-      simp only [StandardMatrixEntry.length, MvPolynomial.eval_mul, MvPolynomial.eval_X]
-      nlinarith)
-  have realizable : composed.Realizable := addressRealizable.letThen accessRealizable _ _ _
+      intro sizes arguments
+      exact ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
+        arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩)
+    (by
+      intro flag
+      cases flag
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+  have realizable := (update_realizable scalar).onResults computation.inputDomains computation.precondition
+    (fun name sizes arguments => match name with
+      | 0 => matrixAddress.compute sizes ⟨(fun flag => if flag then arguments.val 1 else arguments.val 0),
+          ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
+            arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩⟩
+      | 1 => arguments.val 2
+      | 2 => arguments.val 3)
+    (by
+      intro sizes arguments
+      change (arguments.val 0).val * sizes 2 + (arguments.val 1).val <
+        MvPolynomial.eval sizes StandardMatrixEntry.length
+      exact StandardMatrixEntry.index_lt sizes _ _ arguments.property.2.1 arguments.property.2.2.1)
+    (by
+      intro name
+      fin_cases name
+      · exact address
+      · exact Realizable.argument computation.inputDomains 2 computation.precondition
+      · exact Realizable.argument computation.inputDomains 3 computation.precondition)
   exact realizable.withSpecification computation.precondition computation.compute
     (by intro sizes arguments valid; exact valid)
     (by

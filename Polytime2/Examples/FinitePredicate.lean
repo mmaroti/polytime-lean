@@ -26,7 +26,7 @@ open Polytime2.Computation
 private noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 3))
 
 noncomputable def isZero : Polytime2.Computation Empty Unit :=
-  finitePredicate threeElements (fun _ (value : Fin 3) => decide (value = 0))
+  finitePredicate threeElements (fun (value : Fin 3) => decide (value = 0))
 
 example : isZero.Realizable := finitePredicate_realizable threeElements _
 example : (isZero.compute Empty.elim
@@ -36,6 +36,6 @@ example : (isZero.compute Empty.elim
 
 -- The input may have zero width while the Boolean output still has one bit.
 example : (finitePredicate (EncodedDomain.fixed (Equiv.refl (Fin 1)))
-    (fun _ _ => true)).Realizable := finitePredicate_realizable _ _
+    (fun _ => true)).Realizable := finitePredicate_realizable _ _
 
 end Polytime2.Examples.FinitePredicate

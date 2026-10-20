@@ -46,15 +46,15 @@ theorem catalogueFlags_realizable (length : MvPolynomial Parameter ℕ) (entry :
     (catalogueFlags length entry).Realizable := by
   classical
   let image : EncodedDomain Parameter := (subalgebraDomain L Carrier).constant
-  let predicate := fun (_ : Empty → ℕ) (value : (subalgebraDomain L Carrier).Carrier Empty.elim) =>
+  let predicate := fun (value : (subalgebraDomain L Carrier).Carrier Empty.elim) =>
     decide ((value : L.Substructure Carrier) = entry.1)
   have predicateRealizable := (finitePredicate_realizable (subalgebraDomain L Carrier) predicate).withConstantSizes
     (Parameter := Parameter)
   have booleanResult := predicateRealizable.withEncodedOutput EncodedDomain.booleans
     (fun _ arguments => decide ((arguments.val () : L.Substructure Carrier) = entry.1))
-    (by intros; simp [finitePredicate, unaryMap, Computation.withConstantSizes,
+    (by intros; simp [finitePredicate, finiteOperation, Computation.withConstantSizes,
       EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant])
-    (by intros; simp [CallingConvention.encoded, finitePredicate, unaryMap, Computation.withConstantSizes,
+    (by intros; simp [CallingConvention.encoded, finitePredicate, finiteOperation, Computation.withConstantSizes,
       EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant,
       EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast, predicate])
   exact mapArray_realizable image EncodedDomain.booleans length
@@ -80,28 +80,28 @@ theorem convertedImages_realizable (coordinates generators : MvPolynomial Parame
 blocks together. The source image and all runtime lengths remain unchanged. -/
 noncomputable def coordinateBlockMap (generators : MvPolynomial Parameter ℕ)
     (target : EncodedDomain.{0, 0} Empty)
-    (operation : ∀ sizes, Option (SIBlock L Carrier) → target.Carrier sizes) : Computation Parameter Unit where
+    (operation : Option (SIBlock L Carrier) → target.Carrier Empty.elim) : Computation Parameter Unit where
   inputDomains _ := (coordinateConversion (L := L) (Carrier := Carrier) generators).outputDomain
   outputDomain := target.constant.prod (target.constant.arrayOfLength generators)
   precondition _ _ := True
-  compute _ arguments := (operation Empty.elim (arguments.val ()).2.1,
-    fun generator => operation Empty.elim ((arguments.val ()).2.2 generator))
+  compute _ arguments := (operation (arguments.val ()).2.1,
+    fun generator => operation ((arguments.val ()).2.2 generator))
 
 theorem coordinateBlockMap_realizable (generators : MvPolynomial Parameter ℕ)
     (target : EncodedDomain.{0, 0} Empty)
-    (operation : ∀ sizes, Option (SIBlock L Carrier) → target.Carrier sizes) :
+    (operation : Option (SIBlock L Carrier) → target.Carrier Empty.elim) :
     (coordinateBlockMap generators target operation).Realizable := by
   let image : EncodedDomain Parameter := (subalgebraDomain L Carrier).constant
   let block : EncodedDomain Parameter := (elementDomain (Option (SIBlock L Carrier))).constant
   let payload := block.prod (block.arrayOfLength generators)
   have mapped := (finiteOperation_realizable (fun _ : Unit => elementDomain (Option (SIBlock L Carrier)))
-    target (fun sizes values => operation sizes (values ()))).withConstantSizes (Parameter := Parameter)
+    target (fun values => operation (values ()))).withConstantSizes (Parameter := Parameter)
   have first := ((pairProjection_realizable image payload true).followedBy
     (pairProjection_realizable block (block.arrayOfLength generators) false) rfl (by intros; trivial)).followedBy
       mapped rfl (by intros; trivial)
   have columns := ((pairProjection_realizable image payload true).followedBy
     (pairProjection_realizable block (block.arrayOfLength generators) true) rfl (by intros; trivial)).followedBy
-      (mapArray_realizable block target.constant generators (fun _ value => operation Empty.elim value) mapped)
+      (mapArray_realizable block target.constant generators (fun _ value => operation value) mapped)
       rfl (by intros; trivial)
   exact Realizable.pairOutputs (coordinateBlockMap generators target operation).inputDomains target.constant
     (target.constant.arrayOfLength generators) (fun _ _ => True) _ _ first columns
@@ -121,7 +121,7 @@ theorem coordinateAccepted_realizable (generators : MvPolynomial Parameter ℕ) 
   have target := (pairProjection_realizable image payload true).followedBy
     (pairProjection_realizable block (block.arrayOfLength generators) false) rfl (by intros; trivial)
   exact target.followedBy ((finitePredicate_realizable (elementDomain (Option (SIBlock L Carrier)))
-    (fun _ value => value.isSome)).withConstantSizes (Parameter := Parameter)) rfl (by intros; trivial)
+    (fun value => value.isSome)).withConstantSizes (Parameter := Parameter)) rfl (by intros; trivial)
 
 /-- Keep one target-acceptance bit per original coordinate. -/
 noncomputable def conversionAcceptance (coordinates generators : MvPolynomial Parameter ℕ) :

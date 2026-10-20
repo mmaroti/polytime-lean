@@ -54,12 +54,12 @@ noncomputable def arrayUpdate (element : EncodedDomain Parameter) (indexCapacity
 /-- A fixed finite binary operation maps an array using one runtime coefficient. -/
 noncomputable def arrayMap (parameterDomain elementDomain : EncodedDomain Empty)
     (length : MvPolynomial Parameter ℕ)
-    (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
+    (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
     Computation Parameter Bool where
   inputDomains | false => parameterDomain.constant | true => elementDomain.constant.arrayOfLength length
   outputDomain := elementDomain.constant.arrayOfLength length
   precondition _ _ := True
-  compute _ arguments := fun index => operation Empty.elim (arguments.val false) (arguments.val true index)
+  compute _ arguments := fun index => operation (arguments.val false) (arguments.val true index)
 
 namespace Realizable.Internal
 
@@ -160,12 +160,12 @@ theorem arrayUpdate_realizable (element : EncodedDomain Parameter) (indexCapacit
 
 theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain.{0, 0} Empty)
     (length : MvPolynomial Parameter ℕ)
-    (operation : ∀ sizes, parameterDomain.Carrier sizes → elementDomain.Carrier sizes → elementDomain.Carrier sizes) :
+    (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
     (arrayMap parameterDomain elementDomain length operation).Realizable := by
   let context : Unit → EncodedDomain Parameter := fun _ => parameterDomain.constant
   let element : EncodedDomain Parameter := elementDomain.constant
   let update := fun sizes (values : ∀ name, (context name).Carrier sizes) (value : element.Carrier sizes) =>
-    operation Empty.elim (values ()) value
+    operation (values ()) value
   have step := ((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes
     (Parameter := Parameter)).withArguments (arrayTransformStep context element element update).inputDomains
       ⟨(fun choice => if choice then (Sum.inr () : Unit ⊕ Unit) else .inl ()), by

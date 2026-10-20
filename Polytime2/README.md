@@ -416,6 +416,10 @@ using certified computations on a shared context. `withRecordArgument` accepts
 the entire argument family on one record tape. Callers prove domain and
 precondition compatibility mathematically. `withPrecondition` restricts
 admissible inputs.
+Indexed array maps, sequential catalogue maps, and matrix access use `onResults`
+and `argument` directly instead of constructing nested argument contexts and
+routing embeddings. Fixed finite operations accept ordinary functions on the
+specialized carriers, without an empty runtime size assignment.
 `withSpecification` replaces a specification after proving agreement.
 `withConstantSizes` reuses a specialization-fixed computation alongside sizes.
 `reindexDomains` changes mathematical carriers through equivalences with the
@@ -497,25 +501,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Argument routing (~50–120 net lines removed)
-
-**Reduce argument-routing boilerplate using existing composition.**
-
-[indexedMap_realizable](Arrays/IndexedMap.lean)
-and matrix access proofs manually build nested contexts, embeddings,
-selections, and `letThen` continuations.
-
-The existing `onResults`, `argument`, and record composition machinery
-already express much of this. Rewrite representative proofs with those
-tools before introducing algorithm notation.
-
-Likewise, fixed finite operations should take ordinary mathematical
-functions where possible. Arguments such as
-`∀ sizes : Empty → ℕ, ...` in
-[finiteOperation](Primitives/FiniteOperations.lean)
-expose a vacuous size assignment that callers repeatedly instantiate
-with `Empty.elim`.
 
 ### Array coordinates (~50–120 net lines added)
 

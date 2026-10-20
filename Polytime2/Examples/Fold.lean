@@ -40,7 +40,7 @@ noncomputable def anyTrue : Polytime2.Computation Bool (Empty ⊕ Bool) :=
 theorem anyTrue_realizable : anyTrue.Realizable := by
   apply arrayFold_total_realizable
   exact ((finiteTable_realizable EncodedDomain.booleans EncodedDomain.booleans EncodedDomain.booleans
-    (fun _ first second => first || second)).withConstantSizes (Parameter := Bool)).withArguments _
+    (fun first second => first || second)).withConstantSizes (Parameter := Bool)).withArguments _
       ⟨Sum.inr, Sum.inr_injective⟩ (by intro choice; cases choice <;> rfl)
 
 example : anyTrue.TM0Realizable := anyTrue_realizable.tm0
@@ -74,7 +74,7 @@ theorem toggle_realizable : toggle.Realizable := by
     (fun _ _ _ => True) (fun _ _ _ => True) (fun _ _ value => !value)
     ?_ (fun _ _ _ _ _ => True) ?_ ?_ ?_
   · exact ((finitePredicate_realizable EncodedDomain.booleans
-      (fun _ value => !value)).withConstantSizes (Parameter := Bool)).withArguments _
+      (fun value => !value)).withConstantSizes (Parameter := Bool)).withArguments _
       ⟨Sum.inr, Sum.inr_injective⟩ (fun _ => rfl)
   · intros; trivial
   · intros; trivial

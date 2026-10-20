@@ -71,7 +71,7 @@ theorem monolithBlock_source (entry : SICatalogue L Carrier) (value : entry.1)
 /-- A public polynomial-time implementation of each finite graph-table query. -/
 noncomputable def monolithGraphLookup : Computation Empty Unit :=
   finiteOperation (fun _ => elementDomain (MonolithQuery L Carrier)) (elementDomain (SIBlock L Carrier))
-    (fun _ values => monolithBlock (values ()).1 (values ()).2)
+    (fun values => monolithBlock (values ()).1 (values ()).2)
 
 theorem monolithGraphLookup_realizable :
     (monolithGraphLookup (L := L) (Carrier := Carrier)).Realizable :=
@@ -80,7 +80,7 @@ theorem monolithGraphLookup_realizable :
 /-- Dependency masks are fixed finite data, also available through a certified table. -/
 noncomputable def monolithDependencyLookup : Computation Empty Unit :=
   finiteOperation (fun _ => elementDomain (SICatalogue L Carrier)) (elementDomain (Set (SICatalogue L Carrier)))
-    (fun _ values => Set.range (dependencyEntry (values ())))
+    (fun values => Set.range (dependencyEntry (values ())))
 
 theorem monolithDependencyLookup_realizable :
     (monolithDependencyLookup (L := L) (Carrier := Carrier)).Realizable :=
@@ -89,7 +89,7 @@ theorem monolithDependencyLookup_realizable :
 /-- Quotient a tagged parent value by its precomputed monolith. -/
 noncomputable def monolithClassLookup : Computation Empty Unit :=
   finiteOperation (fun _ => elementDomain (SIValue L Carrier)) (elementDomain (MonolithQuery L Carrier))
-    (fun _ values => ⟨(values ()).1,
+    (fun values => ⟨(values ()).1,
       quotientMap (catalogueMonolith L Carrier (values ()).1) (values ()).2⟩)
 
 theorem monolithClassLookup_realizable :

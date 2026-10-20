@@ -29,7 +29,7 @@ private def boolean : EncodedDomain Empty := EncodedDomain.booleans
 private def length : MvPolynomial Unit ℕ := 3
 private def sizes : Unit → ℕ := fun _ => 3
 private def toggle := indexedMap boolean boolean () length
-  (fun _ parameter value => Bool.xor parameter value)
+  (fun parameter value => Bool.xor parameter value)
 private def toggleArguments : toggle.Arguments sizes
   | 0 => (1 : Fin 8)
   | 1 => fun _ => false
@@ -44,7 +44,7 @@ example : toggle.compute sizes ⟨toggleArguments, toggleAdmissible⟩
 example : toggle.compute sizes ⟨toggleArguments, toggleAdmissible⟩
     ⟨0, by norm_num [length]⟩ = false := rfl
 
-private def twice := catalogueMaps boolean () length (fun _ value => !value) (fun _ value => !value)
+private def twice := catalogueMaps boolean () length (fun value => !value) (fun value => !value)
 private def catalogueArguments : twice.Arguments sizes
   | 0 | 1 => (1 : Fin 8)
   | 2 => (2 : Fin 8)
@@ -66,7 +66,7 @@ example : twice.compute sizes ⟨catalogueArguments, catalogueAdmissible⟩
 -- Singleton scalar parameters and array elements occupy zero bits.
 example : (indexedMap (EncodedDomain.fixed (Equiv.refl (Fin 1)))
     (EncodedDomain.fixed (Equiv.refl (Fin 1))) () length
-    (fun _ _ value => value)).Realizable := indexedMap_realizable _ _ _ _ _
+    (fun _ value => value)).Realizable := indexedMap_realizable _ _ _ _ _
 
 end IndexedExamples
 end Polytime2.Examples.IndexedMaps

@@ -67,21 +67,21 @@ theorem combine_contract (enumeration : Scalar ≃ Fin cardinality)
 theorem scale_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     (Computation.arrayMap (scalarDomain enumeration) (scalarDomain enumeration) length
-      (fun _ => scale (Scalar := Scalar))).Realizable :=
+      (scale (Scalar := Scalar))).Realizable :=
   Computation.arrayMap_realizable _ _ _ _
 
 /-- Pivot inversion is part of the fixed field table. -/
 theorem normalize_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     (Computation.arrayMap (scalarDomain enumeration) (scalarDomain enumeration) length
-      (fun _ => normalize (Scalar := Scalar))).Realizable :=
+      (normalize (Scalar := Scalar))).Realizable :=
   Computation.arrayMap_realizable _ _ _ _
 
 /-- The source component is retained, and the target receives its scaled sum. -/
 theorem add_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     (Computation.arrayMap (scalarDomain enumeration) (pairDomain enumeration) length
-      (fun _ => add (Scalar := Scalar))).Realizable :=
+      (add (Scalar := Scalar))).Realizable :=
   Computation.arrayMap_realizable _ _ _ _
 
 omit [Field Scalar] in
@@ -89,7 +89,7 @@ omit [Field Scalar] in
 theorem swap_contract (enumeration : Scalar ≃ Fin cardinality)
     (length : MvPolynomial Parameter ℕ) :
     (Computation.arrayMap (scalarDomain enumeration) (pairDomain enumeration) length
-      (fun _ => swap (Scalar := Scalar))).Realizable :=
+      (swap (Scalar := Scalar))).Realizable :=
   Computation.arrayMap_realizable _ _ _ _
 
 end Polytime2.FieldRow

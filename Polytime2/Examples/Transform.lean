@@ -51,7 +51,7 @@ noncomputable def emptyElements : Computation (Fin 2) (Empty ⊕ Unit) :=
 theorem emptyElements_realizable : emptyElements.Realizable := by
   let domain : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 0))
   have copied := (finiteOperation_realizable (fun _ : Unit => domain) domain
-    (fun _ values => values ())).withConstantSizes (Parameter := Fin 2)
+    (fun values => values ())).withConstantSizes (Parameter := Fin 2)
   apply arrayTransform_realizable
   exact copied.withArguments
     (arrayTransformStep Empty.elim domain.constant domain.constant (fun _ _ value => value)).inputDomains

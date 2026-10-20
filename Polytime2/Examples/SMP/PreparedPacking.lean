@@ -70,7 +70,7 @@ without constructing an intermediate array of tagged sort values. -/
 noncomputable def typedColumn (generators : MvPolynomial Parameter ℕ)
     (selected : SICatalogue L Carrier) : Computation Parameter Unit :=
   coordinateBlockMap generators (elementDomain (SICarrier L Carrier selected))
-    (fun _ block => slotValue selected (block.bind (fun values => values selected)))
+    (fun block => slotValue selected (block.bind (fun values => values selected)))
 
 theorem typedColumn_realizable (generators : MvPolynomial Parameter ℕ)
     (selected : SICatalogue L Carrier) : (typedColumn generators selected).Realizable :=

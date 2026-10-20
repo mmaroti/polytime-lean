@@ -71,7 +71,7 @@ noncomputable def threeElements : EncodedDomain Empty := EncodedDomain.fixed (Eq
 /-- The two named inputs have different mathematical carriers and separate tapes. -/
 noncomputable def conditionalIncrement : Polytime2.Computation Empty Bool :=
   finiteTable threeElements EncodedDomain.booleans threeElements
-    (fun _ (value : Fin 3) (flag : Bool) => if flag then value + 1 else value)
+    (fun (value : Fin 3) (flag : Bool) => if flag then value + 1 else value)
 
 theorem conditionalIncrement_realizable : conditionalIncrement.Realizable :=
   finiteTable_realizable threeElements EncodedDomain.booleans threeElements _

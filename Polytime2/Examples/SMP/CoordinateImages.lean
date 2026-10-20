@@ -91,7 +91,7 @@ theorem extendColumn_realizable (length : MvPolynomial Parameter ℕ) :
   have update : (arrayFoldStep Empty.elim element accumulator (fun _ _ _ _ => True)
       (fun _ _ current value => adjoinGenerated (L := L) current {value})).Realizable :=
     ((finiteTable_realizable (subalgebraDomain L Carrier) (elementDomain Carrier) (subalgebraDomain L Carrier)
-      (fun _ current value => adjoinGenerated (L := L) current {value})).withConstantSizes).withArguments _
+      (fun current value => adjoinGenerated (L := L) current {value})).withConstantSizes).withArguments _
       ⟨Sum.inr, Sum.inr_injective⟩ (by intro choice; cases choice <;> rfl)
   have folded := arrayFold_total_realizable Empty.elim element accumulator length
     (fun _ _ current value => adjoinGenerated (L := L) current {value}) update
