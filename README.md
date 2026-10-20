@@ -19,16 +19,11 @@ lake exe cache get
 lake build
 ```
 
-Lean and Mathlib are pinned to `v4.34.0`. The cache command downloads compiled
+Lean and Mathlib are pinned to `v4.35.0`. The cache command downloads compiled
 Mathlib artifacts.
 
 Build one implementation with `lake build Polytime1` or `lake build Polytime2`.
 Use `import Polytime1` or `import Polytime2` in Lean.
-
-Run `python3 scripts/check_lean.py --build` to check project headers, named
-scopes, and proof placeholders before building. Add `--target Polytime1` or
-`--target Polytime2` for a targeted build; omit `--build` for source checks
-only.
 
 The projects under `temp/` are read-only reference material, excluded from
 version control and project dependencies.
