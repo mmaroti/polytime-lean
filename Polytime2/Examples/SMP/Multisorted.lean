@@ -25,7 +25,7 @@ import Polytime2.TM0.Computation
 The catalogue and its order are specialization data. There is one public size
 per sort and one generator count. Ordinary records and arrays encode the
 mathematical products directly; no inactive coordinates or sort tags occur.
-Preparation is a predicate on this input and encoded dependency masks, independent
+Preparation is a predicate on this input and encoded dependency sets, independent
 of the original algebra or of any algorithm producing the instance.
 -/
 
@@ -53,11 +53,35 @@ allowed. -/
 abbrev Input (Carrier : Fin sortCount → Type) (sizes : Parameter sortCount → ℕ) :=
   (Fin (sizes (.inr ())) → Tuple Carrier sizes) × Tuple Carrier sizes
 
-/-- Boolean masks are runtime dependency sets, not proof-only coordinate
-indices. -/
+/-- Each coordinate carries its actual finite set of dependency coordinates. -/
 abbrev Dependencies (sizes : Parameter sortCount → ℕ) :=
+  Coordinate sizes → Finset (Coordinate sizes)
+
+namespace DependencyEncoding
+
+/-- The existing rectangular characteristic-bit layout stays inside the codec. -/
+abbrev Masks (sizes : Parameter sortCount → ℕ) :=
   ∀ sort : Fin sortCount, Fin (sizes (.inl sort)) →
     ∀ child : Fin sortCount, Fin (sizes (.inl child)) → Bool
+
+noncomputable def equivalence (sizes : Parameter sortCount → ℕ) :
+    Dependencies sizes ≃ Masks sizes where
+  toFun dependencies parent position child childPosition :=
+    @decide (⟨child, childPosition⟩ ∈ dependencies ⟨parent, position⟩) (Classical.propDecidable _)
+  invFun masks parent := by
+    classical
+    exact Finset.univ.filter (fun child => masks parent.1 parent.2 child.1 child.2)
+  left_inv dependencies := by
+    classical
+    funext parent
+    ext child
+    simp
+  right_inv masks := by
+    classical
+    funext parent position child childPosition
+    simp
+
+end DependencyEncoding
 
 section Encoding
 
@@ -142,23 +166,27 @@ end Encoding
 
 /-- A quadratic-size bit mask records every dependency set at exact sort
 sizes. Rectangular blocks are grouped by their fixed pair of sorts. -/
-noncomputable def dependencyDomain (sortCount : ℕ) : EncodedDomain (Parameter sortCount) :=
+noncomputable def DependencyEncoding.maskDomain (sortCount : ℕ) : EncodedDomain (Parameter sortCount) :=
   (EncodedDomain.record sortCount (fun parent =>
     EncodedDomain.record sortCount (fun child =>
       (EncodedDomain.booleans.array (.inl child)).array (.inl parent)))).reindex
-      (Dependencies) (fun _ =>
+      (DependencyEncoding.Masks) (fun _ =>
         { toFun := fun masks parent child position childPosition => masks parent position child childPosition
           invFun := fun blocks parent position child childPosition => blocks parent child position childPosition
           left_inv := by intro masks; rfl
           right_inv := by intro blocks; rfl })
 
-/-- No bounded-index labels or padding intervene between masks and their
+/-- Finite dependency sets reuse the rectangular characteristic-bit codec. -/
+noncomputable def dependencyDomain (sortCount : ℕ) : EncodedDomain (Parameter sortCount) :=
+  (DependencyEncoding.maskDomain sortCount).reindex Dependencies DependencyEncoding.equivalence
+
+/-- No bounded-index labels or padding intervene between finite sets and their
 mathematical data. -/
 theorem dependencyDomain_carrier (sizes : Parameter sortCount → ℕ) :
     (dependencyDomain sortCount).Carrier sizes = Dependencies sizes := rfl
 
 /-- A prepared input carries its ordinary SMP instance and runtime dependency
-masks. -/
+sets. -/
 noncomputable def preparedDomain {Carrier : Fin sortCount → Type} {cardinality : Fin sortCount → ℕ}
     (enumeration : ∀ sort, Carrier sort ≃ Fin (cardinality sort)) : EncodedDomain (Parameter sortCount) :=
   (inputDomain enumeration).prod (dependencyDomain sortCount)
@@ -175,12 +203,6 @@ theorem readPreparedTarget_realizable {Carrier : Fin sortCount → Type} {cardin
     (readPreparedTarget enumeration).Realizable :=
   (pairProjection_realizable _ _ false).followedBy (readTarget_realizable enumeration) rfl (by intros; trivial)
 
-/-- The set of selected coordinates is recovered directly from the encoded mask.
--/
-def dependencySet {sizes : Parameter sortCount → ℕ} (dependencies : Dependencies sizes)
-    (coordinate : Coordinate sizes) : Set (Coordinate sizes) :=
-  {child | dependencies coordinate.1 coordinate.2 child.1 child.2 = true}
-
 section Preparation
 
 variable {L : Language.{0, 0}} [L.IsAlgebraic]
@@ -196,13 +218,13 @@ coordinates. -/
 def projectedDependencies (input : Input Carrier sizes) (dependencies : Dependencies sizes)
     (coordinate : Coordinate sizes) :=
   (generated (L := L) input).map
-    (assemble (fun child : dependencySet dependencies coordinate =>
+    (assemble (fun child : dependencies coordinate =>
       (projection child.val.2).comp (projection child.val.1)))
 
 /-- A prepared input has a subdirect generated relation, ordered SI sorts, and
-bounded earlier dependency masks. The full graph isomorphisms agree with fixed
+bounded earlier dependency sets. The full graph isomorphisms agree with fixed
 catalogue lookups; they are correctness proofs, not runtime function oracles.
-The lookup may be undefined for sort pairs not used by a dependency mask. -/
+The lookup may be undefined for sort pairs not used by a dependency set. -/
 def IsPrepared [∀ sort, Finite (Carrier sort)] (monolith : ∀ sort, Congruence L (Carrier sort))
     (graph : ∀ parent child, Quotient (monolith parent).val → Option (Carrier child))
     (dependencyBound : ℕ) (input : Input Carrier sizes) (dependencies : Dependencies sizes) : Prop :=
@@ -212,17 +234,17 @@ def IsPrepared [∀ sort, Finite (Carrier sort)] (monolith : ∀ sort, Congruenc
   (∀ coordinate : Coordinate sizes, ∀ value : Carrier coordinate.1,
     ∃ tuple ∈ generated (L := L) input, tuple coordinate.1 coordinate.2 = value) ∧
   ∀ coordinate : Coordinate sizes,
-    Nat.card (dependencySet dependencies coordinate) ≤ dependencyBound ∧
-    (∀ child : dependencySet dependencies coordinate,
+    (dependencies coordinate).card ≤ dependencyBound ∧
+    (∀ child : dependencies coordinate,
       toLex (child.val.1.val, child.val.2.val) < toLex (coordinate.1.val, coordinate.2.val)) ∧
     (Nat.card (Congruence L (Carrier coordinate.1)) = 2 →
-      dependencySet dependencies coordinate = ∅) ∧
+      dependencies coordinate = ∅) ∧
     ∃ equivalence : Quotient (monolith coordinate.1).val ≃[L]
         projectedDependencies (L := L) input dependencies coordinate,
-      (∀ value (child : dependencySet dependencies coordinate),
+      (∀ value (child : dependencies coordinate),
         some ((equivalence value).val child) = graph coordinate.1 child.val.1 value) ∧
       (fun tuple : Tuple Carrier sizes =>
-        ((fun child : dependencySet dependencies coordinate => tuple child.val.1 child.val.2),
+        ((fun child : dependencies coordinate => tuple child.val.1 child.val.2),
           tuple coordinate.1 coordinate.2)) '' (generated (L := L) input : Set (Tuple Carrier sizes)) =
         {pair | pair.1 = (equivalence
           (quotientMap (monolith coordinate.1) pair.2)).val}

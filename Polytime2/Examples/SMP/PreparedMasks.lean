@@ -106,7 +106,8 @@ theorem dependencyMatrix_correct (coordinates generators : MvPolynomial Paramete
       (extendedSizeBounds (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)) hostSizes frame.1
     (dependencyMatrix coordinates generators parent child).compute current
       ⟨(fun _ => frame.2), ⟨rfl, rfl⟩⟩ parentPosition childPosition =
-        dependencies (L := L) (conversionGenerators coordinates generators hostSizes arguments)
+        Multisorted.DependencyEncoding.equivalence _
+          (dependencies (L := L) (conversionGenerators coordinates generators hostSizes arguments))
           parent parentPosition child childPosition := by
   let converted := (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).compute
     hostSizes ⟨arguments, trivial⟩
@@ -130,10 +131,10 @@ theorem dependencyMatrix_correct (coordinates generators : MvPolynomial Paramete
 
 /-- Assemble every rectangular block into the one public dependency-mask
 domain. All original source labels remain private conversion data. -/
-noncomputable def dependencyMasks (coordinates generators : MvPolynomial Parameter ℕ) :
+private noncomputable def dependencyMasksRaw (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation (WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)) Unit where
   inputDomains _ := (packedDomain (L := L) (Carrier := Carrier) coordinates generators).renameParameters Sum.inl
-  outputDomain := (Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier))).renameParameters
+  outputDomain := (Multisorted.DependencyEncoding.maskDomain (Nat.card (SICatalogue L Carrier))).renameParameters
     (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
       WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))
   precondition current arguments := ∀ sort, (arguments () sort).2.1.val = current (.inr (.inl sort))
@@ -141,9 +142,9 @@ noncomputable def dependencyMasks (coordinates generators : MvPolynomial Paramet
     (dependencyMatrix coordinates generators parent child).compute current
       ⟨arguments.val, ⟨arguments.property parent, arguments.property child⟩⟩ position childPosition
 
-theorem dependencyMasks_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
-    (dependencyMasks (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
-  let computation := dependencyMasks (L := L) (Carrier := Carrier) coordinates generators
+private theorem dependencyMasksRaw_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+    (dependencyMasksRaw (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
+  let computation := dependencyMasksRaw (L := L) (Carrier := Carrier) coordinates generators
   let sorts := SortIndex (L := L) (Carrier := Carrier)
   let matrix (parent child : sorts) : EncodedDomain
       (WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)) :=
@@ -165,21 +166,36 @@ theorem dependencyMasks_realizable (coordinates generators : MvPolynomial Parame
     rowReady
   apply blocks.withEncodedOutput computation.outputDomain computation.compute
   · intro current
-    simp only [computation, dependencyMasks, EncodedDomain.renameParameters_width,
-      EncodedDomain.width, Multisorted.dependencyDomain]
+    simp only [computation, dependencyMasksRaw, EncodedDomain.renameParameters_width,
+      EncodedDomain.width, Multisorted.DependencyEncoding.maskDomain]
     rw [EncodedDomain.reindex_widthPolynomial]
     simp [matrix, EncodedDomain.booleans, Function.comp_def]
   · intro current arguments
     apply congrArg CallingConvention.tape
-    simp only [computation, dependencyMasks, EncodedDomain.renameParameters_bits, Multisorted.dependencyDomain]
+    simp only [computation, dependencyMasksRaw, EncodedDomain.renameParameters_bits, Multisorted.DependencyEncoding.maskDomain]
     rw [EncodedDomain.reindex_encode_bits]
     simp only [EncodedDomain.bits_record_encode, matrix, EncodedDomain.array_encode_bits,
       EncodedDomain.ArrayEncoding.bits_encode, EncodedDomain.booleans, EncodedDomain.fixed_encode_bits]
     rfl
 
+/-- Dependency sets are exposed through the same characteristic-bit encoding. -/
+noncomputable def dependencySets (coordinates generators : MvPolynomial Parameter ℕ) :=
+  (dependencyMasksRaw (L := L) (Carrier := Carrier) coordinates generators).reindexDomains
+    (dependencyMasksRaw (L := L) (Carrier := Carrier) coordinates generators).inputDomains
+    ((Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier))).renameParameters
+      (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
+        WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)))
+    (fun _ _ => Equiv.refl _) (fun _ => Multisorted.DependencyEncoding.equivalence _)
+
+theorem dependencySets_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+    (dependencySets (L := L) (Carrier := Carrier) coordinates generators).Realizable :=
+  (dependencyMasksRaw_realizable coordinates generators).reindexDomains _ _ _ _
+    (by intros; rfl) (by intros; rfl) (by intros; rfl)
+    (by intros; rfl)
+
 /-- The assembled runtime masks are the complete dependency data of the exact
 multisorted mathematical preparation. -/
-theorem dependencyMasks_correct (coordinates generators : MvPolynomial Parameter ℕ)
+theorem dependencySets_correct (coordinates generators : MvPolynomial Parameter ℕ)
     (hostSizes : Parameter → ℕ)
     (arguments : (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).Arguments hostSizes) :
     let frame := (packedFrame (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes
@@ -187,9 +203,13 @@ theorem dependencyMasks_correct (coordinates generators : MvPolynomial Parameter
         hostSizes ⟨arguments, trivial⟩), trivial⟩
     let current := computedSizeAssignment
       (extendedSizeBounds (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)) hostSizes frame.1
-    (dependencyMasks (L := L) (Carrier := Carrier) coordinates generators).compute current
+    (dependencySets (L := L) (Carrier := Carrier) coordinates generators).compute current
       ⟨(fun _ => frame.2), (by intro sort; rfl)⟩ =
         dependencies (L := L) (conversionGenerators coordinates generators hostSizes arguments) := by
+  apply (Multisorted.DependencyEncoding.equivalence _).injective
+  change Multisorted.DependencyEncoding.equivalence _
+    ((Multisorted.DependencyEncoding.equivalence _).symm _) = _
+  rw [Equiv.apply_symm_apply]
   funext parent position child childPosition
   exact dependencyMatrix_correct coordinates generators hostSizes arguments parent child position childPosition
 

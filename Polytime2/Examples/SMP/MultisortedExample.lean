@@ -121,4 +121,25 @@ example (sizes : Parameter 0 → ℕ) (input : Input EmptyCarrier sizes)
   · intro coordinate; exact Fin.elim0 coordinate.1
   · intro coordinate; exact Fin.elim0 coordinate.1
 
+/-- Public dependencies are actual finite sets, with no mask conversion. -/
+example (sizes : Parameter 2 → ℕ) :
+    (dependencyDomain 2).Carrier sizes = (Coordinate sizes → Finset (Coordinate sizes)) := rfl
+
+/-- The finite-set codec retains exactly the old characteristic bits. -/
+example (sizes : Parameter 2 → ℕ) (dependencies : Dependencies sizes) :
+    EncodedDomain.ArrayEncoding.bits ((dependencyDomain 2).encode sizes dependencies) =
+      EncodedDomain.ArrayEncoding.bits ((DependencyEncoding.maskDomain 2).encode sizes
+        (DependencyEncoding.equivalence sizes dependencies)) := rfl
+
+example (sizes : Parameter 2 → ℕ) (parent : Coordinate sizes) :
+    DependencyEncoding.equivalence sizes (fun _ => ∅)
+      parent.1 parent.2 parent.1 parent.2 = false := by
+  simp [DependencyEncoding.equivalence]
+
+example (sizes : Parameter 2 → ℕ) (parent child : Coordinate sizes) :
+    DependencyEncoding.equivalence sizes (fun _ => {child})
+      parent.1 parent.2 child.1 child.2 = true := by
+  classical
+  simp [DependencyEncoding.equivalence]
+
 end Polytime2.SMP.MultisortedExample

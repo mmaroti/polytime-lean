@@ -139,7 +139,7 @@ theorem preparedInput_correct (coordinates generators : MvPolynomial Parameter �
   · funext sort position
     exact packSort_target coordinates generators hostSizes arguments valid sort position
 
-/-- Final payload construction exposes only the exact SMP input and its masks.
+/-- Final payload construction exposes only the exact SMP input and its dependency sets.
 All source labels and original-size working data stay in the caller. -/
 noncomputable def preparedPayload (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation (WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)) Unit where
@@ -149,11 +149,11 @@ noncomputable def preparedPayload (coordinates generators : MvPolynomial Paramet
       WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))
   precondition current arguments :=
     (preparedInput (L := L) (Carrier := Carrier) coordinates generators).precondition current arguments ∧
-      (dependencyMasks (L := L) (Carrier := Carrier) coordinates generators).precondition current arguments
+      (dependencySets (L := L) (Carrier := Carrier) coordinates generators).precondition current arguments
   compute current arguments :=
     ((preparedInput (L := L) (Carrier := Carrier) coordinates generators).compute current
       ⟨arguments.val, arguments.property.1⟩,
-      (dependencyMasks (L := L) (Carrier := Carrier) coordinates generators).compute current
+      (dependencySets (L := L) (Carrier := Carrier) coordinates generators).compute current
         ⟨arguments.val, arguments.property.2⟩)
 
 theorem preparedPayload_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
@@ -162,22 +162,22 @@ theorem preparedPayload_realizable (coordinates generators : MvPolynomial Parame
   have inputReady := (preparedInput_realizable (L := L) (Carrier := Carrier) coordinates generators).withSpecification
     computation.precondition (fun current arguments => (computation.compute current arguments).1)
     (by intro current arguments valid; exact valid.1) (by intros; rfl)
-  have masksReady := (dependencyMasks_realizable (L := L) (Carrier := Carrier) coordinates generators).withSpecification
+  have setsReady := (dependencySets_realizable (L := L) (Carrier := Carrier) coordinates generators).withSpecification
     computation.precondition (fun current arguments => (computation.compute current arguments).2)
     (by intro current arguments valid; exact valid.2) (by intros; rfl)
   have paired := Realizable.pairOutputs computation.inputDomains
     (preparedInput (L := L) (Carrier := Carrier) coordinates generators).outputDomain
-    (dependencyMasks (L := L) (Carrier := Carrier) coordinates generators).outputDomain computation.precondition
+    (dependencySets (L := L) (Carrier := Carrier) coordinates generators).outputDomain computation.precondition
     (fun current arguments => (computation.compute current arguments).1)
-    (fun current arguments => (computation.compute current arguments).2) inputReady masksReady
+    (fun current arguments => (computation.compute current arguments).2) inputReady setsReady
   apply paired.withEncodedOutput computation.outputDomain computation.compute
   · intro current
     simp [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
-      dependencyMasks, width, MvPolynomial.eval_rename]
+      dependencySets, Computation.reindexDomains, width, MvPolynomial.eval_rename]
   · intro current arguments
     apply congrArg CallingConvention.tape
     simp only [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
-      dependencyMasks, renameParameters_bits, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
+      dependencySets, Computation.reindexDomains, renameParameters_bits, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
 
 /-- On accepted targets, the computed payload is the exact mathematical
 preparation, including its stored dependency coordinates. -/
@@ -198,7 +198,7 @@ theorem preparedPayload_correct (coordinates generators : MvPolynomial Parameter
           dependencies (L := L) (conversionGenerators coordinates generators hostSizes arguments)) := by
   apply Prod.ext
   · exact preparedInput_correct coordinates generators hostSizes arguments valid
-  · exact dependencyMasks_correct coordinates generators hostSizes arguments
+  · exact dependencySets_correct coordinates generators hostSizes arguments
 
 
 end Polytime2.SMP.Prepared

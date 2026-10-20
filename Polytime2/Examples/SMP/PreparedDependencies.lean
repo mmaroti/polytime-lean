@@ -17,7 +17,7 @@ limitations under the License.
 
 import Polytime2.Examples.SMP.PreparedCoordinates
 
-/-! # Exact dependency masks and their fixed catalogue description
+/-! # Finite dependency sets and their fixed catalogue description
 
 Dependency sets are transported by the same coordinate equivalence as values.
 Membership reduces to a fixed catalogue lookup and equality of source indices.
@@ -61,40 +61,41 @@ theorem factor_dependency_iff (input : Fin generators → Fin coordinates → Ca
   · rintro ⟨source, pair, sameEntry⟩
     exact ⟨pair, factor_eq_of_source_entry input _ child source.symm sameEntry⟩
 
-/-- Runtime masks use exact multisorted coordinates, with no inactive slots. -/
+/-- Actual finite dependency sets use exact multisorted coordinates. -/
 noncomputable def dependencies (input : Fin generators → Fin coordinates → Carrier) :
-    Multisorted.Dependencies (sizes (L := L) input) :=
-  fun sort position child childPosition => @decide
-    (coordinateFactor (L := L) input ⟨child, childPosition⟩ ∈
-      CoordinateReduction.dependencySet input (coordinateFactor (L := L) input ⟨sort, position⟩))
-    (Classical.propDecidable _)
+    Multisorted.Dependencies (sizes (L := L) input) := by
+  classical
+  exact fun parent => Finset.univ.filter (fun child =>
+    coordinateFactor (L := L) input child ∈
+      CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent))
 
 @[simp] theorem dependencies_mem (input : Fin generators → Fin coordinates → Carrier)
     (parent child : Multisorted.Coordinate (sizes (L := L) input)) :
-    child ∈ Multisorted.dependencySet (dependencies input) parent ↔
+    child ∈ dependencies input parent ↔
       coordinateFactor (L := L) input child ∈ CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent) := by
   classical
   rcases parent with ⟨sort, position⟩
   rcases child with ⟨childSort, childPosition⟩
-  simp [Multisorted.dependencySet, dependencies]
+  simp [dependencies]
 
 /-- This equation is the operational mask specification: a finite sort lookup
 and source-coordinate equality, followed by the shared stable packing maps. -/
 theorem dependencies_lookup (input : Fin generators → Fin coordinates → Carrier)
     (sort child : SortIndex (L := L) (Carrier := Carrier))
     (position : Fin (sizes (L := L) input (.inl sort))) (childPosition : Fin (sizes (L := L) input (.inl child))) :
-    dependencies input sort position child childPosition = @decide
+    (Multisorted.DependencyEncoding.equivalence _ (dependencies input)) sort position child childPosition = @decide
       ((activeCoordinates (L := L) input child childPosition).val = (activeCoordinates (L := L) input sort position).val ∧
         entry child ∈ dependencySorts (entry sort)) (Classical.propDecidable _) := by
   classical
   apply Bool.eq_iff_iff.mpr
-  simp only [dependencies, decide_eq_true_eq, factor_dependency_iff, coordinateFactor_source, coordinateFactor_entry]
+  simp [Multisorted.DependencyEncoding.equivalence, dependencies, factor_dependency_iff,
+    coordinateFactor_source, coordinateFactor_entry]
 
 /-- The dependency subtype itself is unchanged up to the exact coordinate
 bijection, so cardinality and projected algebra guarantees can be transported. -/
 noncomputable def dependencyEquiv (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input)) :
-    Multisorted.dependencySet (dependencies input) parent ≃
+    dependencies input parent ≃
       CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent) where
   toFun child := ⟨coordinateFactor (L := L) input child.val, (dependencies_mem input parent child.val).mp child.property⟩
   invFun child := ⟨(coordinateFactor (L := L) input).symm child.val,
@@ -106,9 +107,9 @@ noncomputable def dependencyEquiv (input : Fin generators → Fin coordinates �
 
 theorem dependencies_bound (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input)) :
-    Nat.card (Multisorted.dependencySet (dependencies input) parent) ≤ Nat.card Carrier * Nat.card Carrier :=
-  (Nat.card_congr (dependencyEquiv input parent)).le.trans
-    (CoordinateReduction.dependencySet_bound input (coordinateFactor (L := L) input parent))
+    (dependencies input parent).card ≤ Nat.card Carrier * Nat.card Carrier := by
+  simpa only [Nat.card_eq_finsetCard] using ((Nat.card_congr (dependencyEquiv input parent)).le.trans
+    (CoordinateReduction.dependencySet_bound input (coordinateFactor (L := L) input parent)))
 
 private theorem coordinateFactor_rank (input : Fin generators → Fin coordinates → Carrier)
     (coordinate : Multisorted.Coordinate (sizes (L := L) input)) :
@@ -119,7 +120,7 @@ private theorem coordinateFactor_rank (input : Fin generators → Fin coordinate
 coordinate order therefore agrees with the original dependency ordering. -/
 theorem dependencies_earlier (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input))
-    (child : Multisorted.dependencySet (dependencies input) parent) :
+    (child : dependencies input parent) :
     toLex (child.val.1.val, child.val.2.val) < toLex (parent.1.val, parent.2.val) := by
   obtain ⟨pair, equal⟩ := (dependencies_mem input parent child.val).mp child.property
   have smaller : catalogueRank (factorEntry (L := L) input (coordinateFactor (L := L) input child.val)) <
@@ -133,11 +134,11 @@ theorem dependencies_earlier (input : Fin generators → Fin coordinates → Car
 theorem dependencies_simple (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input))
     (simple : Nat.card (Congruence L (SortCarrier parent.1)) = 2) :
-    Multisorted.dependencySet (dependencies input) parent = ∅ := by
+    dependencies input parent = ∅ := by
   have sourceSimple : Nat.card (Congruence L (Factor input (coordinateFactor (L := L) input parent))) = 2 :=
     (congruence_count_equiv (coordinateCarrier (L := L) input parent)).trans simple
   have empty := CoordinateReduction.simple_dependencySet_empty input (coordinateFactor (L := L) input parent) sourceSimple
-  apply Set.eq_empty_iff_forall_notMem.mpr
+  apply Finset.eq_empty_iff_forall_notMem.mpr
   intro child member
   have sourceMember := (dependencies_mem input parent child).mp member
   rw [empty] at sourceMember

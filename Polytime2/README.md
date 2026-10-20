@@ -252,8 +252,12 @@ prepared payload.
 
 `Multisorted.lean` defines this conversion-independent interface for a fixed
 catalogue `D_t`. Its input carrier is exactly generators and a target in `∏ t,
-D_t ^ n_t`; `preparedDomain` adds Boolean dependency masks. Exact coordinate
-columns and rectangular dependency blocks use ordinary record and array codecs.
+D_t ^ n_t`; `preparedDomain` adds finite dependency sets, with carrier
+`Coordinate → Finset Coordinate`. Their codec retains the same quadratic
+characteristic-bit blocks; Boolean masks stay inside encoding and realization
+proofs. Preparation statements use membership, finite-set cardinality, and
+products over the actual dependencies directly. Exact coordinate columns and
+rectangular dependency blocks use ordinary record and array codecs.
 `IsPrepared` specifies ordered SI sorts, subdirectness, bounded earlier
 dependencies, and monolith quotient isomorphisms onto the generated dependency
 projections, agreeing with fixed catalogue lookups.
@@ -524,25 +528,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Dependency sets (~20–70 net lines added)
-
-**Expose SMP dependencies as finite sets.**
-
-[Dependencies](Examples/SMP/Multisorted.lean)
-is currently a family of Boolean masks. Then
-[dependencySet](Examples/SMP/Multisorted.lean)
-converts those masks into sets for mathematical statements.
-
-A natural carrier would be
-`Coordinate → Finset Coordinate`. The codec can retain exactly the same
-characteristic-bit representation through `EncodedDomain.reindex`.
-This would let preparation conditions directly discuss membership,
-cardinality, and projections without repeatedly translating Boolean
-equations into set membership.
-
-This improves mathematical usability; substantial line savings are less
-certain.
 
 ### Preparation outcomes (~20 net lines removed to ~50 added)
 

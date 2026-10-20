@@ -34,11 +34,11 @@ the product indexed by the actual distinct dependencies. -/
 noncomputable def dependencyTupleEquiv (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input)) :
     (∀ child : CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent), Factor input child.val) ≃[L]
-      (∀ child : Multisorted.dependencySet (dependencies (L := L) input) parent, SortCarrier (L := L) (Carrier := Carrier) child.val.1) := by
+      (∀ child : dependencies (L := L) input parent, SortCarrier (L := L) (Carrier := Carrier) child.val.1) := by
   let reindexed := (_root_.Equiv.piCongrLeft
     (fun child : CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent) => Factor input child.val)
     (dependencyEquiv (L := L) input parent)).symm
-  let transported := _root_.Equiv.piCongrRight (fun child : Multisorted.dependencySet (dependencies (L := L) input) parent => (coordinateCarrier (L := L) input child.val).toEquiv)
+  let transported := _root_.Equiv.piCongrRight (fun child : dependencies (L := L) input parent => (coordinateCarrier (L := L) input child.val).toEquiv)
   refine ⟨reindexed.trans transported, ?_, ?_⟩
   · intro arity symbol arguments
     funext child
@@ -50,14 +50,14 @@ noncomputable def dependencyTupleEquiv (input : Fin generators → Fin coordinat
 @[simp] theorem dependencyTupleEquiv_apply (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input))
     (tuple : ∀ child : CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent), Factor input child.val)
-    (child : Multisorted.dependencySet (dependencies (L := L) input) parent) :
+    (child : dependencies (L := L) input parent) :
     dependencyTupleEquiv input parent tuple child =
       coordinateCarrier (L := L) input child.val (tuple (dependencyEquiv input parent child)) := rfl
 
 /-- Projection commutes with the full tuple reindexing. -/
 theorem dependency_projection_commutes (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input)) (tuple : ∀ factor, Factor (L := L) input factor) :
-    (fun child : Multisorted.dependencySet (dependencies (L := L) input) parent =>
+    (fun child : dependencies (L := L) input parent =>
       tupleEquiv input tuple child.val.1 child.val.2) =
       dependencyTupleEquiv input parent
         (fun child : CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent) => tuple child.val) := by
@@ -76,7 +76,7 @@ theorem projectedDependencies_eq_map (input : Fin generators → Fin coordinates
   let oldProjection := fun (tuple : ∀ factor, Factor (L := L) input factor) =>
     fun child : CoordinateReduction.dependencySet input (coordinateFactor (L := L) input parent) => tuple child.val
   let newProjection := fun (tuple : Multisorted.Tuple (SortCarrier (L := L) (Carrier := Carrier)) (sizes (L := L) input)) =>
-    fun child : Multisorted.dependencySet (dependencies (L := L) input) parent => tuple child.val.1 child.val.2
+    fun child : dependencies (L := L) input parent => tuple child.val.1 child.val.2
   apply SetLike.ext
   intro value
   change (∃ tuple ∈ Multisorted.generated (L := L) (inputData input targetValue valid), newProjection tuple = value) ↔

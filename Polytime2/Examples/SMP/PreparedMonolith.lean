@@ -151,7 +151,7 @@ theorem monolithEquiv_graph
     (valid : ∀ coordinate, targetValue coordinate ∈ images (L := L) input coordinate)
     (parent : Multisorted.Coordinate (sizes (L := L) input))
     (value : Quotient (catalogueMonolith L Carrier (entry parent.1)).val)
-    (child : Multisorted.dependencySet (dependencies (L := L) input) parent) :
+    (child : dependencies (L := L) input parent) :
     some ((monolithEquiv input targetValue valid parent value).val child) =
       graph parent.1 child.val.1 value := by
   let original := (monolithCast (coordinateFactor_entry input parent)).symm value
@@ -174,7 +174,7 @@ theorem monolith_graph (input : Fin generators → Fin coordinates → Carrier)
     (parent : Multisorted.Coordinate (sizes (L := L) input)) :
     (fun tuple : Multisorted.Tuple (SortCarrier (L := L) (Carrier := Carrier))
         (sizes (L := L) input) =>
-      ((fun child : Multisorted.dependencySet (dependencies (L := L) input) parent =>
+      ((fun child : dependencies (L := L) input parent =>
         tuple child.val.1 child.val.2), tuple parent.1 parent.2)) ''
       (Multisorted.generated (L := L) (inputData input targetValue valid) : Set _) =
     {pair | pair.1 = (monolithEquiv input targetValue valid parent
@@ -190,7 +190,7 @@ theorem monolith_graph (input : Fin generators → Fin coordinates → Carrier)
       (generated_image_iff (tupleEquiv input).toHom
         (CoordinateReduction.generators (L := L) input) tuple).mp member
     have sourceGraph := (Set.ext_iff.mp oldGraph _).mp ⟨source, sourceMember, rfl⟩
-    change (fun child : Multisorted.dependencySet (dependencies (L := L) input) parent =>
+    change (fun child : dependencies (L := L) input parent =>
       tupleEquiv input source child.val.1 child.val.2) = _
     rw [dependency_projection_commutes]
     change childEquiv (fun child => source child.val) =
@@ -219,7 +219,7 @@ theorem monolith_graph (input : Fin generators → Fin coordinates → Carrier)
         (CoordinateReduction.generators (L := L) input) _).mpr
           ⟨source, sourceMember, rfl⟩
     · apply Prod.ext
-      · change (fun child : Multisorted.dependencySet (dependencies (L := L) input) parent =>
+      · change (fun child : dependencies (L := L) input parent =>
           tupleEquiv input source child.val.1 child.val.2) = pair.1
         rw [dependency_projection_commutes]
         exact (congrArg childEquiv (congrArg Prod.fst equal)).trans
