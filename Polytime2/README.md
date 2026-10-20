@@ -2,6 +2,9 @@
 
 A multi-tape implementation of polynomial-time algorithms.
 
+Using `lake comparator` is possible, but is not currently pursued during
+development because theorem statements may still need to be adapted.
+
 Encoded domain widths currently use exact polynomials. A possible future
 generalization is a mathematical width function with a certified polynomial-time
 unary evaluator. Avoid requiring only a polynomial upper bound: it does not
@@ -129,20 +132,24 @@ The directory reorganization preserved namespaces and declaration names.
 - Runtime-width binary subtraction with an exact signed-difference contract,
   a final borrow that also detects unsigned underflow, and linear tape cost.
   Addition and subtraction reuse one finite-memory ripple scanner.
-- Binary long remainder with a mathematical contract and a quadratic tape
-  bound, preserved operands, restored heads, and fixed-width scratch. A shift
-  and subtraction followed by selection process each dividend bit once, using
-  separate result tapes and finite carry or borrow memory.
-  Public [binaryRemainder](Arithmetic/RemainderOperations.lean) requires only a
-  positive divisor and returns at the operands' original width. Private zero
-  extension, the extra width header, execution, and result extraction are
-  included in its polynomial certificate.
-  The capacity-sensitive controller remains an internal building block.
-- `StandardBitFold.runsValues` tracks live multiplication and remainder
+- Binary long division returns quotient and remainder in one high-bit-first
+  pass, with a quadratic tape bound, preserved operands, restored heads, and
+  fixed-width scratch. Each subtraction's borrow supplies the quotient bit;
+  quotient shifting reuses the shifted-remainder scratch.
+  Public [binaryDivision](Arithmetic/DivisionOperations.lean) requires only a
+  positive divisor and returns an ordinary pair at the operands' original
+  width. Private zero extension, the extra width header, execution, pair
+  packing, and result extraction are included in its polynomial certificate.
+  [binaryRemainder](Arithmetic/RemainderOperations.lean) projects the shared
+  division result. Gcd uses the same divider and reuses its next-operand tape
+  for the temporary quotient. Examples cover divisor one, exact division,
+  maximal operands, high-bit divisors, and width-zero inadmissibility; both
+  results have a standalone TM0 certificate.
+- `StandardBitFold.runsValues` tracks live multiplication and division
   accumulators through representation predicates. Private scratch needs only
   region bounds. Gcd uses `Runs.whileValues` for two live operands, without
   scratch recurrences or final scratch clearing. Mathematical product and
-  remainder functions are independent of private tape contents.
+  division functions are independent of private tape contents.
 - Fixed-width multiplication and compound `(left + right) * multiplier` and
   `factor * multiplier + addend` computations with immutable operands and
   arbitrary initial writable contents.
@@ -512,10 +519,10 @@ transition compared with the former standalone controllers. The matrix-address
 controller retains its shared-workspace lowering.
 Public certificates cover constants, unary-size reading, counter initialization,
 copying, increment/decrement, nonzero tests, comparison, bounded arithmetic,
-compound arithmetic, remainder, gcd, finite tables and predicates, array
-lookup/update and mapping, indexed finite operations, catalogue maps, matrix
-address calculation, access by flat index or row and column, row transforms,
-and Gauss–Jordan elimination.
+compound arithmetic, quotient and remainder, gcd, finite tables and predicates,
+array lookup/update and mapping, indexed finite operations, catalogue maps,
+matrix address calculation, access by flat index or row and column, row
+transforms, and Gauss–Jordan elimination.
 The arithmetic, gcd, countdown, indexed-copy, catalogue, finite-field row, and
 elimination examples use these rules without implementation fields.
 
@@ -536,8 +543,8 @@ an abstraction, and measure net lines removed, including the new machinery.
 
 ### Integer arithmetic
 
-Add quotient production, signed arithmetic, and the remaining bit arithmetic
-needed for integer matrices, reusing generic arithmetic machinery.
+Add signed arithmetic and the remaining bit arithmetic needed for integer
+matrices, reusing generic arithmetic machinery.
 
 ### Algorithm notation
 

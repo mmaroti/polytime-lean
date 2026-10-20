@@ -48,6 +48,9 @@ example : (copy (EncodedDomain.binaryNaturals ())).TM0Realizable :=
 /-- Both gcd operands are supplied as separate delimited argument blocks. -/
 example : gcd.TM0Realizable := gcd_realizable.tm0
 
+/-- Both division results have canonical pair encoding at the original width. -/
+example : binaryDivision.TM0Realizable := binaryDivision_realizable.tm0
+
 /-- Private operand widening and result extraction are included in the export. -/
 example : binaryRemainder.TM0Realizable := binaryRemainder_realizable.tm0
 

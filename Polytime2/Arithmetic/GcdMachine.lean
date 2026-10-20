@@ -62,16 +62,16 @@ private def Represents (digits : ℕ) (operands : List Bool × List Bool) (tapes
     ∀ name, Region (widths digits name) 0 (tapes name)
 
 private def next (operands : List Bool × List Bool) : List Bool × List Bool :=
-  (operands.2, StandardBinaryRemainder.finish operands.2 operands.1.reverse
-    (List.replicate operands.2.length false))
+  (operands.2, (StandardBinaryDivision.finish operands.2 operands.1.reverse
+    (List.replicate operands.2.length false, List.replicate operands.2.length false)).2)
 
 private theorem body_runs (digits : ℕ) (operands : List Bool × List Bool) (initial : Tapes Alphabet)
     (represented : Represents digits operands initial) :
-    ∃ final, Runs (widths digits) (fun _ => false) body (8 * digits ^ 2 + 25 * digits + 15)
+    ∃ final, Runs (widths digits) (fun _ => false) body (12 * digits ^ 2 + 35 * digits + 18)
       bodyEntry (fun _ => 0) initial bodyExit (fun _ => 0) final ∧ Represents digits (next operands) final := by
   rcases represented with ⟨leftLength, rightLength, leftEq, rightEq, regions⟩
   have nextLength : (next operands).2.length = digits :=
-    (StandardBinaryRemainder.finish_length _ _ _ List.length_replicate).trans rightLength
+    (StandardBinaryDivision.finish_lengths _ _ _ List.length_replicate List.length_replicate).2.trans rightLength
   obtain ⟨localFinal, localTrace, remainderEq, divisorEq⟩ := StandardGcdStep.runs operands.1 operands.2
     (leftLength.trans rightLength.symm) (fun name => initial (stepWiring name)) leftEq rightEq
     (by
@@ -148,7 +148,7 @@ theorem runs (left right : List Bool) (sameLength : left.length = right.length)
     (regions : ∀ name, Region (widths right.length name) 0 (initial name))
     (capacity : 2 * value right ≤ 2 ^ right.length) :
     ∃ ticks finalLeft finalRight final,
-      ticks ≤ 16 * right.length ^ 3 + 70 * right.length ^ 2 + 102 * right.length + 56 ∧
+      ticks ≤ 32 * right.length ^ 3 + 160 * right.length ^ 2 + 240 * right.length + 128 ∧
       finalLeft.length = right.length ∧ finalRight.length = right.length ∧
       Runs (widths right.length) (fun _ => false) machine ticks entry (fun _ => 0) initial exit (fun _ => 0) final ∧
       final 6 = buffer (word finalLeft) ∧ final 1 = buffer (word finalRight) ∧
@@ -163,14 +163,14 @@ theorem runs (left right : List Bool) (sameLength : left.length = right.length)
       (represented : representation operands tapes) (active : Gcd.condition (numbers operands) = true) :
       numbers (next operands) = Gcd.advance (numbers operands) := by
     have positive : 0 < value operands.2 := by simpa [Gcd.condition, numbers, Nat.pos_iff_ne_zero] using active
-    change (value operands.2, value (StandardBinaryRemainder.finish _ _ _)) = _
-    rw [StandardBinaryRemainder.result_value operands.1 operands.2 positive
-      (by simpa only [represented.1.2.1] using represented.2.1)]
-    rfl
+    have remainderValue := (StandardBinaryDivision.result_value operands.1 operands.2 positive
+      (by simpa only [represented.1.2.1] using represented.2.1)
+      (by simpa only [represented.1.1, represented.1.2.1] using Binary.value_lt_pow_length operands.1)).2
+    exact Prod.ext rfl remainderValue
   obtain ⟨ticks, final, terminal, cost, trace, guarded, stopped⟩ := Runs.whileValues
     (widths right.length) (fun _ => false) guard body (false, 0) (false, 2) bodyEntry bodyExit result
     representation guardedRepresentation
-    (fun operands => Gcd.condition (numbers operands)) (fun operands => Gcd.measure (numbers operands)) (2 * right.length + 2) (8 * right.length ^ 2 + 25 * right.length + 15)
+    (fun operands => Gcd.condition (numbers operands)) (fun operands => Gcd.measure (numbers operands)) (2 * right.length + 2) (12 * right.length ^ 2 + 35 * right.length + 18)
     (by intro symbols; simp [guard, MultiTape.wire, StandardBinaryGuard.machine])
     (by intro symbols; simp [body, bodyExit, MultiTape.sequence, secondCopy,
       StandardTapeCommands.copy, MultiTape.wire, StandardTerminatedCopy.machine])

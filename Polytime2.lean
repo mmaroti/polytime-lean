@@ -64,7 +64,10 @@ import Polytime2.Encoding.BinaryEncoding
 import Polytime2.Arithmetic.BinaryArithmetic
 import Polytime2.Arithmetic.BinaryReduce
 import Polytime2.Arithmetic.BinaryDivisionStep
-import Polytime2.Arithmetic.BinaryRemainder
+import Polytime2.Arithmetic.DivisionMath
+import Polytime2.Arithmetic.BinaryDivision
+import Polytime2.Arithmetic.DivisionResult
+import Polytime2.Arithmetic.DivisionOperations
 import Polytime2.Arithmetic.BinaryGuard
 import Polytime2.Arithmetic.GcdStep
 import Polytime2.Primitives.TapeCommands
@@ -124,6 +127,7 @@ import Polytime2.Examples.MatrixReplace
 import Polytime2.Machine.Pipeline
 import Polytime2.Primitives.Initialization
 import Polytime2.Examples.Arithmetic
+import Polytime2.Examples.Division
 import Polytime2.Examples.FiniteTables
 import Polytime2.Examples.ArrayMaps
 import Polytime2.Matrices.RowCombine

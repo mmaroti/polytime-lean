@@ -74,6 +74,54 @@ theorem copy_runs (source target : TapeName) (distinct : source ≠ target)
       exact outside ⟨true, rfl⟩
     exact Function.update_of_ne different _ _
 
+-- memoryLevel: the finite memory of a specialization-fixed digit scan.
+universe memoryLevel
+
+/-- Run an immutable-input digit scan into a separate caller tape. -/
+noncomputable def scan {Memory : Type memoryLevel}
+    (update : Memory → Bool → Memory × Bool)
+    (source target : TapeName) (distinct : source ≠ target) :
+    Machine (CallingConvention.Alphabet TapeName) (StandardBinaryScan.State Memory) :=
+  MultiTape.wire (twoTapes source target distinct) (StandardBinaryScan.machine update)
+
+/-- A digit scan overwrites only its destination and restores both heads. -/
+theorem scan_runs {Memory : Type memoryLevel}
+    (update : Memory → Bool → Memory × Bool) (memory : Memory)
+    (source target : TapeName) (distinct : source ≠ target)
+    (width : TapeName → ℕ) (readOnly : TapeName → Bool)
+    (writable : readOnly target = false) (bits : List Bool) (old : List Symbol)
+    (sourceWidth : width source = bits.length) (targetWidth : width target = bits.length)
+    (oldLength : old.length = bits.length) (initial : Tapes (CallingConvention.Alphabet TapeName))
+    (sourceEq : initial source = buffer (word bits)) (targetEq : initial target = buffer old) :
+    Runs width readOnly (scan update source target distinct) (2 * bits.length + 2)
+      (.inl memory) (fun _ => 0) initial
+      (.inr ((BinaryScan.run update memory bits).1, true)) (fun _ => 0)
+      (Function.update initial target (buffer (word (BinaryScan.run update memory bits).2))) := by
+  apply (StandardBinaryScan.runs update memory bits old oldLength).wire_of_eq
+    (twoTapes source target distinct) width readOnly
+  · intro name
+    cases name <;> simp [sourceWidth, targetWidth]
+  · intro name premise
+    cases name
+    · rfl
+    · simp [writable] at premise
+  · intro name
+    cases name
+    · exact sourceEq.trans (buffer_padding (word bits)).symm
+    · exact targetEq.trans (buffer_padding old).symm
+  · intro name
+    cases name
+    · simp only [twoTapes_false, Function.update_of_ne distinct]
+      exact sourceEq.trans (buffer_padding (word bits)).symm
+    · simp only [twoTapes_true, Function.update_self]
+      exact (buffer_padding _).symm
+  · intro name outside
+    have different : name ≠ target := by
+      intro equal
+      subst name
+      exact outside ⟨true, rfl⟩
+    exact Function.update_of_ne different _ _
+
 -- parameterLevel: size names; carrierLevel: mathematical values being copied.
 universe parameterLevel carrierLevel
 
@@ -117,31 +165,9 @@ theorem clear_runs (source target : TapeName) (distinct : source ≠ target)
     Runs width readOnly (clear source target distinct) (2 * bits.length + 2)
       (.inl ()) (fun _ => 0) initial (.inr ((), true)) (fun _ => 0)
       (Function.update initial target (buffer (word (List.replicate bits.length false)))) := by
-  have trace := StandardBinaryScan.runs BinaryScan.clear () bits old oldLength
-  simp only [StandardBinaryScan.run, BinaryScan.clear_run] at trace
-  apply trace.wire_of_eq (twoTapes source target distinct) width readOnly
-  · intro name
-    cases name <;> simp [sourceWidth, targetWidth]
-  · intro name premise
-    cases name
-    · rfl
-    · simp [writable] at premise
-  · intro name
-    cases name
-    · exact sourceEq.trans (buffer_padding (word bits)).symm
-    · exact targetEq.trans (buffer_padding old).symm
-  · intro name
-    cases name
-    · simp only [twoTapes_false, Function.update_of_ne distinct]
-      exact sourceEq.trans (buffer_padding (word bits)).symm
-    · simp only [twoTapes_true, Function.update_self]
-      exact (buffer_padding (word (List.replicate bits.length false))).symm
-  · intro name outside
-    have different : name ≠ target := by
-      intro equal
-      subst name
-      exact outside ⟨true, rfl⟩
-    exact Function.update_of_ne different _ _
+  simpa only [scan, clear, BinaryScan.clear_run] using
+    scan_runs BinaryScan.clear () source target distinct width readOnly writable bits old
+      sourceWidth targetWidth oldLength initial sourceEq targetEq
 
 /-- Write a specialization-fixed word without a prepared source tape. -/
 noncomputable def setConstant (target : TapeName) (bits : List Bool) :

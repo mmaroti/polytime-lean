@@ -63,7 +63,7 @@ theorem runs (left right : List Bool) (sameLength : left.length = right.length)
     (sourceRight : initial 10 = buffer (word right))
     (regions : ∀ name, Region (widths right.length name) 0 (initial name)) :
     ∃ ticks answer final,
-      ticks ≤ 16 * right.length ^ 3 + 70 * right.length ^ 2 + 108 * right.length + 65 ∧
+      ticks ≤ 32 * right.length ^ 3 + 160 * right.length ^ 2 + 246 * right.length + 137 ∧
       answer.length = right.length ∧
       Runs (widths right.length) readOnly machine ticks entry (fun _ => 0) initial exit (fun _ => 0) final ∧
       value answer = Nat.gcd (value left) (value right) ∧ final 11 = buffer (word answer) := by
@@ -142,7 +142,7 @@ theorem contract : CallingConvention.Realizes domains argumentReadOnly sizeTapes
           (input ⟨.inr 10, rfl⟩ : Fin (2 ^ assignment ())).val) := by
   refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithm, MultiTape.wire,
     machine, exit, MultiTape.sequence, extract, StandardTapeCommands.copy, StandardTerminatedCopy.machine]),
-    16 * MvPolynomial.X () ^ 3 + 70 * MvPolynomial.X () ^ 2 + 108 * MvPolynomial.X () + 65, ?_⟩
+    32 * MvPolynomial.X () ^ 3 + 160 * MvPolynomial.X () ^ 2 + 246 * MvPolynomial.X () + 137, ?_⟩
   intro assignment input initial valid represented sizes
   let left := List.ofFn (fun index : Fin (assignment ()) =>
     (BitVec.ofFin (input ⟨.inr 9, rfl⟩)).getLsbD index.val)
