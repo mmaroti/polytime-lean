@@ -29,49 +29,49 @@ private def element : EncodedDomain Unit := EncodedDomain.booleans
 private def rows : MvPolynomial Unit ℕ := 2
 private def columns : MvPolynomial Unit ℕ := 3
 private def sizes : Unit → ℕ := fun _ => 3
-private def lookup := matrixLookup element () rows columns
-private def update := matrixUpdate element () rows columns
+private def lookup := matrixLookup element rows columns
+private def update := matrixUpdate element rows columns
 
-example : lookup.Realizable := matrixLookup_realizable element () rows columns
-example : update.Realizable := matrixUpdate_realizable element () rows columns
+example : lookup.Realizable := matrixLookup_realizable element rows columns
+example : update.Realizable := matrixUpdate_realizable element rows columns
 
 private def lookupArguments : lookup.Arguments sizes
-  | false => (4 : Fin 8)
+  | false => (⟨1, by norm_num [rows]⟩, ⟨1, by norm_num [columns]⟩)
   | true => fun _ _ => true
-private theorem lookupAdmissible : lookup.precondition sizes lookupArguments := by
-  change 4 < MvPolynomial.eval sizes (rows * columns)
-  norm_num [rows, columns]
-
-example : lookup.compute sizes ⟨lookupArguments, lookupAdmissible⟩ = true := rfl
+example : lookup.compute sizes ⟨lookupArguments, trivial⟩ = true := rfl
 
 private def updateArguments : update.Arguments sizes
-  | 0 => (4 : Fin 8)
+  | 0 => (⟨1, by norm_num [rows]⟩, ⟨1, by norm_num [columns]⟩)
   | 1 => fun _ _ => false
   | 2 => true
-private theorem updateAdmissible : update.precondition sizes updateArguments := by
-  change 4 < MvPolynomial.eval sizes (rows * columns)
-  norm_num [rows, columns]
+-- Update changes exactly the selected mathematical row and column.
+example : update.compute sizes ⟨updateArguments, trivial⟩
+    ⟨1, by norm_num [rows]⟩ ⟨1, by norm_num [columns]⟩ = true := by
+  change Function.update (fun _ => false)
+    (EncodedDomain.matrixCoordinateEquiv rows columns sizes
+      (⟨1, by norm_num [rows]⟩, ⟨1, by norm_num [columns]⟩)) true
+    (EncodedDomain.matrixCoordinateEquiv rows columns sizes
+      (⟨1, by norm_num [rows]⟩, ⟨1, by norm_num [columns]⟩)) = true
+  simp
 
--- Update is the ordinary function update on row-major coordinates.
-example : update.compute sizes ⟨updateArguments, updateAdmissible⟩ =
-    (EncodedDomain.MatrixEncoding.flattenPolynomial (Carrier := Bool) rows columns sizes).symm
-      (Function.update (fun _ => false) ⟨4, updateAdmissible⟩ true) := rfl
-
--- Another coordinate retains its original value.
-example : EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes
-    (update.compute sizes ⟨updateArguments, updateAdmissible⟩)
-    ⟨0, by norm_num [rows, columns]⟩ = false := by
-  change (EncodedDomain.MatrixEncoding.flattenPolynomial (Carrier := Bool) rows columns sizes)
-    ((EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes).symm
-      (Function.update (fun _ => false) ⟨4, updateAdmissible⟩ true)) _ = false
-  rw [Equiv.apply_symm_apply]
-  rw [Function.update_of_ne (by decide)]
+example : update.compute sizes ⟨updateArguments, trivial⟩
+    ⟨0, by norm_num [rows]⟩ ⟨0, by norm_num [columns]⟩ = false := by
+  change Function.update (fun _ => false)
+    (EncodedDomain.matrixCoordinateEquiv rows columns sizes
+      (⟨1, by norm_num [rows]⟩, ⟨1, by norm_num [columns]⟩)) true
+    (EncodedDomain.matrixCoordinateEquiv rows columns sizes
+      (⟨0, by norm_num [rows]⟩, ⟨0, by norm_num [columns]⟩)) = false
+  apply Function.update_of_ne
+  intro equal
+  have same := (EncodedDomain.matrixCoordinateEquiv rows columns sizes).injective equal
+  have := congrArg (fun coordinate => coordinate.1.val) same
+  contradiction
 
 -- A singleton scalar domain still supports zero-bit matrix storage.
-example : (matrixLookup (EncodedDomain.fixed (Equiv.refl (Fin 1))) () rows columns).Realizable :=
-  matrixLookup_realizable _ _ _ _
-example : (matrixUpdate (EncodedDomain.fixed (Equiv.refl (Fin 1))) () rows columns).Realizable :=
-  matrixUpdate_realizable _ _ _ _
+example : (matrixLookup (EncodedDomain.fixed (Equiv.refl (Fin 1))) rows columns).Realizable :=
+  matrixLookup_realizable _ _ _
+example : (matrixUpdate (EncodedDomain.fixed (Equiv.refl (Fin 1))) rows columns).Realizable :=
+  matrixUpdate_realizable _ _ _
 
 end MatrixExamples
 end Polytime2.Examples.MatrixAccess

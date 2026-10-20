@@ -70,6 +70,13 @@ Namespaces and declaration names are unchanged.
   handles fixed polynomial assignments using the same header compiler.
   `Examples/DynamicSizes.lean` counts leading true flags and invokes a quadratic
   evaluator at that actual count, with a standalone TM0 certificate.
+- `arrayLookup` and `arrayUpdate` take coordinates in `Fin length`, with no
+  independent counter capacity or separate range precondition. Their binary
+  coordinate codec uses the polynomial array length as its exact bit width.
+  The existing machines support arbitrary element widths, including nested
+  arrays. `matrixLookup` and `matrixUpdate` accept row and column pairs through
+  the same row-major codec. Capacity-sensitive array operations remain internal
+  building blocks for algorithms with binary counters.
 - `arrayPack` stably selects an array by a Boolean mask and returns its count
   and exact-length mathematical array in `EncodedDomain.boundedArray`.
   Counters and zero capacity padding are private; element widths may depend on
@@ -258,8 +265,9 @@ element conversions with identical canonical bits.
 `Prepared.prepareAndConsume_realizable` composes preparation with any certified
 unary consumer whose precondition follows from `IsPrepared`. The result
 preserves explicit rejection and evaluates the consumer at the actual sort
-counts. The computed-size compiler and `consumerPolynomial_bound` use `n_t ≤ n`
-and the unchanged `g` to give a polynomial bound in the original dimensions.
+counts. The computed-size compiler and `consumerPolynomial_bound` use
+`n_t ≤ n` and the unchanged `g` to give a polynomial bound in the original
+dimensions.
 `prepare_tm0` and `prepareAndConsume_tm0` include all preparation, simulation,
 and extraction in their standalone TM0 certificates.
 
@@ -501,21 +509,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Array coordinates (~50–120 net lines added)
-
-**Give array indexing a mathematical coordinate domain.**
-
-[arrayLookup and arrayUpdate](Arrays/Operations.lean)
-require an independent `indexCapacity` parameter and then separately prove
-the index is below the array length.
-
-A more natural public index is `Fin length`, with its binary encoding
-capacity determined internally from the polynomial length. This also
-simplifies matrix coordinates to a row index and a column index.
-
-This is an interface improvement, not an immediate large deletion: it
-needs a reusable bounded-index domain and adapters to existing machines.
 
 ### Matrix capacities (~40–100 net lines added)
 

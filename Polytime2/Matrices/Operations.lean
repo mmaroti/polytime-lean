@@ -20,7 +20,7 @@ import Polytime2.Arrays.Operations
 
 /-! # Matrix access derived from array computations
 
-Indices are flat row-major coordinates. Matrix dimensions are polynomial
+Indices are mathematical row and column pairs. Matrix dimensions are polynomial
 expressions in the runtime size parameters.
 -/
 
@@ -30,64 +30,64 @@ variable {Parameter : Type} [Fintype Parameter]
 
 noncomputable section MatrixAccess
 
-private def matrixLookupDomains (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+private def matrixLookupDomains (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) : Bool → EncodedDomain Parameter
-  | false => EncodedDomain.binaryNaturals indexCapacity
+  | false => EncodedDomain.matrixCoordinates rows columns
   | true => EncodedDomain.matrix element rows columns
 
-private def matrixLookupEquivalence (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+private def matrixLookupEquivalence (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) (name : Bool) (sizes : Parameter → ℕ) :
-    (matrixLookupDomains element indexCapacity rows columns name).Carrier sizes ≃
-      ((arrayLookup element indexCapacity (rows * columns)).inputDomains name).Carrier sizes :=
+    (matrixLookupDomains element rows columns name).Carrier sizes ≃
+      ((arrayLookup element (rows * columns)).inputDomains name).Carrier sizes :=
   match name with
-  | false => Equiv.refl _
+  | false => EncodedDomain.matrixCoordinateEquiv rows columns sizes
   | true => EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes
 
 /-- Read a row-major coordinate of an ordinary mathematical matrix. -/
-def matrixLookup (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+def matrixLookup (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
-  (arrayLookup element indexCapacity (rows * columns)).reindexDomains
-    (matrixLookupDomains element indexCapacity rows columns) element
-    (matrixLookupEquivalence element indexCapacity rows columns) (fun _ => Equiv.refl _)
+  (arrayLookup element (rows * columns)).reindexDomains
+    (matrixLookupDomains element rows columns) element
+    (matrixLookupEquivalence element rows columns) (fun _ => Equiv.refl _)
 
-theorem matrixLookup_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+theorem matrixLookup_realizable (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) :
-    (matrixLookup element indexCapacity rows columns).Realizable := by
-  exact (arrayLookup_realizable element indexCapacity (rows * columns)).reindexDomains
+    (matrixLookup element rows columns).Realizable := by
+  exact (arrayLookup_realizable element (rows * columns)).reindexDomains
     _ _ _ _
     (by intro name sizes; cases name <;> rfl)
     (by intro sizes; rfl)
     (by intro name sizes value; cases name <;> rfl)
     (by intro sizes value; rfl)
 
-private def matrixUpdateDomains (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+private def matrixUpdateDomains (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) : Fin 3 → EncodedDomain Parameter
-  | 0 => EncodedDomain.binaryNaturals indexCapacity
+  | 0 => EncodedDomain.matrixCoordinates rows columns
   | 1 => EncodedDomain.matrix element rows columns
   | 2 => element
 
-private def matrixUpdateEquivalence (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+private def matrixUpdateEquivalence (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) (name : Fin 3) (sizes : Parameter → ℕ) :
-    (matrixUpdateDomains element indexCapacity rows columns name).Carrier sizes ≃
-      ((arrayUpdate element indexCapacity (rows * columns)).inputDomains name).Carrier sizes :=
+    (matrixUpdateDomains element rows columns name).Carrier sizes ≃
+      ((arrayUpdate element (rows * columns)).inputDomains name).Carrier sizes :=
   match name with
-  | 0 => Equiv.refl _
+  | 0 => EncodedDomain.matrixCoordinateEquiv rows columns sizes
   | 1 => EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes
   | 2 => Equiv.refl _
 
 /-- Update one row-major coordinate, returning an ordinary matrix of the same shape. -/
-def matrixUpdate (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+def matrixUpdate (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) :=
-  (arrayUpdate element indexCapacity (rows * columns)).reindexDomains
-    (matrixUpdateDomains element indexCapacity rows columns)
+  (arrayUpdate element (rows * columns)).reindexDomains
+    (matrixUpdateDomains element rows columns)
     (EncodedDomain.matrix element rows columns)
-    (matrixUpdateEquivalence element indexCapacity rows columns)
+    (matrixUpdateEquivalence element rows columns)
     (fun sizes => EncodedDomain.MatrixEncoding.flattenPolynomial rows columns sizes)
 
-theorem matrixUpdate_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+theorem matrixUpdate_realizable (element : EncodedDomain Parameter)
     (rows columns : MvPolynomial Parameter ℕ) :
-    (matrixUpdate element indexCapacity rows columns).Realizable := by
-  exact (arrayUpdate_realizable element indexCapacity (rows * columns)).reindexDomains
+    (matrixUpdate element rows columns).Realizable := by
+  exact (arrayUpdate_realizable element (rows * columns)).reindexDomains
     _ _ _ _
     (by intro name sizes; fin_cases name <;> rfl)
     (by intro sizes; rfl)

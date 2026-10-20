@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Composition
+import Polytime2.Computation.Conditional
 import Polytime2.Arrays.Operations
 
 /-! # Array access through public mathematical certificates
@@ -32,88 +32,73 @@ noncomputable section MathematicalExamples
 
 private def element : EncodedDomain Bool := EncodedDomain.fixed (Equiv.refl (Fin 3))
 private def length : MvPolynomial Bool ℕ := MvPolynomial.X true
+
+/-- Two valid coordinates and an immutable array suffice; no capacity or
+separate index-range precondition is exposed. -/
 private def originalDomains : Fin 3 → EncodedDomain Bool
-  | 0 | 1 => EncodedDomain.binaryNaturals false
+  | 0 | 1 => EncodedDomain.boundedIndex length
   | 2 => element.arrayOfLength length
 
-private def sourceSelection : Bool ↪ Fin 3 :=
-  ⟨(fun | false => 0 | true => 2), by intro first second equal; cases first <;> cases second <;> simp_all⟩
+def indexedCopy : Polytime2.Computation Bool (Fin 3) where
+  inputDomains := originalDomains
+  outputDomain := element.arrayOfLength length
+  precondition _ _ := True
+  compute _ arguments := Function.update (arguments.val 2) (arguments.val 1)
+    (arguments.val 2 (arguments.val 0))
 
-private def readSource : Polytime2.Computation Bool (Fin 3) :=
-  ((arrayLookup element false length).withArguments originalDomains sourceSelection
-    (by intro name; cases name <;> rfl)).withPrecondition
-    (fun sizes arguments => (arguments 0).val < MvPolynomial.eval sizes length ∧
-      (arguments 1).val < MvPolynomial.eval sizes length)
-    (by intro sizes arguments valid; exact valid.1)
-
-private def continuationDomains : Fin 3 ⊕ Unit → EncodedDomain Bool :=
-  Sum.elim originalDomains (fun _ => element)
-
-private def updateSelection : Fin 3 ↪ Fin 3 ⊕ Unit :=
-  ⟨(fun | 0 => .inl 1 | 1 => .inl 2 | 2 => .inr ()), by
-    intro first second equal
-    fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
-
-private def writeTarget : Polytime2.Computation Bool (Fin 3 ⊕ Unit) :=
-  (arrayUpdate element false length).withArguments continuationDomains updateSelection
-    (by intro name; fin_cases name <;> rfl)
-
-/-- Arguments are the source index, target index, and immutable array. -/
-def indexedCopy : Polytime2.Computation Bool (Fin 3) :=
-  readSource.letThen writeTarget (fun _ => rfl) rfl
-    (by intro sizes arguments valid; exact valid.2)
-
-/-- Lookup and update compose without exposing either machine or scratch. -/
 theorem indexedCopy_realizable : indexedCopy.Realizable := by
-  apply Computation.Realizable.letThen
-  · exact ((arrayLookup_realizable element false length).withArguments
-      originalDomains sourceSelection _).withPrecondition _ _
-  · exact (arrayUpdate_realizable element false length).withArguments
-      continuationDomains updateSelection _
+  have read := (arrayLookup_realizable element length).onResults originalDomains (fun _ _ => True)
+    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
+    (by intros; trivial) (by
+      intro choice
+      cases choice
+      · exact Realizable.argument originalDomains 0 (fun _ _ => True)
+      · exact Realizable.argument originalDomains 2 (fun _ _ => True))
+  exact (arrayUpdate_realizable element length).onResults originalDomains (fun _ _ => True)
+    (fun name _ arguments => match name with
+      | 0 => arguments.val 1 | 1 => arguments.val 2 | 2 => arguments.val 2 (arguments.val 0))
+    (by intros; trivial) (by
+      intro name
+      fin_cases name
+      · exact Realizable.argument originalDomains 1 (fun _ _ => True)
+      · exact Realizable.argument originalDomains 2 (fun _ _ => True)
+      · exact read)
 
-/-- Equal source and target indices are allowed; lookup finishes before update. -/
-theorem indexedCopy_correct (sizes : Bool → ℕ) (arguments : indexedCopy.Arguments sizes)
-    (valid : indexedCopy.precondition sizes arguments) :
-    indexedCopy.compute sizes ⟨arguments, valid⟩ =
-      Function.update (arguments 2) ⟨(arguments 1).val, valid.2⟩
-        (arguments 2 ⟨(arguments 0).val, valid.1⟩) := rfl
+/-- Equal source and target coordinates are allowed. -/
+theorem indexedCopy_correct (sizes : Bool → ℕ) (arguments : indexedCopy.Arguments sizes) :
+    indexedCopy.compute sizes ⟨arguments, trivial⟩ =
+      Function.update (arguments 2) (arguments 1) (arguments 2 (arguments 0)) := rfl
 
-example : (arrayLookup element false length).Realizable :=
-  arrayLookup_realizable element false length
-example : (arrayUpdate element false length).Realizable :=
-  arrayUpdate_realizable element false length
+example : (arrayLookup element length).Realizable := arrayLookup_realizable _ _
+example : (arrayUpdate element length).Realizable := arrayUpdate_realizable _ _
 
--- Singleton elements occupy zero bits, but lookup and update remain realizable.
-example : (arrayLookup (EncodedDomain.fixed (Equiv.refl (Fin 1))) false length).Realizable :=
-  arrayLookup_realizable _ _ _
-example : (arrayUpdate (EncodedDomain.fixed (Equiv.refl (Fin 1))) false length).Realizable :=
-  arrayUpdate_realizable _ _ _
-
-/-- A row has a runtime-dependent width; outer lookup returns the whole row. -/
+/-- The element width can itself depend on sizes, including nested rows. -/
 example {Parameter : Type} [Fintype Parameter] (scalar : EncodedDomain Parameter)
-    (capacity : Parameter) (rows columns : MvPolynomial Parameter ℕ) :
-    (arrayLookup (scalar.arrayOfLength columns) capacity rows).Realizable :=
-  arrayLookup_realizable _ _ _
+    (rows columns : MvPolynomial Parameter ℕ) :
+    (arrayLookup (scalar.arrayOfLength columns) rows).Realizable := arrayLookup_realizable _ _
 
-/-- Replacing a row uses the same generic update certificate. -/
 example {Parameter : Type} [Fintype Parameter] (scalar : EncodedDomain Parameter)
-    (capacity : Parameter) (rows columns : MvPolynomial Parameter ℕ) :
-    (arrayUpdate (scalar.arrayOfLength columns) capacity rows).Realizable :=
-  arrayUpdate_realizable _ _ _
+    (rows columns : MvPolynomial Parameter ℕ) :
+    (arrayUpdate (scalar.arrayOfLength columns) rows).Realizable := arrayUpdate_realizable _ _
 
-/-- Runtime binary element capacities need no fixed-width hypothesis. -/
-example : (arrayLookup (EncodedDomain.binaryNaturals false) false length).Realizable :=
-  arrayLookup_realizable _ _ _
+example : (arrayLookup (EncodedDomain.binaryNaturals false) length).Realizable := arrayLookup_realizable _ _
+example : (arrayUpdate (element.arrayOfLength 0) length).Realizable := arrayUpdate_realizable _ _
 
-example : (arrayUpdate (EncodedDomain.binaryNaturals false) false length).Realizable :=
-  arrayUpdate_realizable _ _ _
+/-- Empty arrays have no coordinate, while singleton and zero-width elements
+remain valid targets of the generic algorithms. -/
+example (sizes : Bool → ℕ) : IsEmpty ((EncodedDomain.boundedIndex (Parameter := Bool) 0).Carrier sizes) := by
+  change IsEmpty (Fin 0)
+  infer_instance
 
-/-- Empty rows are valid zero-width elements of an outer array. -/
-example : (arrayLookup (element.arrayOfLength 0) false length).Realizable :=
-  arrayLookup_realizable _ _ _
+example : (arrayLookup element 0).Realizable := arrayLookup_realizable _ _
+example : (arrayUpdate (EncodedDomain.fixed (Parameter := Bool) (Equiv.refl (Fin 1))) length).Realizable :=
+  arrayUpdate_realizable _ _
 
-example : (arrayUpdate (element.arrayOfLength 0) false length).Realizable :=
-  arrayUpdate_realizable _ _ _
+/-- Coordinates reject representable binary values outside the mathematical bound. -/
+example (sizes : Bool → ℕ) (bits : BitVec (MvPolynomial.eval sizes length))
+    (outside : MvPolynomial.eval sizes length ≤ bits.toNat) :
+    (EncodedDomain.boundedIndex length).decode sizes bits = none := by
+  simp [EncodedDomain.boundedIndex, Nat.not_lt.mpr outside]
 
 end MathematicalExamples
 end Polytime2.Examples.Array

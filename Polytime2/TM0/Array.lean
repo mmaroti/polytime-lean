@@ -30,14 +30,14 @@ variable {Parameter : Type} [Fintype Parameter]
 
 /-- Lookup with polynomial element width transfers to the public TM0 format. -/
 theorem lookup_realizes_tm0 (element : EncodedDomain Parameter)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
-    (Computation.arrayLookup element indexCapacity length).TM0Realizable :=
-  (Computation.arrayLookup_realizable element indexCapacity length).tm0
+    (length : MvPolynomial Parameter ℕ) :
+    (Computation.arrayLookup element length).TM0Realizable :=
+  (Computation.arrayLookup_realizable element length).tm0
 
 /-- Update preserves its arguments and exports only the separate result array. -/
 theorem update_realizes_tm0 (element : EncodedDomain Parameter)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
-    (Computation.arrayUpdate element indexCapacity length).TM0Realizable :=
-  (Computation.arrayUpdate_realizable element indexCapacity length).tm0
+    (length : MvPolynomial Parameter ℕ) :
+    (Computation.arrayUpdate element length).TM0Realizable :=
+  (Computation.arrayUpdate_realizable element length).tm0
 
 end Polytime2.Array

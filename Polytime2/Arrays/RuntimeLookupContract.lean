@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Encoding.Records
+
 import Polytime2.Arrays.RuntimeLookup
 import Polytime2.Computation.Width
 
@@ -34,14 +36,14 @@ variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- Encoded domains determine fixed tape widths, including private scratch. -/
 noncomputable def domainsSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ) :
+    (indexDomain : EncodedDomain.{parameterLevel, 0} Parameter) (length : MvPolynomial Parameter ℕ) :
     Sum Parameter (Fin 7) → EncodedDomain.{parameterLevel, 0} Parameter
   | .inl parameter => EncodedDomain.unary parameter
-  | .inr name => if name = 1 then element.arrayOfLength length
+  | .inr name => if name = 0 then indexDomain else if name = 1 then element.arrayOfLength length
       else if name = 2 then element
       else if name = 5 then EncodedDomain.booleans
       else if name = 6 then EncodedDomain.unaryOfLength element.widthPolynomial
-      else EncodedDomain.binaryNaturals indexCapacity
+      else EncodedDomain.bitVectors indexDomain.widthPolynomial
 
 def argumentReadOnly : Sum Parameter (Fin 7) → Bool
   | .inl _ => true
@@ -63,26 +65,27 @@ noncomputable def algorithmSized :
 /-- An in-range binary index returns the corresponding mathematical element.
 Private scratch need not encode valid values on return. -/
 theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
-    (indexCapacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) :
-    CallingConvention.Realizes (domainsSized element indexCapacity length)
+    (indexDomain : EncodedDomain.{parameterLevel, 0} Parameter)
+    (length : MvPolynomial Parameter ℕ) (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
+    (value_encode : ∀ sizes index, value (EncodedDomain.ArrayEncoding.bits (indexDomain.encode sizes index)) = toNat sizes index) :
+    CallingConvention.Realizes (domainsSized element indexDomain length)
       argumentReadOnly sizeTapes outputTapes algorithmSized
       RuntimeArrayLookup.entry RuntimeArrayLookup.exit
       (fun assignment input =>
-        (input ⟨.inr 0, rfl⟩ : Fin (2 ^ assignment indexCapacity)).val <
+        toNat assignment (input ⟨.inr 0, rfl⟩) <
           MvPolynomial.eval assignment length)
-      (fun assignment input output => ∃ within : (input ⟨.inr 0, rfl⟩).val < MvPolynomial.eval assignment length,
-        output () = input ⟨.inr 1, rfl⟩ ⟨(input ⟨.inr 0, rfl⟩).val, within⟩) := by
+      (fun assignment input output => ∃ within : toNat assignment (input ⟨.inr 0, rfl⟩) < MvPolynomial.eval assignment length,
+        output () = input ⟨.inr 1, rfl⟩ ⟨toNat assignment (input ⟨.inr 0, rfl⟩), within⟩) := by
   refine ⟨(by intro parameter; rfl), (by intro name; rfl), (by intro symbols; simp [algorithmSized,
     MultiTape.wire, RuntimeArrayLookup.halt]),
-    length * (6 * MvPolynomial.X indexCapacity + 3 * element.widthPolynomial + 16) +
-      6 * MvPolynomial.X indexCapacity + 3 * element.widthPolynomial + 17, ?_⟩
+    length * (6 * indexDomain.widthPolynomial + 3 * element.widthPolynomial + 16) +
+      6 * indexDomain.widthPolynomial + 3 * element.widthPolynomial + 17, ?_⟩
   intro assignment input initial valid represented sizes
-  let indexValue : Fin (2 ^ assignment indexCapacity) := input ⟨.inr 0, rfl⟩
-  let index := EncodedDomain.ArrayEncoding.bits (BitVec.ofFin indexValue)
+  let indexValue : indexDomain.Carrier assignment := input ⟨.inr 0, rfl⟩
+  let index := EncodedDomain.ArrayEncoding.bits (indexDomain.encode assignment indexValue)
   let array : (element.arrayOfLength length).Carrier assignment := input ⟨.inr 1, rfl⟩
-  have indexLength : index.length = assignment indexCapacity := List.length_ofFn
-  have indexValueEq : value index = indexValue.val := Binary.value_bits (BitVec.ofFin indexValue)
+  have indexLength : index.length = indexDomain.width assignment := List.length_ofFn
+  have indexValueEq : value index = toNat assignment indexValue := value_encode assignment indexValue
   have within : value index < MvPolynomial.eval assignment length := by rw [indexValueEq]; exact valid
   obtain ⟨oldElement, elementLength, elementEq⟩ := represented.2 (.inr 2) rfl
   obtain ⟨oldCounter, counterLength, counterEq⟩ := represented.2 (.inr 3) rfl
@@ -91,9 +94,9 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
   norm_num [domainsSized, EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.ofCodec] at flagLength
   obtain ⟨flag, rfl⟩ := List.length_eq_one_iff.mp flagLength
   change oldElement.length = element.width assignment at elementLength
-  simp [domainsSized, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] at counterLength scratchLength
+  simp [domainsSized, EncodedDomain.bitVectors] at counterLength scratchLength
   have indexEq : initial (.inr 0) = buffer (word index) :=
-    (represented.1 (.inr 0) rfl).trans (encoded_binaryNaturals_value indexCapacity assignment _)
+    (represented.1 (.inr 0) rfl)
   have arrayEq : initial (.inr 1) = encoded (element.arrayOfLength length) assignment array := represented.1 (.inr 1) rfl
   have markerEq : initial (.inr 6) = unary (element.width assignment) := by
     have marker := represented.1 (.inr 6) rfl
@@ -103,14 +106,14 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
   obtain ⟨ticks, cost, localTrace⟩ := encoded_runsOfLength element length assignment index within array oldElement oldCounter scratch elementLength (counterLength.trans indexLength.symm)
     (scratchLength.trans indexLength.symm) flag
   have trace := localTrace.wire dataTapes
-    (fun name => (domainsSized element indexCapacity length name).width assignment)
+    (fun name => (domainsSized element indexDomain length name).width assignment)
     argumentReadOnly
     (by
       intro name
-      change (domainsSized element indexCapacity length (.inr name)).width assignment = _
+      change (domainsSized element indexDomain length (.inr name)).width assignment = _
       fin_cases name <;> norm_num [domainsSized, widths, RuntimeArrayBlockCopy.widths, ArrayBlockCopy.widths, EncodedDomain.arrayOfLength,
-        EncodedDomain.binaryNaturals, EncodedDomain.booleans, EncodedDomain.fixed,
-        indexLength, EncodedDomain.unaryOfLength])
+        EncodedDomain.bitVectors, EncodedDomain.booleans, EncodedDomain.fixed,
+        indexLength, EncodedDomain.unaryOfLength, EncodedDomain.width])
     (by intro name premise; exact premise) initial (fun _ => 0)
   have start : install dataTapes
       (initialFrame (element.width assignment) index (EncodedDomain.ArrayEncoding.bits ((element.arrayOfLength length).encode assignment array))
@@ -135,14 +138,14 @@ theorem contractSized (element : EncodedDomain.{parameterLevel, 0} Parameter)
       (fun _ : Sum Parameter (Fin 7) => (0 : ℤ)) = fun _ => 0 := install_self dataTapes _
   rw [start, positions] at trace
   let selected := array ⟨value index, within⟩
-  let output : Outputs (domainsSized element indexCapacity length) outputTapes assignment :=
+  let output : Outputs (domainsSized element indexDomain length) outputTapes assignment :=
     fun _ => selected
   refine ⟨ticks, output, _, ?_, trace, ?_, ?_⟩
-  · simp only [map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
+  · simp only [map_add, map_mul, map_ofNat]
     simpa only [indexLength, Nat.add_assoc, EncodedDomain.width] using cost
   · refine ⟨valid, ?_⟩
     have equalIndex : (⟨value index, within⟩ : Fin (MvPolynomial.eval assignment length)) =
-        ⟨indexValue.val, valid⟩ := Fin.ext indexValueEq
+        ⟨toNat assignment indexValue, valid⟩ := Fin.ext indexValueEq
     exact congrArg array equalIndex
   · intro name
     cases name

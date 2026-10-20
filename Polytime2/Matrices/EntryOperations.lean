@@ -65,17 +65,17 @@ private def lookupDomains (scalar : EncodedDomain Empty) : Bool → EncodedDomai
 
 private def lookupEquivalence (scalar : EncodedDomain Empty) (name : Bool) (sizes : Fin 3 → ℕ) :
     (lookupDomains scalar name).Carrier sizes ≃
-      ((arrayLookup scalar.constant 0 StandardMatrixEntry.length).inputDomains name).Carrier sizes :=
+      ((Realizable.Internal.arrayLookupWithCapacity scalar.constant 0 StandardMatrixEntry.length).inputDomains name).Carrier sizes :=
   match name with
   | false => Equiv.refl _
   | true => matrixEquiv sizes
 
 private def lookup (scalar : EncodedDomain Empty) : Computation (Fin 3) Bool :=
-  (arrayLookup scalar.constant 0 StandardMatrixEntry.length).reindexDomains
+  (Realizable.Internal.arrayLookupWithCapacity scalar.constant 0 StandardMatrixEntry.length).reindexDomains
     (lookupDomains scalar) scalar.constant (lookupEquivalence scalar) (fun _ => Equiv.refl _)
 
 private theorem lookup_realizable (scalar : EncodedDomain Empty) : (lookup scalar).Realizable :=
-  (arrayLookup_realizable scalar.constant 0 StandardMatrixEntry.length).reindexDomains _ _ _ _
+  (Realizable.Internal.arrayLookupWithCapacity_realizable scalar.constant 0 StandardMatrixEntry.length).reindexDomains _ _ _ _
     (by intro name sizes; cases name <;> rfl) (by intro sizes; rfl)
     (by intro name sizes value; cases name <;> rfl) (by intro sizes value; rfl)
 
@@ -127,18 +127,18 @@ private def updateDomains (scalar : EncodedDomain Empty) : Fin 3 → EncodedDoma
 
 private def updateEquivalence (scalar : EncodedDomain Empty) (name : Fin 3) (sizes : Fin 3 → ℕ) :
     (updateDomains scalar name).Carrier sizes ≃
-      ((arrayUpdate scalar.constant 0 StandardMatrixEntry.length).inputDomains name).Carrier sizes :=
+      ((Realizable.Internal.arrayUpdateWithCapacity scalar.constant 0 StandardMatrixEntry.length).inputDomains name).Carrier sizes :=
   match name with
   | 0 => Equiv.refl _
   | 1 => matrixEquiv sizes
   | 2 => Equiv.refl _
 
 private def update (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 3) :=
-  (arrayUpdate scalar.constant 0 StandardMatrixEntry.length).reindexDomains
+  (Realizable.Internal.arrayUpdateWithCapacity scalar.constant 0 StandardMatrixEntry.length).reindexDomains
     (updateDomains scalar) (matrixDomain scalar) (updateEquivalence scalar) (fun sizes => matrixEquiv sizes)
 
 private theorem update_realizable (scalar : EncodedDomain Empty) : (update scalar).Realizable :=
-  (arrayUpdate_realizable scalar.constant 0 StandardMatrixEntry.length).reindexDomains _ _ _ _
+  (Realizable.Internal.arrayUpdateWithCapacity_realizable scalar.constant 0 StandardMatrixEntry.length).reindexDomains _ _ _ _
     (by intro name sizes; fin_cases name <;> rfl) (by intro sizes; rfl)
     (by intro name sizes value; fin_cases name <;> rfl) (by intro sizes value; rfl)
 

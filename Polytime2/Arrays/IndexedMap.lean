@@ -72,7 +72,7 @@ theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Emp
       elementDomain.Carrier Empty.elim) :
     (indexedMap parameterDomain elementDomain indexCapacity length operation).Realizable := by
   let computation := indexedMap parameterDomain elementDomain indexCapacity length operation
-  have lookup := (arrayLookup_realizable elementDomain.constant indexCapacity length).onResults
+  have lookup := (Realizable.Internal.arrayLookupWithCapacity_realizable elementDomain.constant indexCapacity length).onResults
     computation.inputDomains computation.precondition
     (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 1)
     (by intro sizes arguments; exact arguments.property) (by
@@ -90,7 +90,7 @@ theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Emp
       cases choice
       · exact Realizable.argument computation.inputDomains 2 computation.precondition
       · exact lookup)
-  exact (arrayUpdate_realizable elementDomain.constant indexCapacity length).onResults
+  exact (Realizable.Internal.arrayUpdateWithCapacity_realizable elementDomain.constant indexCapacity length).onResults
     computation.inputDomains computation.precondition
     (fun name _ arguments => match name with
       | 0 => arguments.val 0

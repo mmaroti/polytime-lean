@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Encoding.Binary
-import Polytime2.Encoding.EncodedDomain
+import Polytime2.Encoding.EncodedArray
 import Mathlib.Data.Nat.Bitwise
 
 /-! # Canonical encodings of bounded binary natural numbers
@@ -115,6 +115,40 @@ noncomputable def binaryNaturals (parameter : Parameter) : EncodedDomain Paramet
 @[simp] theorem binaryNaturals_width (parameter : Parameter) (assignment : Parameter → ℕ) :
     (binaryNaturals parameter).width assignment = assignment parameter := by
   simp [binaryNaturals, ofCodec]
+
+/-- Array coordinates have their mathematical bound as carrier and use that
+many binary digits. The generous exact polynomial width keeps capacity private;
+the empty bound has no coordinates, and decoding rejects out-of-range words. -/
+noncomputable def boundedIndex (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter where
+  Carrier sizes := Fin (MvPolynomial.eval sizes length)
+  widthPolynomial := length
+  encode sizes index := BitVec.ofNatLT index.val (index.isLt.trans (Nat.lt_two_pow_self))
+  decode sizes bits := if within : bits.toNat < MvPolynomial.eval sizes length then some ⟨bits.toNat, within⟩ else none
+  decode_encode sizes index := by simp [index.isLt]
+  encode_decode sizes bits index accepted := by
+    split at accepted
+    · cases Option.some.inj accepted
+      exact BitVec.eq_of_toNat_eq (by simp)
+    · simp at accepted
+
+@[simp] theorem boundedIndex_value (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (index : (boundedIndex length).Carrier sizes) :
+    Binary.value (ArrayEncoding.bits ((boundedIndex length).encode sizes index)) = index.val := by
+  simpa only [boundedIndex, BitVec.toNat_ofNatLT] using
+    Binary.value_bits ((boundedIndex length).encode sizes index)
+
+/-- Row and column coordinates correspond to their row-major array coordinate. -/
+noncomputable def matrixCoordinateEquiv (rows columns : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :
+    (Fin (MvPolynomial.eval sizes rows) × Fin (MvPolynomial.eval sizes columns)) ≃
+      Fin (MvPolynomial.eval sizes (rows * columns)) :=
+  finProdFinEquiv.trans (finCongr (by simp only [MvPolynomial.eval_mul]))
+
+/-- A mathematical matrix coordinate is a row and column pair. Its codec uses
+the existing bounded row-major coordinate and introduces no runtime conversion. -/
+noncomputable def matrixCoordinates (rows columns : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  (boundedIndex (rows * columns)).reindex
+    (fun sizes => Fin (MvPolynomial.eval sizes rows) × Fin (MvPolynomial.eval sizes columns))
+    (matrixCoordinateEquiv rows columns)
 
 /-- Boolean results use one canonical bit, with no unused labels. -/
 noncomputable def booleans : EncodedDomain Parameter := fixed finTwoEquiv.symm

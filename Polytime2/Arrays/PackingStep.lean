@@ -89,34 +89,34 @@ theorem packingStep_realizable (element : EncodedDomain Parameter) (capacity : P
     (Realizable.argument inputs (.inr true) allowed).followedBy
       (encode_realizable element) rfl (by intros; trivial)
   let lookupValues (choice : Bool) sizes (arguments : Arguments sizes) :
-      ((arrayLookup EncodedDomain.booleans capacity length).inputDomains choice).Carrier sizes :=
+      ((Realizable.Internal.arrayLookupWithCapacity EncodedDomain.booleans capacity length).inputDomains choice).Carrier sizes :=
     match choice with
     | false => source sizes arguments
     | true => arguments.val (.inl ())
   have lookupValid sizes (arguments : Arguments sizes) :
-      (arrayLookup EncodedDomain.booleans capacity length).precondition sizes
+      (Realizable.Internal.arrayLookupWithCapacity EncodedDomain.booleans capacity length).precondition sizes
         (fun choice => lookupValues choice sizes arguments) := arguments.property.1
   have lookupProducers choice :
-      (Computation.mk inputs ((arrayLookup EncodedDomain.booleans capacity length).inputDomains choice)
+      (Computation.mk inputs ((Realizable.Internal.arrayLookupWithCapacity EncodedDomain.booleans capacity length).inputDomains choice)
         allowed (lookupValues choice)).Realizable := by
     cases choice
     · exact sourceReady
     · exact Realizable.argument inputs (.inl ()) allowed
   have flagReady : (Computation.mk inputs EncodedDomain.booleans allowed flag).Realizable :=
-    (arrayLookup_realizable EncodedDomain.booleans capacity length).onResults inputs allowed
+    (Realizable.Internal.arrayLookupWithCapacity_realizable EncodedDomain.booleans capacity length).onResults inputs allowed
       lookupValues lookupValid lookupProducers
   let updateValues (name : Fin 3) sizes (arguments : Arguments sizes) :
-      ((arrayUpdate raw capacity length).inputDomains name).Carrier sizes :=
+      ((Realizable.Internal.arrayUpdateWithCapacity raw capacity length).inputDomains name).Carrier sizes :=
     match name with
     | 0 => destination sizes arguments
     | 1 => storage sizes arguments
     | 2 => replacement sizes arguments
   have updateValid sizes (arguments : Arguments sizes) :
-      (arrayUpdate raw capacity length).precondition sizes
+      (Realizable.Internal.arrayUpdateWithCapacity raw capacity length).precondition sizes
         (fun name => updateValues name sizes arguments) :=
     lt_of_le_of_lt arguments.property.2 arguments.property.1
   have updateProducers name :
-      (Computation.mk inputs ((arrayUpdate raw capacity length).inputDomains name)
+      (Computation.mk inputs ((Realizable.Internal.arrayUpdateWithCapacity raw capacity length).inputDomains name)
         allowed (updateValues name)).Realizable := by
     fin_cases name
     · exact destinationReady
@@ -126,7 +126,7 @@ theorem packingStep_realizable (element : EncodedDomain Parameter) (capacity : P
     Function.update (storage sizes arguments)
       ⟨(destination sizes arguments).val, updateValid sizes arguments⟩ (replacement sizes arguments)
   have updateReady : (Computation.mk inputs array allowed updated).Realizable :=
-    (arrayUpdate_realizable raw capacity length).onResults inputs allowed
+    (Realizable.Internal.arrayUpdateWithCapacity_realizable raw capacity length).onResults inputs allowed
       updateValues updateValid updateProducers
   let sourceNext sizes (arguments : Arguments sizes) :=
     StandardBinaryIncrement.next capacity sizes (source sizes arguments)

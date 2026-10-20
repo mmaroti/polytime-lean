@@ -24,32 +24,48 @@ import Polytime2.Primitives.FiniteOperations
 
 /-! # Fixed-length array lookup and update with existential implementations -/
 
+set_option backward.isDefEq.respectTransparency false
+
 namespace Polytime2.Computation
 
-open MultiTape CallingConvention Realizable
+open MultiTape CallingConvention Realizable Realizable.Internal
 
 variable {Parameter : Type} [Fintype Parameter]
 
+namespace Realizable.Internal
+
 /-- False names the binary index and true the immutable mathematical array. -/
-noncomputable def arrayLookup (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+noncomputable def arrayLookupWithIndex (element : EncodedDomain.{0, 0} Parameter) (indexDomain : EncodedDomain.{0, 0} Parameter)
+    (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
     (length : MvPolynomial Parameter ℕ) : Computation Parameter Bool where
-  inputDomains | false => EncodedDomain.binaryNaturals indexCapacity
+  inputDomains | false => indexDomain
                | true => element.arrayOfLength length
   outputDomain := element
-  precondition sizes arguments := (arguments false).val < MvPolynomial.eval sizes length
-  compute _ arguments := arguments.val true ⟨(arguments.val false).val, arguments.property⟩
+  precondition sizes arguments := toNat sizes (arguments false) < MvPolynomial.eval sizes length
+  compute sizes arguments := arguments.val true ⟨toNat sizes (arguments.val false), arguments.property⟩
 
 /-- Arguments are the index, immutable array, and replacement. The result is a
 separate array; the original remains available to subsequent computations. -/
-noncomputable def arrayUpdate (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+noncomputable def arrayUpdateWithIndex (element : EncodedDomain.{0, 0} Parameter) (indexDomain : EncodedDomain.{0, 0} Parameter)
+    (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
     (length : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) where
-  inputDomains | 0 => EncodedDomain.binaryNaturals indexCapacity
+  inputDomains | 0 => indexDomain
                | 1 => element.arrayOfLength length
                | 2 => element
   outputDomain := element.arrayOfLength length
-  precondition sizes arguments := (arguments 0).val < MvPolynomial.eval sizes length
-  compute _ arguments := Function.update (arguments.val 1)
-    ⟨(arguments.val 0).val, arguments.property⟩ (arguments.val 2)
+  precondition sizes arguments := toNat sizes (arguments 0) < MvPolynomial.eval sizes length
+  compute sizes arguments := Function.update (arguments.val 1)
+    ⟨toNat sizes (arguments.val 0), arguments.property⟩ (arguments.val 2)
+
+noncomputable def arrayLookupWithCapacity (element : EncodedDomain.{0, 0} Parameter) (capacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  arrayLookupWithIndex element (EncodedDomain.binaryNaturals capacity) (fun _ index => index.val) length
+
+noncomputable def arrayUpdateWithCapacity (element : EncodedDomain.{0, 0} Parameter) (capacity : Parameter)
+    (length : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) :=
+  arrayUpdateWithIndex element (EncodedDomain.binaryNaturals capacity) (fun _ index => index.val) length
+
+end Realizable.Internal
 
 /-- A fixed finite binary operation maps an array using one runtime coefficient. -/
 noncomputable def arrayMap (parameterDomain elementDomain : EncodedDomain Empty)
@@ -91,14 +107,16 @@ end Realizable.Internal
 
 open Realizable.Internal in
 /-- Lookup using a prepared unary width input. -/
-private theorem arrayLookup_withUnaryWidth_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+private theorem arrayLookupWithIndex_withUnaryWidth_realizable (element : EncodedDomain.{0, 0} Parameter) (indexDomain : EncodedDomain.{0, 0} Parameter)
+    (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
+    (value_encode : ∀ sizes index, Binary.value (EncodedDomain.ArrayEncoding.bits (indexDomain.encode sizes index)) = toNat sizes index)
     (length : MvPolynomial Parameter ℕ) :
-    ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial).Realizable := by
-  refine ofNamedLayout ((arrayLookup element indexCapacity length).withUnaryWidth element.widthPolynomial)
-    (RuntimeArrayLookup.domainsSized element indexCapacity length)
+    ((arrayLookupWithIndex element indexDomain toNat length).withUnaryWidth element.widthPolynomial).Realizable := by
+  refine ofNamedLayout ((arrayLookupWithIndex element indexDomain toNat length).withUnaryWidth element.widthPolynomial)
+    (RuntimeArrayLookup.domainsSized element indexDomain length)
     RuntimeArrayLookup.argumentReadOnly RuntimeArrayLookup.sizeTapes RuntimeArrayLookup.outputTapes
     RuntimeArrayLookup.algorithmSized RuntimeArrayLookup.entry RuntimeArrayLookup.exit _ _
-    (RuntimeArrayLookup.contractSized element indexCapacity length) (arrayPlacement 2 finTwoEquiv)
+    (RuntimeArrayLookup.contractSized element indexDomain length toNat value_encode) (arrayPlacement 2 finTwoEquiv)
     (by rintro (parameter | (argument | marker) | result) <;> first
       | rfl | (fin_cases argument <;> rfl))
     (by rintro (parameter | (argument | marker) | result) <;> first
@@ -119,14 +137,16 @@ private theorem arrayLookup_withUnaryWidth_realizable (element : EncodedDomain P
 
 open Realizable.Internal in
 /-- Update overwrites a separate public result array under an in-range hypothesis. -/
-private theorem arrayUpdate_withUnaryWidth_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
+private theorem arrayUpdateWithIndex_withUnaryWidth_realizable (element : EncodedDomain.{0, 0} Parameter) (indexDomain : EncodedDomain.{0, 0} Parameter)
+    (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
+    (value_encode : ∀ sizes index, Binary.value (EncodedDomain.ArrayEncoding.bits (indexDomain.encode sizes index)) = toNat sizes index)
     (length : MvPolynomial Parameter ℕ) :
-    ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial).Realizable := by
-  refine ofNamedLayout ((arrayUpdate element indexCapacity length).withUnaryWidth element.widthPolynomial)
-    (RuntimeArrayUpdate.domainsSized element indexCapacity length)
+    ((arrayUpdateWithIndex element indexDomain toNat length).withUnaryWidth element.widthPolynomial).Realizable := by
+  refine ofNamedLayout ((arrayUpdateWithIndex element indexDomain toNat length).withUnaryWidth element.widthPolynomial)
+    (RuntimeArrayUpdate.domainsSized element indexDomain length)
     RuntimeArrayUpdate.argumentReadOnly RuntimeArrayUpdate.sizeTapes RuntimeArrayUpdate.outputTapes
     RuntimeArrayUpdate.algorithmSized RuntimeArrayUpdate.entry RuntimeArrayUpdate.exit _ _
-    (RuntimeArrayUpdate.contractSized element indexCapacity length) (arrayPlacement 3 (Equiv.refl (Fin 3)))
+    (RuntimeArrayUpdate.contractSized element indexDomain length toNat value_encode) (arrayPlacement 3 (Equiv.refl (Fin 3)))
     (by rintro (parameter | (argument | marker) | result) <;> first
       | rfl | (fin_cases argument <;> rfl))
     (by rintro (parameter | (argument | marker) | result) <;> first
@@ -147,23 +167,70 @@ private theorem arrayUpdate_withUnaryWidth_realizable (element : EncodedDomain P
   exact congrArg (encoded (element.arrayOfLength length) sizes) result
 
 /-- Polynomial element widths are computed privately from the size inputs. -/
-theorem arrayLookup_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) : (arrayLookup element indexCapacity length).Realizable :=
-  Realizable.withComputedWidth (arrayLookup element indexCapacity length) element.widthPolynomial
-    (arrayLookup_withUnaryWidth_realizable element indexCapacity length)
+theorem Realizable.Internal.arrayLookupWithIndex_realizable (element : EncodedDomain.{0, 0} Parameter) (indexDomain : EncodedDomain.{0, 0} Parameter)
+    (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
+    (value_encode : ∀ sizes index, Binary.value (EncodedDomain.ArrayEncoding.bits (indexDomain.encode sizes index)) = toNat sizes index)
+    (length : MvPolynomial Parameter ℕ) : (arrayLookupWithIndex element indexDomain toNat length).Realizable :=
+  Realizable.withComputedWidth (arrayLookupWithIndex element indexDomain toNat length) element.widthPolynomial
+    (arrayLookupWithIndex_withUnaryWidth_realizable element indexDomain toNat value_encode length)
 
 /-- Polynomial-width update preserves its original array and replacement. -/
-theorem arrayUpdate_realizable (element : EncodedDomain Parameter) (indexCapacity : Parameter)
-    (length : MvPolynomial Parameter ℕ) : (arrayUpdate element indexCapacity length).Realizable :=
-  Realizable.withComputedWidth (arrayUpdate element indexCapacity length) element.widthPolynomial
-    (arrayUpdate_withUnaryWidth_realizable element indexCapacity length)
+theorem Realizable.Internal.arrayUpdateWithIndex_realizable (element : EncodedDomain.{0, 0} Parameter) (indexDomain : EncodedDomain.{0, 0} Parameter)
+    (toNat : ∀ sizes, indexDomain.Carrier sizes → ℕ)
+    (value_encode : ∀ sizes index, Binary.value (EncodedDomain.ArrayEncoding.bits (indexDomain.encode sizes index)) = toNat sizes index)
+    (length : MvPolynomial Parameter ℕ) : (arrayUpdateWithIndex element indexDomain toNat length).Realizable :=
+  Realizable.withComputedWidth (arrayUpdateWithIndex element indexDomain toNat length) element.widthPolynomial
+    (arrayUpdateWithIndex_withUnaryWidth_realizable element indexDomain toNat value_encode length)
+
+/-- Capacity-sensitive access remains available to internal binary controllers. -/
+theorem Realizable.Internal.arrayLookupWithCapacity_realizable (element : EncodedDomain.{0, 0} Parameter)
+    (capacity : Parameter) (length : MvPolynomial Parameter ℕ) :
+    (arrayLookupWithCapacity element capacity length).Realizable :=
+  arrayLookupWithIndex_realizable element (EncodedDomain.binaryNaturals capacity) (fun _ index => index.val)
+    (by intros; exact Binary.value_bits _) length
+
+theorem Realizable.Internal.arrayUpdateWithCapacity_realizable (element : EncodedDomain.{0, 0} Parameter)
+    (capacity : Parameter) (length : MvPolynomial Parameter ℕ) :
+    (arrayUpdateWithCapacity element capacity length).Realizable :=
+  arrayUpdateWithIndex_realizable element (EncodedDomain.binaryNaturals capacity) (fun _ index => index.val)
+    (by intros; exact Binary.value_bits _) length
+
+/-- Every coordinate is in range by its mathematical type. No index capacity
+or admissibility proof is part of the public array interface. -/
+noncomputable def arrayLookup (element : EncodedDomain.{0, 0} Parameter)
+    (length : MvPolynomial Parameter ℕ) : Computation Parameter Bool where
+  inputDomains | false => EncodedDomain.boundedIndex length | true => element.arrayOfLength length
+  outputDomain := element
+  precondition _ _ := True
+  compute _ arguments := arguments.val true (arguments.val false)
+
+noncomputable def arrayUpdate (element : EncodedDomain.{0, 0} Parameter)
+    (length : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) where
+  inputDomains | 0 => EncodedDomain.boundedIndex length | 1 => element.arrayOfLength length | 2 => element
+  outputDomain := element.arrayOfLength length
+  precondition _ _ := True
+  compute _ arguments := Function.update (arguments.val 1) (arguments.val 0) (arguments.val 2)
+
+theorem arrayLookup_realizable (element : EncodedDomain.{0, 0} Parameter) (length : MvPolynomial Parameter ℕ) :
+    (arrayLookup element length).Realizable :=
+  (arrayLookupWithIndex_realizable element (EncodedDomain.boundedIndex length) (fun _ index => index.val)
+    (EncodedDomain.boundedIndex_value length) length).withSpecification (fun _ _ => True)
+    (arrayLookup element length).compute (by intro sizes arguments valid; exact (arguments false).isLt)
+    (by intros; rfl)
+
+theorem arrayUpdate_realizable (element : EncodedDomain.{0, 0} Parameter) (length : MvPolynomial Parameter ℕ) :
+    (arrayUpdate element length).Realizable :=
+  (arrayUpdateWithIndex_realizable element (EncodedDomain.boundedIndex length) (fun _ index => index.val)
+    (EncodedDomain.boundedIndex_value length) length).withSpecification (fun _ _ => True)
+    (arrayUpdate element length).compute (by intro sizes arguments valid; exact (arguments 0).isLt)
+    (by intros; rfl)
 
 theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain.{0, 0} Empty)
     (length : MvPolynomial Parameter ℕ)
     (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
     (arrayMap parameterDomain elementDomain length operation).Realizable := by
-  let context : Unit → EncodedDomain Parameter := fun _ => parameterDomain.constant
-  let element : EncodedDomain Parameter := elementDomain.constant
+  let context : Unit → EncodedDomain.{0, 0} Parameter := fun _ => parameterDomain.constant
+  let element : EncodedDomain.{0, 0} Parameter := elementDomain.constant
   let update := fun sizes (values : ∀ name, (context name).Carrier sizes) (value : element.Carrier sizes) =>
     operation (values ()) value
   have step := ((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes
