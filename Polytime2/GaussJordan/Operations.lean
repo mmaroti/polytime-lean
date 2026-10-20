@@ -122,34 +122,18 @@ private theorem gaussJordanWithCapacity_realizable (enumeration : Scalar ≃ Fin
   intro sizes input valid output correct
   exact congrArg (encoded (matrixDomain (FieldRow.scalarDomain enumeration)) sizes) correct
 
-private theorem gaussJordan_capacity_fits (sizes : Fin 2 → ℕ) :
-    sizes 0 < 2 ^ (sizes 0 + sizes 1 + 1) ∧
-      sizes 1 < 2 ^ (sizes 0 + sizes 1 + 1) ∧
-      sizes 0 * sizes 1 ≤ 2 ^ (sizes 0 + sizes 1 + 1) := by
-  have rows := (sizes 0).lt_two_pow_self
-  have columns := (sizes 1).lt_two_pow_self
-  have rowsPower : 2 ^ sizes 0 ≤ 2 ^ (sizes 0 + sizes 1 + 1) :=
-    pow_le_pow_right₀ (by decide) (by omega)
-  have columnsPower : 2 ^ sizes 1 ≤ 2 ^ (sizes 0 + sizes 1 + 1) :=
-    pow_le_pow_right₀ (by decide) (by omega)
-  refine ⟨rows.trans_le rowsPower, columns.trans_le columnsPower, ?_⟩
-  calc
-    sizes 0 * sizes 1 ≤ 2 ^ sizes 0 * 2 ^ sizes 1 := Nat.mul_le_mul rows.le columns.le
-    _ = 2 ^ (sizes 0 + sizes 1) := (pow_add _ _ _).symm
-    _ ≤ 2 ^ (sizes 0 + sizes 1 + 1) := pow_le_pow_right₀ (by decide) (by omega)
-
 /-- Finite-field elimination has just two public sizes, rows and columns.
 Counter capacity is constructed privately; every rectangular matrix is admissible. -/
 noncomputable def gaussJordan (enumeration : Scalar ≃ Fin cardinality) : Computation (Fin 2) Unit :=
   ((gaussJordanWithCapacity enumeration).withInternalSize).withPrecondition
-    (fun _ _ => True) (fun sizes _ _ => gaussJordan_capacity_fits sizes)
+    (fun _ _ => True) (fun sizes _ _ => Realizable.Internal.internalCapacity_fits sizes)
 
 /-- One finite algorithm works for every pair of dimensions. Its private size
 header, scratch tapes, controllers, and polynomial bound remain existential. -/
 theorem gaussJordan_realizable (enumeration : Scalar ≃ Fin cardinality) :
     (gaussJordan enumeration).Realizable :=
   ((gaussJordanWithCapacity_realizable enumeration).withInternalSize).withPrecondition
-    (fun _ _ => True) (fun sizes _ _ => gaussJordan_capacity_fits sizes)
+    (fun _ _ => True) (fun sizes _ _ => Realizable.Internal.internalCapacity_fits sizes)
 
 /-- Elimination preserves the row space and returns reduced row-echelon form. -/
 theorem gaussJordan_correct (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 2 → ℕ)

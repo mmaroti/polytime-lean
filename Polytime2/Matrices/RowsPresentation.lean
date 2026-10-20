@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Matrices.RowsMath
+import Polytime2.Computation.InternalSize
 
 /-! # Matrix-valued input and output contracts for row operations -/
 
@@ -93,5 +94,43 @@ theorem mathematical_contract (writeSource : Bool) (scalar : EncodedDomain.{0, 0
     change (matrixEquiv (Carrier := scalar.Carrier Empty.elim) sizes).symm (output ()) = _
     simpa only [Equiv.symm_apply_apply] using
       congrArg (matrixEquiv (Carrier := scalar.Carrier Empty.elim) sizes).symm flatResult
+
+/-- Public coordinates have the dimension as their bound. Their codec uses the
+private controller width, so no runtime conversion of the binary digits is needed. -/
+noncomputable def coordinateDomain (dimension : Fin 2) : EncodedDomain (Fin 2) :=
+  EncodedDomain.boundedIndexOfWidth (fun sizes => sizes dimension)
+    (Computation.Realizable.Internal.internalBound (MvPolynomial.X 0)) (by
+      intro sizes
+      rw [Computation.Realizable.Internal.internalBound_eval]
+      simp only [MvPolynomial.eval_X, Computation.Realizable.Internal.internalSizes,
+        Matrix.cons_val_zero]
+      have fits := Computation.Realizable.Internal.internalCapacity_fits sizes
+      fin_cases dimension
+      · exact fits.1.le
+      · exact fits.2.1.le)
+
+/-- The same digits are also a valid internal binary counter. -/
+noncomputable def coordinateValue (dimension : Fin 2) (sizes : Fin 2 → ℕ)
+    (index : (coordinateDomain dimension).Carrier sizes) :
+    ((EncodedDomain.binaryNaturals (0 : Fin 3)).withInternalSize).Carrier sizes :=
+  ⟨index.val, by
+    have fits := Computation.Realizable.Internal.internalCapacity_fits sizes
+    apply index.isLt.trans_le
+    fin_cases dimension
+    · exact fits.1.le
+    · exact fits.2.1.le⟩
+
+theorem coordinate_bits (dimension : Fin 2) (sizes : Fin 2 → ℕ)
+    (index : (coordinateDomain dimension).Carrier sizes) :
+    EncodedDomain.ArrayEncoding.bits ((coordinateDomain dimension).encode sizes index) =
+      EncodedDomain.ArrayEncoding.bits
+        (((EncodedDomain.binaryNaturals (0 : Fin 3)).withInternalSize).encode sizes
+          (coordinateValue dimension sizes index)) := by
+  simp only [coordinateDomain, EncodedDomain.boundedIndexOfWidth,
+    EncodedDomain.withInternalSize, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
+    EncodedDomain.ArrayEncoding.bits_cast, BitVec.ofNatLT_eq_ofNat]
+  rw [Computation.Realizable.Internal.internalBound_eval]
+  simp only [coordinateValue, BitVec.ofFin_eq_ofNat]
+  rw [MvPolynomial.eval_X]
 
 end Polytime2.StandardMatrixRows

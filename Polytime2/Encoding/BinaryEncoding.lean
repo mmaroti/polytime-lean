@@ -116,14 +116,14 @@ noncomputable def binaryNaturals (parameter : Parameter) : EncodedDomain Paramet
     (binaryNaturals parameter).width assignment = assignment parameter := by
   simp [binaryNaturals, ofCodec]
 
-/-- Array coordinates have their mathematical bound as carrier and use that
-many binary digits. The generous exact polynomial width keeps capacity private;
-the empty bound has no coordinates, and decoding rejects out-of-range words. -/
-noncomputable def boundedIndex (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter where
-  Carrier sizes := Fin (MvPolynomial.eval sizes length)
-  widthPolynomial := length
-  encode sizes index := BitVec.ofNatLT index.val (index.isLt.trans (Nat.lt_two_pow_self))
-  decode sizes bits := if within : bits.toNat < MvPolynomial.eval sizes length then some ⟨bits.toNat, within⟩ else none
+/-- A bounded coordinate with a chosen exact polynomial binary width. -/
+noncomputable def boundedIndexOfWidth (length : (Parameter → ℕ) → ℕ) (width : MvPolynomial Parameter ℕ)
+    (fits : ∀ sizes, length sizes ≤ 2 ^ MvPolynomial.eval sizes width) :
+    EncodedDomain Parameter where
+  Carrier sizes := Fin (length sizes)
+  widthPolynomial := width
+  encode sizes index := BitVec.ofNatLT index.val (index.isLt.trans_le (fits sizes))
+  decode sizes bits := if within : bits.toNat < length sizes then some ⟨bits.toNat, within⟩ else none
   decode_encode sizes index := by simp [index.isLt]
   encode_decode sizes bits index accepted := by
     split at accepted
@@ -131,11 +131,15 @@ noncomputable def boundedIndex (length : MvPolynomial Parameter ℕ) : EncodedDo
       exact BitVec.eq_of_toNat_eq (by simp)
     · simp at accepted
 
+/-- Array coordinates use their mathematical bound as the exact binary width.
+The empty bound has no coordinates; decoding rejects out-of-range words. -/
+noncomputable def boundedIndex (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  boundedIndexOfWidth (fun sizes => MvPolynomial.eval sizes length) length (fun _ => (Nat.lt_two_pow_self).le)
+
 @[simp] theorem boundedIndex_value (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (index : (boundedIndex length).Carrier sizes) :
     Binary.value (ArrayEncoding.bits ((boundedIndex length).encode sizes index)) = index.val := by
-  simpa only [boundedIndex, BitVec.toNat_ofNatLT] using
-    Binary.value_bits ((boundedIndex length).encode sizes index)
+  exact (Binary.value_bits _).trans (by simp [boundedIndex, boundedIndexOfWidth])
 
 /-- Row and column coordinates correspond to their row-major array coordinate. -/
 noncomputable def matrixCoordinateEquiv (rows columns : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :

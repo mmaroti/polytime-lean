@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Conditional
+import Polytime2.Computation.EncodedInputs
 import Polytime2.Arrays.Operations
 import Polytime2.Matrices.AddressOperations
 import Polytime2.Matrices.RowsPresentation
@@ -29,10 +29,12 @@ namespace Polytime2.Computation
 
 open StandardMatrixRows
 
+namespace Realizable.Internal
+
 noncomputable section MatrixCoordinates
 
 /-- Arguments are binary row and column indices and the immutable matrix. -/
-def matrixEntry (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 3) where
+def matrixEntryWithCapacity (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 3) where
   inputDomains
     | 0 | 1 => EncodedDomain.binaryNaturals 0
     | 2 => matrixDomain scalar
@@ -45,7 +47,7 @@ def matrixEntry (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 3) whe
 
 /-- Arguments are row, column, immutable matrix, and replacement scalar.
 The result changes exactly that coordinate and has the same mathematical shape. -/
-def matrixReplace (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 4) where
+def matrixReplaceWithCapacity (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 4) where
   inputDomains
     | 0 | 1 => EncodedDomain.binaryNaturals 0
     | 2 => matrixDomain scalar
@@ -79,8 +81,8 @@ private theorem lookup_realizable (scalar : EncodedDomain Empty) : (lookup scala
     (by intro name sizes; cases name <;> rfl) (by intro sizes; rfl)
     (by intro name sizes value; cases name <;> rfl) (by intro sizes value; rfl)
 
-theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
-  let computation := matrixEntry scalar
+theorem matrixEntryWithCapacity_realizable (scalar : EncodedDomain Empty) : (matrixEntryWithCapacity scalar).Realizable := by
+  let computation := matrixEntryWithCapacity scalar
   have address := matrixAddress_realizable.onResults computation.inputDomains computation.precondition
     (fun flag _ arguments => if flag then arguments.val 1 else arguments.val 0)
     (by
@@ -142,8 +144,8 @@ private theorem update_realizable (scalar : EncodedDomain Empty) : (update scala
     (by intro name sizes; fin_cases name <;> rfl) (by intro sizes; rfl)
     (by intro name sizes value; fin_cases name <;> rfl) (by intro sizes value; rfl)
 
-theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace scalar).Realizable := by
-  let computation := matrixReplace scalar
+theorem matrixReplaceWithCapacity_realizable (scalar : EncodedDomain Empty) : (matrixReplaceWithCapacity scalar).Realizable := by
+  let computation := matrixReplaceWithCapacity scalar
   have address := matrixAddress_realizable.onResults computation.inputDomains computation.precondition
     (fun flag _ arguments => if flag then arguments.val 1 else arguments.val 0)
     (by
@@ -178,7 +180,7 @@ theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace
     (by
       intro sizes arguments valid
       change computation.Arguments sizes at arguments
-      dsimp only [computation, matrixReplace] at arguments
+      dsimp only [computation, matrixReplaceWithCapacity] at arguments
       change (matrixEquiv sizes).symm (Function.update (matrixEquiv sizes (arguments 2)) _ (arguments 3)) = _
       have indexEqual : (⟨(arguments 0).val * sizes 2 + (arguments 1).val,
           StandardMatrixEntry.index_lt sizes _ _ valid.2.1 valid.2.2.1⟩ :
@@ -202,4 +204,76 @@ theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace
         simp_all [Function.update, (matrixIndex sizes).injective.eq_iff, matrixEquiv_apply])
 
 end MatrixCoordinates
+end Realizable.Internal
+
+noncomputable section PublicCoordinates
+
+/-- Two dimensions, valid row and column coordinates, and an immutable matrix
+suffice for lookup. Every mathematical argument is admissible. -/
+def matrixEntry (scalar : EncodedDomain Empty) : Computation (Fin 2) (Fin 3) where
+  inputDomains
+    | 0 => coordinateDomain 0
+    | 1 => coordinateDomain 1
+    | 2 => (matrixDomain scalar).withInternalSize
+  outputDomain := scalar.constant.withInternalSize
+  precondition _ _ := True
+  compute _ arguments := arguments.val 2 (arguments.val 0) (arguments.val 1)
+
+/-- Replace exactly the selected mathematical coordinate without a public
+counter capacity or an implementation-dependent precondition. -/
+def matrixReplace (scalar : EncodedDomain Empty) : Computation (Fin 2) (Fin 4) where
+  inputDomains
+    | 0 => coordinateDomain 0
+    | 1 => coordinateDomain 1
+    | 2 => (matrixDomain scalar).withInternalSize
+    | 3 => scalar.constant.withInternalSize
+  outputDomain := (matrixDomain scalar).withInternalSize
+  precondition _ _ := True
+  compute _ arguments := Function.update (arguments.val 2) (arguments.val 0)
+    (Function.update (arguments.val 2 (arguments.val 0)) (arguments.val 1) (arguments.val 3))
+
+open Realizable.Internal in
+theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
+  let inputs := (matrixEntry scalar).inputDomains
+  let map (name : Fin 3) (sizes : Fin 2 → ℕ) : (inputs name).Carrier sizes →
+      (((matrixEntryWithCapacity scalar).withInternalSize).inputDomains name).Carrier sizes :=
+    match name with
+    | 0 => coordinateValue 0 sizes
+    | 1 => coordinateValue 1 sizes
+    | 2 => id
+  have ready := (matrixEntryWithCapacity_realizable scalar).withInternalSize.withEncodedInputs inputs map
+    (by intro name sizes value; fin_cases name
+        exact coordinate_bits 0 sizes value
+        exact coordinate_bits 1 sizes value
+        rfl)
+    (fun _ _ => True) (by
+      intro sizes arguments valid
+      have fits := internalCapacity_fits sizes
+      exact ⟨fits.2.1, (arguments 0).isLt, (arguments 1).isLt, fits.2.2⟩)
+  exact ready.withSpecification (fun _ _ => True) (matrixEntry scalar).compute
+    (by intros; trivial) (by intros; rfl)
+
+open Realizable.Internal in
+theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace scalar).Realizable := by
+  let inputs := (matrixReplace scalar).inputDomains
+  let map (name : Fin 4) (sizes : Fin 2 → ℕ) : (inputs name).Carrier sizes →
+      (((matrixReplaceWithCapacity scalar).withInternalSize).inputDomains name).Carrier sizes :=
+    match name with
+    | 0 => coordinateValue 0 sizes
+    | 1 => coordinateValue 1 sizes
+    | 2 | 3 => id
+  have ready := (matrixReplaceWithCapacity_realizable scalar).withInternalSize.withEncodedInputs inputs map
+    (by intro name sizes value; fin_cases name
+        exact coordinate_bits 0 sizes value
+        exact coordinate_bits 1 sizes value
+        rfl
+        rfl)
+    (fun _ _ => True) (by
+      intro sizes arguments valid
+      have fits := internalCapacity_fits sizes
+      exact ⟨fits.2.1, (arguments 0).isLt, (arguments 1).isLt, fits.2.2⟩)
+  exact ready.withSpecification (fun _ _ => True) (matrixReplace scalar).compute
+    (by intros; trivial) (by intros; rfl)
+
+end PublicCoordinates
 end Polytime2.Computation

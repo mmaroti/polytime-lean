@@ -21,7 +21,7 @@ import Polytime2.Matrices.AddressOperations
 
 namespace Polytime2.Examples.MatrixAddress
 
-open Polytime2.Computation
+open Polytime2.Computation.Realizable.Internal
 
 example : matrixAddress.Realizable := matrixAddress_realizable
 

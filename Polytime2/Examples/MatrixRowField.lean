@@ -30,25 +30,24 @@ open Polytime2.Computation
 
 noncomputable section RowExamples
 
-private abbrev sizes : Fin 3 → ℕ := ![3, 2, 3]
+private abbrev sizes : Fin 2 → ℕ := ![2, 3]
 private abbrev enumeration := (ZMod.finEquiv 2).toEquiv.symm
 private abbrev scalar := FieldRow.scalarDomain enumeration
 private def original : Matrix (Fin 2) (Fin 3) (ZMod 2) := ![![1, 0, 1], ![0, 1, 0]]
 private def expected : Matrix (Fin 2) (Fin 3) (ZMod 2) := ![![1, 0, 1], ![1, 1, 1]]
 
-private def addition : Computation (Fin 3) (Fin 4) :=
-  rowTransform false scalar (fun _ => Polytime2.MatrixRowField.add (Scalar := ZMod 2))
+private def addition : Computation (Fin 2) (Fin 4) :=
+  rowTransform false scalar (Polytime2.MatrixRowField.add (Scalar := ZMod 2))
 private def arguments : addition.Arguments sizes
-  | 0 => (0 : Fin 8)
-  | 1 => (1 : Fin 8)
+  | 0 => (0 : Fin 2)
+  | 1 => (1 : Fin 2)
   | 2 => (1 : ZMod 2)
   | 3 => original
 private theorem admissible : addition.precondition sizes arguments := by
-  change 0 < 2 ∧ 1 < 2 ∧ 3 < 8 ∧ 2 * 3 ≤ 8
-  decide
+  trivial
 
 private theorem addition_realizable : addition.Realizable :=
-  rowTransform_realizable false scalar (fun _ => Polytime2.MatrixRowField.add (Scalar := ZMod 2))
+  rowTransform_realizable false scalar (Polytime2.MatrixRowField.add (Scalar := ZMod 2))
 
 /-- Row addition returns the expected ordinary matrix without exposing tapes. -/
 theorem add_rectangular : addition.compute sizes ⟨arguments, admissible⟩ = expected := by
@@ -66,9 +65,15 @@ example : copiedAddition.Realizable :=
 
 example : copiedAddition.compute sizes ⟨arguments, admissible⟩ = expected := add_rectangular
 
+-- Empty column families require no special capacity assumptions.
+example (input : addition.Arguments (![1, 0] : Fin 2 → ℕ)) :
+    addition.compute ![1, 0] ⟨input, trivial⟩ = input 3 := by
+  funext row column
+  exact column.elim0
+
 -- Every scalar can occupy zero bits; both selected rows may coincide.
 example : (rowTransform true (EncodedDomain.fixed (Equiv.refl (Fin 1)))
-    (fun _ (_coefficient source target : Fin 1) => (target, source))).Realizable :=
+    (fun (_coefficient source target : Fin 1) => (target, source))).Realizable :=
   rowTransform_realizable _ _ _
 
 end RowExamples

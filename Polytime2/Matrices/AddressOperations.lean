@@ -20,7 +20,7 @@ import Polytime2.Matrices.AddressContract
 
 /-! # Row-major addresses as a mathematical computation -/
 
-namespace Polytime2.Computation
+namespace Polytime2.Computation.Realizable.Internal
 
 open MultiTape CallingConvention Realizable
 
@@ -35,17 +35,12 @@ noncomputable def matrixAddress : Computation (Fin 3) Bool where
   compute sizes arguments :=
     ⟨(arguments.val false).val * sizes 2 + (arguments.val true).val, arguments.property.2⟩
 
-namespace Realizable.Internal
-
 private def addressPlacement : PublicTape (Fin 3) Bool ↪ Fin 3 ⊕ Fin 9 :=
   (Function.Embedding.refl (Fin 3)).sumMap
     ⟨(fun role => match role with | .inl false => 1 | .inl true => 6 | .inr _ => 7), by
       intro first second equal
       fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
-end Realizable.Internal
-
-open Realizable.Internal in
 theorem matrixAddress_realizable : matrixAddress.Realizable := by
   refine ofNamedLayout matrixAddress StandardMatrixAddress.domains StandardMatrixAddress.readOnly
     StandardMatrixAddress.sizeTapes StandardMatrixAddress.outputTapes StandardMatrixAddress.machine StandardMatrixAddress.entry StandardMatrixAddress.exit
@@ -64,4 +59,4 @@ theorem matrixAddress_realizable : matrixAddress.Realizable := by
   apply congrArg (encoded (EncodedDomain.binaryNaturals 0) sizes)
   exact Fin.ext correct
 
-end Polytime2.Computation
+end Polytime2.Computation.Realizable.Internal

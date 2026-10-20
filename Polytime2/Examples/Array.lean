@@ -98,7 +98,7 @@ example : (arrayUpdate (EncodedDomain.fixed (Parameter := Bool) (Equiv.refl (Fin
 example (sizes : Bool → ℕ) (bits : BitVec (MvPolynomial.eval sizes length))
     (outside : MvPolynomial.eval sizes length ≤ bits.toNat) :
     (EncodedDomain.boundedIndex length).decode sizes bits = none := by
-  simp [EncodedDomain.boundedIndex, Nat.not_lt.mpr outside]
+  simp [EncodedDomain.boundedIndex, EncodedDomain.boundedIndexOfWidth, Nat.not_lt.mpr outside]
 
 end MathematicalExamples
 end Polytime2.Examples.Array

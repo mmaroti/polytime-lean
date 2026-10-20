@@ -26,20 +26,24 @@ open Polytime2.Computation
 noncomputable section CoordinateExamples
 
 private def scalar : EncodedDomain Empty := EncodedDomain.booleans
-private def sizes : Fin 3 → ℕ := ![3, 2, 3]
+private def sizes : Fin 2 → ℕ := ![2, 3]
 private def original : Matrix (Fin 2) (Fin 3) Bool :=
   ![![false, false, false], ![false, false, true]]
 private def lookup := matrixEntry scalar
 private def arguments : lookup.Arguments sizes
-  | 0 => (1 : Fin 8)
-  | 1 => (2 : Fin 8)
+  | 0 => (1 : Fin 2)
+  | 1 => (2 : Fin 3)
   | 2 => original
 private theorem admissible : lookup.precondition sizes arguments := by
-  change 3 < 2 ^ 3 ∧ 1 < 2 ∧ 2 < 3 ∧ 2 * 3 ≤ 2 ^ 3
-  decide
+  trivial
 
 example : lookup.Realizable := matrixEntry_realizable scalar
 example : lookup.compute sizes ⟨arguments, admissible⟩ = true := rfl
+
+-- An empty dimension admits no coordinate; this is expressed by its type.
+example : IsEmpty (((matrixEntry scalar).inputDomains 0).Carrier ![0, 3]) := by
+  change IsEmpty (Fin 0)
+  infer_instance
 
 -- Singleton scalars and the complete matrix occupy zero bits.
 example : (matrixEntry (EncodedDomain.fixed (Equiv.refl (Fin 1)))).Realizable :=

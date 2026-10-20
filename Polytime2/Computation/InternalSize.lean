@@ -48,6 +48,23 @@ theorem internalBound_eval (bound : MvPolynomial (Fin 3) ℕ) (sizes : Fin 2 →
     fin_cases parameter <;> simp [SizeSubstitution.assignment, internalPolynomials, internalSizes]
   rw [equal]
 
+/-- One private capacity accommodates both dimensions and their product. -/
+theorem internalCapacity_fits (sizes : Fin 2 → ℕ) :
+    sizes 0 < 2 ^ (sizes 0 + sizes 1 + 1) ∧
+      sizes 1 < 2 ^ (sizes 0 + sizes 1 + 1) ∧
+      sizes 0 * sizes 1 ≤ 2 ^ (sizes 0 + sizes 1 + 1) := by
+  have rows := (sizes 0).lt_two_pow_self
+  have columns := (sizes 1).lt_two_pow_self
+  have rowsPower : 2 ^ sizes 0 ≤ 2 ^ (sizes 0 + sizes 1 + 1) :=
+    pow_le_pow_right₀ (by decide) (by omega)
+  have columnsPower : 2 ^ sizes 1 ≤ 2 ^ (sizes 0 + sizes 1 + 1) :=
+    pow_le_pow_right₀ (by decide) (by omega)
+  refine ⟨rows.trans_le rowsPower, columns.trans_le columnsPower, ?_⟩
+  calc
+    sizes 0 * sizes 1 ≤ 2 ^ sizes 0 * 2 ^ sizes 1 := Nat.mul_le_mul rows.le columns.le
+    _ = 2 ^ (sizes 0 + sizes 1) := (pow_add _ _ _).symm
+    _ ≤ 2 ^ (sizes 0 + sizes 1 + 1) := pow_le_pow_right₀ (by decide) (by omega)
+
 end Computation.Realizable.Internal
 
 namespace EncodedDomain

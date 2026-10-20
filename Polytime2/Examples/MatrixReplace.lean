@@ -27,22 +27,21 @@ open Polytime2.Computation
 noncomputable section CoordinateExamples
 
 private def scalar : EncodedDomain Empty := EncodedDomain.booleans
-private def sizes : Fin 3 → ℕ := ![3, 2, 3]
+private def sizes : Fin 2 → ℕ := ![2, 3]
 private def replacement := matrixReplace scalar
 private def arguments : replacement.Arguments sizes
-  | 0 => (1 : Fin 8)
-  | 1 => (2 : Fin 8)
+  | 0 => (1 : Fin 2)
+  | 1 => (2 : Fin 3)
   | 2 => fun _ _ => false
   | 3 => true
 private theorem admissible : replacement.precondition sizes arguments := by
-  change 3 < 2 ^ 3 ∧ 1 < 2 ∧ 2 < 3 ∧ 2 * 3 ≤ 2 ^ 3
-  decide
+  trivial
 
 example : replacement.Realizable := matrixReplace_realizable scalar
 example : replacement.compute sizes ⟨arguments, admissible⟩ (1 : Fin 2) (2 : Fin 3) = true := rfl
 example : replacement.compute sizes ⟨arguments, admissible⟩ (0 : Fin 2) (0 : Fin 3) = false := rfl
 
-private def contextDomains : Fin 4 ⊕ Unit → EncodedDomain (Fin 3) :=
+private def contextDomains : Fin 4 ⊕ Unit → EncodedDomain (Fin 2) :=
   Sum.elim replacement.inputDomains (fun _ => replacement.outputDomain)
 private def lookupSelection : Fin 3 ↪ Fin 4 ⊕ Unit :=
   ⟨(fun | 0 => .inl 0 | 1 => .inl 1 | 2 => .inr ()), by

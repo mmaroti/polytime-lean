@@ -26,7 +26,7 @@ Concrete computation interfaces live beside their implementations, usually in
 `Operations.lean`; `Computation/` contains the abstract machinery. Foundational
 modules use `Basic.lean`. File names omit the former `Standard` prefix;
 mathematical helpers use descriptive names where needed to avoid collisions.
-Namespaces and declaration names are unchanged.
+The directory reorganization preserved namespaces and declaration names.
 
 ## Implemented and proved
 
@@ -77,6 +77,13 @@ Namespaces and declaration names are unchanged.
   arrays. `matrixLookup` and `matrixUpdate` accept row and column pairs through
   the same row-major codec. Capacity-sensitive array operations remain internal
   building blocks for algorithms with binary counters.
+- `matrixEntry`, `matrixReplace`, and `rowTransform` expose only row and column
+  counts as sizes. Separate coordinates have carriers `Fin rows` and
+  `Fin columns`; every input is admissible. Private capacity and unary header
+  preparation use the shared compiler also used by Gauss–Jordan elimination.
+  The coordinate codec retains the internal controller's binary digits, and
+  the older capacity-sensitive routines remain under `Realizable.Internal`.
+  Row transformations take ordinary specialization-fixed scalar functions.
 - `arrayPack` stably selects an array by a Boolean mask and returns its count
   and exact-length mathematical array in `EncodedDomain.boundedArray`.
   Counters and zero capacity padding are private; element widths may depend on
@@ -435,6 +442,9 @@ same widths and canonical bit lists, without bit-vector casts in the encoding
 obligations. Constructor lemmas for arrays, products, records, fixed domains,
 and parameter renaming share these comparisons. Equal canonical words remain
 equal under resizing. Matrix access reuses array computations this way.
+`withEncodedInputs` also permits input maps into proper subdomains when their
+canonical bits agree. It composes existing field copying and argument routing;
+no new representation or machine primitive is needed.
 `choose` reads a Boolean argument and requires only the selected branch's
 precondition; uncalled branch scratch stays arbitrary.
 `arrayFold_realizable` traverses an immutable array while updating an
@@ -509,22 +519,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Matrix capacities (~40–100 net lines added)
-
-**Hide counter capacities throughout the matrix interface.**
-
-[matrixEntry and matrixReplace](Matrices/EntryOperations.lean)
-expose three size parameters, including binary counter capacity. Their
-preconditions include implementation requirements such as
-`rows * columns ≤ 2 ^ capacity`.
-[rowTransform](Matrices/RowsOperations.lean)
-does the same.
-
-Mathematically, these operations need dimensions, valid coordinates, and
-matrix entries. Counter capacity should be chosen internally, following
-the public [Gauss–Jordan interface](GaussJordan/Operations.lean).
-Keep capacity-sensitive versions as internal building blocks.
 
 ### Remainder capacity (~40–90 net lines added)
 
