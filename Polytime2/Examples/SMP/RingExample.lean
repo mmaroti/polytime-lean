@@ -50,14 +50,14 @@ theorem preparation_correct (sizes : Fin 2 → ℕ) (arguments : preparation.Arg
 /-- Empty-coordinate instances are accepted, including with zero generators. -/
 theorem empty_coordinates (sizes : Fin 2 → ℕ) (zero : sizes 0 = 0)
     (arguments : preparation.Arguments sizes) :
-    (preparation.compute sizes ⟨arguments, trivial⟩).1 = 1 := by
+    (preparation.compute sizes ⟨arguments, trivial⟩).isRight = true := by
   rcases preparation_correct sizes arguments with rejected | accepted
   · obtain ⟨coordinate, _, _, _⟩ := rejected
     have impossible : coordinate.val < 0 := by
       simpa only [MvPolynomial.eval_X, zero] using coordinate.isLt
     omega
   · obtain ⟨frame, equal, _, _, _⟩ := accepted
-    exact congrArg Sigma.fst equal
+    simpa using congrArg Sum.isRight equal
 
 /-- A prepared consumer sees the ordinary exact tuple domain, with no knowledge
 of original coordinates, packed fields, or conversion capacities. -/

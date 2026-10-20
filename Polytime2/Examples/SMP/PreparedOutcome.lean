@@ -17,7 +17,7 @@ limitations under the License.
 
 import Polytime2.Examples.SMP.PreparedConversion
 import Polytime2.Arithmetic.UnaryComparison
-import Polytime2.Computation.Variants
+import Polytime2.Computation.Sums
 
 /-! # Preparation returns an explicit obstruction or an exact prepared input -/
 
@@ -33,14 +33,14 @@ variable [L.Structure Carrier] [Finite Carrier] [Fintype Parameter]
 
 /-- Acceptance flags are ordinary Boolean arrays over the original coordinates.
 -/
-noncomputable def convertedFlags (coordinates generators : MvPolynomial Parameter ℕ) :
+private noncomputable def convertedFlags (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit where
   inputDomains _ := (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).outputDomain
   outputDomain := booleans.arrayOfLength coordinates
   precondition _ _ := True
   compute _ arguments := fun coordinate => (arguments.val () coordinate).2.1.isSome
 
-theorem convertedFlags_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+private theorem convertedFlags_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
     (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
   apply (conversionAcceptance_realizable (L := L) (Carrier := Carrier) coordinates generators).withEncodedOutput
     (booleans.arrayOfLength coordinates) (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).compute
@@ -52,76 +52,28 @@ theorem convertedFlags_realizable (coordinates generators : MvPolynomial Paramet
       arrayOfLength_encode_bits, ArrayEncoding.bits_encode, constant_encode_bits,
       booleans, fixed_encode_bits]
 
-noncomputable def convertedRejection (coordinates generators : MvPolynomial Parameter ℕ) :
+private noncomputable def convertedRejection (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
   (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).followedBy
     (leadingUnarySize coordinates) rfl (by intros; trivial)
 
-theorem convertedRejection_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+private theorem convertedRejection_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
     (convertedRejection (L := L) (Carrier := Carrier) coordinates generators).Realizable :=
   (convertedFlags_realizable coordinates generators).followedBy (leadingUnarySize_realizable coordinates)
     rfl (by intros; trivial)
 
-noncomputable def convertedAllAccepted (coordinates generators : MvPolynomial Parameter ℕ) :
+private noncomputable def convertedAllAccepted (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
   (convertedRejection (L := L) (Carrier := Carrier) coordinates generators).followedBy
     (boundedUnaryIsFull coordinates) rfl (by intros; trivial)
 
-theorem convertedAllAccepted_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+private theorem convertedAllAccepted_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
     (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).Realizable :=
   (convertedRejection_realizable coordinates generators).followedBy (boundedUnaryIsFull_realizable coordinates)
     rfl (by intros; trivial)
 
-/-- Tag zero carries an original coordinate obstruction. Tag one carries only
-the natural prepared sizes and the ordinary prepared input. -/
-noncomputable def preparationAlternatives (coordinates generators : MvPolynomial Parameter ℕ) :
-    Fin 2 → EncodedDomain Parameter :=
-  ![boundedUnary coordinates,
-    atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)
-      (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier)))]
-
-noncomputable def prepareConvertedOutcome (coordinates generators : MvPolynomial Parameter ℕ) :
-    Computation Parameter Unit where
-  inputDomains _ := (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).outputDomain
-  outputDomain := variant 2 (preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators)
-  precondition _ _ := True
-  compute sizes arguments :=
-    let accepted : Bool := (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute sizes
-      ⟨arguments.val, trivial⟩
-    if accepted then
-      ⟨1, (prepareConverted (L := L) (Carrier := Carrier) coordinates generators).compute sizes ⟨arguments.val, trivial⟩⟩
-    else ⟨0, (convertedRejection (L := L) (Carrier := Carrier) coordinates generators).compute sizes ⟨arguments.val, trivial⟩⟩
-
-theorem prepareConvertedOutcome_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
-    (prepareConvertedOutcome (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
-  let computation := prepareConvertedOutcome (L := L) (Carrier := Carrier) coordinates generators
-  let alternatives := preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators
-  have accepted := (prepareConverted_realizable (L := L) (Carrier := Carrier) coordinates generators).followedBy
-    (variantInjection_realizable 2 alternatives 1) rfl (by intros; trivial)
-  have rejected := (convertedRejection_realizable (L := L) (Carrier := Carrier) coordinates generators).followedBy
-    (variantInjection_realizable 2 alternatives 0) rfl (by intros; trivial)
-  exact Realizable.conditional computation.inputDomains computation.outputDomain computation.precondition
-    (fun sizes arguments => (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute sizes
-      ⟨arguments.val, trivial⟩)
-    (fun sizes arguments => ⟨1, (prepareConverted (L := L) (Carrier := Carrier) coordinates generators).compute sizes
-      ⟨arguments.val, trivial⟩⟩)
-    (fun sizes arguments => ⟨0, (convertedRejection (L := L) (Carrier := Carrier) coordinates generators).compute sizes
-      ⟨arguments.val, trivial⟩⟩)
-    (convertedAllAccepted_realizable coordinates generators) accepted rejected
-
-/-- The public preparation computation handles both coordinate rejection and
-exact-size preparation, with only the original size parameters. -/
-noncomputable def prepare (coordinates generators : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
-  (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).followedBy
-    (prepareConvertedOutcome coordinates generators) rfl (by intros; trivial)
-
-theorem prepare_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
-    (prepare (L := L) (Carrier := Carrier) coordinates generators).Realizable :=
-  (convertAllCoordinates_realizable coordinates generators).followedBy
-    (prepareConvertedOutcome_realizable coordinates generators) rfl (by intros; trivial)
-
 /-- The sentinel test accepts exactly when every coordinate flag is true. -/
-theorem convertedAllAccepted_correct (coordinates generators : MvPolynomial Parameter ℕ)
+private theorem convertedAllAccepted_correct (coordinates generators : MvPolynomial Parameter ℕ)
     (hostSizes : Parameter → ℕ)
     (arguments : (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).Arguments hostSizes) :
     (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes
@@ -135,7 +87,7 @@ theorem convertedAllAccepted_correct (coordinates generators : MvPolynomial Para
 
 /-- Actual conversion flags express coordinate-image membership, including
 empty generated images and singleton source algebras. -/
-theorem convertedFlags_valid (coordinates generators : MvPolynomial Parameter ℕ)
+private theorem convertedFlags_valid (coordinates generators : MvPolynomial Parameter ℕ)
     (hostSizes : Parameter → ℕ)
     (arguments : (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).Arguments hostSizes)
     (coordinate : Fin (MvPolynomial.eval hostSizes coordinates)) :
@@ -147,7 +99,7 @@ theorem convertedFlags_valid (coordinates generators : MvPolynomial Parameter �
   simp only [Option.isSome_iff_ne_none, ne_eq, checkedQuotientBlock_none, not_not]
   rfl
 
-theorem prepare_accepted_iff (coordinates generators : MvPolynomial Parameter ℕ)
+private theorem prepare_accepted_iff (coordinates generators : MvPolynomial Parameter ℕ)
     (hostSizes : Parameter → ℕ)
     (arguments : (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).Arguments hostSizes) :
     (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes
@@ -160,7 +112,7 @@ theorem prepare_accepted_iff (coordinates generators : MvPolynomial Parameter �
 
 /-- A failed sentinel test returns an actual rejected original coordinate,
 rather than the all-accepted sentinel. -/
-theorem convertedRejection_found (coordinates generators : MvPolynomial Parameter ℕ)
+private theorem convertedRejection_found (coordinates generators : MvPolynomial Parameter ℕ)
     (hostSizes : Parameter → ℕ)
     (arguments : (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).Arguments hostSizes)
     (failed : (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes
@@ -191,20 +143,94 @@ theorem convertedRejection_found (coordinates generators : MvPolynomial Paramete
   refine ⟨⟨selected.val, before⟩, rfl, ?_⟩
   simpa only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none] using rejected
 
+/-- An obstruction is a genuine original coordinate. Unary digits agree with
+the internal search result, but the all-accepted sentinel is not a value. -/
+noncomputable def preparationDomain (coordinates generators : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  (unaryIndex coordinates).sum
+    (atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)
+      (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier))))
+
+private theorem rejection_lt (coordinates generators : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).Arguments sizes)
+    (failed : (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute sizes
+      ⟨arguments, trivial⟩ ≠ true) :
+    ((convertedRejection (L := L) (Carrier := Carrier) coordinates generators).compute sizes
+      ⟨arguments, trivial⟩).val < MvPolynomial.eval sizes coordinates := by
+  have rejected : (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute sizes
+      ⟨arguments, trivial⟩ = false := Bool.eq_false_iff.mpr failed
+  obtain ⟨coordinate, equal, _⟩ := convertedRejection_found coordinates generators sizes arguments rejected
+  exact equal.trans_lt coordinate.isLt
+
+/-- Preparation returns an actual rejected coordinate or exact prepared data. -/
+noncomputable def prepareConvertedOutcome (coordinates generators : MvPolynomial Parameter ℕ) :
+    Computation Parameter Unit := by
+  classical
+  exact {
+    inputDomains _ := (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).outputDomain
+    outputDomain := preparationDomain (L := L) (Carrier := Carrier) coordinates generators
+    precondition _ _ := True
+    compute sizes arguments :=
+      if accepted : (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute sizes
+          ⟨arguments.val, trivial⟩ = true then
+        Sum.inr ((prepareConverted (L := L) (Carrier := Carrier) coordinates generators).compute sizes ⟨arguments.val, trivial⟩)
+      else Sum.inl ⟨((convertedRejection (L := L) (Carrier := Carrier) coordinates generators).compute sizes
+        ⟨arguments.val, trivial⟩).val, rejection_lt coordinates generators sizes arguments.val accepted⟩ }
+
+theorem prepareConvertedOutcome_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+    (prepareConvertedOutcome (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
+  let computation := prepareConvertedOutcome (L := L) (Carrier := Carrier) coordinates generators
+  let frame := atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)
+    (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier)))
+  let accepted := fun sizes (arguments : computation.Arguments sizes) =>
+    (convertedAllAccepted (L := L) (Carrier := Carrier) coordinates generators).compute sizes ⟨arguments, trivial⟩
+  apply Realizable.byCases computation accepted (convertedAllAccepted_realizable coordinates generators)
+  · have ready := (prepareConverted_realizable (L := L) (Carrier := Carrier) coordinates generators).followedBy
+      (sumInr_realizable (unaryIndex coordinates) frame) rfl (by intros; trivial)
+    exact ready.withSpecification _ _ (by intros; trivial) (by
+      intro sizes arguments valid
+      dsimp only [computation, prepareConvertedOutcome]
+      rw [dite_eq_left valid.2]
+      rfl)
+  · let rejected := (convertedRejection (L := L) (Carrier := Carrier) coordinates generators).withPrecondition
+      (fun sizes arguments => True ∧ accepted sizes arguments = false) (by intros; trivial)
+    have found := ((convertedRejection_realizable (L := L) (Carrier := Carrier) coordinates generators).withPrecondition
+      rejected.precondition (by intros; trivial)).withEncodedOutput (unaryIndex coordinates)
+      (fun sizes arguments => ⟨(rejected.compute sizes arguments).val,
+        rejection_lt coordinates generators sizes arguments.val (by simp [accepted, arguments.property.2])⟩)
+      (by intros; rfl) (by intros; rfl)
+    have ready := found.followedBy (sumInl_realizable (unaryIndex coordinates) frame) rfl (by intros; trivial)
+    exact ready.withSpecification _ _ (by intro sizes arguments valid; exact valid) (by
+      intro sizes arguments valid
+      dsimp only [computation, prepareConvertedOutcome]
+      rw [dite_eq_right (by simp [accepted, valid.2])]
+      rfl)
+
+/-- The public preparation computation handles both coordinate rejection and
+exact-size preparation, with only the original size parameters. -/
+noncomputable def prepare (coordinates generators : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).followedBy
+    (prepareConvertedOutcome coordinates generators) rfl (by intros; trivial)
+
+theorem prepare_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
+    (prepare (L := L) (Carrier := Carrier) coordinates generators).Realizable :=
+  (convertAllCoordinates_realizable coordinates generators).followedBy
+    (prepareConvertedOutcome_realizable coordinates generators) rfl (by intros; trivial)
+
 /-- Mathematical correctness of the single public rejection/preparation output.
 -/
 noncomputable def OutcomeCorrect (coordinates generators : MvPolynomial Parameter ℕ)
     (hostSizes : Parameter → ℕ)
     (arguments : (convertAllCoordinates (L := L) (Carrier := Carrier) coordinates generators).Arguments hostSizes)
-    (output : (variant 2 (preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators)).Carrier hostSizes) : Prop :=
+    (output : (preparationDomain (L := L) (Carrier := Carrier) coordinates generators).Carrier hostSizes) : Prop :=
     let input := conversionGenerators (L := L) coordinates generators hostSizes arguments
     let target := conversionTarget coordinates generators hostSizes arguments
     (∃ coordinate : Fin (MvPolynomial.eval hostSizes coordinates),
-      output = ⟨0, coordinate.castSucc⟩ ∧ target coordinate ∉ images (L := L) input coordinate ∧
+      output = Sum.inl coordinate ∧ target coordinate ∉ images (L := L) input coordinate ∧
         target ∉ Substructure.closure L (Set.range input)) ∨
     (∃ result : (atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)
         (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier)))).Carrier hostSizes,
-      output = ⟨1, result⟩ ∧
+      output = Sum.inr result ∧
       computedSizeAssignment (sizeBounds (L := L) (Carrier := Carrier) coordinates generators) hostSizes result.1 = sizes (L := L) input ∧
       Multisorted.IsPrepared (L := L) (fun sort => catalogueMonolith L Carrier (entry sort))
         (graph (L := L) (Carrier := Carrier)) (Nat.card Carrier * Nat.card Carrier) result.2.1 result.2.2 ∧
@@ -227,10 +253,9 @@ theorem prepare_specification (coordinates generators : MvPolynomial Parameter �
     obtain ⟨coordinate, same, rejected⟩ := convertedRejection_found coordinates generators hostSizes (fun _ => converted) failed
     left
     refine ⟨coordinate, ?_, ?_, ?_⟩
-    · change (if accepted then _ else _) = _
-      rw [selected]
-      apply congrArg (fun index : Fin (MvPolynomial.eval hostSizes coordinates + 1) =>
-        (⟨0, index⟩ : (variant 2 (preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators)).Carrier hostSizes))
+    · dsimp only [prepare, followedBy, prepareConvertedOutcome]
+      rw [dite_eq_right (show accepted ≠ true by simp [selected])]
+      apply congrArg Sum.inl
       exact Fin.ext same
     · exact (checkedQuotientBlock_none _ _).mp rejected
     · exact convertAllCoordinates_obstruction coordinates generators hostSizes arguments coordinate rejected
@@ -241,9 +266,8 @@ theorem prepare_specification (coordinates generators : MvPolynomial Parameter �
     refine ⟨result, ?_, prepareInput_sizes coordinates generators hostSizes arguments,
       (prepareInput_specification coordinates generators hostSizes arguments valid).1,
       (prepareInput_specification coordinates generators hostSizes arguments valid).2⟩
-    change (if accepted then (⟨1, result⟩ :
-      (variant 2 (preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators)).Carrier hostSizes) else _) = _
-    rw [selected]
+    dsimp only [prepare, followedBy, prepareConvertedOutcome]
+    rw [dite_eq_left selected]
     rfl
 
 /-- One specialization-fixed TM0 program includes coordinate conversion,

@@ -83,4 +83,24 @@ noncomputable def boundedUnary (capacity : MvPolynomial Parameter ℕ) : Encoded
   decode_encode sizes := BoundedUnary.decode_encode (MvPolynomial.eval sizes capacity)
   encode_decode sizes := BoundedUnary.encode_decode (MvPolynomial.eval sizes capacity)
 
+/-- A genuine coordinate in unary; the all-ones search sentinel is rejected. -/
+noncomputable def unaryIndex (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter where
+  Carrier sizes := Fin (MvPolynomial.eval sizes length)
+  widthPolynomial := length
+  encode sizes index := BoundedUnary.encode _ index.castSucc
+  decode sizes bits := do
+    let value ← BoundedUnary.decode (MvPolynomial.eval sizes length) bits
+    if within : value.val < MvPolynomial.eval sizes length then some ⟨value.val, within⟩ else none
+  decode_encode sizes index := by simp [BoundedUnary.decode_encode, index.isLt]
+  encode_decode sizes bits index accepted := by
+    cases decoded : BoundedUnary.decode (MvPolynomial.eval sizes length) bits with
+    | none => simp [decoded] at accepted
+    | some value =>
+      simp only [decoded] at accepted
+      dsimp only [Bind.bind, Option.bind] at accepted
+      split at accepted
+      · cases Option.some.inj accepted
+        exact BoundedUnary.encode_decode _ bits value decoded
+      · simp at accepted
+
 end Polytime2.EncodedDomain

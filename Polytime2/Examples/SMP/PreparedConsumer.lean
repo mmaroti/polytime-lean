@@ -35,54 +35,35 @@ variable (output : EncodedDomain.{0, 0} (Multisorted.Parameter (Nat.card (SICata
 variable (allowed : ∀ sizes, (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier))).Carrier sizes → Prop)
 variable (operation : ∀ sizes, {value // allowed sizes value} → output.Carrier sizes)
 
-/-- Results preserve the rejection alternative; accepted results retain the
-same exact size assignment together with the consumer's own mathematical data. -/
-noncomputable def consumerAlternatives (coordinates generators : MvPolynomial Parameter ℕ) : Fin 2 → EncodedDomain Parameter :=
-  ![boundedUnary coordinates,
-    atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators) output]
-
-noncomputable def consumerPreconditions (coordinates generators : MvPolynomial Parameter ℕ) :
-    ∀ index sizes, (preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators index).Carrier sizes → Prop := by
-  intro index
-  refine Fin.cases ?_ ?_ index
-  · exact fun _ _ => True
-  · intro remaining
-    refine Fin.cases ?_ ?_ remaining
-    · exact fun sizes frame => allowed
-        (computedSizeAssignment (sizeBounds (L := L) (Carrier := Carrier) coordinates generators) sizes frame.1) frame.2
-    · intro impossible
-      exact Fin.elim0 impossible
-
-noncomputable def consumerBranches (coordinates generators : MvPolynomial Parameter ℕ) :
-    ∀ index sizes, {value // consumerPreconditions allowed coordinates generators index sizes value} →
-      (variant 2 (consumerAlternatives (L := L) (Carrier := Carrier) output coordinates generators)).Carrier sizes := by
-  intro index
-  refine Fin.cases ?_ ?_ index
-  · exact fun _ value => ⟨0, value.val⟩
-  · intro remaining
-    refine Fin.cases ?_ ?_ remaining
-    · exact fun sizes value => ⟨1, ((unaryMap (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier)))
-        output allowed operation).atComputedUnarySizes (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)).compute sizes
-          ⟨(fun _ => value.val), value.property⟩⟩
-    · intro impossible
-      exact Fin.elim0 impossible
+/-- Consumer results retain actual rejection coordinates or exact sizes and
+ordinary mathematical output. -/
+noncomputable def consumerDomain (coordinates generators : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  (unaryIndex coordinates).sum
+    (atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators) output)
 
 noncomputable def consumeOutcome (coordinates generators : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
-  variantCases 2 (preparationAlternatives (L := L) (Carrier := Carrier) coordinates generators)
-    (variant 2 (consumerAlternatives (L := L) (Carrier := Carrier) output coordinates generators))
-    (consumerPreconditions allowed coordinates generators) (consumerBranches output allowed operation coordinates generators)
+  sumCases (unaryIndex coordinates)
+    (atComputedSizeDomain (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)
+      (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier))))
+    (consumerDomain (L := L) (Carrier := Carrier) output coordinates generators)
+    (fun _ _ => True)
+    (fun sizes frame => allowed
+      (computedSizeAssignment (sizeBounds (L := L) (Carrier := Carrier) coordinates generators) sizes frame.1) frame.2)
+    (fun _ value => Sum.inl value.val)
+    (fun sizes value => Sum.inr
+      (((unaryMap (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier)))
+        output allowed operation).atComputedUnarySizes
+          (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)).compute sizes
+            ⟨(fun _ => value.val), value.property⟩))
 
 theorem consumeOutcome_realizable
     (consumerReady : (unaryMap (Multisorted.preparedDomain (enumeration (L := L) (Carrier := Carrier))) output allowed operation).Realizable)
     (coordinates generators : MvPolynomial Parameter ℕ) : (consumeOutcome output allowed operation coordinates generators).Realizable := by
-  apply variantCases_realizable
-  intro index
-  fin_cases index
-  · exact variantInjection_realizable 2 (consumerAlternatives (L := L) (Carrier := Carrier) output coordinates generators) 0
+  apply sumCases_realizable
+  · exact sumInl_realizable _ _
   · exact (consumerReady.atComputedUnarySizes
       (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)).followedBy
-        (variantInjection_realizable 2 (consumerAlternatives (L := L) (Carrier := Carrier) output coordinates generators) 1)
-        rfl (by intros; trivial)
+        (sumInr_realizable _ _) rfl (by intros; trivial)
 
 /- A consumer may impose any precondition implied by mathematical preparation.
 This hypothesis is about its ordinary input, independently of this producer. -/
@@ -98,9 +79,10 @@ theorem prepareConsumerCompatible (coordinates generators : MvPolynomial Paramet
     (consumeOutcome output allowed operation coordinates generators).precondition hostSizes
       (fun _ => (prepare (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes
         ⟨arguments, trivial⟩) := by
-  change consumerPreconditions allowed coordinates generators
-    ((prepare (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes ⟨arguments, trivial⟩).1
-    hostSizes ((prepare (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes ⟨arguments, trivial⟩).2
+  change Sum.elim (fun _ => True)
+    (fun frame => allowed
+      (computedSizeAssignment (sizeBounds (L := L) (Carrier := Carrier) coordinates generators) hostSizes frame.1) frame.2)
+    ((prepare (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes ⟨arguments, trivial⟩)
   rcases prepare_specification coordinates generators hostSizes arguments with rejected | accepted
   · obtain ⟨coordinate, equal, outside, nonmember⟩ := rejected
     rw [equal]

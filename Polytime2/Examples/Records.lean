@@ -15,7 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Variants
+import Polytime2.Computation.Sums
+import Polytime2.Encoding.BoundedUnary
 import Polytime2.Arithmetic.CounterOperations
 import Polytime2.TM0.Computation
 
@@ -141,5 +142,25 @@ example : (variantCases (Parameter := Bool) 0 Fin.elim0 booleans
 /-- Two singleton alternatives still have distinct tags and zero-width payloads. -/
 example : (variant 2 (fun _ => fixed (Parameter := Bool) (Equiv.refl (Fin 1)))).width sizes = 1 := by
   norm_num [width, Fin.sum_univ_succ, fixed, ofCodec]
+
+/-- Sums expose ordinary alternatives, including runtime-width payloads. -/
+example : (sumInl (fields 0) (fields 2)).Realizable := sumInl_realizable _ _
+example : (sumInr (fields 0) (fields 2)).TM0Realizable := (sumInr_realizable _ _).tm0
+
+example : (sumCases (booleans (Parameter := Bool)) booleans booleans
+    (fun _ _ => True) (fun _ _ => False)
+    (fun _ value => value.val) (fun _ value => False.elim value.property)).Realizable := by
+  apply sumCases_realizable
+  · exact copy_realizable _
+  · apply Realizable.ofFalsePrecondition
+    intro sizes arguments impossible
+    exact impossible
+
+/-- Rejection coordinates cannot decode the search sentinel, even at size zero. -/
+example (length : MvPolynomial Bool ℕ) (assignment : Bool → ℕ) :
+    (unaryIndex length).decode assignment
+      (BoundedUnary.encode (MvPolynomial.eval assignment length)
+        (Fin.last (MvPolynomial.eval assignment length))) = none := by
+  simp [unaryIndex, BoundedUnary.decode_encode]
 
 end Polytime2.Examples.Records

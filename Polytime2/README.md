@@ -44,6 +44,9 @@ The directory reorganization preserved namespaces and declaration names.
 - Variants store a binary discriminator followed by every alternative's field.
   Inactive fields contain zero bits; decoding rejects nonzero inactive fields.
   The exact width is the discriminator width plus all alternative widths.
+  `EncodedDomain.sum` reuses this codec for ordinary mathematical sums, with
+  certified `sumInl`, `sumInr`, and `sumCases` operations. Only the selected
+  branch needs to satisfy its precondition.
   Certified operations include injection, tag extraction and tests, projection
   with a matching-tag precondition, and case analysis requiring only the
   selected branch's precondition. No delimiters occur inside either encoding.
@@ -244,11 +247,13 @@ The directory reorganization preserved namespaces and declaration names.
 The SMP development in `Examples/SMP/` proves coordinate-image restriction,
 finite subdirect SI decomposition, membership transport, and the full monolith
 graph equation. `Prepared.prepare` is the certified public conversion. It
-returns either an actual rejected original coordinate or a dependent frame
-containing the exact sort counts `n_1, ..., n_k`, the generator count `g`, and
-the ordinary prepared instance. Internal quotient blocks, capacity padding,
+returns a mathematical sum of an actual rejected original coordinate and a
+dependent frame containing the exact sort counts `n_1, ..., n_k`, the generator
+count `g`, and the ordinary prepared instance. Internal quotient blocks,
+capacity padding,
 source labels, and retained original sizes do not occur in the mathematical
-prepared payload.
+prepared payload. The rejection codec accepts only actual coordinates; the
+all-accepted sentinel stays private to the search algorithm.
 
 `Multisorted.lean` defines this conversion-independent interface for a fixed
 catalogue `D_t`. Its input carrier is exactly generators and a target in `∏ t,
@@ -525,37 +530,7 @@ executable implementations are not a requirement.
 
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
-The immediate goals below follow the recommended implementation order. Estimates
-are rough net changes in Lean code, include new machinery, overlap, and should
-not be added together.
-
-### Preparation outcomes (~20 net lines removed to ~50 added)
-
-**Replace numbered preparation outcomes with a mathematical sum.**
-
-[preparationAlternatives](Examples/SMP/PreparedOutcome.lean)
-exposes `Fin 2` tags. Its rejection alternative uses a bounded unary
-value that also admits the all-accepted sentinel. Correctness later
-proves that rejected outputs identify actual coordinates.
-
-The natural result is:
-
-```text
-an original rejected coordinate
-⊕
-an exact size assignment together with its prepared instance
-```
-
-Derive a generic sum-domain interface from the existing variant codec.
-Keep the sentinel inside the search algorithm. This would also simplify
-the nested `Fin.cases` definitions in
-[PreparedConsumer](Examples/SMP/PreparedConsumer.lean).
-No new mathematical structure is needed.
-
-Natural interfaces and fewer lines do not always coincide immediately.
-In particular, sum results and finite-set dependencies may initially need
-adapters. Their implementations should replace the current public forms,
-rather than leave two parallel APIs permanently.
+The immediate goals have been completed; longer-term goals remain below.
 
 ## Longer-term goals
 
