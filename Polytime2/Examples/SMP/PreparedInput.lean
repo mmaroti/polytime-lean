@@ -45,62 +45,26 @@ Reading the contiguous payload needs no transpose or elementwise conversion. -/
 noncomputable def readExactColumns (coordinates generators : MvPolynomial Parameter ℕ)
     (sort : SortIndex (L := L) (Carrier := Carrier)) :
     Computation (WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)) Unit :=
-  unaryMap
-    ((boundedArray (typedColumn generators (entry sort)).outputDomain coordinates).renameParameters Sum.inl)
-    ((preparedColumnDomain (L := L) (Carrier := Carrier) (Parameter := Parameter) sort).array (.inr (.inl sort)))
-    (fun current packed => packed.1.val = current (.inr (.inl sort)) ∧
-      MvPolynomial.eval (current ∘ Sum.inl) generators = current (.inr (.inr ())))
-    (fun _ packed position =>
-      let column := packed.val.2 (Fin.cast packed.property.1.symm position)
-      (column.1, fun generator => column.2 (Fin.cast packed.property.2.symm generator)))
+  boundedArrayAtSize (typedColumn generators (entry sort)).outputDomain coordinates Sum.inl
+    (.inr (.inl sort)) (preparedColumnDomain (L := L) (Carrier := Carrier) (Parameter := Parameter) sort)
+    (fun current => MvPolynomial.eval (current ∘ Sum.inl) generators = current (.inr (.inr ())))
+    (fun _ generatorsEqual column =>
+      (column.1, fun generator => column.2 (Fin.cast generatorsEqual.symm generator)))
 
 theorem readExactColumns_realizable (coordinates generators : MvPolynomial Parameter ℕ)
     (sort : SortIndex (L := L) (Carrier := Carrier)) :
     (readExactColumns coordinates generators sort).Realizable := by
-  apply Realizable.Internal.fieldProjection _ _
-    (MvPolynomial.rename Sum.inl (boundedUnary coordinates).widthPolynomial)
-  intro current packed
-  let original := current ∘ (Sum.inl : Parameter → WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))
-  let values := packed.val.2
-  let source := (typedColumn generators (entry sort)).outputDomain
-  let target := preparedColumnDomain (L := L) (Carrier := Carrier) (Parameter := Parameter) sort
-  have columnBits (column : source.Carrier original) :
-      ArrayEncoding.bits (target.encode current
-        (column.1, fun generator => column.2 (Fin.cast packed.property.2.symm generator))) =
-      ArrayEncoding.bits (source.encode original column) := by
-    simp only [source, target, typedColumn, coordinateBlockMap, preparedColumnDomain,
-      bits_prod_encode, array_encode_bits, arrayOfLength_encode_bits, ArrayEncoding.bits_encode,
-      constant_encode_bits, elementDomain, fixed_encode_bits, enumeration,
-      ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
-    apply congrArg (List.append _)
-    exact congrArg List.flatten
-      (List.ofFn_congr packed.property.2 (fun generator => ArrayEncoding.bits
-        (BitVec.ofNat (Nat.clog 2 (@Fintype.card (SortCarrier (L := L) (Carrier := Carrier) sort)
-          (Fintype.ofFinite _))) ((enumeration sort) (column.2 generator)).val))).symm
-  have payloadBits : ArrayEncoding.bits
-      ((target.array (.inr (.inl sort))).encode current
-        (fun position =>
-          let column := values (Fin.cast packed.property.1.symm position)
-          (column.1, fun generator => column.2 (Fin.cast packed.property.2.symm generator)))) =
-      ArrayEncoding.bits (ArrayEncoding.encode (source.encode original) packed.val.1.val values) := by
-    simp only [array_encode_bits, ArrayEncoding.bits_encode]
-    simp_rw [columnBits]
-    exact congrArg List.flatten
-      (List.ofFn_congr packed.property.1 (fun position => ArrayEncoding.bits
-        (source.encode original (values position)))).symm
-  refine ⟨ArrayEncoding.bits ((boundedUnary coordinates).encode original packed.val.1),
-    List.replicate (MvPolynomial.eval original (coordinates * source.widthPolynomial) -
-      packed.val.1.val * source.width original) false, ?_, ?_⟩
-  · rw [payloadBits, renameParameters_bits]
-    change ArrayEncoding.bits (((boundedUnary coordinates).prod
-      (bitVectors (coordinates * source.widthPolynomial))).encode original
-        (packed.val.1, (ArrayEncoding.encode (source.encode original) packed.val.1.val values).setWidth _)) = _
-    rw [bits_prod_encode, bits_setWidth _ (by
-      simp only [map_mul]
-      exact Nat.mul_le_mul_right (source.width original) (Nat.le_of_lt_succ packed.val.1.isLt))]
-    exact (List.append_assoc _ _ _).symm
-  · simp only [ArrayEncoding.bits, List.length_ofFn, MvPolynomial.eval_rename]
-    rfl
+  apply boundedArrayAtSize_realizable
+  intro current generatorsEqual column
+  simp only [typedColumn, coordinateBlockMap, preparedColumnDomain,
+    bits_prod_encode, array_encode_bits, arrayOfLength_encode_bits, ArrayEncoding.bits_encode,
+    constant_encode_bits, elementDomain, fixed_encode_bits, enumeration,
+    ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
+  apply congrArg (List.append _)
+  exact congrArg List.flatten
+    (List.ofFn_congr generatorsEqual (fun generator => ArrayEncoding.bits
+      (BitVec.ofNat (Nat.clog 2 (@Fintype.card (SortCarrier (L := L) (Carrier := Carrier) sort)
+        (Fintype.ofFinite _))) ((enumeration sort) (column.2 generator)).val))).symm
 
 /-- Assemble generators and target as the one public exact multisorted input.
 The source-coordinate labels are absent from this output domain. -/

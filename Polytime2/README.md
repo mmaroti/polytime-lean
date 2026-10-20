@@ -248,6 +248,8 @@ rectangular array product maps construct the masks. Extended computed-size
 frames retain original dimensions only while constructing the result; their
 projection removes those dimensions before exposing the prepared frame.
 Singleton argument records reuse identical canonical bits.
+Packed-array extraction shares one field-copy theorem, including size-dependent
+element conversions with identical canonical bits.
 
 `Prepared.prepareAndConsume_realizable` composes preparation with any certified
 unary consumer whose precondition follows from `IsPrepared`. The result
@@ -486,23 +488,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Packed-array extraction (~20–40 net lines removed)
-
-**Make packed-array extraction support an element conversion.**
-
-[readExactColumns_realizable](Examples/SMP/PreparedInput.lean)
-substantially repeats
-[boundedArrayAtSize_realizable](Arrays/PackingRead.lean):
-stripping the count header, identifying the active payload, and
-accounting for zero padding.
-
-The additional work is an encoding-preserving conversion of each
-element, including its generator dimension.
-
-Generalize the existing extraction theorem to accept that conversion.
-The SMP theorem should then supply only the column compatibility proof.
-This is a particularly concrete opportunity to remove a one-off proof.
 
 ### Computed-size consumers (~0–20 net lines added)
 

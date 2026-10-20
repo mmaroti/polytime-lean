@@ -110,11 +110,12 @@ noncomputable def readPackedSources (coordinates generators : MvPolynomial Param
     (sort : SortIndex (L := L) (Carrier := Carrier)) :
     Computation (Parameter ⊕ Multisorted.Parameter (Nat.card (SICatalogue L Carrier))) Unit :=
   (boundedArrayAtSize (EncodedDomain.bitVectors (coordinates + 1)) coordinates
-    Sum.inl (.inr (.inl sort))).onResults
+    Sum.inl (.inr (.inl sort)) ((EncodedDomain.bitVectors (coordinates + 1)).renameParameters Sum.inl)
+    (fun _ => True) (fun _ _ value => value)).onResults
       (fun _ => (packedDomain (L := L) (Carrier := Carrier) coordinates generators).renameParameters Sum.inl)
       (fun current arguments => (arguments () sort).2.1.val = current (.inr (.inl sort)))
       (fun _ _ arguments => (arguments.val () sort).2)
-      (by intro current arguments; exact arguments.property)
+      (by intro current arguments; exact ⟨arguments.property, trivial⟩)
 
 theorem readPackedSources_realizable (coordinates generators : MvPolynomial Parameter ℕ)
     (sort : SortIndex (L := L) (Carrier := Carrier)) :
@@ -126,7 +127,8 @@ theorem readPackedSources_realizable (coordinates generators : MvPolynomial Para
       (source.renameParameters Sum.inl) true) rfl (by intros; trivial)
   apply (boundedArrayAtSize_realizable (EncodedDomain.bitVectors (coordinates + 1)) coordinates
     (Sum.inl : Parameter → Parameter ⊕ Multisorted.Parameter (Nat.card (SICatalogue L Carrier)))
-    (.inr (.inl sort))).onResults
+    (.inr (.inl sort)) ((EncodedDomain.bitVectors (coordinates + 1)).renameParameters Sum.inl)
+    (fun _ => True) (fun _ _ value => value) (by intros; exact EncodedDomain.renameParameters_bits _ _ _ _)).onResults
   intro name
   cases name
   exact second.withSpecification _ _ (by intros; trivial) (by intros; rfl)
