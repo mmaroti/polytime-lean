@@ -192,6 +192,7 @@ import Polytime2.Examples.SMP.RingExample
 import Polytime2.Examples.SMP.MultisortedExample
 import Polytime2.Examples.SMP.DistinctDependencies
 import Polytime2.Examples.SMP.MonolithCatalogue
+import Polytime2.Examples.SMP.PreparedConsumer
 
 /-! # Polytime2
 

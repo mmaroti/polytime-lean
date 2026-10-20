@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Examples.SMP.SI
 import Polytime2.Computation.Records
+import Polytime2.Arrays.NamedTransform
 import Polytime2.TM0.Computation
 
 /-! # Exact-size multisorted SMP inputs
@@ -68,9 +69,20 @@ noncomputable def tupleDomain : EncodedDomain (Parameter sortCount) :=
   EncodedDomain.record sortCount (fun sort =>
     (EncodedDomain.fixed (enumeration sort)).array (.inl sort))
 
-/-- One ordinary array of generator tuples and one target tuple. -/
+/-- Each coordinate stores its target and generator column together. The
+carrier remains ordinary generators and a target, with no runtime transpose. -/
 noncomputable def inputDomain : EncodedDomain (Parameter sortCount) :=
-  ((tupleDomain enumeration).array (.inr ())).prod (tupleDomain enumeration)
+  (EncodedDomain.record sortCount (fun sort =>
+    let scalar := EncodedDomain.fixed (enumeration sort)
+    (scalar.prod (scalar.array (.inr ()))).array (.inl sort))).reindex
+      (Input Carrier) (fun _ =>
+        { toFun := fun input sort position =>
+            (input.2 sort position, fun generator => input.1 generator sort position)
+          invFun := fun columns =>
+            ((fun generator sort position => (columns sort position).2 generator),
+              fun sort position => (columns sort position).1)
+          left_inv := by intro input; rfl
+          right_inv := by intro columns; rfl })
 
 /-- The domain carrier is the mathematical input, without a representation
 layer. -/
@@ -83,17 +95,40 @@ theorem inputDomain_widthPolynomial :
     (inputDomain enumeration).widthPolynomial =
       (MvPolynomial.X (.inr ()) + 1) *
         ∑ sort, MvPolynomial.X (.inl sort) * MvPolynomial.C (Nat.clog 2 (cardinality sort)) := by
-  simp only [inputDomain, tupleDomain, EncodedDomain.prod, EncodedDomain.ofCodec,
-    EncodedDomain.array, EncodedDomain.fixed, EncodedDomain.record_widthPolynomial]
+  change (EncodedDomain.record sortCount (fun sort =>
+    let scalar : EncodedDomain (Parameter sortCount) := EncodedDomain.fixed (enumeration sort)
+    (scalar.prod (scalar.array (.inr ()))).array (.inl sort))).widthPolynomial = _
+  rw [EncodedDomain.record_widthPolynomial]
+  simp only [EncodedDomain.prod, EncodedDomain.ofCodec, EncodedDomain.array, EncodedDomain.fixed]
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro sort member
   ring
 
-/-- Consumers can extract the target using the existing certified pair
-operation. -/
-noncomputable def readTarget : Computation (Parameter sortCount) Unit :=
-  pairProjection ((tupleDomain enumeration).array (.inr ())) (tupleDomain enumeration) true
+/-- Extract targets by projecting each coordinate column, using the shared
+array transformer. -/
+noncomputable def readTarget : Computation (Parameter sortCount) Unit where
+  inputDomains _ := inputDomain enumeration
+  outputDomain := tupleDomain enumeration
+  precondition _ _ := True
+  compute _ arguments := (arguments.val ()).2
 
-theorem readTarget_realizable : (readTarget enumeration).Realizable :=
-  pairProjection_realizable _ _ true
+theorem readTarget_realizable : (readTarget enumeration).Realizable := by
+  let scalar := fun sort : Fin sortCount =>
+    (EncodedDomain.fixed (enumeration sort) : EncodedDomain (Parameter sortCount))
+  let columns := fun sort => ((scalar sort).prod ((scalar sort).array (.inr ()))).array (.inl sort)
+  let storage := EncodedDomain.record sortCount columns
+  have view := encodingMap_realizable (inputDomain enumeration) storage
+    (fun _ input sort position => (input.2 sort position, fun generator => input.1 generator sort position))
+    (by intros; rfl) (by intros; rfl)
+  apply Realizable.recordOutputs
+  intro sort
+  have selected := view.followedBy (recordProjection_realizable sortCount columns sort) rfl (by intros; trivial)
+  exact selected.followedBy
+    (mapArrayAtParameter_realizable ((scalar sort).prod ((scalar sort).array (.inr ()))) (scalar sort)
+      (.inl sort) (fun _ column => column.1)
+      (pairProjection_realizable (scalar sort) ((scalar sort).array (.inr ())) false))
+    rfl (by intros; trivial)
 
 /-- Standalone export uses precisely the specialization's sort sizes and
 generator count. -/
@@ -105,12 +140,17 @@ theorem readTarget_tm0 : (readTarget enumeration).TM0Realizable :=
 
 end Encoding
 
-/-- A quadratic-size bit mask records every dependency set at the exact sort
-sizes. -/
+/-- A quadratic-size bit mask records every dependency set at exact sort
+sizes. Rectangular blocks are grouped by their fixed pair of sorts. -/
 noncomputable def dependencyDomain (sortCount : ℕ) : EncodedDomain (Parameter sortCount) :=
-  let mask := EncodedDomain.record sortCount (fun child =>
-    EncodedDomain.booleans.array (.inl child))
-  EncodedDomain.record sortCount (fun sort => mask.array (.inl sort))
+  (EncodedDomain.record sortCount (fun parent =>
+    EncodedDomain.record sortCount (fun child =>
+      (EncodedDomain.booleans.array (.inl child)).array (.inl parent)))).reindex
+      (Dependencies) (fun _ =>
+        { toFun := fun masks parent child position childPosition => masks parent position child childPosition
+          invFun := fun blocks parent position child childPosition => blocks parent child position childPosition
+          left_inv := by intro masks; rfl
+          right_inv := by intro blocks; rfl })
 
 /-- No bounded-index labels or padding intervene between masks and their
 mathematical data. -/

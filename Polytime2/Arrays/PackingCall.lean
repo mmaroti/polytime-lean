@@ -18,6 +18,7 @@ limitations under the License.
 import Polytime2.Arrays.PackingResult
 import Polytime2.Encoding.ParameterRename
 import Polytime2.Computation.ComputedCall
+import Polytime2.Computation.ComputedRecord
 
 /-! # Preparing packed arrays for calls at the retained count
 
@@ -58,23 +59,10 @@ private theorem packingPayload_bits (element : EncodedDomain Parameter) (length 
     renameParameters_bits]
   rfl
 
-private theorem namedRecord_unit_bits (domain : EncodedDomain Parameter) (sizes : Parameter → ℕ)
-    (value : domain.Carrier sizes) :
-    ArrayEncoding.bits ((namedRecord (fun _ : Unit => domain)).encode sizes (fun _ => value)) =
-      ArrayEncoding.bits (domain.encode sizes value) := by
-  change ArrayEncoding.bits ((record (Fintype.card Unit) (fun _ => domain)).encode sizes (fun _ => value)) = _
-  rw [bits_record_encode]
-  simp
-
 private theorem packingCall_capacity (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     SizeSubstitution.polynomial (packingCallBounds length)
       (namedRecord (fun _ : Unit => packingPayload element)).widthPolynomial = length * element.widthPolynomial := by
-  have oneField : (namedRecord (fun _ : Unit => packingPayload element)).widthPolynomial =
-      (packingPayload element).widthPolynomial := by
-    change (record (Fintype.card Unit) (fun _ => packingPayload element)).widthPolynomial = _
-    rw [record_widthPolynomial]
-    simp
-  rw [oneField]
+  rw [namedRecord_unit_widthPolynomial]
   simp [packingPayload, EncodedDomain.array, renameParameters, ofCodec,
     SizeSubstitution.polynomial, MvPolynomial.bind₁_rename, MvPolynomial.bind₁_X_left, packingCallBounds, Function.comp_def]
 

@@ -13,7 +13,11 @@
   including for universe levels and implicit parameters.
 - Add Lean definitions and theorems only when needed by concrete examples;
   avoid speculative additions.
-- Try to avoid introducing new Lean structures, keep their number to the
-  absolute minimum. Always try to reuse Lean structures from Mathlib.
+- Avoid introducing new Lean structures, keep their number to the absolute
+  minimum. Always try to reuse Lean structures from Mathlib.
 - When a structure or theorem or any other artifact is no longer needed or 
   used, then remove it and its documentation.
+- Always formalize the most mathematically natural and reusable encoding of
+  domains and problems, and not the one that is the easiest to implement.
+- Make reusable components. Actively rewrite proofs if it can be shortened
+  by using newly introduced components.

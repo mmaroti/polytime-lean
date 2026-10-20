@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Examples.SMP.DenseConversion
+import Polytime2.Examples.SMP.PreparedConsumer
 import Mathlib.ModelTheory.Algebra.Ring.Basic
 import Mathlib.Data.ZMod.Basic
 
@@ -35,34 +35,45 @@ local instance : FirstOrder.Ring.CompatibleRing (ZMod 4) :=
 
 /-- Two independent public dimensions: coordinates and generators. -/
 noncomputable def preparation : Computation (Fin 2) Unit :=
-  denseConversion (L := Language.ring) (Carrier := ZMod 4) (MvPolynomial.X 0) (MvPolynomial.X 1)
+  Prepared.prepare (L := Language.ring) (Carrier := ZMod 4) (MvPolynomial.X 0) (MvPolynomial.X 1)
 
-theorem preparation_realizable : preparation.Realizable := denseConversion_realizable _ _
+theorem preparation_realizable : preparation.Realizable := Prepared.prepare_realizable _ _
 
-theorem preparation_tm0 : preparation.TM0Realizable := denseConversion_tm0
+theorem preparation_tm0 : preparation.TM0Realizable := Prepared.prepare_tm0
 
 theorem preparation_correct (sizes : Fin 2 → ℕ) (arguments : preparation.Arguments sizes) :
-    DenseOutputCorrect (L := Language.ring) (Carrier := ZMod 4)
+    Prepared.OutcomeCorrect (L := Language.ring) (Carrier := ZMod 4)
       (MvPolynomial.X 0) (MvPolynomial.X 1) sizes arguments
       (preparation.compute sizes ⟨arguments, trivial⟩) :=
-  denseConversion_correct _ _ _ _
+  Prepared.prepare_specification _ _ _ _
 
-/-- Empty-coordinate instances return the accepted sentinel, with no hidden
-positive-dimension or nonempty-generator requirement. -/
+/-- Empty-coordinate instances are accepted, including with zero generators. -/
 theorem empty_coordinates (sizes : Fin 2 → ℕ) (zero : sizes 0 = 0)
     (arguments : preparation.Arguments sizes) :
-    (preparation.compute sizes ⟨arguments, trivial⟩).1.2.toNat = 0 := by
-  change ((denseConversion (L := Language.ring) (Carrier := ZMod 4)
-    (MvPolynomial.X 0) (MvPolynomial.X 1)).compute sizes ⟨arguments, trivial⟩).1.2.toNat = 0
-  have core := denseConversion_core (L := Language.ring) (Carrier := ZMod 4)
-    (MvPolynomial.X (0 : Fin 2)) (MvPolynomial.X 1) sizes arguments
-  have marker := congrArg (fun result => result.2.toNat) core
-  have computed := conversionResult_compute (L := Language.ring) (Carrier := ZMod 4)
-    (MvPolynomial.X (0 : Fin 2)) (MvPolynomial.X 1) sizes arguments
-  have resultMarker := congrArg (fun result => result.2.toNat) computed
-  refine marker.trans (resultMarker.trans ?_)
-  have bounded := rejectionCoordinate_bound (L := Language.ring) (Carrier := ZMod 4)
-    (MvPolynomial.X 0) (MvPolynomial.X 1) sizes arguments
-  simpa only [MvPolynomial.eval_X, zero, Nat.le_zero] using bounded
+    (preparation.compute sizes ⟨arguments, trivial⟩).1 = 1 := by
+  rcases preparation_correct sizes arguments with rejected | accepted
+  · obtain ⟨coordinate, _, _, _⟩ := rejected
+    have impossible : coordinate.val < 0 := by
+      simpa only [MvPolynomial.eval_X, zero] using coordinate.isLt
+    omega
+  · obtain ⟨frame, equal, _, _, _⟩ := accepted
+    exact congrArg Sigma.fst equal
+
+/-- A prepared consumer sees the ordinary exact tuple domain, with no knowledge
+of original coordinates, packed fields, or conversion capacities. -/
+noncomputable def targetAfterPreparation : Computation (Fin 2) Unit :=
+  Prepared.prepareAndConsume
+    (Multisorted.tupleDomain (Prepared.enumeration (L := Language.ring) (Carrier := ZMod 4)))
+    (fun _ _ => True) (fun _ value => value.val.1.2) (by intros; trivial)
+    (MvPolynomial.X 0) (MvPolynomial.X 1)
+
+theorem targetAfterPreparation_realizable : targetAfterPreparation.Realizable := by
+  let enumeration := Prepared.enumeration (L := Language.ring) (Carrier := ZMod 4)
+  have consumerReady := (Multisorted.readPreparedTarget_realizable enumeration).withSpecification
+    (fun _ _ => True) (fun _ value => (value.val ()).1.2) (by intros; trivial) (by intros; rfl)
+  exact Prepared.prepareAndConsume_realizable _ _ _ _ consumerReady _ _
+
+theorem targetAfterPreparation_tm0 : targetAfterPreparation.TM0Realizable :=
+  targetAfterPreparation_realizable.tm0
 
 end Polytime2.SMP.RingExample

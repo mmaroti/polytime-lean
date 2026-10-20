@@ -147,23 +147,6 @@ noncomputable def dependencyFactor (input : Generator → Index → Carrier)
     FactorIndex (L := L) input :=
   ⟨factor.1, (dependencyEntry (factorEntry input factor) pair).2⟩
 
-/-- Each dependency belongs strictly earlier in the fixed congruence-count order. -/
-theorem dependencyFactor_earlier (input : Generator → Index → Carrier)
-    (factor : FactorIndex (L := L) input) (pair : MonolithPair (factorEntry input factor)) :
-    Nat.card (Congruence L (Factor input (dependencyFactor input factor pair))) <
-      Nat.card (Congruence L (Factor input factor)) :=
-  dependency_earlier (factorEntry input factor) pair
-
-/-- The global order uses the fixed sort rank before the original coordinate. -/
-noncomputable def factorKey [LinearOrder Index] (input : Generator → Index → Carrier)
-    (factor : FactorIndex (L := L) input) : ℕ ×ₗ Index :=
-  toLex ((catalogueRank (factorEntry input factor)).val, factor.1)
-
-theorem dependencyFactor_key_lt [LinearOrder Index] (input : Generator → Index → Carrier)
-    (factor : FactorIndex (L := L) input) (pair : MonolithPair (factorEntry input factor)) :
-    factorKey input (dependencyFactor input factor pair) < factorKey input factor :=
-  Prod.Lex.toLex_lt_toLex.mpr (Or.inl (dependency_rank_lt (factorEntry input factor) pair))
-
 /-- Distinct earlier dependency coordinates, with duplicate quotient slots removed. -/
 noncomputable def dependencySet (input : Generator → Index → Carrier)
     (factor : FactorIndex (L := L) input) : Set (FactorIndex (L := L) input) :=
@@ -175,14 +158,6 @@ theorem dependencySet_bound (input : Generator → Index → Carrier)
     Nat.card (dependencySet input factor) ≤ Nat.card Carrier * Nat.card Carrier :=
   (Nat.card_le_card_of_surjective (Set.rangeFactorization (dependencyFactor input factor))
     Set.rangeFactorization_surjective).trans (monolithPair_bound (factorEntry input factor))
-
-/-- Every distinct dependency is strictly earlier, hence the parent is excluded. -/
-theorem dependencySet_earlier [LinearOrder Index] (input : Generator → Index → Carrier)
-    (factor : FactorIndex (L := L) input) (dependency : dependencySet input factor) :
-    factorKey input dependency.val < factorKey input factor := by
-  obtain ⟨pair, equal⟩ := dependency.property
-  rw [← equal]
-  exact dependencyFactor_key_lt input factor pair
 
 /-- Simple factors need no earlier coordinates: their monolith quotient is encoded
 by the empty dependency product. -/
@@ -266,41 +241,5 @@ noncomputable def rankedSlotEquiv (input : Generator → Index → Carrier) :
         {index : Index // images (L := L) input index = (catalogueRank.symm rank).1} :=
   (activeSlotEquiv input).trans (Equiv.sigmaCongrLeft' catalogueRank)
 
-/-- Dense sort-local positions enumerate only active coordinates, in original
-coordinate order. Their lengths are ordinary counts, not new size parameters. -/
-noncomputable def denseSortEquiv [Fintype Index] [LinearOrder Index]
-    (input : Generator → Index → Carrier) (entry : SICatalogue L Carrier) :
-    {index : Index // images (L := L) input index = entry.1} ≃o
-      Fin (Nat.card {index : Index // images (L := L) input index = entry.1}) := by
-  classical
-  exact (Fintype.orderIsoFinOfCardEq _ (Nat.card_eq_fintype_card.symm)).symm
-
-/-- The ordered padded positions have a canonical dense sort-local numbering. -/
-noncomputable def denseSlotEquiv [Fintype Index] [LinearOrder Index]
-    (input : Generator → Index → Carrier) :
-    FactorIndex (L := L) input ≃
-      Σ rank : Fin (Nat.card (SICatalogue L Carrier)),
-        Fin (Nat.card {index : Index // images (L := L) input index = (catalogueRank.symm rank).1}) :=
-  (rankedSlotEquiv input).trans (Equiv.sigmaCongrRight (fun rank =>
-    (denseSortEquiv input (catalogueRank.symm rank)).toEquiv))
-
-/-- Summing actual sort counts gives exactly the total number of SI factors. -/
-theorem factor_count_eq [Finite Index] (input : Generator → Index → Carrier) :
-    Nat.card (FactorIndex (L := L) input) =
-      ∑ rank : Fin (Nat.card (SICatalogue L Carrier)),
-        Nat.card {index : Index // images (L := L) input index = (catalogueRank.symm rank).1} := by
-  rw [Nat.card_congr (rankedSlotEquiv input), Nat.card_sigma]
-
-/-- The full catalogue still gives a linear bound, fixed by specialization. -/
-theorem factor_count_bound {count : ℕ} (input : Generator → Fin count → Carrier) :
-    Nat.card (FactorIndex (L := L) input) ≤ count * Nat.card (SICatalogue L Carrier) := by
-  have injective : Function.Injective (fun factor : FactorIndex (L := L) input =>
-      (factor.1, factorEntry input factor)) := by
-    rintro ⟨firstIndex, first⟩ ⟨secondIndex, second⟩ equal
-    have indices : firstIndex = secondIndex := congrArg Prod.fst equal
-    subst secondIndex
-    have entries := congrArg Prod.snd equal
-    exact congrArg (Sigma.mk firstIndex) (eq_of_heq (Sigma.mk.inj entries).2)
-  simpa only [Nat.card_prod, Nat.card_fin] using Nat.card_le_card_of_injective _ injective
 
 end Polytime2.SMP.CoordinateReduction

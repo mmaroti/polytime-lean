@@ -222,48 +222,46 @@ Namespaces and declaration names are unchanged.
   its polynomial bound. Empty blocks and absent size or input tapes are covered.
 
 The SMP development in `Examples/SMP/` proves coordinate-image restriction,
-finite subdirect SI decomposition, membership transport, and global monolith
-graph equality. Polynomial-time certificates cover all coordinate images and
-padded SI blocks for every generator and target. The full fixed catalogue
-contains every monolith dependency as a quotient of the same original image
-algebra, with a smaller
-congruence count and a proved graph equation for the generated global relation.
-A fixed catalogue rank places dependencies earlier. Certified exact sort counts
-are stored with padded sort arrays in this order, retaining a target-acceptance
-bit per original coordinate even when there are no SI sorts. Certified output
-values agree with the global embedding. Active padded slots are in bijection
-with the mathematical factors, and stored sort counts sum to their cardinality.
-Distinct dependency sets have the fixed bound and contain only earlier slots.
-The monolith quotient is isomorphic to the projection onto distinct dependency
-coordinates, with full graph equality, and the original generated algebra is
-isomorphic to the generated SI relation. `Specification.lean` combines the
-rejection/prepared outcome, structural guarantees, output agreement, exact
-counts, and polynomial-time certificates. A certified selector returns an
-explicit rejected coordinate or the all-accepted sentinel, preserving the
-ordered instance data. Dense mathematical sort-local correspondence is proved
-against the stored counts. Monolith quotient maps, dependency masks, and graph
-maps have certified fixed-catalogue lookups. Certified runtime position tables
-record the dense index of each active padded slot.
-`denseConversion_implements` combines the complete output
-contract with multi-tape realizability and standalone TM0 export, using only
-the coordinate and generator counts as public size parameters.
-`RingExample.lean` specializes the construction to `ZMod 4` and checks the
-empty-coordinate sentinel. Specialization uses finite mathematical choices;
-the result proves existence of a machine for each fixed algebra, rather than
-providing an executable compiler from operation tables.
+finite subdirect SI decomposition, membership transport, and the full monolith
+graph equation. `Prepared.prepare` is the certified public conversion. It
+returns either an actual rejected original coordinate or a dependent frame
+containing the exact sort counts `n_1, ..., n_k`, the generator count `g`, and
+the ordinary prepared instance. Internal quotient blocks, capacity padding,
+source labels, and retained original sizes do not occur in the mathematical
+prepared payload.
 
-`Multisorted.lean` defines conversion-independent SMP inputs for a fixed finite
-catalogue `D_t`, with public sizes `n_t` for each sort and a generator count
-`g`. The carrier is exactly generators and a target in `∏ t, D_t ^ n_t`,
-encoded by ordinary records and arrays without inactive slots. `preparedDomain`
-adds encoded dependency masks. `IsPrepared` specifies ordered SI sorts,
-subdirectness, bounded earlier dependencies, and the full monolith graph
-isomorphisms agreeing with fixed catalogue lookups. `IsMember` states the
-ordinary membership question. Certified target access and standalone TM0 export
-reuse public composition. `MultisortedExample.lean` covers two different finite
-rings, absent sorts, and empty catalogues. Adapting the existing padded
-preparation output to this interface remains the computed-size and packing work
-listed below.
+`Multisorted.lean` defines this conversion-independent interface for a fixed
+catalogue `D_t`. Its input carrier is exactly generators and a target in `∏ t,
+D_t ^ n_t`; `preparedDomain` adds Boolean dependency masks. Exact coordinate
+columns and rectangular dependency blocks use ordinary record and array codecs.
+`IsPrepared` specifies ordered SI sorts, subdirectness, bounded earlier
+dependencies, and monolith quotient isomorphisms onto the generated dependency
+projections, agreeing with fixed catalogue lookups.
+`Prepared.prepare_specification` proves rejection or these guarantees together
+with equivalence of the original SMP membership question and exact runtime
+counts.
+
+Stable packing uses a common source-coordinate selection for targets,
+generators, and dependency labels. Generic polynomial-width comparison and
+rectangular array product maps construct the masks. Extended computed-size
+frames retain original dimensions only while constructing the result; their
+projection removes those dimensions before exposing the prepared frame.
+Singleton argument records reuse identical canonical bits.
+
+`Prepared.prepareAndConsume_realizable` composes preparation with any certified
+unary consumer whose precondition follows from `IsPrepared`. The result
+preserves explicit rejection and evaluates the consumer at the actual sort
+counts. The computed-size compiler and `consumerPolynomial_bound` use `n_t ≤ n`
+and the unchanged `g` to give a polynomial bound in the original dimensions.
+`prepare_tm0` and `prepareAndConsume_tm0` include all preparation, simulation,
+and extraction in their standalone TM0 certificates.
+
+`RingExample.lean` specializes the conversion to `ZMod 4`, checks
+empty-coordinate acceptance, and composes a certified target consumer.
+`MultisortedExample.lean` also covers two distinct finite rings, absent sorts,
+and empty catalogues. Specialization uses finite mathematical choices: the
+result proves existence of a machine for each fixed algebra rather than an
+executable compiler from operation tables.
 
 Tape count, alphabets, controller, and polynomial witnesses are fixed before
 runtime size assignments. Loop progress measures are proof data, not fuel.
@@ -508,17 +506,6 @@ needed for integer matrices, reusing generic arithmetic machinery.
 
 Develop higher-level algorithm notation over the certified mathematical
 composition rules, keeping machine witnesses and scratch layouts internal.
-
-### Prepared conversion
-
-Use the multisorted interface, computed-size calls, and generic packing to
-convert the current padded SMP output to exact sort arrays at sizes
-`n_1, ..., n_k, g`. Transport the stored values, dependency coordinates, and
-monolith guarantees, retaining the explicit coordinate-obstruction outcome.
-Prove that preparation followed by any certified consumer of the prepared
-interface is polynomial in the original `n, g`, using the existing bounds on
-sort counts. Replace superseded adapters and proofs rather than maintaining
-parallel public SMP representations.
 
 ### Algebra targets
 
