@@ -69,6 +69,17 @@ Namespaces and declaration names are unchanged.
   handles fixed polynomial assignments using the same header compiler.
   `Examples/DynamicSizes.lean` counts leading true flags and invokes a quadratic
   evaluator at that actual count, with a standalone TM0 certificate.
+- `arrayPack` stably selects an array by a Boolean mask and returns its count
+  and exact-length mathematical array in `EncodedDomain.boundedArray`.
+  Counters and zero capacity padding are private; element widths may depend on
+  sizes, including for nested arrays and tuples. `arrayPackWithPositions`
+  supplies one shared prefix-count table for related fields and dependencies.
+  `boundedArrayCallFrame` connects stored packed results to
+  `Realizable.atComputedSizes` without repeating packing; `preparePackingCall`
+  includes the packing stage. Original sizes are preserved and the retained
+  count supplies one new runtime size.
+  `Examples/Packing.lean` covers stable indices, shared fields, empty and
+  zero-width cases, and an exact-array consumer with a TM0 certificate.
 - Deterministic transitions over Mathlib's two-sided tapes, with separate
   alphabets, writes, and head movements for each tape.
 - Counted execution, controller embedding, and sequential composition with one
@@ -497,16 +508,6 @@ needed for integer matrices, reusing generic arithmetic machinery.
 
 Develop higher-level algorithm notation over the certified mathematical
 composition rules, keeping machine witnesses and scratch layouts internal.
-
-### Array packing
-
-Develop certified stable packing of an array selected by a Boolean mask, with
-the active count and correspondence between original and packed indices.
-Support runtime-dependent element widths and reuse scans, prefix counts, and
-array operations. Connect the bounded-capacity representation to an exact-length
-array at the computed count through the computed-size composition rule. Share
-the selection and index correspondence across related arrays, so generators,
-targets, and dependency indices remain aligned. Keep capacity padding private.
 
 ### Prepared conversion
 

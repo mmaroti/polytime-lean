@@ -180,6 +180,7 @@ import Polytime2.Arrays.FoldContract
 import Polytime2.Computation.Traversal
 import Polytime2.Examples.Fold
 import Polytime2.Examples.Transform
+import Polytime2.Examples.Packing
 import Polytime2.Examples.DynamicSizes
 import Polytime2.Examples.ComputedSizes
 

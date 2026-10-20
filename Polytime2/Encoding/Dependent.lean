@@ -58,47 +58,61 @@ noncomputable def namedRecord (fields : IndexName → EncodedDomain Parameter) :
     (fun sizes => (Equiv.piCongrLeft (fun name => (fields name).Carrier sizes)
       (Fintype.equivFin IndexName).symm).symm)
 
-variable {NewParameter : Type} [Fintype NewParameter]
-
-/-- An ordinary dependent pair fits a fixed-width domain when its payload width
-is bounded at every admissible index. No blank delimiters occur in the code. -/
-noncomputable def boundedSigma (index : EncodedDomain Parameter)
-    (assignment : ∀ sizes, index.Carrier sizes → NewParameter → ℕ)
-    (payload : EncodedDomain NewParameter) (capacity : MvPolynomial Parameter ℕ)
-    (fits : ∀ sizes value, payload.width (assignment sizes value) ≤ MvPolynomial.eval sizes capacity) :
-    EncodedDomain Parameter :=
+/-- A bounded dependent codec retains the exact mathematical payload family.
+Only the storage width is padded to the caller's polynomial capacity. -/
+noncomputable abbrev ofBoundedCodec (index : EncodedDomain Parameter)
+    (Payload : ∀ sizes, index.Carrier sizes → Type)
+    (width : ∀ sizes, index.Carrier sizes → ℕ)
+    (encodePayload : ∀ sizes value, Payload sizes value → BitVec (width sizes value))
+    (decodePayload : ∀ sizes value, BitVec (width sizes value) → Option (Payload sizes value))
+    (decodeEncode : ∀ sizes value payload, decodePayload sizes value (encodePayload sizes value payload) = some payload)
+    (capacity : MvPolynomial Parameter ℕ)
+    (fits : ∀ sizes value, width sizes value ≤ MvPolynomial.eval sizes capacity) : EncodedDomain Parameter :=
   let storage := index.prod (bitVectors capacity)
-  { Carrier := fun sizes => Σ value : index.Carrier sizes, payload.Carrier (assignment sizes value)
+  { Carrier := fun sizes => Σ value : index.Carrier sizes, Payload sizes value
     widthPolynomial := storage.widthPolynomial
     encode := fun sizes value => storage.encode sizes
-      (value.1, (payload.encode (assignment sizes value.1) value.2).setWidth (MvPolynomial.eval sizes capacity))
+      (value.1, (encodePayload sizes value.1 value.2).setWidth (MvPolynomial.eval sizes capacity))
     decode := fun sizes bits => do
       let value ← storage.decode sizes bits
-      let decoded ← payload.decode (assignment sizes value.1)
-        (value.2.setWidth (payload.width (assignment sizes value.1)))
-      if (payload.encode (assignment sizes value.1) decoded).setWidth (MvPolynomial.eval sizes capacity) = value.2
+      let decoded ← decodePayload sizes value.1 (value.2.setWidth (width sizes value.1))
+      if (encodePayload sizes value.1 decoded).setWidth (MvPolynomial.eval sizes capacity) = value.2
         then some ⟨value.1, decoded⟩ else none
     decode_encode := by
       intro sizes value
       simp only [Bind.bind, storage.decode_encode, Option.bind_some,
         BitVec.setWidth_setWidth_of_le _ (fits sizes value.1), BitVec.setWidth_eq,
-        payload.decode_encode, ↓reduceIte]
+        decodeEncode, ↓reduceIte]
     encode_decode := by
       intro sizes bits value accepted
       cases stored : storage.decode sizes bits with
       | none => simp [stored] at accepted
       | some pair =>
         simp only [Bind.bind, stored, Option.bind_some] at accepted
-        cases decoded : payload.decode (assignment sizes pair.1)
-            (pair.2.setWidth (payload.width (assignment sizes pair.1))) with
+        cases decoded : decodePayload sizes pair.1 (pair.2.setWidth (width sizes pair.1)) with
         | none => simp [decoded] at accepted
         | some answer =>
           simp only [decoded, Option.bind_some] at accepted
           split at accepted
           · cases Option.some.inj accepted
             have same := storage.encode_decode sizes bits pair stored
-            simpa only [‹(payload.encode (assignment sizes pair.1) answer).setWidth
+            simpa only [‹(encodePayload sizes pair.1 answer).setWidth
               (MvPolynomial.eval sizes capacity) = pair.2›] using same
           · contradiction }
+
+variable {NewParameter : Type} [Fintype NewParameter]
+
+/-- A dependent payload reparameterized by the decoded index is one bounded
+codec family. Its mathematical carrier and canonical bits are unchanged. -/
+noncomputable def boundedSigma (index : EncodedDomain Parameter)
+    (assignment : ∀ sizes, index.Carrier sizes → NewParameter → ℕ)
+    (payload : EncodedDomain NewParameter) (capacity : MvPolynomial Parameter ℕ)
+    (fits : ∀ sizes value, payload.width (assignment sizes value) ≤ MvPolynomial.eval sizes capacity) :
+    EncodedDomain Parameter :=
+  ofBoundedCodec index (fun sizes value => payload.Carrier (assignment sizes value))
+    (fun sizes value => payload.width (assignment sizes value))
+    (fun sizes value => payload.encode (assignment sizes value))
+    (fun sizes value => payload.decode (assignment sizes value))
+    (fun sizes value => payload.decode_encode (assignment sizes value)) capacity fits
 
 end Polytime2.EncodedDomain
