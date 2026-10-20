@@ -479,23 +479,201 @@ executable implementations are not a requirement.
 
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
-The consolidation steps below are ordered by rough expected net line reduction;
-the estimates include new machinery, overlap, and should not be added together.
+The immediate goals below follow the recommended implementation order. Estimates
+are rough net changes in Lean code, include new machinery, overlap, and should
+not be added together.
 
-### Call frames (~350 lines)
+### Named record outputs (~20–50 net lines removed)
 
-Share preservation of encoded live variables, size headers, and scratch regions
-across internal calls. Combine this with `Pipeline.runs` for the repeated call,
-commit, and advance sequences in `Matrices/RowStep.lean`,
-`GaussJordan/ClearStep.lean`, and `GaussJordan/EliminationBody.lean`.
-Replace their nested sequence proofs and per-tape preservation bookkeeping.
+**Add named record output assembly as a thin derived theorem.**
 
-### Domain views (~75 lines)
+The same pattern occurs in
+[ComputedFrame](Computation/ComputedFrame.lean),
+[ComputedProjection](Computation/ComputedProjection.lean),
+[PackingCall](Arrays/PackingCall.lean),
+and [PreparedCounts](Examples/SMP/PreparedCounts.lean):
 
-Build on the domain-equality transport in `ofNamedLayout` to consolidate
-carrier changes, matrix flattening, and their encoding and contract proofs.
-Specialize unary domains from `unaryOfLength` and improve transport and
-simplification lemmas while retaining exact polynomial widths.
+choose `Fintype.equivFin`, invoke `recordOutputs`, and reinterpret the
+result as a named record.
+
+A generic `namedRecordOutputs` theorem can encapsulate this. It reuses
+the existing record implementation and requires no new structure.
+
+### Domain transport (~100–200 net lines removed)
+
+**Consolidate encoding transport before adding further adapters.**
+
+[NamedTransform](Arrays/NamedTransform.lean)
+repeatedly proves that named-length arrays and polynomial-length arrays
+have matching widths and bits. Similar work appears in matrix views,
+renamed domains, and computed-size payloads.
+
+Existing `reindexDomains` already supplies the fundamental theorem.
+What is missing is convenient derived support for the standard domain
+constructors: arrays, products, records, and parameter renaming.
+
+Prove these compatibility facts once, then replace application proofs
+that unfold `ofCodec`, casts, and `ArrayEncoding.bits`. This extends the
+README’s “Domain views” item considerably beyond matrix flattening.
+
+### Packed-array extraction (~20–40 net lines removed)
+
+**Make packed-array extraction support an element conversion.**
+
+[readExactColumns_realizable](Examples/SMP/PreparedInput.lean)
+substantially repeats
+[boundedArrayAtSize_realizable](Arrays/PackingRead.lean):
+stripping the count header, identifying the active payload, and
+accounting for zero padding.
+
+The additional work is an encoding-preserving conversion of each
+element, including its generator dimension.
+
+Generalize the existing extraction theorem to accept that conversion.
+The SMP theorem should then supply only the column compatibility proof.
+This is a particularly concrete opportunity to remove a one-off proof.
+
+### Computed-size consumers (~0–20 net lines added)
+
+**Move generic computed-size consumer lifting out of SMP.**
+
+[runPreparedConsumer](Examples/SMP/PreparedConsumer.lean)
+contains no essential SMP operation. It packages a unary argument,
+invokes `atComputedSizes`, and retains the actual sizes with the result.
+
+Make this a generic unary computed-size call operation, implemented
+using `recordComputedFrame` and `atComputedSizes`. Prepared consumers
+become a specialization. This directly supports future algorithms
+consuming input-dependent dimensions.
+
+### Call frames (~250–450 net lines removed)
+
+**Keep call-frame consolidation as the largest infrastructure target.**
+
+[EliminationBody](GaussJordan/EliminationBody.lean),
+`ClearStep`, and `RowStep` repeatedly propagate region bounds, immutable
+size headers, live values, and unaffected tapes between calls.
+
+`Pipeline.runs` already handles sequencing. The missing reusable part
+is preservation of the surrounding call state. This supports the
+README’s existing estimate of roughly **350 net lines removed**, though
+it remains an estimate.
+
+I would retain the existing shared fixed/runtime block-copy machinery;
+those implementations already share substantial infrastructure and are
+not simply independent duplicates.
+
+### Argument routing (~50–120 net lines removed)
+
+**Reduce argument-routing boilerplate using existing composition.**
+
+[indexedMap_realizable](Arrays/IndexedMap.lean)
+and matrix access proofs manually build nested contexts, embeddings,
+selections, and `letThen` continuations.
+
+The existing `onResults`, `argument`, and record composition machinery
+already express much of this. Rewrite representative proofs with those
+tools before introducing algorithm notation.
+
+Likewise, fixed finite operations should take ordinary mathematical
+functions where possible. Arguments such as
+`∀ sizes : Empty → ℕ, ...` in
+[finiteOperation](Primitives/FiniteOperations.lean)
+expose a vacuous size assignment that callers repeatedly instantiate
+with `Empty.elim`.
+
+### Array coordinates (~50–120 net lines added)
+
+**Give array indexing a mathematical coordinate domain.**
+
+[arrayLookup and arrayUpdate](Arrays/Operations.lean)
+require an independent `indexCapacity` parameter and then separately prove
+the index is below the array length.
+
+A more natural public index is `Fin length`, with its binary encoding
+capacity determined internally from the polynomial length. This also
+simplifies matrix coordinates to a row index and a column index.
+
+This is an interface improvement, not an immediate large deletion: it
+needs a reusable bounded-index domain and adapters to existing machines.
+
+### Matrix capacities (~40–100 net lines added)
+
+**Hide counter capacities throughout the matrix interface.**
+
+[matrixEntry and matrixReplace](Matrices/EntryOperations.lean)
+expose three size parameters, including binary counter capacity. Their
+preconditions include implementation requirements such as
+`rows * columns ≤ 2 ^ capacity`.
+[rowTransform](Matrices/RowsOperations.lean)
+does the same.
+
+Mathematically, these operations need dimensions, valid coordinates, and
+matrix entries. Counter capacity should be chosen internally, following
+the public [Gauss–Jordan interface](GaussJordan/Operations.lean).
+Keep capacity-sensitive versions as internal building blocks.
+
+### Remainder capacity (~40–90 net lines added)
+
+**Remove the long-division restriction from public remainder.**
+
+[binaryRemainder](Arithmetic/Operations.lean)
+requires both a positive divisor and
+`2 * divisor ≤ 2 ^ capacity`. The latter reserves a shift bit for the
+implementation; it is not a mathematical requirement for remainder.
+
+Widen operands privately, call the existing implementation, and return
+the result at the original width. The public precondition should only
+require the chosen mathematical divisor condition.
+
+### Dependency sets (~20–70 net lines added)
+
+**Expose SMP dependencies as finite sets.**
+
+[Dependencies](Examples/SMP/Multisorted.lean)
+is currently a family of Boolean masks. Then
+[dependencySet](Examples/SMP/Multisorted.lean)
+converts those masks into sets for mathematical statements.
+
+A natural carrier would be
+`Coordinate → Finset Coordinate`. The codec can retain exactly the same
+characteristic-bit representation through `EncodedDomain.reindex`.
+This would let preparation conditions directly discuss membership,
+cardinality, and projections without repeatedly translating Boolean
+equations into set membership.
+
+This improves mathematical usability; substantial line savings are less
+certain.
+
+### Preparation outcomes (~20 net lines removed to ~50 added)
+
+**Replace numbered preparation outcomes with a mathematical sum.**
+
+[preparationAlternatives](Examples/SMP/PreparedOutcome.lean)
+exposes `Fin 2` tags. Its rejection alternative uses a bounded unary
+value that also admits the all-accepted sentinel. Correctness later
+proves that rejected outputs identify actual coordinates.
+
+The natural result is:
+
+```text
+an original rejected coordinate
+⊕
+an exact size assignment together with its prepared instance
+```
+
+Derive a generic sum-domain interface from the existing variant codec.
+Keep the sentinel inside the search algorithm. This would also simplify
+the nested `Fin.cases` definitions in
+[PreparedConsumer](Examples/SMP/PreparedConsumer.lean).
+No new mathematical structure is needed.
+
+Natural interfaces and fewer lines do not always coincide immediately.
+In particular, sum results and finite-set dependencies may initially need
+adapters. Their implementations should replace the current public forms,
+rather than leave two parallel APIs permanently.
+
+## Longer-term goals
 
 ### Integer arithmetic
 
