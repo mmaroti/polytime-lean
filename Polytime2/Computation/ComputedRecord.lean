@@ -72,14 +72,11 @@ theorem recordComputedFrame_realizable (bounds : NewParameter → MvPolynomial P
       ArrayEncoding.bits (((computedSizeDomain bounds).prod
         (bitVectors (SizeSubstitution.polynomial bounds singleton.widthPolynomial))).encode sizes
         (frame.1, (singleton.encode assignment (fun _ => frame.2)).setWidth _))
-    rw [bits_prod_encode, bits_prod_encode,
-      bits_setWidth _ (computedSizeWidth_bound bounds payload sizes frame.1),
-      bits_setWidth _ (computedSizeWidth_bound bounds singleton sizes frame.1)]
-    change _ = ArrayEncoding.bits ((computedSizeDomain bounds).encode sizes frame.1) ++
-      (ArrayEncoding.bits (singleton.encode assignment (fun _ => frame.2)) ++
-        List.replicate (MvPolynomial.eval sizes (SizeSubstitution.polynomial bounds singleton.widthPolynomial) -
-          singleton.width assignment) false)
-    simp only [singleton, namedRecord_unit_bits, EncodedDomain.width, namedRecord_unit_widthPolynomial]
-    rfl
+    rw [bits_prod_encode, bits_prod_encode]
+    have capacityEq : SizeSubstitution.polynomial bounds singleton.widthPolynomial = capacity := by
+      simp only [singleton, namedRecord_unit_widthPolynomial, capacity]
+    rw [capacityEq]
+    exact congrArg (fun bits => ArrayEncoding.bits ((computedSizeDomain bounds).encode sizes frame.1) ++ bits)
+      (ArrayEncoding.bits_setWidth_congr (namedRecord_unit_bits payload assignment frame.2).symm)
 
 end Polytime2.Computation

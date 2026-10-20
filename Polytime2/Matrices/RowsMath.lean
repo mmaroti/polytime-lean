@@ -48,17 +48,10 @@ theorem matrixIndex_eq (sizes : Fin 3 → ℕ) (row : Fin (sizes 1)) (column : F
 have the same coordinates. The bit encoding stays inside the encoded domain. -/
 noncomputable def matrixEquiv (sizes : Fin 3 → ℕ) :
     Matrix (Fin (sizes 1)) (Fin (sizes 2)) Carrier ≃
-      (Fin (MvPolynomial.eval sizes StandardMatrixEntry.length) → Carrier) where
-  toFun matrix index :=
-    let coordinate := (matrixIndex sizes).symm index
-    matrix coordinate.1 coordinate.2
-  invFun array row column := array (matrixIndex sizes (row, column))
-  left_inv matrix := by
-    funext row column
-    exact congrArg (fun coordinate => matrix coordinate.1 coordinate.2) ((matrixIndex sizes).left_inv (row, column))
-  right_inv array := by
-    funext index
-    exact congrArg array ((matrixIndex sizes).right_inv index)
+      (Fin (MvPolynomial.eval sizes StandardMatrixEntry.length) → Carrier) :=
+  EncodedDomain.MatrixEncoding.flattenEquiv.trans
+    (EncodedDomain.MatrixEncoding.functionEquiv
+      (finCongr (by simp [StandardMatrixEntry.length])))
 
 @[simp] theorem matrixEquiv_apply (sizes : Fin 3 → ℕ)
     (matrix : Matrix (Fin (sizes 1)) (Fin (sizes 2)) Carrier) (row : Fin (sizes 1)) (column : Fin (sizes 2)) :

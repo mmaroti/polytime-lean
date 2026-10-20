@@ -48,18 +48,12 @@ theorem booleanOperation_realizable (operation : (Argument → Bool) → Bool) :
     booleans (fun _ arguments => operation arguments)).withConstantSizes (Parameter := Parameter)
   exact table.reindexDomains (fun _ => booleans) booleans (fun _ _ => Equiv.refl Bool)
     (fun _ => Equiv.refl Bool)
-    (by intros; simp [withConstantSizes, finiteOperation, EncodedDomain.constant, booleans, fixed, ofCodec])
-    (by intros; simp [withConstantSizes, finiteOperation, EncodedDomain.constant, booleans, fixed, ofCodec])
-    (by
-      intros
-      apply ArrayPacking.bits_injective
-      simp only [withConstantSizes, finiteOperation, EncodedDomain.constant, booleans, fixed, ofCodec]
-      simp only [ArrayEncoding.bits_cast, Equiv.refl_apply])
-    (by
-      intros
-      apply ArrayPacking.bits_injective
-      simp only [withConstantSizes, finiteOperation, EncodedDomain.constant, booleans, fixed, ofCodec]
-      simp only [ArrayEncoding.bits_cast, Equiv.refl_apply])
+    (by intros; simp [withConstantSizes, finiteOperation, booleans, EncodedDomain.width])
+    (by intros; simp [withConstantSizes, finiteOperation, booleans, EncodedDomain.width])
+    (by intros; simp only [withConstantSizes, finiteOperation, constant_encode_bits,
+      booleans, fixed_encode_bits]; rfl)
+    (by intros; simp only [withConstantSizes, finiteOperation, constant_encode_bits,
+      booleans, fixed_encode_bits]; rfl)
 
 /-- Unsigned comparison at an exact polynomial width. -/
 noncomputable def bitsLess (width : MvPolynomial Parameter ℕ) : Computation Parameter Bool where
@@ -81,13 +75,11 @@ theorem bitsLess_realizable (width : MvPolynomial Parameter ℕ) : (bitsLess wid
       booleans, fixed, ofCodec, SizeSubstitution.polynomial])
     (by
       intros
-      apply ArrayPacking.bits_injective
       simp only [computation, bitsLess, binaryLess, Computation.substitute, EncodedDomain.substitute,
         binaryNaturals, bitVectors, ofCodec, valueEquiv, ArrayEncoding.bits_cast]
       rfl)
     (by
       intros
-      apply ArrayPacking.bits_injective
       simp only [computation, bitsLess, binaryLess, Computation.substitute, EncodedDomain.substitute,
         booleans, fixed, ofCodec]
       simp only [ArrayEncoding.bits_cast, Equiv.refl_apply])

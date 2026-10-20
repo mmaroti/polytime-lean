@@ -45,13 +45,12 @@ theorem convertedFlags_realizable (coordinates generators : MvPolynomial Paramet
   apply (conversionAcceptance_realizable (L := L) (Carrier := Carrier) coordinates generators).withEncodedOutput
     (booleans.arrayOfLength coordinates) (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).compute
   · intro sizes
-    simp [conversionAcceptance, booleans, fixed, ofCodec,
-      EncodedDomain.constant, arrayOfLength, mapArray]
+    simp [conversionAcceptance, booleans, width, arrayOfLength, mapArray]
   · intro sizes arguments
     apply congrArg CallingConvention.tape
-    simp [conversionAcceptance, coordinateAccepted, convertedFlags, booleans, fixed, ofCodec,
-      EncodedDomain.constant, arrayOfLength, mapArray, ArrayEncoding.bits_cast]
-    simp only [ArrayEncoding.bits_encode, ArrayEncoding.bits_cast]
+    simp only [conversionAcceptance, coordinateAccepted, convertedFlags, mapArray,
+      arrayOfLength_encode_bits, ArrayEncoding.bits_encode, constant_encode_bits,
+      booleans, fixed_encode_bits]
 
 noncomputable def convertedRejection (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=

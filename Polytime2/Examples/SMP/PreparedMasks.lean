@@ -165,41 +165,16 @@ theorem dependencyMasks_realizable (coordinates generators : MvPolynomial Parame
     rowReady
   apply blocks.withEncodedOutput computation.outputDomain computation.compute
   · intro current
-    change ((Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier))).renameParameters
-      (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-        WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).width current =
-      (EncodedDomain.record (Nat.card (SICatalogue L Carrier))
-        (fun parent => EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (matrix parent))).width current
-    rw [EncodedDomain.renameParameters_width]
-    change MvPolynomial.eval (current ∘ Sum.inr)
-      (EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (fun parent =>
-        EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (fun child =>
-          ((EncodedDomain.booleans : EncodedDomain (Multisorted.Parameter (Nat.card (SICatalogue L Carrier)))).array
-            (.inl child)).array (.inl parent)))).widthPolynomial = _
-    simp only [EncodedDomain.record_widthPolynomial]
-    simp [matrix, EncodedDomain.array, EncodedDomain.booleans, EncodedDomain.fixed,
-      EncodedDomain.ofCodec]
+    simp only [computation, dependencyMasks, EncodedDomain.renameParameters_width,
+      EncodedDomain.width, Multisorted.dependencyDomain]
+    rw [EncodedDomain.reindex_widthPolynomial]
+    simp [matrix, EncodedDomain.booleans, Function.comp_def]
   · intro current arguments
     apply congrArg CallingConvention.tape
-    change EncodedDomain.ArrayEncoding.bits
-      (((Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier))).renameParameters
-        (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-          WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).encode current
-        (computation.compute current arguments)) =
-      EncodedDomain.ArrayEncoding.bits
-        ((EncodedDomain.record (Nat.card (SICatalogue L Carrier))
-          (fun parent => EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (matrix parent))).encode current
-          (fun parent child position childPosition => computation.compute current arguments parent position child childPosition))
-    rw [EncodedDomain.renameParameters_bits]
-    change EncodedDomain.ArrayEncoding.bits
-      ((EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (fun parent =>
-        EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (fun child =>
-          (EncodedDomain.booleans.array (.inl child)).array (.inl parent)))).encode
-        (current ∘ Sum.inr) (fun parent child position childPosition =>
-          computation.compute current arguments parent position child childPosition)) = _
-    simp only [EncodedDomain.bits_record_encode, EncodedDomain.array, EncodedDomain.ofCodec,
-      EncodedDomain.ArrayEncoding.bits_cast, EncodedDomain.ArrayEncoding.bits_encode,
-      matrix, EncodedDomain.booleans, EncodedDomain.fixed]
+    simp only [computation, dependencyMasks, EncodedDomain.renameParameters_bits, Multisorted.dependencyDomain]
+    rw [EncodedDomain.reindex_encode_bits]
+    simp only [EncodedDomain.bits_record_encode, matrix, EncodedDomain.array_encode_bits,
+      EncodedDomain.ArrayEncoding.bits_encode, EncodedDomain.booleans, EncodedDomain.fixed_encode_bits]
     rfl
 
 /-- The assembled runtime masks are the complete dependency data of the exact

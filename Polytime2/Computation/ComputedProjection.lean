@@ -76,18 +76,12 @@ theorem projectComputedFrame_realizable (bounds : NewParameter → MvPolynomial 
         (bitVectors (SizeSubstitution.polynomial fullBounds renamed.widthPolynomial))).encode sizes
           (frame.val.1, (renamed.encode (computedSizeAssignment fullBounds sizes frame.val.1)
             frame.val.2).setWidth _)) = _
-      rw [bits_prod_encode, List.append_nil,
-        bits_setWidth _ (computedSizeWidth_bound fullBounds renamed sizes frame.val.1),
-        bits_setWidth _ (computedSizeWidth_bound bounds payload sizes (fun name => frame.val.1 (.inr name))),
-        renameParameters_bits]
+      rw [bits_prod_encode, List.append_nil]
       have capacityEq : SizeSubstitution.polynomial fullBounds renamed.widthPolynomial = capacity :=
         extendedResult_capacity bounds payload
-      have widthEq : renamed.width (computedSizeAssignment fullBounds sizes frame.val.1) =
-          payload.width (computedSizeAssignment bounds sizes (fun name => frame.val.1 (.inr name))) := by
-        rw [renameParameters_width]
-        rfl
-      rw [capacityEq, widthEq]
-      rfl
+      rw [capacityEq]
+      exact congrArg (fun bits => ArrayEncoding.bits ((computedSizeDomain fullBounds).encode sizes frame.val.1) ++ bits)
+        (ArrayEncoding.bits_setWidth_congr (renameParameters_bits payload Sum.inr _ frame.val.2))
     · simp only [ArrayEncoding.bits, List.length_ofFn]
   have paired := Realizable.pairOutputs computation.inputDomains index (bitVectors capacity)
     computation.precondition sizesResult bitsResult indexReady bitsReady

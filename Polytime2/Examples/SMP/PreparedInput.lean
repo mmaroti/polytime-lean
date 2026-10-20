@@ -68,17 +68,10 @@ theorem readExactColumns_realizable (coordinates generators : MvPolynomial Param
       ArrayEncoding.bits (target.encode current
         (column.1, fun generator => column.2 (Fin.cast packed.property.2.symm generator))) =
       ArrayEncoding.bits (source.encode original column) := by
-    change ArrayEncoding.bits
-      (((EncodedDomain.fixed (enumeration sort)).prod
-        ((EncodedDomain.fixed (enumeration sort)).array (.inr (.inr ())))).encode current
-          (column.1, fun generator => column.2 (Fin.cast packed.property.2.symm generator))) =
-      ArrayEncoding.bits
-        (((elementDomain (SortCarrier (L := L) (Carrier := Carrier) sort)).constant.prod
-          ((elementDomain (SortCarrier (L := L) (Carrier := Carrier) sort)).constant.arrayOfLength generators)).encode
-          original column)
-    simp only [EncodedDomain.array, arrayOfLength, EncodedDomain.constant,
-      elementDomain, fixed, ofCodec, ArrayEncoding.bits_cast]
-    simp only [ArrayEncoding.bits_append, ArrayEncoding.bits_cast, ArrayEncoding.bits_encode, enumeration, BitVec.ofNatLT_eq_ofNat]
+    simp only [source, target, typedColumn, coordinateBlockMap, preparedColumnDomain,
+      bits_prod_encode, array_encode_bits, arrayOfLength_encode_bits, ArrayEncoding.bits_encode,
+      constant_encode_bits, elementDomain, fixed_encode_bits, enumeration,
+      ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
     apply congrArg (List.append _)
     exact congrArg List.flatten
       (List.ofFn_congr packed.property.2 (fun generator => ArrayEncoding.bits
@@ -90,7 +83,7 @@ theorem readExactColumns_realizable (coordinates generators : MvPolynomial Param
           let column := values (Fin.cast packed.property.1.symm position)
           (column.1, fun generator => column.2 (Fin.cast packed.property.2.symm generator)))) =
       ArrayEncoding.bits (ArrayEncoding.encode (source.encode original) packed.val.1.val values) := by
-    simp only [EncodedDomain.array, ofCodec, ArrayEncoding.bits_cast, ArrayEncoding.bits_encode]
+    simp only [array_encode_bits, ArrayEncoding.bits_encode]
     simp_rw [columnBits]
     exact congrArg List.flatten
       (List.ofFn_congr packed.property.1 (fun position => ArrayEncoding.bits
@@ -150,37 +143,15 @@ theorem preparedInput_realizable (coordinates generators : MvPolynomial Paramete
     fieldReady
   apply assembled.withEncodedOutput computation.outputDomain computation.compute
   · intro current
-    change ((Multisorted.inputDomain (enumeration (L := L) (Carrier := Carrier))).renameParameters
-      (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-        WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).width current =
-      (EncodedDomain.record (Nat.card (SICatalogue L Carrier)) columns).width current
-    rw [renameParameters_width]
-    change MvPolynomial.eval (current ∘ Sum.inr)
-      (EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (fun sort =>
-        let scalar : EncodedDomain (Multisorted.Parameter (Nat.card (SICatalogue L Carrier))) :=
-          EncodedDomain.fixed (enumeration sort)
-        (scalar.prod (scalar.array (.inr ()))).array (.inl sort))).widthPolynomial = _
-    simp only [record_widthPolynomial]
-    simp [columns, preparedColumnDomain, EncodedDomain.array, EncodedDomain.prod, fixed, ofCodec]
+    simp only [computation, preparedInput, renameParameters_width, width, Multisorted.inputDomain]
+    rw [reindex_widthPolynomial]
+    simp [columns, preparedColumnDomain, Function.comp_def]
   · intro current arguments
     apply congrArg CallingConvention.tape
-    change ArrayEncoding.bits
-      (((Multisorted.inputDomain (enumeration (L := L) (Carrier := Carrier))).renameParameters
-        (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-          WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).encode current
-        (computation.compute current arguments)) =
-      ArrayEncoding.bits ((EncodedDomain.record (Nat.card (SICatalogue L Carrier)) columns).encode current
-        (fun sort position => ((computation.compute current arguments).2 sort position,
-          fun generator => (computation.compute current arguments).1 generator sort position)))
-    rw [renameParameters_bits]
-    change ArrayEncoding.bits
-      ((EncodedDomain.record (Nat.card (SICatalogue L Carrier)) (fun sort =>
-        let scalar := EncodedDomain.fixed (enumeration sort)
-        (scalar.prod (scalar.array (.inr ()))).array (.inl sort))).encode (current ∘ Sum.inr)
-        (fun sort position => ((computation.compute current arguments).2 sort position,
-          fun generator => (computation.compute current arguments).1 generator sort position))) = _
-    simp only [bits_record_encode, columns, preparedColumnDomain, EncodedDomain.array, EncodedDomain.prod,
-      fixed, ofCodec, ArrayEncoding.bits_cast, ArrayEncoding.bits_encode, ArrayEncoding.bits_append]
+    simp only [computation, preparedInput, renameParameters_bits, Multisorted.inputDomain]
+    rw [reindex_encode_bits]
+    simp only [bits_record_encode, columns, preparedColumnDomain, array_encode_bits,
+      ArrayEncoding.bits_encode, bits_prod_encode, fixed_encode_bits]
     rfl
 
 /-- The public runtime data are exactly the mathematical prepared input. -/
@@ -237,31 +208,12 @@ theorem preparedPayload_realizable (coordinates generators : MvPolynomial Parame
     (fun current arguments => (computation.compute current arguments).2) inputReady masksReady
   apply paired.withEncodedOutput computation.outputDomain computation.compute
   · intro current
-    change (((Multisorted.inputDomain (enumeration (L := L) (Carrier := Carrier))).prod
-      (Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier)))).renameParameters Sum.inr).width current = _
-    rw [renameParameters_width]
-    simp [preparedInput, dependencyMasks, ofCodec,
-      renameParameters, MvPolynomial.eval_rename]
+    simp [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
+      dependencyMasks, width, MvPolynomial.eval_rename]
   · intro current arguments
     apply congrArg CallingConvention.tape
-    change ArrayEncoding.bits
-      ((((Multisorted.inputDomain (enumeration (L := L) (Carrier := Carrier))).prod
-        (Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier)))).renameParameters
-          (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-            WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).encode current
-              (computation.compute current arguments)) = _
-    rw [renameParameters_bits, bits_prod_encode, bits_prod_encode]
-    change _ = ArrayEncoding.bits
-      (((Multisorted.inputDomain (enumeration (L := L) (Carrier := Carrier))).renameParameters
-        (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-          WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).encode current
-            (computation.compute current arguments).1) ++
-      ArrayEncoding.bits
-        (((Multisorted.dependencyDomain (Nat.card (SICatalogue L Carrier))).renameParameters
-          (Sum.inr : Multisorted.Parameter (Nat.card (SICatalogue L Carrier)) →
-            WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter))).encode current
-              (computation.compute current arguments).2)
-    rw [renameParameters_bits, renameParameters_bits]
+    simp only [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
+      dependencyMasks, renameParameters_bits, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
 
 /-- On accepted targets, the computed payload is the exact mathematical
 preparation, including its stored dependency coordinates. -/

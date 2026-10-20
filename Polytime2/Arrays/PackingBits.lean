@@ -68,10 +68,8 @@ theorem arrayPackBits_realizable (width length : MvPolynomial Parameter ℕ) :
   have outputWidths sizes : target.outputDomain.width sizes = specialized.outputDomain.width sizes :=
     inputWidths true sizes
   have inputEncodings choice sizes value :
-      ((target.inputDomains choice).encode sizes value).cast (inputWidths choice sizes) =
-        (specialized.inputDomains choice).encode sizes (inputs choice sizes value) := by
-    apply bits_injective
-    rw [ArrayEncoding.bits_cast]
+      ArrayEncoding.bits ((target.inputDomains choice).encode sizes value) =
+        ArrayEncoding.bits ((specialized.inputDomains choice).encode sizes (inputs choice sizes value)) := by
     cases choice
     · change ArrayEncoding.bits ((booleans.arrayOfLength length).encode sizes value) =
         ArrayEncoding.bits (((booleans.arrayOfLength (MvPolynomial.X (1 : Fin 3))).substitute polynomials).encode sizes
@@ -86,8 +84,8 @@ theorem arrayPackBits_realizable (width length : MvPolynomial Parameter ℕ) :
       simp only [arrayOfLength, ofCodec, ArrayEncoding.bits_cast]
       exact (bitArrayCast_bits (lengthEq sizes) (widthEq sizes) value).symm
   have outputEncodings sizes value :
-      (target.outputDomain.encode sizes value).cast (outputWidths sizes) =
-        specialized.outputDomain.encode sizes (output sizes value) := inputEncodings true sizes value
+      ArrayEncoding.bits (target.outputDomain.encode sizes value) =
+        ArrayEncoding.bits (specialized.outputDomain.encode sizes (output sizes value)) := inputEncodings true sizes value
   have normalized := (arrayPackRawSized_realizable element 2 (MvPolynomial.X 1)).substitute polynomials |>.reindexDomains
     target.inputDomains target.outputDomain inputs output inputWidths outputWidths inputEncodings outputEncodings
   have compatible sizes (arguments : target.Arguments sizes) (_valid : target.precondition sizes arguments) :

@@ -36,6 +36,10 @@ noncomputable def renameParameters (domain : EncodedDomain.{0, carrierLevel} Par
     (fun sizes => domain.encode (sizes ∘ names)) (fun sizes => domain.decode (sizes ∘ names))
     (fun sizes => domain.decode_encode (sizes ∘ names)) (fun sizes => domain.encode_decode (sizes ∘ names))
 
+@[simp] theorem renameParameters_widthPolynomial (domain : EncodedDomain.{0, carrierLevel} Parameter)
+    (names : Parameter → NewParameter) :
+    (domain.renameParameters names).widthPolynomial = MvPolynomial.rename names domain.widthPolynomial := rfl
+
 @[simp] theorem renameParameters_width (domain : EncodedDomain.{0, carrierLevel} Parameter)
     (names : Parameter → NewParameter) (sizes : NewParameter → ℕ) :
     (domain.renameParameters names).width sizes = domain.width (sizes ∘ names) := by

@@ -61,6 +61,10 @@ noncomputable abbrev prod (left right : EncodedDomain.{parameterLevel, carrierLe
       rw [left.encode_decode _ _ _ firstAccepted, right.encode_decode _ _ _ secondAccepted]
       exact BitVec.extractLsb'_append_extractLsb')
 
+@[simp] theorem prod_widthPolynomial
+    (left right : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
+    (left.prod right).widthPolynomial = left.widthPolynomial + right.widthPolynomial := rfl
+
 @[simp] theorem bits_prod_encode
     (left right : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (sizes : Parameter → ℕ) (value : left.Carrier sizes × right.Carrier sizes) :
@@ -237,7 +241,9 @@ noncomputable def variant (count : ℕ)
     (alternatives : Fin count → EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
     (variant count alternatives).widthPolynomial = MvPolynomial.C (Nat.clog 2 count) +
       ∑ index, (alternatives index).widthPolynomial := by
-  simp [variant, VariantEncoding.storage, prod, ofCodec, fixed]
+  change MvPolynomial.C (Nat.clog 2 count) +
+    (record count (fun index => bitVectors (alternatives index).widthPolynomial)).widthPolynomial = _
+  simp only [record_widthPolynomial]
 
 /-- The tag is followed by every alternative's field in index order. -/
 theorem bits_variant_encode (count : ℕ)

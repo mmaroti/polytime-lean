@@ -16,13 +16,12 @@ limitations under the License.
 -/
 
 import Polytime2.Arrays.Transform
-import Polytime2.Arrays.PackingTransport
 
 /-! # Array transformation at a named size parameter -/
 
 namespace Polytime2.Computation
 
-open EncodedDomain ArrayPacking
+open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -34,17 +33,6 @@ noncomputable def mapArrayAtParameter (source target : EncodedDomain.{0, 0} Para
   outputDomain := target.array parameter
   precondition _ _ := True
   compute sizes arguments := fun index => operation sizes (arguments.val () index)
-
-private theorem namedArray_bits (element : EncodedDomain.{0, 0} Parameter) (parameter : Parameter)
-    (sizes : Parameter → ℕ) (values : Fin (sizes parameter) → element.Carrier sizes) :
-    ArrayEncoding.bits ((element.array parameter).encode sizes values) =
-      ArrayEncoding.bits ((element.arrayOfLength (MvPolynomial.X parameter)).encode sizes
-        ((Equiv.arrowCongr (finCongr (MvPolynomial.eval_X (f := sizes) parameter).symm) (Equiv.refl _)) values)) := by
-  simp only [EncodedDomain.array, arrayOfLength, ofCodec, ArrayEncoding.bits_cast,
-    ArrayEncoding.bits_encode]
-  exact congrArg List.flatten
-    (List.ofFn_congr (MvPolynomial.eval_X parameter).symm
-      (fun position => ArrayEncoding.bits (element.encode sizes (values position))))
 
 /-- Lift a total certified element operation at a named length, retaining any
 fixed finite family of immutable context tapes. -/
@@ -79,15 +67,13 @@ theorem arrayTransformAtParameter_realizable {Context : Type} [Fintype Context]
   have presented := (arrayTransform_realizable context source target (MvPolynomial.X parameter) operation step).reindexDomains
     computation.inputDomains computation.outputDomain argumentsEquiv targetEquiv
     (by rintro (name | name) sizes; rfl; simp [computation, arrayTransformAtParameter, arrayTransform,
-      EncodedDomain.array, arrayOfLength, ofCodec])
-    (by intros; simp [computation, arrayTransformAtParameter, arrayTransform, EncodedDomain.array, arrayOfLength, ofCodec])
+      EncodedDomain.width])
+    (by intros; simp [computation, arrayTransformAtParameter, arrayTransform, EncodedDomain.width])
     (by
       rintro (name | name) sizes value
       · rfl
-      · apply bits_injective
-        rw [ArrayEncoding.bits_cast]
-        exact namedArray_bits source parameter sizes value)
-    (by intro sizes value; apply bits_injective; rw [ArrayEncoding.bits_cast]; exact namedArray_bits target parameter sizes value)
+      · exact array_X_encode_bits source parameter sizes value)
+    (by intro sizes value; exact array_X_encode_bits target parameter sizes value)
   exact presented.withSpecification computation.precondition computation.compute (by intros; trivial) (by
     intro sizes arguments valid
     funext position
@@ -97,22 +83,15 @@ theorem mapArrayAtParameter_realizable (source target : EncodedDomain.{0, 0} Par
     (parameter : Parameter) (operation : ∀ sizes, source.Carrier sizes → target.Carrier sizes)
     (step : (unaryMap source target (fun _ _ => True) (fun sizes value => operation sizes value.val)).Realizable) :
     (mapArrayAtParameter source target parameter operation).Realizable := by
-  let computation := mapArrayAtParameter source target parameter operation
-  let sourceEquiv (sizes : Parameter → ℕ) := Equiv.arrowCongr
-    (finCongr (MvPolynomial.eval_X (f := sizes) parameter).symm) (Equiv.refl (source.Carrier sizes))
-  let targetEquiv (sizes : Parameter → ℕ) := Equiv.arrowCongr
-    (finCongr (MvPolynomial.eval_X (f := sizes) parameter).symm) (Equiv.refl (target.Carrier sizes))
-  have presented := (mapArray_realizable source target (MvPolynomial.X parameter) operation step).reindexDomains
-    computation.inputDomains computation.outputDomain (fun _ sizes => sourceEquiv sizes) targetEquiv
-    (by intros; simp [computation, mapArrayAtParameter, mapArray, EncodedDomain.array,
-      EncodedDomain.arrayOfLength, EncodedDomain.ofCodec])
-    (by intros; simp [computation, mapArrayAtParameter, mapArray, EncodedDomain.array,
-      EncodedDomain.arrayOfLength, EncodedDomain.ofCodec])
-    (by intro name sizes value; apply bits_injective; rw [ArrayEncoding.bits_cast]; exact namedArray_bits source parameter sizes value)
-    (by intro sizes value; apply bits_injective; rw [ArrayEncoding.bits_cast]; exact namedArray_bits target parameter sizes value)
-  exact presented.withSpecification computation.precondition computation.compute (by intros; trivial) (by
-    intro sizes arguments valid
-    funext position
-    rfl)
+  have selected := step.withArguments
+    (arrayTransformStep Empty.elim source target (fun sizes _ value => operation sizes value)).inputDomains
+    ⟨Sum.inr, Sum.inr_injective⟩ (by intro name; cases name; rfl)
+  have mapped := arrayTransformAtParameter_realizable Empty.elim source target parameter
+    (fun sizes _ value => operation sizes value) selected
+  exact mapped.withArguments (mapArrayAtParameter source target parameter operation).inputDomains
+    ⟨Sum.elim Empty.elim id, by
+      rintro (impossible | first) (impossible' | second) equal
+      all_goals first | exact impossible.elim | exact impossible'.elim | exact congrArg Sum.inr equal⟩
+    (by rintro (impossible | name); exact impossible.elim; cases name; rfl)
 
 end Polytime2.Computation

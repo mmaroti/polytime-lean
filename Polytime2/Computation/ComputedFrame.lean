@@ -164,8 +164,7 @@ theorem renamedPairView_realizable (first second : EncodedDomain HostParameter)
     (renamedPairView first second hostNames).Realizable := by
   apply encodingMap_realizable
   · intro sizes
-    simp [EncodedDomain.prod, EncodedDomain.ofCodec,
-      EncodedDomain.renameParameters, MvPolynomial.eval_rename]
+    simp [EncodedDomain.width, MvPolynomial.eval_rename]
   · intro sizes values
     rw [EncodedDomain.renameParameters_bits, EncodedDomain.bits_prod_encode,
       EncodedDomain.bits_prod_encode, EncodedDomain.renameParameters_bits,

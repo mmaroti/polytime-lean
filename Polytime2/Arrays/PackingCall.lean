@@ -122,9 +122,6 @@ theorem boundedArrayCallFrame_realizable (element : EncodedDomain Parameter) (le
         ArrayEncoding.bits (ArrayEncoding.encode (element.encode sizes) (retained sizes arguments).val values) :=
       (namedRecord_unit_bits (packingPayload element) assignment values).trans
         (packingPayload_bits element length sizes (retained sizes arguments) values)
-    have payloadWidth : payload.width assignment = (retained sizes arguments).val * element.width sizes := by
-      have lengths := congrArg List.length prefixBits
-      simpa only [ArrayEncoding.bits, List.length_ofFn] using lengths
     have capacityEq : MvPolynomial.eval sizes (SizeSubstitution.polynomial bounds payload.widthPolynomial) =
         MvPolynomial.eval sizes (length * element.widthPolynomial) := by rw [packingCall_capacity]
     apply congrArg tape
@@ -137,12 +134,8 @@ theorem boundedArrayCallFrame_realizable (element : EncodedDomain Parameter) (le
       (MvPolynomial.eval sizes (SizeSubstitution.polynomial bounds payload.widthPolynomial))) =
         ArrayEncoding.bits ((ArrayEncoding.encode (element.encode sizes) (retained sizes arguments).val values).setWidth
           (MvPolynomial.eval sizes (length * element.widthPolynomial)))
-    have fits : (retained sizes arguments).val * element.width sizes ≤
-        MvPolynomial.eval sizes (length * element.widthPolynomial) := by
-      simp only [map_mul]
-      exact Nat.mul_le_mul_right (element.width sizes) (Nat.le_of_lt_succ (retained sizes arguments).isLt)
-    rw [bits_setWidth _ (computedSizeWidth_bound bounds payload sizes (sizesResult sizes arguments)),
-      bits_setWidth _ fits, prefixBits, capacityEq, payloadWidth]
+    rw [capacityEq]
+    exact ArrayEncoding.bits_setWidth_congr prefixBits
 
 /-- Pack a mask-selected array and prepare its exact result for a consumer at
 the computed count. Both stages use the same public mathematical interface. -/

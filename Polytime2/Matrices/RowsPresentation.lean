@@ -48,11 +48,7 @@ noncomputable def mathematicalEquivalence (scalar : EncodedDomain.{0, 0} Empty) 
 
 private theorem mathematical_widths (scalar : EncodedDomain.{0, 0} Empty) (name : TapeName) (sizes : Fin 3 → ℕ) :
     (mathematicalDomains scalar name).width sizes = (domains scalar name).width sizes := by
-  by_cases isInput : name = inputTape
-  · subst name; rfl
-  · by_cases isOutput : name = dataTape 5
-    · subst name; rfl
-    · simp only [mathematicalDomains, show ¬ (name = inputTape ∨ name = dataTape 5) by tauto, ↓reduceIte]
+  fin_cases name <;> rfl
 
 private theorem mathematical_encoding (scalar : EncodedDomain.{0, 0} Empty) (name : TapeName) (sizes : Fin 3 → ℕ)
     (value : (mathematicalDomains scalar name).Carrier sizes) :

@@ -62,11 +62,11 @@ theorem reindexDomains {computation : Computation.{carrierLevel} Parameter Input
       (inputDomains name).width sizes = (computation.inputDomains name).width sizes)
     (outputWidths : ∀ sizes, outputDomain.width sizes = computation.outputDomain.width sizes)
     (inputEncodings : ∀ name sizes value,
-      ((inputDomains name).encode sizes value).cast (inputWidths name sizes) =
-        (computation.inputDomains name).encode sizes (inputEquivalence name sizes value))
+      EncodedDomain.ArrayEncoding.bits ((inputDomains name).encode sizes value) =
+        EncodedDomain.ArrayEncoding.bits ((computation.inputDomains name).encode sizes (inputEquivalence name sizes value)))
     (outputEncodings : ∀ sizes value,
-      (outputDomain.encode sizes value).cast (outputWidths sizes) =
-        computation.outputDomain.encode sizes (outputEquivalence sizes value)) :
+      EncodedDomain.ArrayEncoding.bits (outputDomain.encode sizes value) =
+        EncodedDomain.ArrayEncoding.bits (computation.outputDomain.encode sizes (outputEquivalence sizes value))) :
     (computation.reindexDomains inputDomains outputDomain inputEquivalence outputEquivalence).Realizable := by
   classical
   obtain ⟨ScratchName, finiteScratch, scratchDomains, State, finiteState,
@@ -93,12 +93,8 @@ theorem reindexDomains {computation : Computation.{carrierLevel} Parameter Input
   · intro name sizes value
     rcases name with parameter | argument | result | scratch
     · rfl
-    · have bits := congrArg EncodedDomain.ArrayEncoding.bits (inputEncodings argument sizes value)
-      rw [EncodedDomain.ArrayEncoding.bits_cast] at bits
-      exact congrArg CallingConvention.tape bits
-    · have bits := congrArg EncodedDomain.ArrayEncoding.bits (outputEncodings sizes value)
-      rw [EncodedDomain.ArrayEncoding.bits_cast] at bits
-      exact congrArg CallingConvention.tape bits
+    · exact congrArg CallingConvention.tape (inputEncodings argument sizes value)
+    · exact congrArg CallingConvention.tape (outputEncodings sizes value)
     · rfl
   · intro sizes input valid
     exact valid

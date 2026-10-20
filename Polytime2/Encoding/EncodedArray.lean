@@ -84,6 +84,24 @@ theorem encode_decode (elementEncode : Carrier → BitVec width)
 abbrev bits {width : ℕ} (value : BitVec width) : List Bool :=
   List.ofFn (fun index : Fin width => value.getLsbD index.val)
 
+/-- Canonical bit lists determine their bit vectors. -/
+theorem bits_injective {width : ℕ} : Function.Injective (bits : BitVec width → List Bool) := by
+  intro first second equal
+  apply BitVec.eq_of_getLsbD_eq
+  intro index within
+  have entry := congrArg (fun values : List Bool => values[index]?) equal
+  simpa only [bits, List.getElem?_ofFn, within, dite_true, Option.some.injEq] using entry
+
+/-- Resizing equal canonical words preserves equality, regardless of their
+original vector widths. -/
+theorem bits_setWidth_congr {firstWidth secondWidth capacity : ℕ}
+    {first : BitVec firstWidth} {second : BitVec secondWidth}
+    (equal : bits first = bits second) : bits (first.setWidth capacity) = bits (second.setWidth capacity) := by
+  have widths : firstWidth = secondWidth := by
+    simpa only [bits, List.length_ofFn] using congrArg List.length equal
+  subst secondWidth
+  exact congrArg (fun value => bits (value.setWidth capacity)) (bits_injective equal)
+
 /-- Reindexing an array by an equality of lengths does not change its bit
 encoding, after casting the resulting vector width. -/
 theorem encode_cast {Carrier : Type carrierLevel} {width firstLength secondLength : ℕ}
@@ -238,6 +256,25 @@ noncomputable def flattenPolynomial (rows columns : MvPolynomial Parameter ℕ)
 
 end MatrixEncoding
 
+@[simp] theorem constant_encode_bits (domain : EncodedDomain.{0, carrierLevel} Empty)
+    (sizes : Parameter → ℕ) (value : domain.Carrier Empty.elim) :
+    ArrayEncoding.bits ((domain.constant (Parameter := Parameter)).encode sizes value) =
+      ArrayEncoding.bits (domain.encode Empty.elim value) := by
+  simp only [constant, ofCodec, ArrayEncoding.bits_cast]
+
+@[simp] theorem fixed_encode_bits {Carrier : Type carrierLevel} {cardinality : ℕ}
+    (enumeration : Carrier ≃ Fin cardinality) (sizes : Parameter → ℕ) (value : Carrier) :
+    ArrayEncoding.bits ((fixed (Parameter := Parameter) enumeration).encode sizes value) =
+      ArrayEncoding.bits (BitVec.ofNat (Nat.clog 2 cardinality) (enumeration value).val) := by
+  simp only [fixed, ofCodec, ArrayEncoding.bits_cast, BitVec.ofNatLT_eq_ofNat]
+
+theorem reindex_encode_bits (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (Carrier' : (Parameter → ℕ) → Type carrierLevel)
+    (equivalence : ∀ assignment, Carrier' assignment ≃ domain.Carrier assignment)
+    (sizes : Parameter → ℕ) (value : Carrier' sizes) :
+    ArrayEncoding.bits ((domain.reindex Carrier' equivalence).encode sizes value) =
+      ArrayEncoding.bits (domain.encode sizes (equivalence sizes value)) := rfl
+
 /-- Arrays whose length is any polynomial expression in the size parameters. -/
 noncomputable def arrayOfLength (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
@@ -261,6 +298,14 @@ noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} 
     (fun assignment => ArrayEncoding.decode (element.decode assignment) _)
     (fun assignment => ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _)
     (fun assignment => ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _)
+
+@[simp] theorem arrayOfLength_widthPolynomial (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (length : MvPolynomial Parameter ℕ) :
+    (element.arrayOfLength length).widthPolynomial = length * element.widthPolynomial := rfl
+
+@[simp] theorem array_widthPolynomial (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (parameter : Parameter) :
+    (element.array parameter).widthPolynomial = MvPolynomial.X parameter * element.widthPolynomial := rfl
 
 /-- Polynomial evaluation casts leave the concatenated array bits unchanged. -/
 @[simp] theorem arrayOfLength_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
@@ -353,6 +398,18 @@ theorem array_update_of_blocks (element : EncodedDomain.{parameterLevel, carrier
     ArrayEncoding.bits ((element.array parameter).encode assignment values) =
       ArrayEncoding.bits (ArrayEncoding.encode (element.encode assignment) _ values) := by
   simp only [array, ofCodec, ArrayEncoding.bits_cast]
+
+/-- Named arrays and variable-length polynomials use the same element blocks. -/
+theorem array_X_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (parameter : Parameter) (sizes : Parameter → ℕ)
+    (values : Fin (sizes parameter) → element.Carrier sizes) :
+    ArrayEncoding.bits ((element.array parameter).encode sizes values) =
+      ArrayEncoding.bits ((element.arrayOfLength (MvPolynomial.X parameter)).encode sizes
+        (Equiv.arrowCongr (finCongr (MvPolynomial.eval_X (f := sizes) parameter).symm) (Equiv.refl _) values)) := by
+  simp only [array, arrayOfLength, ofCodec, ArrayEncoding.bits_cast, ArrayEncoding.bits_encode]
+  exact congrArg List.flatten
+    (List.ofFn_congr (MvPolynomial.eval_X parameter).symm
+      (fun position => ArrayEncoding.bits (element.encode sizes (values position))))
 
 /-- Rectangular matrices use their mathematical row and column indices while
 retaining a flat row-major array encoding. -/

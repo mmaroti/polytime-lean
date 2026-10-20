@@ -41,13 +41,6 @@ theorem arrayCast_ofFn {firstLength secondLength : ℕ} {Element : Type}
   cases lengthEq
   rfl
 
-theorem bits_injective {width : ℕ} : Function.Injective (ArrayEncoding.bits : BitVec width → List Bool) := by
-  intro first second equal
-  apply BitVec.eq_of_getLsbD_eq
-  intro index within
-  have entry := congrArg (fun values : List Bool => values[index]?) equal
-  simpa only [ArrayEncoding.bits, List.getElem?_ofFn, within, dite_true, Option.some.injEq] using entry
-
 theorem bitArrayCast_bits {firstLength secondLength firstWidth secondWidth : ℕ}
     (lengthEq : firstLength = secondLength) (widthEq : firstWidth = secondWidth)
     (values : Fin secondLength → BitVec secondWidth) :

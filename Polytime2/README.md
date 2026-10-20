@@ -413,7 +413,10 @@ admissible inputs.
 `withSpecification` replaces a specification after proving agreement.
 `withConstantSizes` reuses a specialization-fixed computation alongside sizes.
 `reindexDomains` changes mathematical carriers through equivalences with the
-same widths and encoded bits. Matrix access reuses array computations this way.
+same widths and canonical bit lists, without bit-vector casts in the encoding
+obligations. Constructor lemmas for arrays, products, records, fixed domains,
+and parameter renaming share these comparisons. Equal canonical words remain
+equal under resizing. Matrix access reuses array computations this way.
 `choose` reads a Boolean argument and requires only the selected branch's
 precondition; uncalled branch scratch stays arbitrary.
 `arrayFold_realizable` traverses an immutable array while updating an
@@ -483,23 +486,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Domain transport (~100–200 net lines removed)
-
-**Consolidate encoding transport before adding further adapters.**
-
-[NamedTransform](Arrays/NamedTransform.lean)
-repeatedly proves that named-length arrays and polynomial-length arrays
-have matching widths and bits. Similar work appears in matrix views,
-renamed domains, and computed-size payloads.
-
-Existing `reindexDomains` already supplies the fundamental theorem.
-What is missing is convenient derived support for the standard domain
-constructors: arrays, products, records, and parameter renaming.
-
-Prove these compatibility facts once, then replace application proofs
-that unfold `ofCodec`, casts, and `ArrayEncoding.bits`. This extends the
-README’s “Domain views” item considerably beyond matrix flattening.
 
 ### Packed-array extraction (~20–40 net lines removed)
 

@@ -136,5 +136,17 @@ def reindex (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
         rw [decoding, valuesEqual]
       exact domain.encode_decode assignment bits (equivalence assignment value) oldAccepted
 
+@[simp] theorem fixed_widthPolynomial {Carrier : Type carrierLevel} {cardinality : ℕ}
+    (enumeration : Carrier ≃ Fin cardinality) :
+    (fixed (Parameter := Parameter) enumeration).widthPolynomial = MvPolynomial.C (Nat.clog 2 cardinality) := rfl
+
+@[simp] theorem constant_widthPolynomial (domain : EncodedDomain.{0, carrierLevel} Empty) :
+    (domain.constant (Parameter := Parameter)).widthPolynomial = MvPolynomial.C (domain.width Empty.elim) := rfl
+
+theorem reindex_widthPolynomial (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (Carrier' : (Parameter → ℕ) → Type carrierLevel)
+    (equivalence : ∀ assignment, Carrier' assignment ≃ domain.Carrier assignment) :
+    (domain.reindex Carrier' equivalence).widthPolynomial = domain.widthPolynomial := rfl
+
 end EncodedDomain
 end Polytime2
