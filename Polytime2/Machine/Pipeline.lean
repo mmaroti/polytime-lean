@@ -172,6 +172,29 @@ theorem runs (width : TapeName → ℕ) (readOnly : TapeName → Bool)
   runs_at width readOnly components entries exits representation (fun _ _ => 0)
     allowance halt execute initial represented
 
+/-- Compose an already established chain of restoring calls. The pipeline
+handles controller injections, handovers, and the aggregate transition bound. -/
+theorem runs_chain (width : TapeName → ℕ) (readOnly : TapeName → Bool)
+    (components : ∀ index, Machine (CallingConvention.Alphabet TapeName) (LocalState index))
+    (entries exits : ∀ index, LocalState index)
+    (tapes : Fin (count + 1) → Tapes (CallingConvention.Alphabet TapeName))
+    (ticks : Fin count → ℕ)
+    (halt : ∀ index symbols, components index (exits index) symbols = none)
+    (traces : ∀ index, CallingConvention.Runs width readOnly (components index) (ticks index)
+      (entries index) (fun _ => 0) (tapes index.castSucc)
+      (exits index) (fun _ => 0) (tapes index.succ)) :
+    ∃ total, total ≤ count * ((∑ index, ticks index) + 1) ∧
+      CallingConvention.Runs width readOnly (machine components entries) total
+        (position entries 0) (fun _ => 0) (tapes 0) none (fun _ => 0) (tapes (Fin.last count)) := by
+  obtain ⟨total, final, cost, trace, equal⟩ := runs width readOnly components entries exits
+    (fun stage current => current = tapes stage) (∑ index, ticks index) halt
+    (by
+      intro index current equal
+      subst current
+      exact ⟨ticks index, tapes index.succ, Finset.single_le_sum (fun _ _ => Nat.zero_le _) (Finset.mem_univ index),
+        traces index, rfl⟩) (tapes 0) rfl
+  exact ⟨total, cost, equal ▸ trace⟩
+
 /-- Formatting distinct writable destinations needs only their preserved
 regions and immutable source tapes. The finite pipeline establishes every
 destination's selected word, independently of all old writable contents. -/

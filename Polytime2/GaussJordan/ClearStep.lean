@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Machine.Pipeline
+
 import Polytime2.GaussJordan.ClearTarget
 
 /-! # Committing a cleared row and advancing its private counter
@@ -23,6 +25,8 @@ The enclosing column-clear loop owns the working matrix and target counter.
 Each row-clear call reads those values immutably and writes a separate result;
 the caller commits that result and advances through a separate counter output.
 -/
+
+set_option backward.isDefEq.respectTransparency false
 
 namespace Polytime2.StandardGaussJordanClearStep
 
@@ -33,12 +37,17 @@ variable {Scalar : Type} [Field Scalar] {cardinality : ℕ}
 abbrev TapeName := Sum StandardGaussJordanClearTarget.TapeName Unit
 abbrev Alphabet := CallingConvention.Alphabet TapeName
 abbrev IncrementState := Sum (StandardBinaryScan.State Bool) Unit
-abbrev State (width : ℕ) := Sum (StandardGaussJordanClearTarget.State width)
-  (Sum (Fin 3) (Sum IncrementState (Fin 3)))
+abbrev StageState (width : ℕ) : Fin 4 → Type
+  | 0 => StandardGaussJordanClearTarget.State width
+  | 1 | 3 => Fin 3
+  | 2 => IncrementState
+abbrev State (width : ℕ) := Pipeline.State (StageState width)
 
 noncomputable instance statesFinite (width : ℕ) : Fintype (State width) := by
   letI : Fintype (StandardGaussJordanClearTarget.State width) := inferInstance
-  dsimp only [State, IncrementState]
+  letI (stage : Fin 4) : Fintype (StageState width stage) := by
+    match stage with
+    | 0 | 1 | 2 | 3 => infer_instance
   infer_instance
 
 def dataTape (slot : Fin 18) : TapeName := .inl (StandardGaussJordanClearTarget.dataTape slot)
@@ -90,77 +99,33 @@ noncomputable def increment : Machine Alphabet IncrementState :=
 noncomputable def advance : Machine Alphabet (Fin 3) :=
   StandardTapeCommands.copy nextTape (dataTape 1) (by decide)
 
+noncomputable def components (enumeration : Scalar ≃ Fin cardinality) :
+    ∀ stage, Machine Alphabet (StageState ((FieldRow.scalarDomain enumeration).width Empty.elim) stage)
+  | 0 => MultiTape.wire targetWiring (StandardGaussJordanClearTarget.algorithm enumeration)
+  | 1 => commit
+  | 2 => increment
+  | 3 => advance
+
+def entries (width : ℕ) : ∀ stage, StageState width stage
+  | 0 => StandardGaussJordanClearTarget.entry width
+  | 1 | 3 => 0
+  | 2 => .inl (.inl true)
+
+def exits (width : ℕ) : ∀ stage, StageState width stage
+  | 0 => StandardGaussJordanClearTarget.exit width
+  | 1 | 3 => 2
+  | 2 => .inr ()
+
 noncomputable def machine (enumeration : Scalar ≃ Fin cardinality) :
     Machine Alphabet (State ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
-  MultiTape.sequence
-    (MultiTape.wire targetWiring (StandardGaussJordanClearTarget.algorithm enumeration))
-    (MultiTape.sequence commit (MultiTape.sequence increment advance 0)
-      (.inl (.inl (.inl true)))) (.inl 0)
+  Pipeline.machine (components enumeration) (entries ((FieldRow.scalarDomain enumeration).width Empty.elim))
 
-def entry (width : ℕ) : State width := .inl (StandardGaussJordanClearTarget.entry width)
-def exit (width : ℕ) : State width := .inr (.inr (.inr 2))
+def entry (width : ℕ) : State width := Pipeline.position (entries width) 0
+def exit (width : ℕ) : State width := none
 
 @[simp] theorem halt (enumeration : Scalar ≃ Fin cardinality) (symbols : Symbols Alphabet) :
-    machine enumeration (exit ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := by
-  simp [machine, exit, MultiTape.sequence, advance, StandardTapeCommands.copy,
-    MultiTape.wire, StandardTerminatedCopy.machine]
+    machine enumeration (exit ((FieldRow.scalarDomain enumeration).width Empty.elim)) symbols = none := rfl
 
-omit [Field Scalar] in
-/-- The private target counter is read immutably and incremented into a separate
-output. Every other tape, including the working matrix, stays unchanged. -/
-theorem increment_runs (enumeration : Scalar ≃ Fin cardinality) :
-    ∃ bound : MvPolynomial (Fin 3) ℕ, ∀ (sizes : Fin 3 → ℕ)
-      (initial : Tapes Alphabet) (targetRow : Fin (2 ^ sizes 0)),
-      initial (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes targetRow →
-      (∀ parameter, initial (sizeTape parameter) = unary (sizes parameter)) →
-      Region (sizes 0) 0 (initial nextTape) →
-      ∃ ticks final, ticks ≤ MvPolynomial.eval sizes bound ∧
-        Runs (fun name => (domains enumeration name).width sizes) readOnly increment ticks
-          (.inl (.inl true)) (fun _ => 0) initial (.inr ()) (fun _ => 0) final ∧
-        final nextTape = encoded (EncodedDomain.binaryNaturals 0) sizes
-          (StandardBinaryIncrement.next 0 sizes targetRow) ∧
-        (∀ name, name ≠ nextTape → final name = initial name) := by
-  obtain ⟨bound, execute⟩ := (StandardBinaryIncrement.contract (0 : Fin 3)).wired_runs incrementWiring
-  refine ⟨bound, ?_⟩
-  intro sizes initial targetRow targetEq headers region
-  let input : Inputs (StandardBinaryScan.domains (EncodedDomain.binaryNaturals (0 : Fin 3))
-      (EncodedDomain.binaryNaturals 0)) StandardTerminatedCopy.readOnly sizes := fun name => by
-    rcases name with ⟨name, readonly⟩
-    cases name with
-    | inl parameter => exact PUnit.unit
-    | inr output => cases output with
-      | false => exact targetRow
-      | true => contradiction
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical, outside, immutable⟩ :=
-    execute sizes input (fun name => (domains enumeration name).width sizes) readOnly initial
-      (by intro name; fin_cases name <;> rfl)
-      (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      trivial
-      (by
-        intro name readonly
-        cases name with
-        | inl parameter =>
-          change initial (sizeTape parameter) = encoded (EncodedDomain.unary parameter) sizes PUnit.unit
-          rw [encoded_unary]
-          exact headers parameter
-        | inr output => cases output with
-          | false => exact targetEq
-          | true => contradiction)
-      (by intro name writable; fin_cases name <;> first | contradiction | simpa [domains, nextTape, EncodedDomain.binaryNaturals, EncodedDomain.ofCodec] using region)
-      headers
-  refine ⟨ticks, final, cost, trace, ?_, ?_⟩
-  · have result := canonical ()
-    change output () = StandardBinaryIncrement.next 0 sizes targetRow at correct
-    rw [correct] at result
-    exact result
-  · intro name different
-    apply preserved_of_wiring incrementWiring StandardTerminatedCopy.readOnly initial final outside immutable
-    intro localName equal
-    cases localName with
-    | inl parameter => rfl
-    | inr output => cases output with
-      | false => rfl
-      | true => exact False.elim (different equal.symm)
 
 /-- One complete row-clear loop body. The working matrix and target counter
 belong to the enclosing loop; each called routine preserves its own inputs. -/
@@ -195,9 +160,12 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
         final (dataTape 1) = encoded (EncodedDomain.binaryNaturals 0) sizes
           (StandardBinaryIncrement.next 0 sizes targetRow) := by
   obtain ⟨targetBound, executeTarget⟩ := StandardGaussJordanClearTarget.runs enumeration
-  obtain ⟨incrementBound, executeIncrement⟩ := increment_runs enumeration
+  obtain ⟨incrementBound, executeIncrement⟩ := StandardBinaryIncrement.wired_runs 0
+    (fun sizes name => (domains enumeration name).width sizes) readOnly incrementWiring
+    (by intro sizes name; fin_cases name <;> rfl)
+    (by intro name premise; fin_cases name <;> first | rfl | contradiction)
   let matrixBound := ((FieldRow.scalarDomain enumeration).constant.arrayOfLength StandardMatrixEntry.length).widthPolynomial
-  refine ⟨targetBound + incrementBound + 2 * matrixBound + 2 * MvPolynomial.X 0 + 7, ?_⟩
+  refine ⟨4 * (targetBound + incrementBound + 2 * matrixBound + 2 * MvPolynomial.X 0 + 7), ?_⟩
   intro sizes initial sourceRow targetRow column sourceValid targetValid matrix
     columnsFit columnValid capacity sourceEq targetEq columnEq matrixEq headers regions
   let width : TapeName → ℕ := fun name => (domains enumeration name).width sizes
@@ -209,51 +177,36 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
     (StandardGaussJordanClearTarget.additionOperation enumeration)
     sizes sourceRow targetRow sourceValid targetValid
     (Neg.neg (α := Scalar) (matrix ⟨targetRow.val * sizes 2 + column.val, within⟩)) matrix (sizes 2)
-  let afterTarget : Tapes Alphabet := install targetWiring localFinal initial
-  have targetTrace : Runs width readOnly
-      (MultiTape.wire targetWiring (StandardGaussJordanClearTarget.algorithm enumeration)) targetTicks
-      (StandardGaussJordanClearTarget.entry ((FieldRow.scalarDomain enumeration).width Empty.elim))
-      (fun _ => 0) initial
-      (StandardGaussJordanClearTarget.exit ((FieldRow.scalarDomain enumeration).width Empty.elim))
-      (fun _ => 0) afterTarget := by
-    have trace := localTrace.wire targetWiring width readOnly (fun _ => rfl)
+  obtain ⟨afterTarget, targetTrace, afterTargetAt, _, targetImmutable⟩ :=
+    localTrace.wire_restoring targetWiring width readOnly (fun _ => rfl)
       (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-      initial (fun _ => 0)
-    have positions : install targetWiring
-        (fun _ : StandardGaussJordanClearTarget.TapeName => (0 : ℤ))
-        (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self targetWiring _
-    have start : install targetWiring (fun name => initial (.inl name)) initial = initial :=
-      install_self targetWiring initial
-    rw [positions, start] at trace
-    exact trace
-  have afterTargetAt (name : StandardGaussJordanClearTarget.TapeName) :
-      afterTarget (.inl name) = localFinal name := install_at targetWiring localFinal initial name
+      initial (fun _ => rfl)
+  have targetFrame := targetTrace.frame ⟨regions, (by intros; rfl)⟩
   have resultEq : afterTarget (dataTape 5) =
       encoded (domains enumeration workingTape) sizes resultMatrix :=
     (afterTargetAt _).trans localResult
   have targetStill : afterTarget (dataTape 1) =
       encoded (EncodedDomain.binaryNaturals 0) sizes targetRow :=
-    (afterTargetAt _).trans ((localTrace.readOnly_tape _ rfl).trans targetEq)
+    (targetImmutable _ rfl).trans targetEq
   have commitTrace := StandardTapeCommands.copy_encoded_runs
     (domains enumeration workingTape) sizes resultMatrix
     (dataTape 5) workingTape (by decide) width readOnly rfl rfl rfl afterTarget resultEq
-    (targetTrace.region workingTape (regions workingTape))
+    (targetFrame.1 workingTape)
   let afterCommit := Function.update afterTarget workingTape
     (encoded (domains enumeration workingTape) sizes resultMatrix)
+  have commitFrame := commitTrace.frame targetFrame
   obtain ⟨incrementTicks, incremented, incrementCost, incrementTrace, nextEq, incrementOutside⟩ :=
     executeIncrement sizes afterCommit targetRow
       ((Function.update_of_ne (by decide) _ _).trans targetStill)
-      (fun parameter => (commitTrace.readOnly_tape (sizeTape parameter) rfl).trans
-        ((targetTrace.readOnly_tape (sizeTape parameter) rfl).trans (headers parameter)))
-      (by
-        have region := commitTrace.region nextTape (targetTrace.region nextTape (regions nextTape))
-        change Region ((EncodedDomain.binaryNaturals (0 : Fin 3)).width sizes) 0 (afterCommit nextTape) at region
-        simpa only [EncodedDomain.binaryNaturals_width] using region)
+      (fun parameter => (commitFrame.2 (sizeTape parameter) rfl).trans (headers parameter))
+      (by simpa only [incrementWiring_apply, afterCommit,
+        show width nextTape = sizes 0 from EncodedDomain.binaryNaturals_width 0 sizes]
+        using commitFrame.1 nextTape)
+  have incrementFrame := incrementTrace.frame commitFrame
   have advanceTrace := StandardTapeCommands.copy_encoded_runs
     (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes targetRow)
     nextTape (dataTape 1) (by decide) width readOnly rfl rfl rfl incremented nextEq
-    (incrementTrace.region (dataTape 1)
-      (commitTrace.region (dataTape 1) (targetTrace.region (dataTape 1) (regions (dataTape 1)))))
+    (incrementFrame.1 (dataTape 1))
   simp only [EncodedDomain.binaryNaturals_width] at advanceTrace
   let final := Function.update incremented (dataTape 1)
     (encoded (EncodedDomain.binaryNaturals 0) sizes (StandardBinaryIncrement.next 0 sizes targetRow))
@@ -261,19 +214,22 @@ theorem runs (enumeration : Scalar ≃ Fin cardinality) :
       encoded (domains enumeration workingTape) sizes resultMatrix := by
     exact (Function.update_of_ne (by decide) _ _).trans
       ((incrementOutside workingTape (by decide)).trans (Function.update_self _ _ _))
-  have tail := incrementTrace.sequence advance 0
-    (by intro symbols; rfl) advanceTrace
-  have middle := commitTrace.sequence _ (Sum.inl (Sum.inl (Sum.inl true)))
-    (by intro symbols; rfl) tail
-  have complete := targetTrace.sequence _ (Sum.inl 0)
-    (by intro symbols; simp [MultiTape.wire, StandardGaussJordanClearTarget.halt]) middle
-  refine ⟨targetTicks + ((2 * (domains enumeration workingTape).width sizes + 2) +
-    (incrementTicks + (2 * sizes 0 + 2) + 1) + 1) + 1, final, ?_, ?_,
-    ⟨within, finalMatrix⟩, Function.update_self _ _ _⟩
-  · have matrixWidth : (domains enumeration workingTape).width sizes = MvPolynomial.eval sizes matrixBound := rfl
-    rw [matrixWidth]
-    simp only [matrixBound, map_add, map_mul, map_ofNat, MvPolynomial.eval_X]
+  obtain ⟨total, totalCost, complete⟩ := Pipeline.runs_chain width readOnly (components enumeration)
+    (entries ((FieldRow.scalarDomain enumeration).width Empty.elim)) (exits ((FieldRow.scalarDomain enumeration).width Empty.elim))
+    ![initial, afterTarget, afterCommit, incremented, final]
+    ![targetTicks, 2 * (domains enumeration workingTape).width sizes + 2, incrementTicks, 2 * sizes 0 + 2]
+    (by intro stage symbols; fin_cases stage <;> rfl)
+    (by intro stage; fin_cases stage <;> first
+      | exact targetTrace
+      | exact commitTrace
+      | exact incrementTrace
+      | exact advanceTrace)
+  refine ⟨total, final, ?_, ?_, ⟨within, finalMatrix⟩, Function.update_self _ _ _⟩
+  · simp only [Fin.sum_univ_succ, Matrix.cons_val_zero, Matrix.cons_val_succ, Fin.sum_univ_zero,
+      Nat.add_zero, EncodedDomain.width] at totalCost
+    rw [show (domains enumeration workingTape).widthPolynomial = matrixBound from rfl] at totalCost
+    simp only [matrixBound, map_add, map_mul, map_ofNat, MvPolynomial.eval_X] at totalCost ⊢
     omega
-  · simpa only [machine, entry, exit, commit, advance, width, final,
+  · simpa [machine, entry, exit, Fin.last, commit, advance, width, final,
       EncodedDomain.binaryNaturals_width] using complete
 end Polytime2.StandardGaussJordanClearStep

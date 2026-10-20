@@ -107,6 +107,22 @@ universe localTapeLevel stateLevel
 variable {LocalTape : Type localTapeLevel} [Fintype LocalTape]
 variable {State : Type stateLevel} [Fintype State]
 
+/-- Caller regions and immutable values form a frame around the live writable
+values of a restoring call. No validity is required of scratch contents. -/
+def CallFrame (width : TapeName → ℕ) (readOnly : TapeName → Bool)
+    (saved current : Tapes (Alphabet TapeName)) : Prop :=
+  (∀ name, Region (width name) 0 (current name)) ∧
+    (∀ name, readOnly name = true → current name = saved name)
+
+omit [Fintype State] in
+/-- Restoring calls transport the entire caller frame in one step. -/
+theorem Runs.frame {width : TapeName → ℕ} {readOnly : TapeName → Bool}
+    {machine : Machine (Alphabet TapeName) State} {ticks entry exit initial final saved}
+    (trace : Runs width readOnly machine ticks entry (fun _ => 0) initial exit (fun _ => 0) final)
+    (frame : CallFrame width readOnly saved initial) : CallFrame width readOnly saved final :=
+  ⟨fun name => trace.region name (frame.1 name),
+    fun name readonly => (trace.readOnly_tape name readonly).trans (frame.2 name readonly)⟩
+
 /-- A caller's tape is preserved when every local role that can name it is
 read-only. This also covers tapes absent from the subroutine's wiring. -/
 theorem preserved_of_wiring (wiring : LocalTape ↪ TapeName) (readOnly : LocalTape → Bool)

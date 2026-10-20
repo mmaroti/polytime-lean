@@ -80,7 +80,8 @@ def stepWiring : StandardGaussJordanClearStep.TapeName ↪ TapeName :=
     stepWiring name = .inl (.inl name) := rfl
 
 noncomputable def increment : Machine Alphabet StandardGaussJordanClearStep.IncrementState :=
-  MultiTape.wire stepWiring StandardGaussJordanClearStep.increment
+  MultiTape.wire (StandardGaussJordanClearStep.incrementWiring.trans stepWiring)
+    (StandardBinaryScan.algorithm BinaryScan.increment)
 
 noncomputable def advance : Machine Alphabet (Fin 3) :=
   StandardTapeCommands.copy nextTape (dataTape 1) (by decide)
@@ -112,33 +113,10 @@ theorem increment_runs (enumeration : Scalar ≃ Fin cardinality) :
         final nextTape = encoded (EncodedDomain.binaryNaturals 0) sizes
           (StandardBinaryIncrement.next 0 sizes targetRow) ∧
         (∀ name, name ≠ nextTape → final name = initial name) := by
-  obtain ⟨bound, execute⟩ := StandardGaussJordanClearStep.increment_runs enumeration
-  refine ⟨bound, ?_⟩
-  intro sizes initial targetRow targetEq headers region
-  obtain ⟨ticks, localFinal, cost, localTrace, resultEq, outside⟩ :=
-    execute sizes (fun name => initial (stepWiring name)) targetRow targetEq headers region
-  have trace := localTrace.wire stepWiring
-    (fun name => (domains enumeration name).width sizes) readOnly
-    (fun _ => rfl)
+  exact StandardBinaryIncrement.wired_runs 0 (fun sizes name => (domains enumeration name).width sizes)
+    readOnly (StandardGaussJordanClearStep.incrementWiring.trans stepWiring)
+    (by intro sizes name; fin_cases name <;> rfl)
     (by intro name premise; fin_cases name <;> first | rfl | contradiction)
-    initial (fun _ => 0)
-  have start : install stepWiring (fun name => initial (stepWiring name)) initial = initial :=
-    install_self stepWiring initial
-  have positions : install stepWiring
-      (fun _ : StandardGaussJordanClearStep.TapeName => (0 : ℤ))
-      (fun _ : TapeName => (0 : ℤ)) = fun _ => 0 := install_self stepWiring _
-  rw [start, positions] at trace
-  refine ⟨ticks, install stepWiring localFinal initial, cost, trace,
-    (install_at stepWiring localFinal initial _).trans resultEq, ?_⟩
-  intro name notNext
-  by_cases located : name ∈ Set.range stepWiring
-  · obtain ⟨localName, rfl⟩ := located
-    rw [install_at]
-    exact outside localName (by
-      intro equal
-      subst localName
-      exact notNext rfl)
-  · exact install_outside stepWiring localFinal initial name located
 
 omit [Field Scalar] in
 /-- Skipping the pivot commits the separate increment output to the private

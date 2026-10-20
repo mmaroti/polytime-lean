@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Machine.Pipeline
+
 import Polytime2.GaussJordan.ColumnAlgorithm
 
 /-! # Standard-convention outer Gauss–Jordan controller
@@ -23,6 +25,8 @@ The column routine reads the private current matrix, pivot, and column without
 changing them. Between calls, the caller commits the separate matrix and row
 outputs and increments the column through a separate counter output.
 -/
+
+set_option backward.isDefEq.respectTransparency false
 
 namespace Polytime2.StandardGaussJordanElimination
 
@@ -92,14 +96,18 @@ def guardWiring : Sum Unit (Fin 4) ↪ TapeName :=
 
 abbrev IncrementState := Sum (StandardBinaryScan.State Bool) Unit
 abbrev GuardState := Sum StandardBinaryArithmetic.State Unit
-abbrev BodyState (scalarWidth : ℕ) :=
-  Sum (StandardGaussJordanColumn.AlgorithmState scalarWidth)
-    (Sum (Fin 3) (Sum (Fin 3) (Sum IncrementState (Fin 3))))
+abbrev BodyStageState (scalarWidth : ℕ) : Fin 5 → Type
+  | 0 => StandardGaussJordanColumn.AlgorithmState scalarWidth
+  | 1 | 2 | 4 => Fin 3
+  | 3 => IncrementState
 
-noncomputable instance bodyStatesFinite (scalarWidth : ℕ) :
-    Fintype (BodyState scalarWidth) := by
+abbrev BodyState (scalarWidth : ℕ) := Pipeline.State (BodyStageState scalarWidth)
+
+noncomputable instance bodyStatesFinite (scalarWidth : ℕ) : Fintype (BodyState scalarWidth) := by
   letI : Fintype (StandardGaussJordanColumn.AlgorithmState scalarWidth) := inferInstance
-  dsimp only [BodyState, IncrementState]
+  letI (stage : Fin 5) : Fintype (BodyStageState scalarWidth stage) := by
+    match stage with
+    | 0 | 1 | 2 | 3 | 4 => infer_instance
   infer_instance
 
 noncomputable def column (enumeration : Scalar ≃ Fin cardinality) :
@@ -119,20 +127,31 @@ noncomputable def increment : Machine Alphabet IncrementState :=
 noncomputable def commitColumn : Machine Alphabet (Fin 3) :=
   StandardTapeCommands.copy nextColumnTape columnTape (by decide)
 
+noncomputable def bodyComponents (enumeration : Scalar ≃ Fin cardinality) :
+    ∀ stage, Machine Alphabet (BodyStageState ((FieldRow.scalarDomain enumeration).width Empty.elim) stage)
+  | 0 => column enumeration
+  | 1 => commitMatrix
+  | 2 => commitRow
+  | 3 => increment
+  | 4 => commitColumn
+
+def bodyEntries (scalarWidth : ℕ) : ∀ stage, BodyStageState scalarWidth stage
+  | 0 => StandardGaussJordanColumn.algorithmEntry scalarWidth
+  | 1 | 2 | 4 => 0
+  | 3 => .inl (.inl true)
+
+def bodyExits (scalarWidth : ℕ) : ∀ stage, BodyStageState scalarWidth stage
+  | 0 => StandardGaussJordanColumn.algorithmExit scalarWidth
+  | 1 | 2 | 4 => 2
+  | 3 => .inr ()
+
 noncomputable def body (enumeration : Scalar ≃ Fin cardinality) :
-    Machine Alphabet (BodyState
-      ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
-  MultiTape.sequence (column enumeration)
-    (MultiTape.sequence commitMatrix
-      (MultiTape.sequence commitRow
-        (MultiTape.sequence increment commitColumn 0) (.inl (.inl (.inl true))))
-      (.inl 0)) (.inl 0)
+    Machine Alphabet (BodyState ((FieldRow.scalarDomain enumeration).width Empty.elim)) :=
+  Pipeline.machine (bodyComponents enumeration) (bodyEntries ((FieldRow.scalarDomain enumeration).width Empty.elim))
 
-def bodyEntry (scalarWidth : ℕ) : BodyState scalarWidth :=
-  .inl (StandardGaussJordanColumn.algorithmEntry scalarWidth)
+def bodyEntry (scalarWidth : ℕ) : BodyState scalarWidth := Pipeline.position (bodyEntries scalarWidth) 0
 
-def bodyExit (scalarWidth : ℕ) : BodyState scalarWidth :=
-  .inr (.inr (.inr (.inr 2)))
+def bodyExit (scalarWidth : ℕ) : BodyState scalarWidth := none
 
 noncomputable def guard : Machine Alphabet GuardState :=
   MultiTape.wire guardWiring BinarySubtraction.algorithm

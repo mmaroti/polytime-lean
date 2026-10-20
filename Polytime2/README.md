@@ -462,6 +462,11 @@ representations; only live variables require encoding proofs. `Initialization`
 compiles finite copy, clear, and constant plans through `Pipeline.updates_runs`
 and supplies shared unary-size reading. Matrix and elimination controllers use
 these rules without preparing unused scratch, including for empty loops.
+`CallFrame` and `Runs.frame` carry all region bounds and immutable caller values
+through restoring calls. Matrix row steps, row clearing, and elimination bodies
+use `Pipeline.runs_chain` for call, commit, increment, and advance stages; stage
+handover costs are included in their polynomial bounds. Wired increments share
+one adapter and preserve every caller tape except their separate result.
 Compound arithmetic composes addition at a named capacity with multiplication.
 It retains one intermediate word and the primitives' scratch: three binary words
 and two flag tapes in total. It adds no operand copies and takes one additional
@@ -492,23 +497,6 @@ an abstraction, and measure net lines removed, including the new machinery.
 The immediate goals below follow the recommended implementation order. Estimates
 are rough net changes in Lean code, include new machinery, overlap, and should
 not be added together.
-
-### Call frames (~250–450 net lines removed)
-
-**Keep call-frame consolidation as the largest infrastructure target.**
-
-[EliminationBody](GaussJordan/EliminationBody.lean),
-`ClearStep`, and `RowStep` repeatedly propagate region bounds, immutable
-size headers, live values, and unaffected tapes between calls.
-
-`Pipeline.runs` already handles sequencing. The missing reusable part
-is preservation of the surrounding call state. This supports the
-README’s existing estimate of roughly **350 net lines removed**, though
-it remains an estimate.
-
-I would retain the existing shared fixed/runtime block-copy machinery;
-those implementations already share substantial infrastructure and are
-not simply independent duplicates.
 
 ### Argument routing (~50–120 net lines removed)
 
