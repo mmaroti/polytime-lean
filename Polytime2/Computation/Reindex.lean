@@ -48,6 +48,79 @@ def reindexDomains (computation : Computation.{carrierLevel} Parameter InputName
 
 namespace Realizable
 
+/-- Reuse a machine unchanged when input maps and computed outputs preserve
+canonical words. Widths are separate obligations, including for empty carriers. -/
+theorem withEncoding {computation target : Computation.{carrierLevel} Parameter InputName}
+    (realizable : computation.Realizable)
+    (inputMap : ∀ name sizes,
+      (target.inputDomains name).Carrier sizes → (computation.inputDomains name).Carrier sizes)
+    (inputWidths : ∀ name sizes,
+      (target.inputDomains name).width sizes = (computation.inputDomains name).width sizes)
+    (outputWidths : ∀ sizes, target.outputDomain.width sizes = computation.outputDomain.width sizes)
+    (inputEncodings : ∀ name sizes value,
+      encoded (target.inputDomains name) sizes value =
+        encoded (computation.inputDomains name) sizes (inputMap name sizes value))
+    (compatible : ∀ sizes arguments, target.precondition sizes arguments →
+      computation.precondition sizes (fun name => inputMap name sizes (arguments name)))
+    (outputEncodings : ∀ sizes arguments,
+      encoded target.outputDomain sizes (target.compute sizes arguments) =
+        encoded computation.outputDomain sizes (computation.compute sizes
+          ⟨(fun name => inputMap name sizes (arguments.val name)),
+            compatible sizes arguments.val arguments.property⟩)) : target.Realizable := by
+  classical
+  obtain ⟨Scratch, finiteScratch, scratch, State, finiteState, machine, entry, exit, certificate⟩ := realizable
+  let scratchFinite := finiteScratch
+  let stateFinite := finiteState
+  refine ⟨Scratch, finiteScratch, scratch, State, finiteState, machine, entry, exit, ?_⟩
+  obtain ⟨sizeReadonly, outputWritable, halt, bound, execute⟩ := certificate
+  refine ⟨sizeReadonly, outputWritable, halt, bound, ?_⟩
+  intro sizes input initial valid represented headers
+  let sourceInput : Inputs (Internal.domains computation scratch) (Internal.readOnly computation) sizes := by
+    intro name
+    rcases name with ⟨name, immutable⟩
+    rcases name with parameter | argument | result | scratchName
+    · exact input ⟨.inl parameter, rfl⟩
+    · exact inputMap argument sizes (input ⟨.inr (.inl argument), rfl⟩)
+    · contradiction
+    · contradiction
+  have widths (name : Internal.TapeName computation Scratch) :
+      (Internal.domains target scratch name).width sizes =
+        (Internal.domains computation scratch name).width sizes := by
+    rcases name with parameter | argument | result | scratchName
+    · rfl
+    · exact inputWidths argument sizes
+    · exact outputWidths sizes
+    · rfl
+  have sourceEntry : Entry (Internal.domains computation scratch) (Internal.readOnly computation)
+      sizes sourceInput initial := by
+    constructor
+    · intro name immutable
+      rcases name with parameter | argument | result | scratchName
+      · exact represented.1 (.inl parameter) rfl
+      · exact (represented.1 (.inr (.inl argument)) rfl).trans
+          (inputEncodings argument sizes _)
+      · contradiction
+      · contradiction
+    · intro name writable
+      obtain ⟨old, length, equal⟩ := represented.2 name writable
+      exact ⟨old, length.trans (widths name), equal⟩
+  obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
+    execute sizes sourceInput initial
+      (compatible sizes (Internal.arguments target scratch sizes input) valid) sourceEntry headers
+  have trace := trace.regions (fun name => (Internal.domains target scratch name).width sizes)
+    (fun _ => 0) (by intro name writable; rw [widths]; simp)
+  simp only [zero_add] at trace
+  refine ⟨ticks, (fun _ => target.compute sizes ⟨Internal.arguments target scratch sizes input, valid⟩),
+    final, cost, trace, ⟨valid, rfl⟩, ?_⟩
+  intro name
+  cases name
+  have equal := correct.2
+  have result := canonical ()
+  change final (Internal.outputTape target) = encoded computation.outputDomain sizes (output ()) at result
+  rw [equal] at result
+  exact result.trans (outputEncodings sizes ⟨Internal.arguments target scratch sizes input, valid⟩).symm
+
+
 /-- Domain reinterpretation reuses the same hidden realization and polynomial
 bound. It neither copies data nor inspects private scratch contents. -/
 theorem reindexDomains {computation : Computation.{carrierLevel} Parameter InputName}
@@ -68,40 +141,13 @@ theorem reindexDomains {computation : Computation.{carrierLevel} Parameter Input
       EncodedDomain.ArrayEncoding.bits (outputDomain.encode sizes value) =
         EncodedDomain.ArrayEncoding.bits (computation.outputDomain.encode sizes (outputEquivalence sizes value))) :
     (computation.reindexDomains inputDomains outputDomain inputEquivalence outputEquivalence).Realizable := by
-  classical
-  obtain ⟨ScratchName, finiteScratch, scratchDomains, State, finiteState,
-    machine, entry, exit, certificate⟩ := realizable
-  let target := computation.reindexDomains inputDomains outputDomain inputEquivalence outputEquivalence
-  let equivalence (name : Internal.TapeName computation ScratchName) sizes :
-      (Internal.domains target scratchDomains name).Carrier sizes ≃
-        (Internal.domains computation scratchDomains name).Carrier sizes :=
-    match name with
-    | .inl _ => Equiv.refl _
-    | .inr (.inl argument) => inputEquivalence argument sizes
-    | .inr (.inr (.inl _)) => outputEquivalence sizes
-    | .inr (.inr (.inr _)) => Equiv.refl _
-  refine ⟨ScratchName, finiteScratch, scratchDomains, State, finiteState, machine, entry, exit, ?_⟩
-  refine CallingConvention.realizes_reindex equivalence ?_ ?_
-    (Internal.readOnly computation) (Internal.sizeTapes computation ScratchName)
-    (Internal.outputTapes computation ScratchName) machine entry exit _ _ _ _ ?_ ?_ certificate
-  · intro name sizes
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · exact inputWidths argument sizes
-    · exact outputWidths sizes
-    · rfl
-  · intro name sizes value
-    rcases name with parameter | argument | result | scratch
-    · rfl
-    · exact congrArg CallingConvention.tape (inputEncodings argument sizes value)
-    · exact congrArg CallingConvention.tape (outputEncodings sizes value)
-    · rfl
-  · intro sizes input valid
-    exact valid
-  · intro sizes input output correct
-    obtain ⟨valid, correct⟩ := correct
-    refine ⟨valid, ?_⟩
-    exact congrArg (outputEquivalence sizes).symm correct
+  apply realizable.withEncoding (fun name sizes => inputEquivalence name sizes)
+    inputWidths outputWidths
+    (fun name sizes value => congrArg CallingConvention.tape (inputEncodings name sizes value))
+    (by intros; assumption)
+  intro sizes arguments
+  exact congrArg CallingConvention.tape
+    ((outputEncodings sizes _).trans (by simp only [Computation.reindexDomains, Equiv.apply_symm_apply]))
 
 /-- Change a computed result's mathematical interpretation when its exact bits
 agree. Unlike an equivalence of domains, this also permits proper subdomains. -/
@@ -115,53 +161,8 @@ theorem withEncodedOutput {computation : Computation.{carrierLevel} Parameter In
       encoded outputDomain sizes (compute sizes arguments) =
         encoded computation.outputDomain sizes (computation.compute sizes arguments)) :
     (Computation.mk computation.inputDomains outputDomain computation.precondition compute).Realizable := by
-  classical
-  obtain ⟨Scratch, finiteScratch, scratch, State, finiteState, machine, entry, exit, certificate⟩ := realizable
-  let scratchFinite := finiteScratch
-  let stateFinite := finiteState
-  let target := Computation.mk computation.inputDomains outputDomain computation.precondition compute
-  refine ⟨Scratch, finiteScratch, scratch, State, finiteState, machine, entry, exit, ?_⟩
-  obtain ⟨sizeReadonly, outputWritable, halt, bound, execute⟩ := certificate
-  refine ⟨sizeReadonly, outputWritable, halt, bound, ?_⟩
-  intro sizes input initial valid represented headers
-  let sourceInput : Inputs (Internal.domains computation scratch) (Internal.readOnly computation) sizes := by
-    intro name
-    rcases name with ⟨name, immutable⟩
-    rcases name with parameter | argument | result | scratchName
-    · exact input ⟨.inl parameter, rfl⟩
-    · exact input ⟨.inr (.inl argument), rfl⟩
-    · contradiction
-    · contradiction
-  have widths (name : Internal.TapeName computation Scratch) :
-      (Internal.domains target scratch name).width sizes =
-        (Internal.domains computation scratch name).width sizes := by
-    rcases name with parameter | argument | result | scratchName <;> first | rfl | exact sameWidth sizes
-  have sourceEntry : Entry (Internal.domains computation scratch) (Internal.readOnly computation)
-      sizes sourceInput initial := by
-    constructor
-    · intro name immutable
-      rcases name with parameter | argument | result | scratchName
-      · exact represented.1 (.inl parameter) rfl
-      · exact represented.1 (.inr (.inl argument)) rfl
-      · contradiction
-      · contradiction
-    · intro name writable
-      obtain ⟨old, length, equal⟩ := represented.2 name writable
-      exact ⟨old, length.trans (widths name), equal⟩
-  obtain ⟨ticks, output, final, cost, trace, correct, canonical⟩ :=
-    execute sizes sourceInput initial valid sourceEntry headers
-  have trace := trace.regions (fun name => (Internal.domains target scratch name).width sizes)
-    (fun _ => 0) (by intro name writable; rw [widths]; simp)
-  simp only [zero_add] at trace
-  refine ⟨ticks, (fun _ => compute sizes ⟨Internal.arguments target scratch sizes input, valid⟩),
-    final, cost, trace, ⟨valid, rfl⟩, ?_⟩
-  intro name
-  cases name
-  have equal := correct.2
-  have result := canonical ()
-  change final (Internal.outputTape target) = encoded computation.outputDomain sizes (output ()) at result
-  rw [equal] at result
-  exact result.trans (sameEncoding sizes ⟨Internal.arguments target scratch sizes input, valid⟩).symm
+  exact realizable.withEncoding (fun _ _ value => value) (by intros; rfl)
+    sameWidth (by intros; rfl) (by intros; assumption) sameEncoding
 
 end Realizable
 end Polytime2.Computation

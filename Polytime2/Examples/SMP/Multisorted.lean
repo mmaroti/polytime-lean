@@ -123,7 +123,7 @@ theorem inputDomain_widthPolynomial :
     let scalar : EncodedDomain (Parameter sortCount) := EncodedDomain.fixed (enumeration sort)
     (scalar.prod (scalar.array (.inr ()))).array (.inl sort))).widthPolynomial = _
   rw [EncodedDomain.record_widthPolynomial]
-  simp only [EncodedDomain.prod, EncodedDomain.ofCodec, EncodedDomain.array, EncodedDomain.fixed]
+  simp only [EncodedDomain.array_widthPolynomial, EncodedDomain.fixed_widthPolynomial]
   rw [Finset.mul_sum]
   apply Finset.sum_congr rfl
   intro sort member

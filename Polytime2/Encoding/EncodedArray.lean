@@ -102,6 +102,14 @@ theorem bits_setWidth_congr {firstWidth secondWidth capacity : ℕ}
   subst secondWidth
   exact congrArg (fun value => bits (value.setWidth capacity)) (bits_injective equal)
 
+/-- Padding equal words to equal capacities preserves their canonical bits. -/
+theorem bits_setWidth_congr_of_eq {firstWidth secondWidth firstCapacity secondCapacity : ℕ}
+    {first : BitVec firstWidth} {second : BitVec secondWidth}
+    (equal : bits first = bits second) (capacities : firstCapacity = secondCapacity) :
+    bits (first.setWidth firstCapacity) = bits (second.setWidth secondCapacity) := by
+  cases capacities
+  exact bits_setWidth_congr equal
+
 /-- Reindexing an array by an equality of lengths does not change its bit
 encoding, after casting the resulting vector width. -/
 theorem encode_cast {Carrier : Type carrierLevel} {width firstLength secondLength : ℕ}
@@ -139,6 +147,22 @@ theorem bits_encode (element : Carrier → BitVec width) (length : ℕ)
   | succ length hypothesis =>
     rw [encode, bits_cast, bits_append, hypothesis, List.ofFn_succ]
     rfl
+
+/-- Equal element words give equal array words, including empty arrays. -/
+theorem bits_encode_congr {otherWidth : ℕ} (first : Carrier → BitVec width)
+    (second : Carrier → BitVec otherWidth) (equal : ∀ value, bits (first value) = bits (second value))
+    (length : ℕ) (values : Fin length → Carrier) :
+    bits (encode first length values) = bits (encode second length values) := by
+  simp only [bits_encode]
+  exact congrArg List.flatten (congrArg List.ofFn (funext (fun index => equal (values index))))
+
+/-- Casting the array length preserves its consecutive element words. -/
+theorem bits_encode_cast {firstLength secondLength : ℕ}
+    (element : Carrier → BitVec width) (sameLength : firstLength = secondLength)
+    (values : Fin secondLength → Carrier) :
+    bits (encode element firstLength (fun index => values (Fin.cast sameLength index))) =
+      bits (encode element secondLength values) := by
+  simpa only [bits_cast] using congrArg bits (encode_cast element sameLength values)
 
 /-- A selected element starts after exactly `index * width` bits. -/
 theorem split_encode (element : Carrier → BitVec width) (length : ℕ)
@@ -230,6 +254,24 @@ def flattenEquiv : (Fin rows → Fin columns → Carrier) ≃
     funext index
     exact congrArg array (finProdFinEquiv.right_inv index)
 
+theorem bits_encode_nested {width : ℕ}
+    (element : Carrier → BitVec width) (matrix : Fin rows → Fin columns → Carrier) :
+    ArrayEncoding.bits (ArrayEncoding.encode (ArrayEncoding.encode element columns) rows matrix) =
+      ArrayEncoding.bits (ArrayEncoding.encode element (rows * columns) (flattenEquiv matrix)) := by
+  simp only [ArrayEncoding.bits_encode]
+  rw [List.ofFn_mul]
+  simp only [List.flatten_flatten, List.map_ofFn]
+  congr 2
+  funext row
+  apply congrArg List.flatten
+  apply congrArg List.ofFn
+  funext column
+  congr 2
+  change matrix row column = matrix _ _
+  have same := finProdFinEquiv.left_inv (row, column)
+  simpa [finProdFinEquiv, Nat.add_comm, Nat.mul_comm] using
+    congrArg (fun coordinate => matrix coordinate.1 coordinate.2) same.symm
+
 /-- Reindex a function's coordinates along an equivalence. -/
 def functionEquiv {Index Source : Type*} (equivalence : Index ≃ Source) :
     (Source → Carrier) ≃ (Index → Carrier) where
@@ -290,14 +332,10 @@ noncomputable def arrayOfLength (element : EncodedDomain.{parameterLevel, carrie
 /-- Arrays of a named assigned length are the common coordinate-indexed case. -/
 noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (lengthParameter : Parameter) : EncodedDomain Parameter :=
-  ofCodec (fun assignment => Fin (assignment lengthParameter) → element.Carrier assignment)
-    (MvPolynomial.X lengthParameter * element.widthPolynomial)
-    (fun assignment => assignment lengthParameter * element.width assignment)
-    (by intro assignment; simp)
-    (fun assignment => ArrayEncoding.encode (element.encode assignment) _)
-    (fun assignment => ArrayEncoding.decode (element.decode assignment) _)
-    (fun assignment => ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _)
-    (fun assignment => ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _)
+  (element.arrayOfLength (MvPolynomial.X lengthParameter)).reindex
+    (fun sizes => Fin (sizes lengthParameter) → element.Carrier sizes)
+    (fun sizes => Equiv.arrowCongr
+      (finCongr (MvPolynomial.eval_X (f := sizes) lengthParameter).symm) (Equiv.refl _))
 
 @[simp] theorem arrayOfLength_widthPolynomial (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (length : MvPolynomial Parameter ℕ) :
@@ -306,6 +344,16 @@ noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} 
 @[simp] theorem array_widthPolynomial (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (parameter : Parameter) :
     (element.array parameter).widthPolynomial = MvPolynomial.X parameter * element.widthPolynomial := rfl
+
+@[simp] theorem arrayOfLength_width (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :
+    (element.arrayOfLength length).width sizes = MvPolynomial.eval sizes length * element.width sizes := by
+  simp only [width, arrayOfLength_widthPolynomial, map_mul]
+
+@[simp] theorem array_width (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (parameter : Parameter) (sizes : Parameter → ℕ) :
+    (element.array parameter).width sizes = sizes parameter * element.width sizes := by
+  simp only [width, array_widthPolynomial, map_mul, MvPolynomial.eval_X]
 
 /-- Polynomial evaluation casts leave the concatenated array bits unchanged. -/
 @[simp] theorem arrayOfLength_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
@@ -397,7 +445,28 @@ theorem array_update_of_blocks (element : EncodedDomain.{parameterLevel, carrier
     (values : (element.array parameter).Carrier assignment) :
     ArrayEncoding.bits ((element.array parameter).encode assignment values) =
       ArrayEncoding.bits (ArrayEncoding.encode (element.encode assignment) _ values) := by
-  simp only [array, ofCodec, ArrayEncoding.bits_cast]
+  change (Fin (assignment parameter) → element.Carrier assignment) at values
+  exact (arrayOfLength_encode_bits element (MvPolynomial.X parameter) assignment _).trans
+    ((ArrayEncoding.bits_encode _ _ _).trans
+      ((congrArg List.flatten
+        (List.ofFn_congr (MvPolynomial.eval_X parameter).symm
+          (fun position => ArrayEncoding.bits (element.encode assignment (values position))))).symm.trans
+        (ArrayEncoding.bits_encode _ _ values).symm))
+
+/-- The named-size view specializes a polynomial array without changing storage. -/
+noncomputable def arrayParameterEquiv
+    (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (parameter : Parameter) (sizes : Parameter → ℕ) :
+    (element.array parameter).Carrier sizes ≃
+      (element.arrayOfLength (MvPolynomial.X parameter)).Carrier sizes :=
+  Equiv.arrowCongr (finCongr (MvPolynomial.eval_X (f := sizes) parameter).symm)
+    (Equiv.refl _)
+
+@[simp] theorem arrayParameter_width
+    (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (parameter : Parameter) (sizes : Parameter → ℕ) :
+    (element.array parameter).width sizes =
+      (element.arrayOfLength (MvPolynomial.X parameter)).width sizes := rfl
 
 /-- Named arrays and variable-length polynomials use the same element blocks. -/
 theorem array_X_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
@@ -405,11 +474,7 @@ theorem array_X_encode_bits (element : EncodedDomain.{parameterLevel, carrierLev
     (values : Fin (sizes parameter) → element.Carrier sizes) :
     ArrayEncoding.bits ((element.array parameter).encode sizes values) =
       ArrayEncoding.bits ((element.arrayOfLength (MvPolynomial.X parameter)).encode sizes
-        (Equiv.arrowCongr (finCongr (MvPolynomial.eval_X (f := sizes) parameter).symm) (Equiv.refl _) values)) := by
-  simp only [array, arrayOfLength, ofCodec, ArrayEncoding.bits_cast, ArrayEncoding.bits_encode]
-  exact congrArg List.flatten
-    (List.ofFn_congr (MvPolynomial.eval_X parameter).symm
-      (fun position => ArrayEncoding.bits (element.encode sizes (values position))))
+        (arrayParameterEquiv element parameter sizes values)) := rfl
 
 /-- Rectangular matrices use their mathematical row and column indices while
 retaining a flat row-major array encoding. -/

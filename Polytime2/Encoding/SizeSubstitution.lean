@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Encoding.EncodedDomain
+import Polytime2.Encoding.EncodedArray
 
 /-! # Polynomial substitution and majorization for size assignments
 
@@ -87,5 +87,18 @@ noncomputable def substitute (domain : EncodedDomain.{0, carrierLevel} NewParame
     (fun sizes => domain.decode (SizeSubstitution.assignment substitution sizes))
     (fun sizes => domain.decode_encode (SizeSubstitution.assignment substitution sizes))
     (fun sizes => domain.encode_decode (SizeSubstitution.assignment substitution sizes))
+
+@[simp] theorem substitute_width (domain : EncodedDomain.{0, carrierLevel} NewParameter)
+    (substitution : NewParameter → MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :
+    (domain.substitute substitution).width sizes =
+      domain.width (SizeSubstitution.assignment substitution sizes) :=
+  SizeSubstitution.polynomial_eval substitution domain.widthPolynomial sizes
+
+@[simp] theorem substitute_encode_bits (domain : EncodedDomain.{0, carrierLevel} NewParameter)
+    (substitution : NewParameter → MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (value : domain.Carrier (SizeSubstitution.assignment substitution sizes)) :
+    ArrayEncoding.bits ((domain.substitute substitution).encode sizes value) =
+      ArrayEncoding.bits (domain.encode (SizeSubstitution.assignment substitution sizes) value) := by
+  simp only [substitute, ofCodec, ArrayEncoding.bits_cast]
 
 end Polytime2.EncodedDomain

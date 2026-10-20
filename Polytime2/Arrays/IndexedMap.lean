@@ -18,6 +18,7 @@ limitations under the License.
 import Polytime2.Computation.Conditional
 import Polytime2.Computation.Constant
 import Polytime2.Arrays.Operations
+import Polytime2.Encoding.BoundedUnary
 import Polytime2.Primitives.FiniteOperations
 import Polytime2.Primitives.ConstantOperations
 
@@ -33,49 +34,50 @@ noncomputable section IndexedComputations
 
 /-- Arguments are the index, immutable array, and finite scalar parameter. -/
 def indexedMap (parameterDomain elementDomain : EncodedDomain Empty)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
+    (length : MvPolynomial Parameter ℕ)
     (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim →
       elementDomain.Carrier Empty.elim) : Computation Parameter (Fin 3) where
   inputDomains
-    | 0 => EncodedDomain.binaryNaturals indexCapacity
+    | 0 => EncodedDomain.boundedIndex length
     | 1 => elementDomain.constant.arrayOfLength length
     | 2 => parameterDomain.constant
   outputDomain := elementDomain.constant.arrayOfLength length
-  precondition sizes arguments := (arguments 0).val < MvPolynomial.eval sizes length
+  precondition _ _ := True
   compute _ arguments := Function.update (arguments.val 1)
-    ⟨(arguments.val 0).val, arguments.property⟩
+    (arguments.val 0)
     (operation (arguments.val 2)
-      (arguments.val 1 ⟨(arguments.val 0).val, arguments.property⟩))
+      (arguments.val 1 (arguments.val 0)))
 
 /-- Two fixed maps act sequentially on selected coordinates in an active prefix.
 Arguments are the first index, second index, active count, and immutable array.
 Coincident indices apply the second map to the first map's result. -/
-def catalogueMaps (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
+def catalogueMaps (elementDomain : EncodedDomain Empty)
     (length : MvPolynomial Parameter ℕ)
     (first second : elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
     Computation Parameter (Fin 4) where
   inputDomains
-    | 0 | 1 | 2 => EncodedDomain.binaryNaturals indexCapacity
+    | 0 | 1 => EncodedDomain.boundedIndex length
+    | 2 => EncodedDomain.boundedUnary length
     | 3 => elementDomain.constant.arrayOfLength length
   outputDomain := elementDomain.constant.arrayOfLength length
-  precondition sizes arguments := (arguments 2).val ≤ MvPolynomial.eval sizes length ∧
+  precondition _ arguments :=
     (arguments 0).val < (arguments 2).val ∧ (arguments 1).val < (arguments 2).val
   compute _ arguments :=
-    let firstIndex := ⟨(arguments.val 0).val, lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩
-    let secondIndex := ⟨(arguments.val 1).val, lt_of_lt_of_le arguments.property.2.2 arguments.property.1⟩
+    let firstIndex := arguments.val 0
+    let secondIndex := arguments.val 1
     let middle := Function.update (arguments.val 3) firstIndex (first (arguments.val 3 firstIndex))
     Function.update middle secondIndex (second (middle secondIndex))
 
 theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Empty)
-    (indexCapacity : Parameter) (length : MvPolynomial Parameter ℕ)
+    (length : MvPolynomial Parameter ℕ)
     (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim →
       elementDomain.Carrier Empty.elim) :
-    (indexedMap parameterDomain elementDomain indexCapacity length operation).Realizable := by
-  let computation := indexedMap parameterDomain elementDomain indexCapacity length operation
-  have lookup := (Realizable.Internal.arrayLookupWithCapacity_realizable elementDomain.constant indexCapacity length).onResults
+    (indexedMap parameterDomain elementDomain length operation).Realizable := by
+  let computation := indexedMap parameterDomain elementDomain length operation
+  have lookup := (arrayLookup_realizable elementDomain.constant length).onResults
     computation.inputDomains computation.precondition
     (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 1)
-    (by intro sizes arguments; exact arguments.property) (by
+    (by intros; trivial) (by
       intro choice
       cases choice
       · exact Realizable.argument computation.inputDomains 0 computation.precondition
@@ -84,55 +86,54 @@ theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Emp
     computation.inputDomains computation.precondition
     (fun choice sizes arguments => match choice with
       | false => arguments.val 2
-      | true => arguments.val 1 ⟨(arguments.val 0).val, arguments.property⟩)
+      | true => arguments.val 1 (arguments.val 0))
     (by intros; trivial) (by
       intro choice
       cases choice
       · exact Realizable.argument computation.inputDomains 2 computation.precondition
       · exact lookup)
-  exact (Realizable.Internal.arrayUpdateWithCapacity_realizable elementDomain.constant indexCapacity length).onResults
+  exact (arrayUpdate_realizable elementDomain.constant length).onResults
     computation.inputDomains computation.precondition
     (fun name _ arguments => match name with
       | 0 => arguments.val 0
       | 1 => arguments.val 1
       | 2 => operation (arguments.val 2)
-          (arguments.val 1 ⟨(arguments.val 0).val, arguments.property⟩))
-    (by intro sizes arguments; exact arguments.property) (by
+          (arguments.val 1 (arguments.val 0)))
+    (by intros; trivial) (by
       intro name
       fin_cases name
       · exact Realizable.argument computation.inputDomains 0 computation.precondition
       · exact Realizable.argument computation.inputDomains 1 computation.precondition
       · exact mapped)
 
-theorem catalogueMaps_realizable (elementDomain : EncodedDomain Empty) (indexCapacity : Parameter)
+theorem catalogueMaps_realizable (elementDomain : EncodedDomain Empty)
     (length : MvPolynomial Parameter ℕ)
     (first second : elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :
-    (catalogueMaps elementDomain indexCapacity length first second).Realizable := by
-  let computation := catalogueMaps elementDomain indexCapacity length first second
+    (catalogueMaps elementDomain length first second).Realizable := by
+  let computation := catalogueMaps elementDomain length first second
   let singleton : EncodedDomain Empty := EncodedDomain.fixed (Equiv.refl (Fin 1))
   have unitReady := ((constant_realizable singleton (fun _ => (0 : Fin 1))).withConstantSizes).onResults
     computation.inputDomains computation.precondition (fun impossible => impossible.elim)
     (by intros; trivial) (fun impossible => impossible.elim)
-  have firstReady := (indexedMap_realizable singleton elementDomain indexCapacity length
+  have firstReady := (indexedMap_realizable singleton elementDomain length
     (fun _ value => first value)).onResults computation.inputDomains computation.precondition
     (fun name _ arguments => match name with | 0 => arguments.val 0 | 1 => arguments.val 3 | 2 => (0 : Fin 1))
-    (by intro sizes arguments; exact lt_of_lt_of_le arguments.property.2.1 arguments.property.1)
+    (by intros; trivial)
     (by
       intro name
       fin_cases name
       · exact Realizable.argument computation.inputDomains 0 computation.precondition
       · exact Realizable.argument computation.inputDomains 3 computation.precondition
       · exact unitReady)
-  exact (indexedMap_realizable singleton elementDomain indexCapacity length
+  exact (indexedMap_realizable singleton elementDomain length
     (fun _ value => second value)).onResults computation.inputDomains computation.precondition
     (fun name _ arguments => match name with
       | 0 => arguments.val 1
       | 1 => Function.update (arguments.val 3)
-          ⟨(arguments.val 0).val, lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩
-          (first (arguments.val 3 ⟨(arguments.val 0).val,
-            lt_of_lt_of_le arguments.property.2.1 arguments.property.1⟩))
+          (arguments.val 0)
+          (first (arguments.val 3 (arguments.val 0)))
       | 2 => (0 : Fin 1))
-    (by intro sizes arguments; exact lt_of_lt_of_le arguments.property.2.2 arguments.property.1)
+    (by intros; trivial)
     (by
       intro name
       fin_cases name

@@ -82,11 +82,12 @@ The directory reorganization preserved namespaces and declaration names.
   building blocks for algorithms with binary counters.
 - `matrixEntry`, `matrixReplace`, and `rowTransform` expose only row and column
   counts as sizes. Separate coordinates have carriers `Fin rows` and
-  `Fin columns`; every input is admissible. Private capacity and unary header
-  preparation use the shared compiler also used by Gauss–Jordan elimination.
-  The coordinate codec retains the internal controller's binary digits, and
-  the older capacity-sensitive routines remain under `Realizable.Internal`.
-  Row transformations take ordinary specialization-fixed scalar functions.
+  `Fin columns`; every input is admissible. Entry lookup and replacement compose
+  `arrayLookupAtParameter` and `arrayUpdateAtParameter` for rows and entries.
+  Their runtime bounds include size-dependent row widths, and the existing
+  row-major bits remain unchanged. Row transforms retain private capacity and
+  unary header preparation through the compiler used by Gauss–Jordan.
+  They take ordinary specialization-fixed scalar functions.
 - `arrayPack` stably selects an array by a Boolean mask and returns its count
   and exact-length mathematical array in `EncodedDomain.boundedArray`.
   Counters and zero capacity padding are private; element widths may depend on
@@ -218,7 +219,7 @@ The directory reorganization preserved namespaces and declaration names.
   contract specifies only the result matrix. Scaling, normalization, addition,
   and swapping reuse the shared field identities. Gauss–Jordan's standard
   controllers use this traversal.
-- Standard-convention matrix lookup and replacement compute a binary address
+- Low-level matrix lookup and replacement compute a binary address
   from separate row and column inputs and the unary column-size tape, then
   access the encoded array. Replacement writes a separate result matrix.
   Address arithmetic and access share scratch tapes; arbitrary initial writable
@@ -312,8 +313,8 @@ blocks and extracts a selected output;
 public `Computation.TM0Realizable` predicate.
 
 For gcd, size parameter `b` fixes the binary width of both separate operands
-and the result. A separate immutable tape stores `b` in unary. The contract
-requires twice the second operand to fit in `2^b`, reserving shift capacity.
+and the result. A separate immutable tape stores `b` in unary. Every pair of
+operands is admissible; one extra working bit is prepared privately.
 The output is the nonnegative binary gcd, including `gcd(0, 0) = 0`.
 
 ## Execution design
@@ -456,9 +457,10 @@ same widths and canonical bit lists, without bit-vector casts in the encoding
 obligations. Constructor lemmas for arrays, products, records, fixed domains,
 and parameter renaming share these comparisons. Equal canonical words remain
 equal under resizing. Matrix access reuses array computations this way.
-`withEncodedInputs` also permits input maps into proper subdomains when their
-canonical bits agree. It composes existing field copying and argument routing;
-no new representation or machine primitive is needed.
+`withEncoding` shares the foundational transport proof for `reindexDomains`,
+`withEncodedInputs`, and `withEncodedOutput`. Matching widths and canonical bits
+reuse the original machine and runtime bound, including for proper subdomains.
+Width obligations remain separate because carriers may be empty.
 `choose` reads a Boolean argument and requires only the selected branch's
 precondition; uncalled branch scratch stays arbitrary.
 `arrayFold_realizable` traverses an immutable array while updating an
@@ -530,8 +532,6 @@ executable implementations are not a requirement.
 
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
-The immediate goals have been completed; longer-term goals remain below.
-
 ## Longer-term goals
 
 ### Integer arithmetic

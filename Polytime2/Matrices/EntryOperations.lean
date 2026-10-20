@@ -15,9 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.EncodedInputs
+import Polytime2.Computation.Conditional
 import Polytime2.Arrays.Operations
-import Polytime2.Matrices.AddressOperations
 import Polytime2.Matrices.RowsPresentation
 import Polytime2.Computation.Reindex
 
@@ -28,183 +27,6 @@ set_option backward.isDefEq.respectTransparency false
 namespace Polytime2.Computation
 
 open StandardMatrixRows
-
-namespace Realizable.Internal
-
-noncomputable section MatrixCoordinates
-
-/-- Arguments are binary row and column indices and the immutable matrix. -/
-def matrixEntryWithCapacity (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 3) where
-  inputDomains
-    | 0 | 1 => EncodedDomain.binaryNaturals 0
-    | 2 => matrixDomain scalar
-  outputDomain := scalar.constant
-  precondition sizes arguments := sizes 2 < 2 ^ sizes 0 ∧
-    (arguments 0).val < sizes 1 ∧ (arguments 1).val < sizes 2 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0
-  compute _ arguments := (arguments.val 2)
-    ⟨(arguments.val 0).val, arguments.property.2.1⟩
-    ⟨(arguments.val 1).val, arguments.property.2.2.1⟩
-
-/-- Arguments are row, column, immutable matrix, and replacement scalar.
-The result changes exactly that coordinate and has the same mathematical shape. -/
-def matrixReplaceWithCapacity (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 4) where
-  inputDomains
-    | 0 | 1 => EncodedDomain.binaryNaturals 0
-    | 2 => matrixDomain scalar
-    | 3 => scalar.constant
-  outputDomain := matrixDomain scalar
-  precondition sizes arguments := sizes 2 < 2 ^ sizes 0 ∧
-    (arguments 0).val < sizes 1 ∧ (arguments 1).val < sizes 2 ∧ sizes 1 * sizes 2 ≤ 2 ^ sizes 0
-  compute _ arguments :=
-    let row := ⟨(arguments.val 0).val, arguments.property.2.1⟩
-    let column := ⟨(arguments.val 1).val, arguments.property.2.2.1⟩
-    Function.update (arguments.val 2) row
-      (Function.update (arguments.val 2 row) column (arguments.val 3))
-
-private def lookupDomains (scalar : EncodedDomain Empty) : Bool → EncodedDomain (Fin 3)
-  | false => EncodedDomain.binaryNaturals 0
-  | true => matrixDomain scalar
-
-private def lookupEquivalence (scalar : EncodedDomain Empty) (name : Bool) (sizes : Fin 3 → ℕ) :
-    (lookupDomains scalar name).Carrier sizes ≃
-      ((Realizable.Internal.arrayLookupWithCapacity scalar.constant 0 StandardMatrixEntry.length).inputDomains name).Carrier sizes :=
-  match name with
-  | false => Equiv.refl _
-  | true => matrixEquiv sizes
-
-private def lookup (scalar : EncodedDomain Empty) : Computation (Fin 3) Bool :=
-  (Realizable.Internal.arrayLookupWithCapacity scalar.constant 0 StandardMatrixEntry.length).reindexDomains
-    (lookupDomains scalar) scalar.constant (lookupEquivalence scalar) (fun _ => Equiv.refl _)
-
-private theorem lookup_realizable (scalar : EncodedDomain Empty) : (lookup scalar).Realizable :=
-  (Realizable.Internal.arrayLookupWithCapacity_realizable scalar.constant 0 StandardMatrixEntry.length).reindexDomains _ _ _ _
-    (by intro name sizes; cases name <;> rfl) (by intro sizes; rfl)
-    (by intro name sizes value; cases name <;> rfl) (by intro sizes value; rfl)
-
-theorem matrixEntryWithCapacity_realizable (scalar : EncodedDomain Empty) : (matrixEntryWithCapacity scalar).Realizable := by
-  let computation := matrixEntryWithCapacity scalar
-  have address := matrixAddress_realizable.onResults computation.inputDomains computation.precondition
-    (fun flag _ arguments => if flag then arguments.val 1 else arguments.val 0)
-    (by
-      intro sizes arguments
-      exact ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
-        arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩)
-    (by
-      intro flag
-      cases flag
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
-  have realizable := (lookup_realizable scalar).onResults computation.inputDomains computation.precondition
-    (fun choice sizes arguments => match choice with
-      | true => arguments.val 2
-      | false => matrixAddress.compute sizes ⟨(fun flag => if flag then arguments.val 1 else arguments.val 0),
-          ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
-            arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩⟩)
-    (by
-      intro sizes arguments
-      change (arguments.val 0).val * sizes 2 + (arguments.val 1).val <
-        MvPolynomial.eval sizes StandardMatrixEntry.length
-      exact StandardMatrixEntry.index_lt sizes _ _ arguments.property.2.1 arguments.property.2.2.1)
-    (by
-      intro choice
-      cases choice
-      · exact address
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
-  exact realizable.withSpecification computation.precondition computation.compute
-    (by intro sizes arguments valid; exact valid)
-    (by
-      intro sizes arguments valid
-      change matrixEquiv sizes (arguments 2) _ = _
-      refine (congrArg (matrixEquiv sizes (arguments 2)) ?_).trans
-        (matrixEquiv_apply sizes (arguments 2) ⟨(arguments 0).val, valid.2.1⟩
-          ⟨(arguments 1).val, valid.2.2.1⟩)
-      apply Fin.ext
-      exact (matrixIndex_val sizes ⟨(arguments 0).val, valid.2.1⟩
-        ⟨(arguments 1).val, valid.2.2.1⟩).symm)
-
-private def updateDomains (scalar : EncodedDomain Empty) : Fin 3 → EncodedDomain (Fin 3)
-  | 0 => EncodedDomain.binaryNaturals 0
-  | 1 => matrixDomain scalar
-  | 2 => scalar.constant
-
-private def updateEquivalence (scalar : EncodedDomain Empty) (name : Fin 3) (sizes : Fin 3 → ℕ) :
-    (updateDomains scalar name).Carrier sizes ≃
-      ((Realizable.Internal.arrayUpdateWithCapacity scalar.constant 0 StandardMatrixEntry.length).inputDomains name).Carrier sizes :=
-  match name with
-  | 0 => Equiv.refl _
-  | 1 => matrixEquiv sizes
-  | 2 => Equiv.refl _
-
-private def update (scalar : EncodedDomain Empty) : Computation (Fin 3) (Fin 3) :=
-  (Realizable.Internal.arrayUpdateWithCapacity scalar.constant 0 StandardMatrixEntry.length).reindexDomains
-    (updateDomains scalar) (matrixDomain scalar) (updateEquivalence scalar) (fun sizes => matrixEquiv sizes)
-
-private theorem update_realizable (scalar : EncodedDomain Empty) : (update scalar).Realizable :=
-  (Realizable.Internal.arrayUpdateWithCapacity_realizable scalar.constant 0 StandardMatrixEntry.length).reindexDomains _ _ _ _
-    (by intro name sizes; fin_cases name <;> rfl) (by intro sizes; rfl)
-    (by intro name sizes value; fin_cases name <;> rfl) (by intro sizes value; rfl)
-
-theorem matrixReplaceWithCapacity_realizable (scalar : EncodedDomain Empty) : (matrixReplaceWithCapacity scalar).Realizable := by
-  let computation := matrixReplaceWithCapacity scalar
-  have address := matrixAddress_realizable.onResults computation.inputDomains computation.precondition
-    (fun flag _ arguments => if flag then arguments.val 1 else arguments.val 0)
-    (by
-      intro sizes arguments
-      exact ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
-        arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩)
-    (by
-      intro flag
-      cases flag
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
-  have realizable := (update_realizable scalar).onResults computation.inputDomains computation.precondition
-    (fun name sizes arguments => match name with
-      | 0 => matrixAddress.compute sizes ⟨(fun flag => if flag then arguments.val 1 else arguments.val 0),
-          ⟨arguments.property.1, lt_of_lt_of_le (StandardMatrixEntry.index_lt sizes _ _
-            arguments.property.2.1 arguments.property.2.2.1) (by simpa [StandardMatrixEntry.length] using arguments.property.2.2.2)⟩⟩
-      | 1 => arguments.val 2
-      | 2 => arguments.val 3)
-    (by
-      intro sizes arguments
-      change (arguments.val 0).val * sizes 2 + (arguments.val 1).val <
-        MvPolynomial.eval sizes StandardMatrixEntry.length
-      exact StandardMatrixEntry.index_lt sizes _ _ arguments.property.2.1 arguments.property.2.2.1)
-    (by
-      intro name
-      fin_cases name
-      · exact address
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 3 computation.precondition)
-  exact realizable.withSpecification computation.precondition computation.compute
-    (by intro sizes arguments valid; exact valid)
-    (by
-      intro sizes arguments valid
-      change computation.Arguments sizes at arguments
-      dsimp only [computation, matrixReplaceWithCapacity] at arguments
-      change (matrixEquiv sizes).symm (Function.update (matrixEquiv sizes (arguments 2)) _ (arguments 3)) = _
-      have indexEqual : (⟨(arguments 0).val * sizes 2 + (arguments 1).val,
-          StandardMatrixEntry.index_lt sizes _ _ valid.2.1 valid.2.2.1⟩ :
-          Fin (MvPolynomial.eval sizes StandardMatrixEntry.length)) =
-          matrixIndex sizes (⟨(arguments 0).val, valid.2.1⟩, ⟨(arguments 1).val, valid.2.2.1⟩) := by
-        apply Fin.ext
-        exact (matrixIndex_val sizes ⟨(arguments 0).val, valid.2.1⟩ ⟨(arguments 1).val, valid.2.2.1⟩).symm
-      erw [indexEqual]
-      let matrix : Matrix (Fin (sizes 1)) (Fin (sizes 2)) (scalar.Carrier Empty.elim) := arguments 2
-      let replacement : scalar.Carrier Empty.elim := arguments 3
-      let selectedRow : Fin (sizes 1) := ⟨(arguments 0).val, valid.2.1⟩
-      let selectedColumn : Fin (sizes 2) := ⟨(arguments 1).val, valid.2.2.1⟩
-      change (matrixEquiv sizes).symm
-        (Function.update (matrixEquiv sizes matrix) (matrixIndex sizes (selectedRow, selectedColumn)) replacement) =
-        Function.update matrix selectedRow (Function.update (matrix selectedRow) selectedColumn replacement)
-      funext row column
-      change Function.update (matrixEquiv sizes matrix) (matrixIndex sizes (selectedRow, selectedColumn))
-        replacement (matrixIndex sizes (row, column)) =
-        Function.update matrix selectedRow (Function.update (matrix selectedRow) selectedColumn replacement) row column
-      by_cases sameRow : row = selectedRow <;> by_cases sameColumn : column = selectedColumn <;>
-        simp_all [Function.update, (matrixIndex sizes).injective.eq_iff, matrixEquiv_apply])
-
-end MatrixCoordinates
-end Realizable.Internal
 
 noncomputable section PublicCoordinates
 
@@ -232,48 +54,91 @@ def matrixReplace (scalar : EncodedDomain Empty) : Computation (Fin 2) (Fin 4) w
   compute _ arguments := Function.update (arguments.val 2) (arguments.val 0)
     (Function.update (arguments.val 2 (arguments.val 0)) (arguments.val 1) (arguments.val 3))
 
-open Realizable.Internal in
-theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
-  let inputs := (matrixEntry scalar).inputDomains
-  let map (name : Fin 3) (sizes : Fin 2 → ℕ) : (inputs name).Carrier sizes →
-      (((matrixEntryWithCapacity scalar).withInternalSize).inputDomains name).Carrier sizes :=
-    match name with
-    | 0 => coordinateValue 0 sizes
-    | 1 => coordinateValue 1 sizes
-    | 2 => id
-  have ready := (matrixEntryWithCapacity_realizable scalar).withInternalSize.withEncodedInputs inputs map
-    (by intro name sizes value; fin_cases name
-        exact coordinate_bits 0 sizes value
-        exact coordinate_bits 1 sizes value
-        rfl)
-    (fun _ _ => True) (by
-      intro sizes arguments valid
-      have fits := internalCapacity_fits sizes
-      exact ⟨fits.2.1, (arguments 0).isLt, (arguments 1).isLt, fits.2.2⟩)
-  exact ready.withSpecification (fun _ _ => True) (matrixEntry scalar).compute
+private theorem coordinate_value (dimension : Fin 2) (sizes : Fin 2 → ℕ)
+    (index : (coordinateDomain dimension).Carrier sizes) :
+    Binary.value (EncodedDomain.ArrayEncoding.bits ((coordinateDomain dimension).encode sizes index)) = index.val :=
+  EncodedDomain.boundedIndexOfWidth_value _ _ _ sizes index
+
+/-- Read a whole row through the same generic runtime-width array accessor. -/
+private def matrixRow (scalar : EncodedDomain Empty) : Computation (Fin 2) Bool where
+  inputDomains | false => coordinateDomain 0 | true => (matrixDomain scalar).withInternalSize
+  outputDomain := (scalar.constant.withInternalSize).array 1
+  precondition _ _ := True
+  compute _ arguments := arguments.val true (arguments.val false)
+
+private theorem matrixRow_realizable (scalar : EncodedDomain Empty) : (matrixRow scalar).Realizable := by
+  apply (arrayLookupAtParameter_realizable ((scalar.constant.withInternalSize).array 1)
+    (coordinateDomain 0) 0 (fun _ value => value) (coordinate_value 0)).withEncoding
+    (target := matrixRow scalar) (fun name _ => match name with | false => id | true => id)
+    (by intro name sizes; cases name; rfl; exact matrixDomain_rows_width scalar sizes)
+    (by intros; rfl)
+    (by intro name sizes value; cases name; rfl; exact congrArg CallingConvention.tape (matrixDomain_rows_bits scalar sizes value))
     (by intros; trivial) (by intros; rfl)
 
-open Realizable.Internal in
-theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace scalar).Realizable := by
-  let inputs := (matrixReplace scalar).inputDomains
-  let map (name : Fin 4) (sizes : Fin 2 → ℕ) : (inputs name).Carrier sizes →
-      (((matrixReplaceWithCapacity scalar).withInternalSize).inputDomains name).Carrier sizes :=
-    match name with
-    | 0 => coordinateValue 0 sizes
-    | 1 => coordinateValue 1 sizes
-    | 2 | 3 => id
-  have ready := (matrixReplaceWithCapacity_realizable scalar).withInternalSize.withEncodedInputs inputs map
+private def replaceMatrixRow (scalar : EncodedDomain Empty) : Computation (Fin 2) (Fin 3) where
+  inputDomains | 0 => coordinateDomain 0 | 1 => (matrixDomain scalar).withInternalSize
+               | 2 => (scalar.constant.withInternalSize).array 1
+  outputDomain := (matrixDomain scalar).withInternalSize
+  precondition _ _ := True
+  compute _ arguments := Function.update (arguments.val 1) (arguments.val 0) (arguments.val 2)
+
+private theorem replaceMatrixRow_realizable (scalar : EncodedDomain Empty) :
+    (replaceMatrixRow scalar).Realizable := by
+  apply (arrayUpdateAtParameter_realizable ((scalar.constant.withInternalSize).array 1)
+    (coordinateDomain 0) 0 (fun _ value => value) (coordinate_value 0)).withEncoding
+    (target := replaceMatrixRow scalar) (fun name _ => match name with | 0 => id | 1 => id | 2 => id)
+    (by intro name sizes; fin_cases name; rfl; exact matrixDomain_rows_width scalar sizes; rfl)
+    (matrixDomain_rows_width scalar)
     (by intro name sizes value; fin_cases name
-        exact coordinate_bits 0 sizes value
-        exact coordinate_bits 1 sizes value
         rfl
+        exact congrArg CallingConvention.tape (matrixDomain_rows_bits scalar sizes value)
         rfl)
-    (fun _ _ => True) (by
-      intro sizes arguments valid
-      have fits := internalCapacity_fits sizes
-      exact ⟨fits.2.1, (arguments 0).isLt, (arguments 1).isLt, fits.2.2⟩)
-  exact ready.withSpecification (fun _ _ => True) (matrixReplace scalar).compute
-    (by intros; trivial) (by intros; rfl)
+    (by intros; trivial)
+  intro sizes arguments
+  exact congrArg CallingConvention.tape (matrixDomain_rows_bits scalar sizes _)
+
+theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
+  let computation := matrixEntry scalar
+  have row := (matrixRow_realizable scalar).onResults computation.inputDomains computation.precondition
+    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
+    (by intros; trivial) (by
+      intro choice; cases choice
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
+  exact (arrayLookupAtParameter_realizable scalar.constant.withInternalSize (coordinateDomain 1)
+    1 (fun _ value => value) (coordinate_value 1)).onResults computation.inputDomains computation.precondition
+    (fun choice _ arguments => match choice with | false => arguments.val 1 | true => arguments.val 2 (arguments.val 0))
+    (by intros; trivial) (by
+      intro choice; cases choice
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition
+      · exact row)
+
+theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace scalar).Realizable := by
+  let computation := matrixReplace scalar
+  have row := (matrixRow_realizable scalar).onResults computation.inputDomains computation.precondition
+    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
+    (by intros; trivial) (by
+      intro choice; cases choice
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
+  have replaced := (arrayUpdateAtParameter_realizable scalar.constant.withInternalSize (coordinateDomain 1)
+    1 (fun _ value => value) (coordinate_value 1)).onResults computation.inputDomains computation.precondition
+    (fun name _ arguments => match name with
+      | 0 => arguments.val 1 | 1 => arguments.val 2 (arguments.val 0) | 2 => arguments.val 3)
+    (by intros; trivial) (by
+      intro name; fin_cases name
+      · exact Realizable.argument computation.inputDomains 1 computation.precondition
+      · exact row
+      · exact Realizable.argument computation.inputDomains 3 computation.precondition)
+  exact (replaceMatrixRow_realizable scalar).onResults computation.inputDomains computation.precondition
+    (fun name _ arguments => match name with
+      | 0 => arguments.val 0 | 1 => arguments.val 2
+      | 2 => Function.update (arguments.val 2 (arguments.val 0)) (arguments.val 1) (arguments.val 3))
+    (by intros; trivial) (by
+      intro name; fin_cases name
+      · exact Realizable.argument computation.inputDomains 0 computation.precondition
+      · exact Realizable.argument computation.inputDomains 2 computation.precondition
+      · exact replaced)
 
 end PublicCoordinates
 end Polytime2.Computation

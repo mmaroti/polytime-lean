@@ -225,6 +225,93 @@ theorem arrayUpdate_realizable (element : EncodedDomain.{0, 0} Parameter) (lengt
     (arrayUpdate element length).compute (by intro sizes arguments valid; exact (arguments 0).isLt)
     (by intros; rfl)
 
+noncomputable section NamedAccess
+
+open EncodedDomain
+
+def arrayLookupAtParameter (element indexDomain : EncodedDomain.{0, 0} Parameter)
+    (parameter : Parameter) (index : ∀ sizes, indexDomain.Carrier sizes → Fin (sizes parameter)) :
+    Computation Parameter Bool where
+  inputDomains | false => indexDomain | true => element.array parameter
+  outputDomain := element
+  precondition _ _ := True
+  compute sizes arguments := arguments.val true (index sizes (arguments.val false))
+
+def arrayUpdateAtParameter (element indexDomain : EncodedDomain.{0, 0} Parameter)
+    (parameter : Parameter) (index : ∀ sizes, indexDomain.Carrier sizes → Fin (sizes parameter)) :
+    Computation Parameter (Fin 3) where
+  inputDomains | 0 => indexDomain | 1 => element.array parameter | 2 => element
+  outputDomain := element.array parameter
+  precondition _ _ := True
+  compute sizes arguments := Function.update (arguments.val 1)
+    (index sizes (arguments.val 0)) (arguments.val 2)
+
+theorem arrayLookupAtParameter_realizable (element indexDomain : EncodedDomain.{0, 0} Parameter)
+    (parameter : Parameter) (index : ∀ sizes, indexDomain.Carrier sizes → Fin (sizes parameter))
+    (value_encode : ∀ sizes value,
+      Binary.value (ArrayEncoding.bits (indexDomain.encode sizes value)) = (index sizes value).val) :
+    (arrayLookupAtParameter element indexDomain parameter index).Realizable := by
+  let computation := arrayLookupAtParameter element indexDomain parameter index
+  let inputMap (name : Bool) sizes : (computation.inputDomains name).Carrier sizes →
+      ((arrayLookupWithIndex element indexDomain (fun sizes value => (index sizes value).val)
+        (MvPolynomial.X parameter)).inputDomains name).Carrier sizes :=
+    match name with | false => id | true => arrayParameterEquiv element parameter sizes
+  apply (arrayLookupWithIndex_realizable element indexDomain
+    (fun sizes value => (index sizes value).val) value_encode (MvPolynomial.X parameter)).withEncoding
+    (target := computation) inputMap (by intro name sizes; cases name <;> rfl)
+    (by intros; rfl)
+    (by intro name sizes value; cases name; rfl
+        exact congrArg tape (array_X_encode_bits element parameter sizes value))
+    (by
+      intro sizes arguments valid
+      change (index sizes (arguments false)).val < MvPolynomial.eval sizes (MvPolynomial.X parameter)
+      simpa only [MvPolynomial.eval_X] using (index sizes (arguments false)).isLt)
+  intros
+  rfl
+
+theorem arrayUpdateAtParameter_realizable (element indexDomain : EncodedDomain.{0, 0} Parameter)
+    (parameter : Parameter) (index : ∀ sizes, indexDomain.Carrier sizes → Fin (sizes parameter))
+    (value_encode : ∀ sizes value,
+      Binary.value (ArrayEncoding.bits (indexDomain.encode sizes value)) = (index sizes value).val) :
+    (arrayUpdateAtParameter element indexDomain parameter index).Realizable := by
+  let computation := arrayUpdateAtParameter element indexDomain parameter index
+  let inputMap (name : Fin 3) sizes : (computation.inputDomains name).Carrier sizes →
+      ((arrayUpdateWithIndex element indexDomain (fun sizes value => (index sizes value).val)
+        (MvPolynomial.X parameter)).inputDomains name).Carrier sizes :=
+    match name with | 0 => id | 1 => arrayParameterEquiv element parameter sizes | 2 => id
+  apply (arrayUpdateWithIndex_realizable element indexDomain
+    (fun sizes value => (index sizes value).val) value_encode (MvPolynomial.X parameter)).withEncoding
+    (target := computation) inputMap (by intro name sizes; fin_cases name <;> rfl)
+    (arrayParameter_width element parameter)
+    (by intro name sizes value; fin_cases name
+        rfl
+        exact congrArg tape (array_X_encode_bits element parameter sizes value)
+        rfl)
+    (by
+      intro sizes arguments valid
+      change (index sizes (arguments 0)).val < MvPolynomial.eval sizes (MvPolynomial.X parameter)
+      simpa only [MvPolynomial.eval_X] using (index sizes (arguments 0)).isLt)
+  intro sizes arguments
+  apply congrArg tape
+  refine (array_X_encode_bits element parameter sizes _).trans ?_
+  apply congrArg ArrayEncoding.bits
+  apply congrArg ((element.arrayOfLength (MvPolynomial.X parameter)).encode sizes)
+  have updateTransport (values : Fin (sizes parameter) → element.Carrier sizes)
+      (selected : Fin (sizes parameter)) (replacement : element.Carrier sizes) :
+      arrayParameterEquiv element parameter sizes (Function.update values selected replacement) =
+        Function.update (arrayParameterEquiv element parameter sizes values)
+          ⟨selected.val, by simpa only [MvPolynomial.eval_X] using selected.isLt⟩ replacement := by
+    funext position
+    change Function.update values selected replacement
+      (Fin.cast (MvPolynomial.eval_X (f := sizes) parameter) position) =
+        Function.update
+          (fun position => values (Fin.cast (MvPolynomial.eval_X (f := sizes) parameter) position))
+          ⟨selected.val, _⟩ replacement position
+    simp only [Function.update_apply, Fin.ext_iff, Fin.val_cast]
+  exact updateTransport (arguments.val 1) (index sizes (arguments.val 0)) (arguments.val 2)
+
+end NamedAccess
+
 theorem arrayMap_realizable (parameterDomain elementDomain : EncodedDomain.{0, 0} Empty)
     (length : MvPolynomial Parameter ℕ)
     (operation : parameterDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim → elementDomain.Carrier Empty.elim) :

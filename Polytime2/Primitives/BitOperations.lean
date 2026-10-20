@@ -61,8 +61,9 @@ theorem encodingMap_realizable (source target : EncodedDomain Parameter)
       EncodedDomain.ArrayEncoding.bits (source.encode sizes value) =
         EncodedDomain.ArrayEncoding.bits (target.encode sizes (compute sizes value))) :
     (encodingMap source target compute).Realizable :=
-  bitTransducer_realizable BinaryScan.copy () source target compute sameWidth
-    (by intro sizes value; simpa only [BinaryScan.copy_run] using sameBits sizes value)
+  (copy_realizable source).withEncodedOutput target
+    (fun sizes value => compute sizes (value.val ())) sameWidth
+    (fun sizes value => congrArg CallingConvention.tape (sameBits sizes (value.val ())).symm)
 
 /-- The canonical encoding itself is a polynomial-time computation. -/
 theorem encode_realizable (domain : EncodedDomain Parameter) :

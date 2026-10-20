@@ -55,7 +55,7 @@ private theorem packingPayload_bits (element : EncodedDomain Parameter) (length 
     ArrayEncoding.bits ((packingPayload element).encode
       (computedSizeAssignment (packingCallBounds length) sizes (packingCallSizes length sizes retained)) values) =
       ArrayEncoding.bits (ArrayEncoding.encode (element.encode sizes) retained.val values) := by
-  simp only [packingPayload, EncodedDomain.array, ofCodec, ArrayEncoding.bits_cast, ArrayEncoding.bits_encode,
+  simp only [packingPayload, array_encode_bits, ArrayEncoding.bits_encode,
     renameParameters_bits]
   rfl
 
@@ -63,7 +63,7 @@ private theorem packingCall_capacity (element : EncodedDomain Parameter) (length
     SizeSubstitution.polynomial (packingCallBounds length)
       (namedRecord (fun _ : Unit => packingPayload element)).widthPolynomial = length * element.widthPolynomial := by
   rw [namedRecord_unit_widthPolynomial]
-  simp [packingPayload, EncodedDomain.array, renameParameters, ofCodec,
+  simp [packingPayload, array_widthPolynomial, renameParameters, ofCodec,
     SizeSubstitution.polynomial, MvPolynomial.bind₁_rename, MvPolynomial.bind₁_X_left, packingCallBounds, Function.comp_def]
 
 private theorem packingSizeRecord_realizable {InputName : Type} [Fintype InputName]
@@ -125,17 +125,17 @@ theorem boundedArrayCallFrame_realizable (element : EncodedDomain Parameter) (le
     have capacityEq : MvPolynomial.eval sizes (SizeSubstitution.polynomial bounds payload.widthPolynomial) =
         MvPolynomial.eval sizes (length * element.widthPolynomial) := by rw [packingCall_capacity]
     apply congrArg tape
-    change ArrayEncoding.bits (((computedSizeDomain bounds).prod
-      (bitVectors (SizeSubstitution.polynomial bounds payload.widthPolynomial))).encode sizes
-        (sizesResult sizes arguments, (payload.encode assignment (fun _ => values)).setWidth _)) = _
-    rw [bits_prod_encode, bits_prod_encode]
-    apply congrArg (fun bits => ArrayEncoding.bits ((computedSizeDomain bounds).encode sizes (sizesResult sizes arguments)) ++ bits)
-    change ArrayEncoding.bits ((payload.encode assignment (fun _ => values)).setWidth
-      (MvPolynomial.eval sizes (SizeSubstitution.polynomial bounds payload.widthPolynomial))) =
-        ArrayEncoding.bits ((ArrayEncoding.encode (element.encode sizes) (retained sizes arguments).val values).setWidth
-          (MvPolynomial.eval sizes (length * element.widthPolynomial)))
-    rw [capacityEq]
-    exact ArrayEncoding.bits_setWidth_congr prefixBits
+    change ArrayEncoding.bits ((atComputedSizeDomain bounds payload).encode sizes
+      ⟨sizesResult sizes arguments, fun _ => values⟩) =
+        ArrayEncoding.bits (((computedSizeDomain bounds).prod
+          (bitVectors (length * element.widthPolynomial))).encode sizes
+          (sizesResult sizes arguments, (boundedArrayPayload element length).compute sizes arguments))
+    exact (boundedSigma_encode_bits _ _ _ _ _ sizes _).trans
+      ((congrArg (fun bits => ArrayEncoding.bits
+        ((computedSizeDomain bounds).encode sizes (sizesResult sizes arguments)) ++ bits)
+        (ArrayEncoding.bits_setWidth_congr_of_eq prefixBits capacityEq)).trans
+          (bits_prod_encode (computedSizeDomain bounds) (bitVectors (length * element.widthPolynomial))
+            sizes (sizesResult sizes arguments, (boundedArrayPayload element length).compute sizes arguments)).symm)
 
 /-- Pack a mask-selected array and prepare its exact result for a consumer at
 the computed count. Both stages use the same public mathematical interface. -/

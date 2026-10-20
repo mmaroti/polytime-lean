@@ -84,12 +84,24 @@ noncomputable def withInternalSize (domain : EncodedDomain.{0, carrierLevel} (Fi
     (fun sizes => domain.decode_encode (Computation.Realizable.Internal.internalSizes sizes))
     (fun sizes => domain.encode_decode (Computation.Realizable.Internal.internalSizes sizes))
 
+@[simp] theorem withInternalSize_width (domain : EncodedDomain.{0, carrierLevel} (Fin 3))
+    (sizes : Fin 2 → ℕ) : domain.withInternalSize.width sizes =
+      domain.width (Computation.Realizable.Internal.internalSizes sizes) :=
+  Computation.Realizable.Internal.internalBound_eval domain.widthPolynomial sizes
+
+/-- Private size substitution retains the canonical binary word. -/
+@[simp] theorem withInternalSize_encode_bits (domain : EncodedDomain.{0, carrierLevel} (Fin 3))
+    (sizes : Fin 2 → ℕ) (value : domain.Carrier (Computation.Realizable.Internal.internalSizes sizes)) :
+    ArrayEncoding.bits (domain.withInternalSize.encode sizes value) =
+      ArrayEncoding.bits (domain.encode (Computation.Realizable.Internal.internalSizes sizes) value) := by
+  simp only [withInternalSize, ofCodec, ArrayEncoding.bits_cast]
+
 /-- Substituting private sizes preserves the canonical tape. -/
 @[simp] theorem encoded_withInternalSize (domain : EncodedDomain.{0, carrierLevel} (Fin 3))
     (sizes : Fin 2 → ℕ) (value : domain.Carrier (Computation.Realizable.Internal.internalSizes sizes)) :
     CallingConvention.encoded domain.withInternalSize sizes value =
       CallingConvention.encoded domain (Computation.Realizable.Internal.internalSizes sizes) value := by
-  simp only [CallingConvention.encoded, withInternalSize, ofCodec, ArrayEncoding.bits_cast]
+  exact congrArg CallingConvention.tape (withInternalSize_encode_bits domain sizes value)
 
 end EncodedDomain
 

@@ -22,7 +22,7 @@ import Polytime2.Computation.InternalSize
 
 namespace Polytime2.StandardMatrixRows
 
-open MultiTape CallingConvention
+open MultiTape CallingConvention EncodedDomain
 
 /-- The mathematical carrier exposes an ordinary rectangular matrix. Its
 canonical encoding is the controller's existing row-major array encoding. -/
@@ -30,6 +30,53 @@ noncomputable def matrixDomain (scalar : EncodedDomain.{0, 0} Empty) : EncodedDo
   (scalar.constant.arrayOfLength StandardMatrixEntry.length).reindex
     (fun sizes => Matrix (Fin (sizes 1)) (Fin (sizes 2)) (scalar.Carrier Empty.elim))
     (fun sizes => matrixEquiv sizes)
+
+theorem matrixDomain_nested_bits (scalar : EncodedDomain Empty) (sizes : Fin 3 → ℕ)
+    (value : Matrix (Fin (sizes 1)) (Fin (sizes 2)) (scalar.Carrier Empty.elim)) :
+    ArrayEncoding.bits ((matrixDomain scalar).encode sizes value) =
+      ArrayEncoding.bits (ArrayEncoding.encode (ArrayEncoding.encode (scalar.encode Empty.elim)
+        (sizes 2)) (sizes 1) value) := by
+  have lengthEq : MvPolynomial.eval sizes StandardMatrixEntry.length = sizes 1 * sizes 2 := by
+    simp [StandardMatrixEntry.length]
+  exact (arrayOfLength_encode_bits scalar.constant StandardMatrixEntry.length sizes (matrixEquiv sizes value)).trans
+    ((ArrayEncoding.bits_encode_congr _ _ (constant_encode_bits scalar sizes) _ _).trans
+      ((ArrayEncoding.bits_encode_cast (scalar.encode Empty.elim) lengthEq
+        (MatrixEncoding.flattenEquiv value)).trans
+        (MatrixEncoding.bits_encode_nested (scalar.encode Empty.elim) value).symm))
+
+/-- A matrix's flat codec and nested named arrays have identical canonical bits. -/
+theorem matrixDomain_rows_bits (scalar : EncodedDomain Empty) (sizes : Fin 2 → ℕ)
+    (value : Matrix (Fin (sizes 0)) (Fin (sizes 1)) (scalar.Carrier Empty.elim)) :
+    EncodedDomain.ArrayEncoding.bits (((matrixDomain scalar).withInternalSize).encode sizes value) =
+      EncodedDomain.ArrayEncoding.bits
+        ((((scalar.constant.withInternalSize).array (1 : Fin 2)).array 0).encode sizes value) := by
+  let element : EncodedDomain (Fin 2) := scalar.constant.withInternalSize
+  have elementBits (entry : scalar.Carrier Empty.elim) :
+      EncodedDomain.ArrayEncoding.bits (element.encode sizes entry) =
+        EncodedDomain.ArrayEncoding.bits (scalar.encode Empty.elim entry) :=
+    (EncodedDomain.withInternalSize_encode_bits scalar.constant sizes entry).trans
+      (EncodedDomain.constant_encode_bits scalar _ entry)
+  have rowsBits := EncodedDomain.array_encode_bits (element.array 1) 0 sizes value
+  have rawRows := EncodedDomain.ArrayEncoding.bits_encode_congr ((element.array 1).encode sizes)
+    (EncodedDomain.ArrayEncoding.encode (scalar.encode Empty.elim) (sizes 1))
+    (fun row => (EncodedDomain.array_encode_bits element 1 sizes row).trans
+      (EncodedDomain.ArrayEncoding.bits_encode_congr _ _ elementBits _ row)) (sizes 0) value
+  exact (EncodedDomain.withInternalSize_encode_bits (matrixDomain scalar) sizes value).trans
+    ((matrixDomain_nested_bits scalar (Computation.Realizable.Internal.internalSizes sizes) value).trans
+      (rowsBits.trans rawRows).symm)
+
+/-- Width equality is independent of inhabitants, including empty matrices. -/
+theorem matrixDomain_rows_width (scalar : EncodedDomain Empty) (sizes : Fin 2 → ℕ) :
+    ((matrixDomain scalar).withInternalSize).width sizes =
+      (((scalar.constant.withInternalSize).array (1 : Fin 2)).array 0).width sizes := by
+  have scalarWidth : scalar.constant.withInternalSize.width sizes = scalar.width Empty.elim :=
+    (EncodedDomain.withInternalSize_width scalar.constant sizes).trans
+      (by simp only [EncodedDomain.width, EncodedDomain.constant_widthPolynomial, MvPolynomial.eval_C])
+  rw [EncodedDomain.withInternalSize_width]
+  change (scalar.constant.arrayOfLength StandardMatrixEntry.length).width
+    (Computation.Realizable.Internal.internalSizes sizes) = _
+  rw [EncodedDomain.arrayOfLength_width, EncodedDomain.array_width, EncodedDomain.array_width, scalarWidth]
+  simp [StandardMatrixEntry.length, Computation.Realizable.Internal.internalSizes, Nat.mul_assoc]
 
 /-- Public matrix arguments are mathematical matrices. Private workspace
 values retain their existing domains and their exact same physical encodings. -/

@@ -17,8 +17,7 @@ limitations under the License.
 
 import Polytime2.Computation.Layout
 import Polytime2.Computation.Conditional
-import Polytime2.Computation.Substitution
-import Polytime2.Primitives.BitOperations
+import Polytime2.Arithmetic.WidthOperations
 import Polytime2.Arithmetic.BinaryRemainder
 
 /-! # Remainder with private working capacity
@@ -78,83 +77,31 @@ noncomputable def binaryRemainder : Computation Unit Bool where
   compute _ arguments := ⟨(arguments.val false).val % (arguments.val true).val,
     lt_trans (Nat.mod_lt _ arguments.property) (arguments.val true).isLt⟩
 
-namespace Realizable.Internal
 
-private noncomputable def remainderSizes : Unit → MvPolynomial Unit ℕ :=
-  fun _ => MvPolynomial.X () + 1
-
-private theorem remainderSizes_eval (sizes : Unit → ℕ) :
-    SizeSubstitution.assignment remainderSizes sizes () = sizes () + 1 := by
-  simp [SizeSubstitution.assignment, remainderSizes]
-
-private noncomputable def remainderWide : EncodedDomain Unit :=
-  (EncodedDomain.binaryNaturals ()).substitute remainderSizes
-
-private def remainderWiden (sizes : Unit → ℕ) (value : Fin (2 ^ sizes ())) :
-    remainderWide.Carrier sizes :=
-  ⟨value.val, by
-    rw [remainderSizes_eval]
-    exact value.isLt.trans_le (pow_le_pow_right₀ (by decide) (by omega))⟩
-
-private theorem remainderWiden_realizable :
-    (encodingMap (EncodedDomain.binaryNaturals ()) remainderWide remainderWiden).Realizable := by
-  refine zeroExtendEncoding_realizable (EncodedDomain.binaryNaturals ()) remainderWide 1 remainderWiden ?_ ?_
-  · intro sizes
-    simp only [remainderWide, EncodedDomain.width, EncodedDomain.substitute,
-      EncodedDomain.binaryNaturals, EncodedDomain.ofCodec,
-      SizeSubstitution.polynomial_eval, MvPolynomial.eval_X, map_one]
-    exact remainderSizes_eval sizes
-  · intro sizes value
-    simp only [remainderWide, EncodedDomain.substitute, EncodedDomain.binaryNaturals,
-      EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast]
-    have widened : BitVec.ofFin (remainderWiden sizes value) =
-        (BitVec.ofFin value).setWidth (SizeSubstitution.assignment remainderSizes sizes ()) := by
-      apply BitVec.eq_of_toNat_eq
-      simp only [BitVec.toNat_ofFin, BitVec.toNat_setWidth]
-      exact (Nat.mod_eq_of_lt (remainderWiden sizes value).isLt).symm
-    rw [widened, EncodedDomain.bits_setWidth _ (by rw [remainderSizes_eval]; omega)]
-    simp [remainderSizes_eval]
-
-private noncomputable def remainderNarrow : Computation Unit Unit :=
-  encodingMap remainderWide (EncodedDomain.binaryNaturals ())
-    (fun sizes value => ((BitVec.ofFin value).setWidth (sizes ())).toFin)
-
-private theorem remainderNarrow_realizable : remainderNarrow.Realizable := by
-  apply Realizable.Internal.fieldProjection remainderWide (EncodedDomain.binaryNaturals ()) 0
-    (fun _ _ => True) (fun sizes value => ((BitVec.ofFin value.val).setWidth (sizes ())).toFin)
-  intro sizes value
-  refine ⟨[], (EncodedDomain.ArrayEncoding.bits (BitVec.ofFin value.val)).drop (sizes ()), ?_, by simp⟩
-  simp only [remainderWide, EncodedDomain.substitute, EncodedDomain.binaryNaturals,
-    EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast, BitVec.ofFin_toFin, List.nil_append]
-  rw [EncodedDomain.bits_setWidth_take _ (by rw [remainderSizes_eval]; omega)]
-  simpa only [EncodedDomain.ArrayEncoding.bits_cast] using
-    (List.take_append_drop (sizes ()) (EncodedDomain.ArrayEncoding.bits (BitVec.ofFin value.val))).symm
-
-end Realizable.Internal
 
 open Realizable.Internal in
 theorem binaryRemainder_realizable : binaryRemainder.Realizable := by
-  have widened := (binaryRemainderWithCapacity_realizable.substitute remainderSizes).onResults
+  have widened := (binaryRemainderWithCapacity_realizable.substitute extraBitSizes).onResults
     binaryRemainder.inputDomains binaryRemainder.precondition
-    (fun name sizes arguments => remainderWiden sizes (arguments.val name))
+    (fun name sizes arguments => extraBitWiden sizes (arguments.val name))
     (by
       intro sizes arguments
       change 0 < (arguments.val true).val ∧
-        2 * (arguments.val true).val ≤ 2 ^ SizeSubstitution.assignment remainderSizes sizes ()
-      rw [remainderSizes_eval, pow_succ]
+        2 * (arguments.val true).val ≤ 2 ^ SizeSubstitution.assignment extraBitSizes sizes ()
+      rw [extraBitSizes_eval, pow_succ]
       exact ⟨arguments.property, by have bound := (arguments.val true).isLt; omega⟩)
     (by
       intro name
-      exact remainderWiden_realizable.onResults binaryRemainder.inputDomains binaryRemainder.precondition
+      exact extraBitWiden_realizable.onResults binaryRemainder.inputDomains binaryRemainder.precondition
         (fun _ _ arguments => arguments.val name) (by intros; trivial)
         (by intro _; exact Realizable.argument _ name _))
-  have narrowed := widened.followedBy remainderNarrow_realizable rfl (by intros; trivial)
+  have narrowed := widened.followedBy extraBitNarrow_realizable rfl (by intros; trivial)
   exact narrowed.withSpecification binaryRemainder.precondition binaryRemainder.compute
     (by intro sizes arguments valid; exact valid) (by
       intro sizes arguments valid
       apply Fin.ext
-      simp only [followedBy, remainderNarrow, encodingMap, unaryMap, onResults, substitute,
-        binaryRemainderWithCapacity, remainderWiden, binaryRemainder]
+      simp only [followedBy, extraBitNarrow, encodingMap, unaryMap, onResults, substitute,
+        binaryRemainderWithCapacity, extraBitWiden, binaryRemainder]
       change (BitVec.setWidth (sizes ()) _).toNat = _
       rw [BitVec.toNat_setWidth]
       exact Nat.mod_eq_of_lt ((Nat.mod_lt _ valid).trans (arguments true).isLt))

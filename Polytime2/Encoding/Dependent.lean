@@ -25,7 +25,7 @@ padding to a polynomial capacity. Decoding rejects nonzero padding.
 
 namespace Polytime2.EncodedDomain
 
-variable {Parameter IndexName : Type} [Fintype Parameter] [Fintype IndexName]
+variable {Parameter : Type} [Fintype Parameter]
 
 /-- Zero extension preserves the exact payload prefix and adds only binary zeros. -/
 theorem bits_setWidth {width capacity : ℕ} (bits : BitVec width) (fits : width ≤ capacity) :
@@ -57,14 +57,6 @@ theorem encode_setWidth_injective (domain : EncodedDomain Parameter) (sizes : Pa
   simp only [BitVec.setWidth_setWidth_of_le _ fits, BitVec.setWidth_eq] at exactBits
   have decoded := congrArg (domain.decode sizes) exactBits
   simpa only [domain.decode_encode, Option.some.injEq] using decoded
-
-/-- Named fields use the existing record codec in a fixed specialization order.
--/
-noncomputable def namedRecord (fields : IndexName → EncodedDomain Parameter) : EncodedDomain Parameter :=
-  (record (Fintype.card IndexName) (fun index => fields ((Fintype.equivFin IndexName).symm index))).reindex
-    (fun sizes => ∀ name, (fields name).Carrier sizes)
-    (fun sizes => (Equiv.piCongrLeft (fun name => (fields name).Carrier sizes)
-      (Fintype.equivFin IndexName).symm).symm)
 
 /-- A bounded dependent codec retains the exact mathematical payload family.
 Only the storage width is padded to the caller's polynomial capacity. -/
@@ -122,5 +114,23 @@ noncomputable def boundedSigma (index : EncodedDomain Parameter)
     (fun sizes value => payload.encode (assignment sizes value))
     (fun sizes value => payload.decode (assignment sizes value))
     (fun sizes value => payload.decode_encode (assignment sizes value)) capacity fits
+
+@[simp] theorem boundedSigma_widthPolynomial (index : EncodedDomain Parameter)
+    (assignment : ∀ sizes, index.Carrier sizes → NewParameter → ℕ)
+    (payload : EncodedDomain NewParameter) (capacity : MvPolynomial Parameter ℕ)
+    (fits : ∀ sizes value, payload.width (assignment sizes value) ≤ MvPolynomial.eval sizes capacity) :
+    (boundedSigma index assignment payload capacity fits).widthPolynomial = index.widthPolynomial + capacity := rfl
+
+/-- A dependent frame is its index followed by its zero-padded payload bits. -/
+@[simp] theorem boundedSigma_encode_bits (index : EncodedDomain Parameter)
+    (assignment : ∀ sizes, index.Carrier sizes → NewParameter → ℕ)
+    (payload : EncodedDomain NewParameter) (capacity : MvPolynomial Parameter ℕ)
+    (fits : ∀ sizes value, payload.width (assignment sizes value) ≤ MvPolynomial.eval sizes capacity)
+    (sizes : Parameter → ℕ) (value : (boundedSigma index assignment payload capacity fits).Carrier sizes) :
+    ArrayEncoding.bits ((boundedSigma index assignment payload capacity fits).encode sizes value) =
+      ArrayEncoding.bits (index.encode sizes value.1) ++
+        ArrayEncoding.bits ((payload.encode (assignment sizes value.1) value.2).setWidth
+          (MvPolynomial.eval sizes capacity)) := by
+  exact bits_prod_encode _ _ _ _
 
 end Polytime2.EncodedDomain

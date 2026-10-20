@@ -131,6 +131,12 @@ noncomputable def boundedIndexOfWidth (length : (Parameter → ℕ) → ℕ) (wi
       exact BitVec.eq_of_toNat_eq (by simp)
     · simp at accepted
 
+@[simp] theorem boundedIndexOfWidth_value (length : (Parameter → ℕ) → ℕ)
+    (width : MvPolynomial Parameter ℕ) (fits : ∀ sizes, length sizes ≤ 2 ^ MvPolynomial.eval sizes width)
+    (sizes : Parameter → ℕ) (index : (boundedIndexOfWidth length width fits).Carrier sizes) :
+    Binary.value (ArrayEncoding.bits ((boundedIndexOfWidth length width fits).encode sizes index)) = index.val :=
+  (Binary.value_bits _).trans (by simp only [boundedIndexOfWidth, BitVec.toNat_ofNatLT])
+
 /-- Array coordinates use their mathematical bound as the exact binary width.
 The empty bound has no coordinates; decoding rejects out-of-range words. -/
 noncomputable def boundedIndex (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=

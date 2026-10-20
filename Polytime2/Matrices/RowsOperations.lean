@@ -125,6 +125,7 @@ theorem rowTransform_realizable (writeSource : Bool) (scalar : EncodedDomain Emp
     | 0 | 1 => coordinateValue 0 sizes
     | 2 | 3 => id
   have ready := (rowTransformWithCapacity_realizable writeSource scalar internalOperation).withInternalSize.withEncodedInputs inputs map
+    (by intro name sizes; fin_cases name <;> rfl)
     (by intro name sizes value; fin_cases name
         exact coordinate_bits 0 sizes value
         exact coordinate_bits 0 sizes value

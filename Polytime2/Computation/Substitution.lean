@@ -42,7 +42,7 @@ variable {Parameter NewParameter : Type} [Fintype Parameter] [Fintype NewParamet
     (value : domain.Carrier (SizeSubstitution.assignment substitution sizes)) :
     encoded (domain.substitute substitution) sizes value =
       encoded domain (SizeSubstitution.assignment substitution sizes) value := by
-  simp only [encoded, substitute, ofCodec, ArrayEncoding.bits_cast]
+  exact congrArg tape (substitute_encode_bits domain substitution sizes value)
 
 end Polytime2.EncodedDomain
 

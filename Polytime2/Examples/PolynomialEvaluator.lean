@@ -49,7 +49,8 @@ example (scalar : EncodedDomain Empty) :
   have widthEq : (scalar.constant.array (1 : Fin 2)).width =
       (fun sizes => sizes 1 * scalar.width Empty.elim) := by
     funext sizes
-    simp [EncodedDomain.array, EncodedDomain.constant, EncodedDomain.ofCodec]
+    simp only [EncodedDomain.width, EncodedDomain.array_widthPolynomial,
+      EncodedDomain.constant_widthPolynomial, map_mul, MvPolynomial.eval_X, MvPolynomial.eval_C]
   rw [← widthEq]
   exact (scalar.constant.array (1 : Fin 2)).width_computable
 
@@ -60,7 +61,8 @@ example (scalar : EncodedDomain Empty) :
   have widthEq : ((scalar.constant.array (1 : Fin 2)).array 0).width =
       (fun sizes => sizes 0 * (sizes 1 * scalar.width Empty.elim)) := by
     funext sizes
-    simp [EncodedDomain.array, EncodedDomain.constant, EncodedDomain.ofCodec]
+    simp only [EncodedDomain.width, EncodedDomain.array_widthPolynomial,
+      EncodedDomain.constant_widthPolynomial, map_mul, MvPolynomial.eval_X, MvPolynomial.eval_C]
   rw [← widthEq]
   exact ((scalar.constant.array (1 : Fin 2)).array 0).width_computable
 

@@ -42,12 +42,19 @@ example (sizes : Unit → ℕ) (arguments : gcd.Arguments sizes)
       Nat.gcd (arguments false).val (arguments true).val := rfl
 
 example : (gcd.compute (fun _ => 6)
-    ⟨(fun | false => (48 : Fin 64) | true => (18 : Fin 64)), by change 2 * 18 ≤ 64; decide⟩ : Fin 64) = (6 : Fin 64) := rfl
+    ⟨(fun | false => (48 : Fin 64) | true => (18 : Fin 64)), by trivial⟩ : Fin 64) = (6 : Fin 64) := rfl
 example : (gcd.compute (fun _ => 7)
-    ⟨(fun | false => (0 : Fin 128) | true => (37 : Fin 128)), by change 2 * 37 ≤ 128; decide⟩ : Fin 128) = (37 : Fin 128) := rfl
+    ⟨(fun | false => (0 : Fin 128) | true => (37 : Fin 128)), by trivial⟩ : Fin 128) = (37 : Fin 128) := rfl
 example : (gcd.compute (fun _ => 6)
-    ⟨(fun | false => (37 : Fin 64) | true => (0 : Fin 64)), by change 2 * 0 ≤ 64; decide⟩ : Fin 64) = (37 : Fin 64) := rfl
+    ⟨(fun | false => (37 : Fin 64) | true => (0 : Fin 64)), by trivial⟩ : Fin 64) = (37 : Fin 64) := rfl
 example : (gcd.compute (fun _ => 0)
-    ⟨(fun _ => (0 : Fin 1)), by change 2 * 0 ≤ 1; decide⟩ : Fin 1) = (0 : Fin 1) := rfl
+    ⟨(fun _ => (0 : Fin 1)), by trivial⟩ : Fin 1) = (0 : Fin 1) := rfl
+
+example : (gcd.compute (fun _ => 4)
+    ⟨(fun | false => (13 : Fin 16) | true => (15 : Fin 16)), by trivial⟩ : Fin 16) =
+      (1 : Fin 16) := rfl
+example : (gcd.compute (fun _ => 1)
+    ⟨(fun | false => (0 : Fin 2) | true => (1 : Fin 2)), by trivial⟩ : Fin 2) =
+      (1 : Fin 2) := rfl
 
 end Polytime2.Examples.Gcd

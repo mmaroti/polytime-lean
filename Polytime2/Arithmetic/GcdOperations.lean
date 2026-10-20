@@ -16,6 +16,8 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
+import Polytime2.Computation.Conditional
+import Polytime2.Arithmetic.WidthOperations
 import Polytime2.Arithmetic.Gcd
 
 /-! # Gcd as a mathematical computation with an existential certificate -/
@@ -31,14 +33,21 @@ def gcdValue (bits : ℕ) (left right : Fin (2 ^ bits)) : Fin (2 ^ bits) :=
     · simpa only [zero, Nat.gcd_zero_left] using right.isLt
     · exact lt_of_le_of_lt (Nat.gcd_le_left right.val (Nat.pos_of_ne_zero zero)) left.isLt⟩
 
-/-- False names the first operand and true the second; capacity is an immutable size. -/
+/-- Gcd has no capacity restriction on either operand. -/
 noncomputable def gcd : Computation Unit Bool where
+  inputDomains _ := EncodedDomain.binaryNaturals ()
+  outputDomain := EncodedDomain.binaryNaturals ()
+  precondition _ _ := True
+  compute sizes arguments := gcdValue (sizes ()) (arguments.val false) (arguments.val true)
+
+namespace Realizable.Internal
+
+/-- The Euclidean controller requires a spare bit for its divisor. -/
+noncomputable def gcdWithCapacity : Computation Unit Bool where
   inputDomains _ := EncodedDomain.binaryNaturals ()
   outputDomain := EncodedDomain.binaryNaturals ()
   precondition sizes arguments := 2 * (arguments true).val ≤ 2 ^ sizes ()
   compute sizes arguments := gcdValue (sizes ()) (arguments.val false) (arguments.val true)
-
-namespace Realizable.Internal
 
 private def gcdPlacement : PublicTape Unit Bool ↪ Unit ⊕ Fin 12 :=
   (Function.Embedding.refl Unit).sumMap
@@ -46,12 +55,9 @@ private def gcdPlacement : PublicTape Unit Bool ↪ Unit ⊕ Fin 12 :=
       intro first second equal
       fin_cases first <;> fin_cases second <;> first | rfl | cases equal⟩
 
-end Realizable.Internal
-
-open Realizable.Internal in
 /-- The physical certificate is consumed only inside this foundational proof. -/
-theorem gcd_realizable : gcd.Realizable := by
-  refine ofNamedLayout gcd StandardGcd.domains StandardGcd.argumentReadOnly
+theorem gcdWithCapacity_realizable : gcdWithCapacity.Realizable := by
+  refine ofNamedLayout gcdWithCapacity StandardGcd.domains StandardGcd.argumentReadOnly
     StandardGcd.sizeTapes StandardGcd.outputTapes StandardGcd.algorithm StandardGcd.entry StandardGcd.exit
     _ _ StandardGcd.contract gcdPlacement
     (by intro role; fin_cases role <;> rfl) (by intro role; fin_cases role <;> rfl)
@@ -68,5 +74,35 @@ theorem gcd_realizable : gcd.Realizable := by
   apply congrArg (encoded (EncodedDomain.binaryNaturals ()) sizes)
   apply Fin.ext
   exact result
+
+end Realizable.Internal
+
+open Realizable.Internal in
+theorem gcd_realizable : gcd.Realizable := by
+  have widened := (gcdWithCapacity_realizable.substitute extraBitSizes).onResults
+    gcd.inputDomains gcd.precondition
+    (fun name sizes arguments => extraBitWiden sizes (arguments.val name))
+    (by
+      intro sizes arguments
+      change 2 * (arguments.val true).val ≤
+        2 ^ SizeSubstitution.assignment extraBitSizes sizes ()
+      rw [extraBitSizes_eval, pow_succ]
+      have bound := (arguments.val true).isLt
+      omega)
+    (by
+      intro name
+      exact extraBitWiden_realizable.onResults gcd.inputDomains gcd.precondition
+        (fun _ _ arguments => arguments.val name) (by intros; trivial)
+        (by intro _; exact Realizable.argument _ name _))
+  have narrowed := widened.followedBy extraBitNarrow_realizable rfl (by intros; trivial)
+  exact narrowed.withSpecification gcd.precondition gcd.compute
+    (by intros; trivial) (by
+      intro sizes arguments valid
+      apply Fin.ext
+      simp only [followedBy, extraBitNarrow, encodingMap, unaryMap, onResults, substitute,
+        gcdWithCapacity, extraBitWiden, gcd, gcdValue]
+      change (BitVec.setWidth (sizes ()) _).toNat = _
+      rw [BitVec.toNat_setWidth]
+      exact Nat.mod_eq_of_lt (gcdValue (sizes ()) (arguments false) (arguments true)).isLt)
 
 end Polytime2.Computation

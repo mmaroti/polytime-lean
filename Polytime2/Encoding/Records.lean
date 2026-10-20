@@ -291,3 +291,33 @@ theorem variant_rejects_inactive (count : ℕ)
     exact False.elim (nonzero (fieldEqual.symm.trans empty))
 
 end Polytime2.EncodedDomain
+
+namespace Polytime2.EncodedDomain
+
+variable {Parameter : Type} [Fintype Parameter]
+
+variable {IndexName : Type} [Fintype IndexName]
+
+/-- Named fields use the existing record codec in a fixed specialization order.
+-/
+noncomputable def namedRecord (fields : IndexName → EncodedDomain Parameter) : EncodedDomain Parameter :=
+  (record (Fintype.card IndexName) (fun index => fields ((Fintype.equivFin IndexName).symm index))).reindex
+    (fun sizes => ∀ name, (fields name).Carrier sizes)
+    (fun sizes => (Equiv.piCongrLeft (fun name => (fields name).Carrier sizes)
+      (Fintype.equivFin IndexName).symm).symm)
+
+theorem namedRecord_unit_widthPolynomial (domain : EncodedDomain Parameter) :
+    (namedRecord (fun _ : Unit => domain)).widthPolynomial = domain.widthPolynomial := by
+  change (record (Fintype.card Unit) (fun _ => domain)).widthPolynomial = _
+  rw [record_widthPolynomial]
+  simp
+
+theorem namedRecord_unit_bits (domain : EncodedDomain Parameter) (sizes : Parameter → ℕ)
+    (value : domain.Carrier sizes) :
+    ArrayEncoding.bits ((namedRecord (fun _ : Unit => domain)).encode sizes (fun _ => value)) =
+      ArrayEncoding.bits (domain.encode sizes value) := by
+  change ArrayEncoding.bits ((record (Fintype.card Unit) (fun _ => domain)).encode sizes (fun _ => value)) = _
+  rw [bits_record_encode]
+  simp
+
+end Polytime2.EncodedDomain

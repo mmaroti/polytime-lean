@@ -15,8 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Computation.Conditional
-import Polytime2.Computation.Fields
+import Polytime2.Computation.Reindex
 
 /-! # Restricting mathematical inputs while retaining their canonical bits -/
 
@@ -25,10 +24,12 @@ namespace Polytime2.Computation.Realizable
 variable {Parameter InputName : Type} [Fintype Parameter] [Fintype InputName]
 
 /-- An encoding-preserving input map may restrict a domain without being
-surjective. Existing field copying and composition supply its realization. -/
+surjective. The original machine and runtime bound are reused directly. -/
 theorem withEncodedInputs {computation : Computation Parameter InputName}
     (ready : computation.Realizable) (inputs : InputName → EncodedDomain Parameter)
     (map : ∀ name sizes, (inputs name).Carrier sizes → (computation.inputDomains name).Carrier sizes)
+    (sameWidth : ∀ name sizes,
+      (inputs name).width sizes = (computation.inputDomains name).width sizes)
     (sameEncoding : ∀ name sizes value,
       EncodedDomain.ArrayEncoding.bits ((inputs name).encode sizes value) =
         EncodedDomain.ArrayEncoding.bits ((computation.inputDomains name).encode sizes (map name sizes value)))
@@ -38,15 +39,8 @@ theorem withEncodedInputs {computation : Computation Parameter InputName}
     (Computation.mk inputs computation.outputDomain allowed
       (fun sizes arguments => computation.compute sizes
         ⟨(fun name => map name sizes (arguments.val name)), compatible sizes arguments.val arguments.property⟩)).Realizable := by
-  apply ready.onResults inputs allowed
-    (fun name sizes arguments => map name sizes (arguments.val name))
-    (by intro sizes arguments; exact compatible sizes arguments.val arguments.property)
-  intro name
-  have copied := Internal.fieldProjection (inputs name) (computation.inputDomains name) 0
-    (fun _ _ => True) (fun sizes value => map name sizes value.val) (by
-      intro sizes value
-      exact ⟨[], [], by simpa using sameEncoding name sizes value.val, by simp⟩)
-  exact copied.onResults inputs allowed (fun _ _ arguments => arguments.val name)
-    (by intros; trivial) (by intro _; exact argument inputs name allowed)
+  exact ready.withEncoding map sameWidth (by intros; rfl)
+    (fun name sizes value => congrArg CallingConvention.tape (sameEncoding name sizes value))
+    compatible (by intros; rfl)
 
 end Polytime2.Computation.Realizable
