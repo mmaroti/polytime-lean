@@ -67,13 +67,12 @@ private def matrixRow (scalar : EncodedDomain Empty) : Computation (Fin 2) Bool 
   compute _ arguments := arguments.val true (arguments.val false)
 
 private theorem matrixRow_realizable (scalar : EncodedDomain Empty) : (matrixRow scalar).Realizable := by
-  apply (arrayLookupAtParameter_realizable ((scalar.constant.withInternalSize).array 1)
-    (coordinateDomain 0) 0 (fun _ value => value) (coordinate_value 0)).withEncoding
-    (target := matrixRow scalar) (fun name _ => match name with | false => id | true => id)
+  exact (arrayLookupAtParameter_realizable ((scalar.constant.withInternalSize).array 1)
+    (coordinateDomain 0) 0 (fun _ value => value) (coordinate_value 0)).reinterpretInputs
+    (matrixRow scalar).inputDomains (fun name _ => match name with | false => id | true => id)
     (by intro name sizes; cases name; rfl; exact matrixDomain_rows_width scalar sizes)
-    (by intros; rfl)
-    (by intro name sizes value; cases name; rfl; exact congrArg CallingConvention.tape (matrixDomain_rows_bits scalar sizes value))
-    (by intros; trivial) (by intros; rfl)
+    (by intro name sizes value; cases name; rfl; exact matrixDomain_rows_bits scalar sizes value)
+    (fun _ _ => True) (by intros; trivial)
 
 private def replaceMatrixRow (scalar : EncodedDomain Empty) : Computation (Fin 2) (Fin 3) where
   inputDomains | 0 => coordinateDomain 0 | 1 => (matrixDomain scalar).withInternalSize
@@ -84,18 +83,18 @@ private def replaceMatrixRow (scalar : EncodedDomain Empty) : Computation (Fin 2
 
 private theorem replaceMatrixRow_realizable (scalar : EncodedDomain Empty) :
     (replaceMatrixRow scalar).Realizable := by
-  apply (arrayUpdateAtParameter_realizable ((scalar.constant.withInternalSize).array 1)
-    (coordinateDomain 0) 0 (fun _ value => value) (coordinate_value 0)).withEncoding
-    (target := replaceMatrixRow scalar) (fun name _ => match name with | 0 => id | 1 => id | 2 => id)
+  have prepared := (arrayUpdateAtParameter_realizable ((scalar.constant.withInternalSize).array 1)
+    (coordinateDomain 0) 0 (fun _ value => value) (coordinate_value 0)).reinterpretInputs
+    (replaceMatrixRow scalar).inputDomains
+    (fun name _ => match name with | 0 => id | 1 => id | 2 => id)
     (by intro name sizes; fin_cases name; rfl; exact matrixDomain_rows_width scalar sizes; rfl)
-    (matrixDomain_rows_width scalar)
     (by intro name sizes value; fin_cases name
         rfl
-        exact congrArg CallingConvention.tape (matrixDomain_rows_bits scalar sizes value)
+        exact matrixDomain_rows_bits scalar sizes value
         rfl)
-    (by intros; trivial)
-  intro sizes arguments
-  exact congrArg CallingConvention.tape (matrixDomain_rows_bits scalar sizes _)
+    (fun _ _ => True) (by intros; trivial)
+  exact prepared.reinterpretOutput (replaceMatrixRow scalar).outputDomain (fun _ value => value)
+    (matrixDomain_rows_width scalar) (matrixDomain_rows_bits scalar)
 
 theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
   let computation := matrixEntry scalar

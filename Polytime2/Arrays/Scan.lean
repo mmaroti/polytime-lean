@@ -112,9 +112,10 @@ theorem scanQueueStep_realizable (source state : EncodedDomain.{0, 0} Parameter)
     (fun sizes arguments => update sizes
       (successorValues length sizes (arguments.val false) (Fin.last (MvPolynomial.eval sizes length)))
       (arguments.val true)) tail computed
-  exact pair.withEncodedOutput computation.outputDomain computation.compute
+  exact pair.reinterpretOutput computation.outputDomain
+    (fun sizes parts => snocValues length sizes parts.1 parts.2)
     (by intro sizes; simp [computation, scanQueueStep, EncodedDomain.arrayOfLength, EncodedDomain.ofCodec, Nat.add_mul])
-    (fun sizes arguments => arraySnoc_encoding state length sizes _ _)
+    (fun sizes parts => arraySnoc_encode_bits state length sizes _ _)
 
 /-- A seed queue and input array produce every prefix state. Only its last seed
 value survives; in particular arbitrary earlier seed values are permitted. -/

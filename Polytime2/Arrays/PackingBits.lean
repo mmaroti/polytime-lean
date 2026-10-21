@@ -74,13 +74,13 @@ theorem arrayPackBits_realizable (width length : MvPolynomial Parameter ℕ) :
     · change ArrayEncoding.bits ((booleans.arrayOfLength length).encode sizes value) =
         ArrayEncoding.bits (((booleans.arrayOfLength (MvPolynomial.X (1 : Fin 3))).substitute polynomials).encode sizes
           ((arrayCast (lengthEq sizes) (Equiv.refl Bool)).symm value))
-      rw [substitute_bits, FirstFalse.boolean_bits, FirstFalse.boolean_bits]
+      rw [substitute_encode_bits, FirstFalse.boolean_bits, FirstFalse.boolean_bits]
       exact (arrayCast_ofFn (lengthEq sizes) value).symm
     · change ArrayEncoding.bits (((bitVectors width).arrayOfLength length).encode sizes value) =
         ArrayEncoding.bits ((((bitVectors (MvPolynomial.X (0 : Fin 3))).arrayOfLength
           (MvPolynomial.X 1)).substitute polynomials).encode sizes
           ((bitArrayCast (lengthEq sizes) (widthEq sizes)).symm value))
-      rw [substitute_bits]
+      rw [substitute_encode_bits]
       simp only [arrayOfLength, ofCodec, ArrayEncoding.bits_cast]
       exact (bitArrayCast_bits (lengthEq sizes) (widthEq sizes) value).symm
   have outputEncodings sizes value :

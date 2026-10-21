@@ -28,7 +28,7 @@ before calling them; callers of the signed interface need no capacity premise.
 
 namespace Polytime2.Computation.Realizable.Internal
 
-open EncodedDomain CallingConvention
+open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -47,21 +47,22 @@ private theorem naturalBinaryAtWidth_realizable (width : MvPolynomial Parameter 
     (source : (Computation.mk (fun _ : Bool => (binaryNaturals () : EncodedDomain Unit))
       (binaryNaturals ()) (fun sizes => allowed (sizes ())) (fun sizes => result (sizes ()))).Realizable) :
     (naturalBinaryAtWidth width allowed result).Realizable := by
-  have specialized := source.substitute (fun _ : Unit => width)
-  apply specialized.withEncoding (target := naturalBinaryAtWidth width allowed result)
-    (fun _ _ value => value) ?_ ?_ ?_ (by intros; assumption) ?_
-  · intro name sizes
-    change (binaryNaturalsOfWidth width).width sizes =
-      ((binaryNaturals ()).substitute (fun _ : Unit => width)).width sizes
-    simp [SizeSubstitution.assignment]
-  · intro sizes
-    change (binaryNaturalsOfWidth width).width sizes =
-      ((binaryNaturals ()).substitute (fun _ : Unit => width)).width sizes
-    simp [SizeSubstitution.assignment]
-  · intro name sizes value
-    exact congrArg tape (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
-  · intro sizes arguments
-    exact congrArg tape (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes (result _ arguments))
+  have specialized := (source.substitute (fun _ : Unit => width)).reinterpretInputs
+    (fun _ => binaryNaturalsOfWidth width) (fun _ _ value => value)
+    (by
+      intros
+      change (binaryNaturalsOfWidth width).width _ =
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width _
+      simp [SizeSubstitution.assignment])
+    (fun _ sizes value => binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
+    (fun sizes => allowed (MvPolynomial.eval sizes width)) (by intros; assumption)
+  exact specialized.reinterpretOutput (binaryNaturalsOfWidth width) (fun _ value => value)
+    (by
+      intros
+      change (binaryNaturalsOfWidth width).width _ =
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width _
+      simp [SizeSubstitution.assignment])
+    (fun sizes value => binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
 
 noncomputable def naturalIncrement (width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   unaryMap (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) (fun _ _ => True)
@@ -70,18 +71,22 @@ noncomputable def naturalIncrement (width : MvPolynomial Parameter ℕ) : Comput
 
 theorem naturalIncrement_realizable (width : MvPolynomial Parameter ℕ) :
     (naturalIncrement width).Realizable := by
-  have source := (counterIncrement_realizable ()).substitute (fun _ : Unit => width)
-  apply source.withEncoding (target := naturalIncrement width) (fun _ _ value => value)
-    (by intros; simp [naturalIncrement, unaryMap, Computation.substitute, counterIncrement,
-      EncodedDomain.substitute_width, SizeSubstitution.assignment])
-    (by intros; simp [naturalIncrement, unaryMap, Computation.substitute, counterIncrement,
-      EncodedDomain.substitute_width, SizeSubstitution.assignment])
-    ?_ (by intros; trivial) ?_
-  · intro name sizes value
-    exact congrArg tape (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
-  · intro sizes arguments
-    exact congrArg tape (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes
-      ((naturalIncrement width).compute sizes arguments))
+  have source := ((counterIncrement_realizable ()).substitute (fun _ : Unit => width)).reinterpretInputs
+    (fun _ => binaryNaturalsOfWidth width) (fun _ _ value => value)
+    (by
+      intros
+      change (binaryNaturalsOfWidth width).width _ =
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width _
+      simp [SizeSubstitution.assignment])
+    (fun _ sizes value => binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
+    (fun _ _ => True) (by intros; trivial)
+  exact source.reinterpretOutput (binaryNaturalsOfWidth width) (fun _ value => value)
+    (by
+      intros
+      change (binaryNaturalsOfWidth width).width _ =
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width _
+      simp [SizeSubstitution.assignment])
+    (fun sizes value => binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
 
 noncomputable def naturalAdd (width : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   naturalBinaryAtWidth width
@@ -118,34 +123,31 @@ noncomputable def naturalDivision (width : MvPolynomial Parameter ℕ) : Computa
 
 theorem naturalDivision_realizable (width : MvPolynomial Parameter ℕ) :
     (naturalDivision width).Realizable := by
-  have source := binaryDivision_realizable.substitute (fun _ : Unit => width)
-  apply source.withEncoding (target := naturalDivision width) (fun _ _ value => value)
+  have source := (binaryDivision_realizable.substitute (fun _ : Unit => width)).reinterpretInputs
+    (fun _ => binaryNaturalsOfWidth width) (fun _ _ value => value)
     (by
-      intro name sizes
-      change (binaryNaturalsOfWidth width).width sizes =
-        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width sizes
+      intros
+      change (binaryNaturalsOfWidth width).width _ =
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width _
       simp [SizeSubstitution.assignment])
-    (by intros; simp [naturalDivision, Computation.substitute, binaryDivision,
-      EncodedDomain.substitute_width, EncodedDomain.width, SizeSubstitution.assignment])
-    ?_ (by intros; assumption) ?_
-  · intro name sizes value
-    exact congrArg tape (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
-  · intro sizes arguments
-    apply congrArg tape
-    change ArrayEncoding.bits (((binaryNaturalsOfWidth width).prod (binaryNaturalsOfWidth width)).encode
-      sizes ((naturalDivision width).compute sizes arguments)) =
-      ArrayEncoding.bits ((((binaryNaturals ()).prod (binaryNaturals ())).substitute
-        (fun _ : Unit => width)).encode sizes ((naturalDivision width).compute sizes arguments))
-    let answer : Fin (2 ^ MvPolynomial.eval sizes width) × Fin (2 ^ MvPolynomial.eval sizes width) :=
-      (naturalDivision width).compute sizes arguments
-    exact (bits_prod_encode (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) sizes answer).trans
-      ((congrArg₂ List.append
-        (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes answer.1)
-        (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes answer.2)).trans
-        ((bits_prod_encode ((binaryNaturals ()).substitute (fun _ : Unit => width))
-          ((binaryNaturals ()).substitute (fun _ : Unit => width)) sizes answer).symm.trans
-          (substitute_prod_encode_bits (binaryNaturals ()) (binaryNaturals ())
-            (fun _ : Unit => width) sizes answer)))
+    (fun _ sizes value => binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
+    (naturalDivision width).precondition (by intros; assumption)
+  apply source.reinterpretOutput ((binaryNaturalsOfWidth width).prod (binaryNaturalsOfWidth width))
+    (fun _ value => value)
+    (by
+      intro sizes
+      change ((binaryNaturalsOfWidth width).prod (binaryNaturalsOfWidth width)).width sizes =
+        (((binaryNaturals ()).prod (binaryNaturals ())).substitute (fun _ : Unit => width)).width sizes
+      simp [EncodedDomain.width, SizeSubstitution.assignment])
+  intro sizes answer
+  exact (bits_prod_encode (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) sizes answer).trans
+    ((congrArg₂ List.append
+      (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes answer.1)
+      (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes answer.2)).trans
+      ((bits_prod_encode ((binaryNaturals ()).substitute (fun _ : Unit => width))
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)) sizes answer).symm.trans
+        (substitute_prod_encode_bits (binaryNaturals ()) (binaryNaturals ())
+          (fun _ : Unit => width) sizes answer)))
 
 /-- The existing multiplier permits independent operand capacities. -/
 noncomputable def naturalMultiplyAtWidths (leftWidth rightWidth : MvPolynomial Parameter ℕ) :
@@ -158,21 +160,21 @@ noncomputable def naturalMultiplyAtWidths (leftWidth rightWidth : MvPolynomial P
 theorem naturalMultiplyAtWidths_realizable (leftWidth rightWidth : MvPolynomial Parameter ℕ) :
     (naturalMultiplyAtWidths leftWidth rightWidth).Realizable := by
   let substitution : Bool → MvPolynomial Parameter ℕ := fun name => if name then rightWidth else leftWidth
-  have source := binaryMultiply_realizable.substitute substitution
-  apply source.withEncoding (target := naturalMultiplyAtWidths leftWidth rightWidth)
-    (fun _ _ value => value) ?_ ?_ ?_ (by intros; assumption) ?_
-  · intro name sizes
-    change (binaryNaturalsOfWidth (substitution name)).width sizes =
-      ((binaryNaturals name).substitute substitution).width sizes
-    simp [SizeSubstitution.assignment]
-  · intro sizes
-    change (binaryNaturalsOfWidth (substitution false)).width sizes =
-      ((binaryNaturals false).substitute substitution).width sizes
-    simp [SizeSubstitution.assignment]
-  · intro name sizes value
-    exact congrArg tape (binaryNaturals_substitute_bits substitution name sizes value)
-  · intro sizes arguments
-    exact congrArg tape (binaryNaturals_substitute_bits substitution false sizes
-      (⟨(arguments.val false).val * (arguments.val true).val, arguments.property⟩))
+  have source := (binaryMultiply_realizable.substitute substitution).reinterpretInputs
+    (naturalMultiplyAtWidths leftWidth rightWidth).inputDomains (fun _ _ value => value)
+    (by
+      intro name sizes
+      change (binaryNaturalsOfWidth (substitution name)).width sizes =
+        ((binaryNaturals name).substitute substitution).width sizes
+      simp [SizeSubstitution.assignment])
+    (fun name sizes value => binaryNaturals_substitute_bits substitution name sizes value)
+    (naturalMultiplyAtWidths leftWidth rightWidth).precondition (by intros; assumption)
+  exact source.reinterpretOutput (binaryNaturalsOfWidth leftWidth) (fun _ value => value)
+    (by
+      intro sizes
+      change (binaryNaturalsOfWidth (substitution false)).width sizes =
+        ((binaryNaturals false).substitute substitution).width sizes
+      simp [SizeSubstitution.assignment])
+    (fun sizes value => binaryNaturals_substitute_bits substitution false sizes value)
 
 end Polytime2.Computation.Realizable.Internal

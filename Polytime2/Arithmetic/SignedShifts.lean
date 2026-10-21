@@ -124,19 +124,16 @@ theorem integerShiftRight_realizable (width amount : MvPolynomial Parameter ℕ)
       cases name
       · exact numeratorReady
       · have sameWidth : (1 + width) + amount = capacity := by dsimp [capacity]; ring
-        exact divisorReady.withEncodedOutput (binaryIntegers capacity) _
-          (by
-            intro sizes
-            change (binaryIntegers capacity).width sizes = (binaryIntegers ((1 + width) + amount)).width sizes
-            rw [sameWidth]) (by
-            intro sizes arguments
-            apply congrArg CallingConvention.tape
-            change ArrayEncoding.bits ((binaryIntegers capacity).encode sizes
-              ⟨(2 ^ MvPolynomial.eval sizes amount : ℕ), _⟩) =
-              ArrayEncoding.bits ((binaryIntegers ((1 + width) + amount)).encode sizes
-                ⟨1 * (2 ^ MvPolynomial.eval sizes amount : ℕ), _⟩)
-            exact binaryIntegers_encode_congr capacity ((1 + width) + amount) sameWidth.symm
-              sizes _ _ (one_mul _).symm))
+        have transported := divisorReady.reinterpretOutput (binaryIntegers capacity)
+          (fun sizes value => ⟨value.val, by simpa only [sameWidth] using value.property⟩)
+          (by intro sizes; change (binaryIntegers capacity).width sizes =
+              (binaryIntegers ((1 + width) + amount)).width sizes
+              rw [sameWidth])
+          (fun sizes value => binaryIntegers_encode_congr _ _ sameWidth.symm sizes _ _ rfl)
+        exact transported.withSpecification (fun _ _ => True) _ (by intros; trivial) (by
+          intros
+          apply Subtype.ext
+          exact one_mul _))
   have narrowed := quotient.followedBy (Realizable.Internal.integerNarrow_realizable width (1 + amount)) rfl (by
     intro sizes arguments valid
     exact (Int.natAbs_ediv_le_natAbs _ _).trans_lt (arguments ()).property)

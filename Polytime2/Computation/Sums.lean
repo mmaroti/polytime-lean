@@ -58,8 +58,8 @@ noncomputable def sumInl (left right : EncodedDomain.{0, 0} Parameter) : Computa
 
 theorem sumInl_realizable (left right : EncodedDomain.{0, 0} Parameter) :
     (sumInl left right).Realizable :=
-  (variantInjection_realizable 2 (SumEncoding.alternatives left right) 0).withEncodedOutput
-    (left.sum right) (sumInl left right).compute (by intros; rfl) (by intros; rfl)
+  (variantInjection_realizable 2 (SumEncoding.alternatives left right) 0).reindexOutput
+    (fun sizes => left.Carrier sizes ⊕ right.Carrier sizes) (SumEncoding.equivalence left right)
 
 /-- Inject an ordinary right value using the existing variant implementation. -/
 noncomputable def sumInr (left right : EncodedDomain.{0, 0} Parameter) : Computation Parameter Unit :=
@@ -67,8 +67,8 @@ noncomputable def sumInr (left right : EncodedDomain.{0, 0} Parameter) : Computa
 
 theorem sumInr_realizable (left right : EncodedDomain.{0, 0} Parameter) :
     (sumInr left right).Realizable :=
-  (variantInjection_realizable 2 (SumEncoding.alternatives left right) 1).withEncodedOutput
-    (left.sum right) (sumInr left right).compute (by intros; rfl) (by intros; rfl)
+  (variantInjection_realizable 2 (SumEncoding.alternatives left right) 1).reindexOutput
+    (fun sizes => left.Carrier sizes ⊕ right.Carrier sizes) (SumEncoding.equivalence left right)
 
 /-- Apply a certified branch to the selected alternative. Only its mathematical
 precondition is required. -/

@@ -164,14 +164,14 @@ private theorem dependencyMasksRaw_realizable (coordinates generators : MvPolyno
     computation.precondition
     (fun parent current arguments child position childPosition => computation.compute current arguments parent position child childPosition)
     rowReady
-  apply blocks.withEncodedOutput computation.outputDomain computation.compute
+  apply blocks.reinterpretOutput computation.outputDomain
+    (fun _ blocks parent position child childPosition => blocks parent child position childPosition)
   · intro current
     simp only [computation, dependencyMasksRaw, EncodedDomain.renameParameters_width,
       EncodedDomain.width, Multisorted.DependencyEncoding.maskDomain]
     rw [EncodedDomain.reindex_widthPolynomial]
     simp [matrix, EncodedDomain.booleans, Function.comp_def]
-  · intro current arguments
-    apply congrArg CallingConvention.tape
+  · intro current value
     simp only [computation, dependencyMasksRaw, EncodedDomain.renameParameters_bits, Multisorted.DependencyEncoding.maskDomain]
     rw [EncodedDomain.reindex_encode_bits]
     simp only [EncodedDomain.bits_record_encode, matrix, EncodedDomain.array_encode_bits,

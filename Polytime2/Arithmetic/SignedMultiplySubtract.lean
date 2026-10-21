@@ -52,13 +52,11 @@ theorem integerMultiplySubtract_realizable (width : MvPolynomial Parameter ℕ) 
   let widenValue sizes (value : (binaryIntegers width).Carrier sizes) :
       (binaryIntegers (2 * width)).Carrier sizes := ⟨value.val, value.property.trans_le
         (pow_le_pow_right₀ (by decide) (by rw [two_mul, map_add]; omega))⟩
-  have widened := (integerWiden_realizable width width).withEncodedOutput (binaryIntegers (2 * width))
-    (fun sizes arguments => widenValue sizes (arguments.val ()))
+  have widened := (integerWiden_realizable width width).reinterpretOutput (binaryIntegers (2 * width))
+    (fun sizes value => ⟨value.val, by simpa only [two_mul] using value.property⟩)
     (by intro sizes; change (binaryIntegers (2 * width)).width sizes = (binaryIntegers (width + width)).width sizes
-        rw [two_mul]) (by
-      intro sizes arguments
-      apply congrArg CallingConvention.tape
-      exact binaryIntegers_encode_congr (2 * width) (width + width) (two_mul width) sizes _ _ rfl)
+        rw [two_mul])
+    (fun sizes value => binaryIntegers_encode_congr _ _ (two_mul width) sizes _ _ rfl)
   have first := widened.onResults inputs allowed (fun _ _ arguments => arguments.val 0)
     (by intros; trivial) (fun _ => Realizable.argument inputs 0 allowed)
   have difference := (integerSubtract_realizable (2 * width)).onResults inputs allowed

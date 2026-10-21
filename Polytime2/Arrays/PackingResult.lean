@@ -99,8 +99,9 @@ noncomputable def boundedArrayStorage (element : EncodedDomain Parameter) (lengt
 
 theorem boundedArrayStorage_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (boundedArrayStorage element length).Realizable :=
-  (copy_realizable (boundedArray element length)).withEncodedOutput
-    (boundedArrayStorage element length).outputDomain (boundedArrayStorage element length).compute
+  (copy_realizable (boundedArray element length)).reinterpretOutput
+    (boundedArrayStorage element length).outputDomain
+    (fun sizes value => ((boundedArrayStorage element length).compute sizes ⟨(fun _ => value), trivial⟩))
     (fun _ => rfl) (by intros; rfl)
 
 noncomputable def boundedArrayCount (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :

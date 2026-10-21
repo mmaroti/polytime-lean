@@ -167,8 +167,9 @@ theorem integerBitLength_realizable (width : MvPolynomial Parameter ℕ) :
   let inputs := (integerBitLength width).inputDomains
   have magnitude := (integerMagnitude_realizable width).followedBy
     (Realizable.Internal.integerOfMagnitude_realizable width) rfl (by intros; trivial)
-  have zeros := (zeroBits_realizable (width + 1)).withEncodedOutput (binaryNaturalsOfWidth (width + 1))
-    (fun _ _ => ⟨0, by positivity⟩) (by intros; rfl) (by intros; rfl)
+  have zeros := (zeroBits_realizable (width + 1)).reinterpretOutput (binaryNaturalsOfWidth (width + 1))
+    (fun _ value => value.toFin) (by intros; rfl)
+    (by intro sizes value; exact binaryNaturalsOfWidth_encode_bits _ _ _)
   have count := zeros.withArguments inputs
     ⟨Empty.elim, by intro impossible; exact impossible.elim⟩ (by intro impossible; exact impossible.elim)
   have initial := Realizable.pairOutputs inputs (binaryIntegers width) (binaryNaturalsOfWidth (width + 1))
@@ -181,13 +182,22 @@ theorem integerBitLength_realizable (width : MvPolynomial Parameter ℕ) :
   have projected := loop.followedBy
     (pairProjection_realizable (binaryIntegers width) (binaryNaturalsOfWidth (width + 1)) true) rfl
     (by intros; trivial)
-  exact projected.withEncodedOutput (boundedIndex (width + 1)) (integerBitLength width).compute
-    (by intros; rfl) (by
+  have refined := projected.refineOutput
+    (fun sizes value => value.val < MvPolynomial.eval sizes (width + 1)) (by
       intro sizes arguments
-      apply congrArg CallingConvention.tape
-      simp [integerBitLength, encodingMap, unaryMap, followedBy, zeroBits,
-        pairProjection, Realizable.Internal.IntegerBitLength.answer,
-        integerMagnitude, Realizable.Internal.integerOfMagnitude, boundedIndex,
-        binaryNaturalsOfWidth, boundedIndexOfWidth])
+      change 0 + Nat.size ((arguments.val ()).val.natAbs : ℤ).natAbs <
+        MvPolynomial.eval sizes (width + 1)
+      simpa only [Int.natAbs_natCast, Nat.zero_add, map_add, map_one, Nat.succ_eq_add_one] using
+        Nat.lt_succ_of_le (Nat.size_le.mpr (arguments.val ()).property))
+  have converted := refined.reinterpretOutput (boundedIndex (width + 1))
+    (fun _ value => ⟨value.val.val, value.property⟩) (by intros; rfl)
+    (fun sizes value => boundedIndexOfWidth_encode_congr _ _ _ _
+      (fun _ => Nat.lt_two_pow_self.le) (fun _ => le_rfl) sizes rfl _ _ rfl)
+  exact converted.withSpecification (fun _ _ => True) (integerBitLength width).compute
+    (by intros; trivial) (by
+      intro sizes arguments valid
+      apply Fin.ext
+      change 0 + Nat.size ((arguments ()).val.natAbs : ℤ).natAbs = Nat.size (arguments ()).val.natAbs
+      simp only [Nat.zero_add, Int.natAbs_natCast])
 
 end Polytime2.Computation

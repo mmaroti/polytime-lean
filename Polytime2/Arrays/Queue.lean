@@ -161,13 +161,12 @@ noncomputable def snocValues {Element : Type} (length : MvPolynomial Parameter �
   fun index => Fin.snoc (α := fun _ => Element) values value (Fin.cast (by simp) index)
 
 /-- Appending blocks and constructing the corresponding record have equal bits. -/
-theorem arraySnoc_encoding (element : EncodedDomain Parameter)
+theorem arraySnoc_encode_bits (element : EncodedDomain Parameter)
     (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (values : (element.arrayOfLength length).Carrier sizes) (value : element.Carrier sizes) :
-    CallingConvention.encoded (element.arrayOfLength (length + 1)) sizes
-      (snocValues length sizes values value) =
-      CallingConvention.encoded ((element.arrayOfLength length).prod element) sizes (values, value) := by
-  apply congrArg (fun bits => CallingConvention.buffer (Binary.word bits))
+    EncodedDomain.ArrayEncoding.bits ((element.arrayOfLength (length + 1)).encode sizes
+      (snocValues length sizes values value)) =
+      EncodedDomain.ArrayEncoding.bits (((element.arrayOfLength length).prod element).encode sizes (values, value)) := by
   simp only [EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.ArrayEncoding.bits_encode]
   rw [List.ofFn_congr (show MvPolynomial.eval sizes (length + 1) =
     MvPolynomial.eval sizes length + 1 by simp)]

@@ -110,12 +110,10 @@ theorem update_realizable
     (fun sizes arguments => Fin.tail (successorValues length sizes (arguments.val (.inr false))))
     (fun sizes arguments => target.encode sizes (operation sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr true))))
     tail encoded
-  have result := pair.withEncodedOutput queue
-    (fun sizes arguments => update target length sizes (arguments.val (.inr false))
-      (operation sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr true))))
+  exact pair.reinterpretOutput queue
+    (fun sizes parts => snocValues length sizes parts.1 parts.2)
     (by intro sizes; simp [queue, raw, EncodedDomain.arrayOfLength, EncodedDomain.ofCodec, Nat.add_mul])
-    (by intro sizes arguments; exact arraySnoc_encoding raw length sizes _ _)
-  exact result
+    (fun sizes parts => arraySnoc_encode_bits raw length sizes _ _)
 
 end ArrayTransform
 

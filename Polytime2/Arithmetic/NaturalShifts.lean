@@ -27,7 +27,7 @@ prepend the low zero bits; no numerical iteration or new controller is used.
 
 namespace Polytime2.Computation.Realizable.Internal
 
-open EncodedDomain CallingConvention
+open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -47,31 +47,25 @@ theorem naturalShiftLeft_realizable (width amount : MvPolynomial Parameter ℕ) 
     ⟨Empty.elim, by intro impossible; exact impossible.elim⟩ (by intro impossible; exact impossible.elim)
   have pair := Realizable.pairOutputs inputs zeros source (fun _ _ => True)
     (fun _ _ => 0) (fun _ arguments => arguments.val ()) zeroReady (copy_realizable source)
-  exact pair.withEncodedOutput (binaryNaturalsOfWidth (width + amount)) (naturalShiftLeft width amount).compute
+  have shifted := pair.reinterpretOutput (binaryNaturalsOfWidth (width + amount))
+    (fun sizes parts => ((BitVec.ofFin parts.2 ++ parts.1).cast
+      (by simp only [map_add])).toFin)
     (by intros; simp [source, zeros, EncodedDomain.width, Nat.add_comm]) (by
-      intro sizes arguments
-      apply congrArg tape
-      change ArrayEncoding.bits ((binaryNaturalsOfWidth (width + amount)).encode sizes
-          ((naturalShiftLeft width amount).compute sizes arguments)) =
-        ArrayEncoding.bits ((zeros.prod source).encode sizes (0, arguments.val ()))
-      rw [bits_prod_encode, binaryNaturalsOfWidth_encode_bits]
-      let words := ArrayEncoding.bits (0 : BitVec (MvPolynomial.eval sizes amount)) ++
-        ArrayEncoding.bits (BitVec.ofFin (arguments.val ()))
-      have packedLength : words.length = MvPolynomial.eval sizes (width + amount) := by
-        simp [words, ArrayEncoding.bits, Nat.add_comm]
-      have packedValue : Binary.value words = (arguments.val ()).val * 2 ^ MvPolynomial.eval sizes amount := by
-        have zeroValue : Binary.value (ArrayEncoding.bits (0 : BitVec (MvPolynomial.eval sizes amount))) = 0 :=
-          Binary.value_bits (0 : BitVec (MvPolynomial.eval sizes amount))
-        have payloadValue : Binary.value (ArrayEncoding.bits (BitVec.ofFin (arguments.val ()))) =
-            (arguments.val ()).val := Binary.value_bits (BitVec.ofFin (arguments.val ()))
-        dsimp only [words]
-        rw [Binary.value_append, zeroValue, payloadValue]
-        simp only [ArrayEncoding.bits, List.length_ofFn, Nat.zero_add, Nat.mul_comm]
-      have canonical := Binary.bits_value words packedLength
-      rw [packedValue] at canonical
-      change ArrayEncoding.bits ((binaryNaturalsOfWidth (width + amount)).encode sizes
-        ⟨(arguments.val ()).val * 2 ^ MvPolynomial.eval sizes amount, _⟩) = words
+      intro sizes parts
       erw [binaryNaturalsOfWidth_encode_bits (width + amount) sizes _]
-      simpa only [ArrayEncoding.bits, BitVec.ofFin_eq_ofNat] using canonical)
+      rw [bits_prod_encode]
+      simp only [BitVec.ofFin_toFin, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
+      erw [binaryNaturalsOfWidth_encode_bits width sizes _])
+  exact shifted.withSpecification (fun _ _ => True) (naturalShiftLeft width amount).compute
+    (by intros; trivial) (by
+      intro sizes arguments valid
+      apply Fin.ext
+      change (BitVec.cast (show MvPolynomial.eval sizes width + MvPolynomial.eval sizes amount =
+          MvPolynomial.eval sizes (width + amount) by rw [map_add]) (BitVec.ofFin (arguments ()) ++
+        (0 : BitVec (MvPolynomial.eval sizes amount)))).toNat =
+          (arguments ()).val * 2 ^ MvPolynomial.eval sizes amount
+      rw [BitVec.toNat_cast, BitVec.toNat_append]
+      change (arguments ()).val <<< MvPolynomial.eval sizes amount ||| 0 = _
+      simp only [Nat.or_zero, Nat.shiftLeft_eq])
 
 end Polytime2.Computation.Realizable.Internal

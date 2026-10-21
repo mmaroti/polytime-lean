@@ -41,13 +41,10 @@ noncomputable def naturalLess (width : MvPolynomial Parameter ℕ) : Computation
 
 theorem naturalLess_realizable (width : MvPolynomial Parameter ℕ) :
     (naturalLess width).Realizable := by
-  apply (bitsLess_realizable width).withEncoding (target := naturalLess width)
-    (fun _ _ value => BitVec.ofFin value)
-    (by intros; rfl) (by intros; rfl) ?_ (by intros; trivial) ?_
-  · intro name sizes value
-    exact congrArg CallingConvention.tape (binaryNaturalsOfWidth_encode_bits width sizes value)
-  · intro sizes arguments
-    rfl
+  exact (bitsLess_realizable width).reinterpretInputs
+    (fun _ => binaryNaturalsOfWidth width) (fun _ _ value => BitVec.ofFin value)
+    (by intros; rfl) (fun _ sizes value => binaryNaturalsOfWidth_encode_bits width sizes value)
+    (fun _ _ => True) (by intros; trivial)
 
 end Realizable.Internal
 

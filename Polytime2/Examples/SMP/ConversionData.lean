@@ -50,13 +50,15 @@ theorem catalogueFlags_realizable (length : MvPolynomial Parameter ℕ) (entry :
     decide ((value : L.Substructure Carrier) = entry.1)
   have predicateRealizable := (finitePredicate_realizable (subalgebraDomain L Carrier) predicate).withConstantSizes
     (Parameter := Parameter)
-  have booleanResult := predicateRealizable.withEncodedOutput EncodedDomain.booleans
-    (fun _ arguments => decide ((arguments.val () : L.Substructure Carrier) = entry.1))
+  have booleanResult := predicateRealizable.reinterpretOutput EncodedDomain.booleans
+    (fun _ value => value)
     (by intros; simp [finitePredicate, finiteOperation, Computation.withConstantSizes,
       EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant])
-    (by intros; simp [CallingConvention.encoded, finitePredicate, finiteOperation, Computation.withConstantSizes,
-      EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant,
-      EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast, predicate])
+    (by
+      intro sizes value
+      simp only [finitePredicate, finiteOperation, Computation.withConstantSizes,
+        EncodedDomain.booleans, EncodedDomain.constant_encode_bits,
+        EncodedDomain.fixed_encode_bits])
   exact mapArray_realizable image EncodedDomain.booleans length
     (fun _ value => decide ((value : L.Substructure Carrier) = entry.1)) booleanResult
 

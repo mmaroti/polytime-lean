@@ -137,6 +137,22 @@ noncomputable def boundedIndexOfWidth (length : (Parameter → ℕ) → ℕ) (wi
     Binary.value (ArrayEncoding.bits ((boundedIndexOfWidth length width fits).encode sizes index)) = index.val :=
   (Binary.value_bits _).trans (by simp only [boundedIndexOfWidth, BitVec.toNat_ofNatLT])
 
+/-- Equal word widths and natural values determine the same canonical bits,
+independently of the chosen mathematical bounds. -/
+theorem boundedIndexOfWidth_encode_congr
+    (firstLength secondLength : (Parameter → ℕ) → ℕ)
+    (firstWidth secondWidth : MvPolynomial Parameter ℕ)
+    (firstFits : ∀ sizes, firstLength sizes ≤ 2 ^ MvPolynomial.eval sizes firstWidth)
+    (secondFits : ∀ sizes, secondLength sizes ≤ 2 ^ MvPolynomial.eval sizes secondWidth)
+    (sizes : Parameter → ℕ)
+    (sameWidth : MvPolynomial.eval sizes firstWidth = MvPolynomial.eval sizes secondWidth)
+    (first : Fin (firstLength sizes)) (second : Fin (secondLength sizes))
+    (sameValue : first.val = second.val) :
+    ArrayEncoding.bits ((boundedIndexOfWidth firstLength firstWidth firstFits).encode sizes first) =
+      ArrayEncoding.bits ((boundedIndexOfWidth secondLength secondWidth secondFits).encode sizes second) := by
+  simp only [boundedIndexOfWidth, BitVec.ofNatLT_eq_ofNat]
+  rw [sameWidth, sameValue]
+
 /-- Array coordinates use their mathematical bound as the exact binary width.
 The empty bound has no coordinates; decoding rejects out-of-range words. -/
 noncomputable def boundedIndex (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=

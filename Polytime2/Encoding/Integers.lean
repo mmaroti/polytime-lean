@@ -39,35 +39,6 @@ namespace Polytime2.EncodedDomain
 universe parameterLevel carrierLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
-/-- Restrict a mathematical carrier while preserving its accepted canonical bits. -/
-noncomputable def restrict (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (predicate : ∀ sizes, domain.Carrier sizes → Prop)
-    [∀ sizes, DecidablePred (predicate sizes)] : EncodedDomain Parameter where
-  Carrier sizes := {value : domain.Carrier sizes // predicate sizes value}
-  widthPolynomial := domain.widthPolynomial
-  encode sizes value := domain.encode sizes value.val
-  decode sizes bits := do
-    let value ← domain.decode sizes bits
-    if valid : predicate sizes value then some ⟨value, valid⟩ else none
-  decode_encode sizes value := by simp [domain.decode_encode, value.property]
-  encode_decode sizes bits value accepted := by
-    simp only [Bind.bind, Option.bind_eq_some_iff] at accepted
-    obtain ⟨decoded, decodedEq, accepted⟩ := accepted
-    split at accepted
-    · cases Option.some.inj accepted
-      exact domain.encode_decode sizes bits decoded decodedEq
-    · contradiction
-
-/-- Words for excluded values are rejected, rather than normalized. -/
-theorem restrict_decode_rejected
-    (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (predicate : ∀ sizes, domain.Carrier sizes → Prop)
-    [∀ sizes, DecidablePred (predicate sizes)]
-    (sizes : Parameter → ℕ) (value : domain.Carrier sizes) (invalid : ¬ predicate sizes value) :
-    (domain.restrict predicate).decode sizes (domain.encode sizes value) = none := by
-  simp only [restrict, domain.decode_encode]
-  simp [invalid]
-
 namespace SignedEncoding
 
 /-- The storage sign is true exactly for a strictly negative value. -/

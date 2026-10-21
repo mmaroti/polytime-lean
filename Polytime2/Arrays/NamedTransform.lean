@@ -59,29 +59,30 @@ theorem arrayTransformAtParameter_realizable {Context : Type} [Fintype Context]
     match name with
     | .inl _ => id
     | .inr _ => arrayParameterEquiv source parameter sizes
-  apply (arrayTransform_realizable context source target (MvPolynomial.X parameter) operation step).withEncoding
-    (target := arrayTransformAtParameter context source target parameter operation) inputMap
+  have prepared := (arrayTransform_realizable context source target (MvPolynomial.X parameter) operation step).reinterpretInputs
+    (arrayTransformAtParameter context source target parameter operation).inputDomains inputMap
     (by rintro (name | name) sizes <;> rfl)
-    (arrayParameter_width target parameter)
     (by
       rintro (name | name) sizes value
       · rfl
-      · exact congrArg CallingConvention.tape (array_X_encode_bits source parameter sizes value))
-    (by intros; trivial)
-  intro sizes arguments
-  exact congrArg CallingConvention.tape (array_X_encode_bits target parameter sizes _)
+      · exact array_X_encode_bits source parameter sizes value)
+    (fun _ _ => True) (by intros; trivial)
+  exact prepared.reinterpretOutput (target.array parameter)
+    (fun sizes => (arrayParameterEquiv target parameter sizes).symm)
+    (arrayParameter_width target parameter)
+    (fun sizes value => array_X_encode_bits target parameter sizes _)
 
 theorem mapArrayAtParameter_realizable (source target : EncodedDomain.{0, 0} Parameter)
     (parameter : Parameter) (operation : ∀ sizes, source.Carrier sizes → target.Carrier sizes)
     (step : (unaryMap source target (fun _ _ => True) (fun sizes value => operation sizes value.val)).Realizable) :
     (mapArrayAtParameter source target parameter operation).Realizable := by
-  apply (mapArray_realizable source target (MvPolynomial.X parameter) operation step).withEncoding
-    (target := mapArrayAtParameter source target parameter operation)
-    (fun _ sizes => arrayParameterEquiv source parameter sizes)
-    (by intros; rfl) (arrayParameter_width target parameter)
-    (fun _ sizes value => congrArg CallingConvention.tape (array_X_encode_bits source parameter sizes value))
-    (by intros; trivial)
-  intro sizes arguments
-  exact congrArg CallingConvention.tape (array_X_encode_bits target parameter sizes _)
+  have prepared := (mapArray_realizable source target (MvPolynomial.X parameter) operation step).reinterpretInputs
+    (fun _ => source.array parameter) (fun _ sizes => arrayParameterEquiv source parameter sizes)
+    (by intros; rfl) (fun _ sizes value => array_X_encode_bits source parameter sizes value)
+    (fun _ _ => True) (by intros; trivial)
+  exact prepared.reinterpretOutput (target.array parameter)
+    (fun sizes => (arrayParameterEquiv target parameter sizes).symm)
+    (arrayParameter_width target parameter)
+    (fun sizes value => array_X_encode_bits target parameter sizes _)
 
 end Polytime2.Computation

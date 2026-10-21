@@ -64,15 +64,15 @@ private theorem emptyFrame_realizable (capacity : MvPolynomial Unit ℕ) :
   have capacityZero : SizeSubstitution.polynomial (bounds capacity) payload.widthPolynomial = 0 := by
     rw [payload_width]
     exact map_zero _
-  apply (copy_realizable index).withEncodedOutput (emptyFrame capacity).outputDomain
-    (emptyFrame capacity).compute
+  apply (copy_realizable index).reinterpretOutput (emptyFrame capacity).outputDomain
+    (fun _ value => ⟨value, fun impossible => impossible.elim⟩)
   · intro sizes
     change MvPolynomial.eval sizes (index.widthPolynomial +
       SizeSubstitution.polynomial (bounds capacity) payload.widthPolynomial) = _
     rw [capacityZero, add_zero]
     rfl
-  · intro sizes arguments
-    let actual := computedSizeAssignment (bounds capacity) sizes (arguments.val ())
+  · intro sizes value
+    let actual := computedSizeAssignment (bounds capacity) sizes value
     let bits := (payload.encode actual (fun impossible => impossible.elim)).setWidth
       (MvPolynomial.eval sizes (SizeSubstitution.polynomial (bounds capacity) payload.widthPolynomial))
     have empty : ArrayEncoding.bits bits = [] := by
@@ -80,9 +80,9 @@ private theorem emptyFrame_realizable (capacity : MvPolynomial Unit ℕ) :
       change MvPolynomial.eval sizes (SizeSubstitution.polynomial (bounds capacity) payload.widthPolynomial) = 0
       rw [capacityZero]
       rfl
-    change tape (ArrayEncoding.bits ((index.prod
+    change ArrayEncoding.bits ((index.prod
       (bitVectors (SizeSubstitution.polynomial (bounds capacity) payload.widthPolynomial))).encode
-        sizes (arguments.val (), bits))) = tape (ArrayEncoding.bits (index.encode sizes (arguments.val ())))
+        sizes (value, bits)) = ArrayEncoding.bits (index.encode sizes value)
     rw [bits_prod_encode, empty, List.append_nil]
 
 /-- One fixed callee is invoked at the leading-prefix count, with a dependent

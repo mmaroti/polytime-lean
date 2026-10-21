@@ -105,13 +105,14 @@ theorem preparedInput_realizable (coordinates generators : MvPolynomial Paramete
       ((computation.compute current arguments).2 sort position,
         fun generator => (computation.compute current arguments).1 generator sort position))
     fieldReady
-  apply assembled.withEncodedOutput computation.outputDomain computation.compute
+  apply assembled.reinterpretOutput computation.outputDomain
+    (fun _ columns => ((fun generator sort position => (columns sort position).2 generator),
+      fun sort position => (columns sort position).1))
   · intro current
     simp only [computation, preparedInput, renameParameters_width, width, Multisorted.inputDomain]
     rw [reindex_widthPolynomial]
     simp [columns, preparedColumnDomain, Function.comp_def]
-  · intro current arguments
-    apply congrArg CallingConvention.tape
+  · intro current value
     simp only [computation, preparedInput, renameParameters_bits, Multisorted.inputDomain]
     rw [reindex_encode_bits]
     simp only [bits_record_encode, columns, preparedColumnDomain, array_encode_bits,
@@ -170,12 +171,11 @@ theorem preparedPayload_realizable (coordinates generators : MvPolynomial Parame
     (dependencySets (L := L) (Carrier := Carrier) coordinates generators).outputDomain computation.precondition
     (fun current arguments => (computation.compute current arguments).1)
     (fun current arguments => (computation.compute current arguments).2) inputReady setsReady
-  apply paired.withEncodedOutput computation.outputDomain computation.compute
+  apply paired.reinterpretOutput computation.outputDomain (fun _ value => value)
   · intro current
     simp [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
       dependencySets, Computation.reindexDomains, width, MvPolynomial.eval_rename]
-  · intro current arguments
-    apply congrArg CallingConvention.tape
+  · intro current value
     simp only [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
       dependencySets, Computation.reindexDomains, renameParameters_bits, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
 

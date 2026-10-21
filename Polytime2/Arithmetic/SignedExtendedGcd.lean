@@ -253,13 +253,12 @@ private theorem magnitude_realizable (width : MvPolynomial Parameter ℕ) :
   have sameWidth : coefficientWidth width = width + (2 * width * (width + 1) + 2) := by
     unfold coefficientWidth
     ring
-  exact magnitude.withEncodedOutput (binaryIntegers (coefficientWidth width)) _
+  exact magnitude.reinterpretOutput (binaryIntegers (coefficientWidth width))
+    (fun sizes value => ⟨value.val, by simpa only [sameWidth] using value.property⟩)
     (by intro sizes; change (binaryIntegers (coefficientWidth width)).width sizes =
         (binaryIntegers (width + (2 * width * (width + 1) + 2))).width sizes
-        rw [sameWidth]) (by
-      intro sizes arguments
-      exact congrArg CallingConvention.tape
-        (binaryIntegers_encode_congr _ _ sameWidth sizes _ _ rfl))
+        rw [sameWidth])
+    (fun sizes value => binaryIntegers_encode_congr _ _ sameWidth sizes _ _ rfl)
 
 private theorem sign_realizable (width : MvPolynomial Parameter ℕ) :
     (encodingMap (binaryIntegers width) (binaryIntegers (coefficientWidth width))

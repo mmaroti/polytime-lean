@@ -483,10 +483,15 @@ same widths and canonical bit lists, without bit-vector casts in the encoding
 obligations. Constructor lemmas for arrays, products, records, fixed domains,
 and parameter renaming share these comparisons. Equal canonical words remain
 equal under resizing. Matrix access reuses array computations this way.
-`withEncoding` shares the foundational transport proof for `reindexDomains`,
-`withEncodedInputs`, and `withEncodedOutput`. Matching widths and canonical bits
-reuse the original machine and runtime bound, including for proper subdomains.
-Width obligations remain separate because carriers may be empty.
+`reinterpretInputs` changes input carriers through encoding-preserving maps
+and compatible preconditions. `refineOutput` returns the subtype of results
+satisfying a proved predicate, retaining the original codec without a runtime
+check. `reinterpretOutput` applies a total encoding-preserving mathematical map;
+refine the output first when the conversion requires a proved result property.
+These rules share the existing transport infrastructure without changing the
+machine definition. `withEncoding` and `withEncodedOutput` support foundational
+codec construction. Width obligations remain separate because carriers may be
+empty.
 `choose` reads a Boolean argument and requires only the selected branch's
 precondition; uncalled branch scratch stays arbitrary.
 `arrayFold_realizable` traverses an immutable array while updating an
@@ -558,6 +563,7 @@ executable implementations are not a requirement.
 
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
+
 ## Longer-term goals
 
 ### Algorithm notation

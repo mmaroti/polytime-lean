@@ -42,15 +42,13 @@ private noncomputable def convertedFlags (coordinates generators : MvPolynomial 
 
 private theorem convertedFlags_realizable (coordinates generators : MvPolynomial Parameter ℕ) :
     (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
-  apply (conversionAcceptance_realizable (L := L) (Carrier := Carrier) coordinates generators).withEncodedOutput
-    (booleans.arrayOfLength coordinates) (convertedFlags (L := L) (Carrier := Carrier) coordinates generators).compute
+  apply (conversionAcceptance_realizable (L := L) (Carrier := Carrier) coordinates generators).reinterpretOutput
+    (booleans.arrayOfLength coordinates) (fun _ value => value)
   · intro sizes
     simp [conversionAcceptance, booleans, width, arrayOfLength, mapArray]
-  · intro sizes arguments
-    apply congrArg CallingConvention.tape
-    simp only [conversionAcceptance, coordinateAccepted, convertedFlags, mapArray,
-      arrayOfLength_encode_bits, ArrayEncoding.bits_encode, constant_encode_bits,
-      booleans, fixed_encode_bits]
+  · intro sizes value
+    simp only [conversionAcceptance, mapArray, arrayOfLength_encode_bits,
+      ArrayEncoding.bits_encode, constant_encode_bits, booleans, fixed_encode_bits]
 
 private noncomputable def convertedRejection (coordinates generators : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
@@ -194,10 +192,14 @@ theorem prepareConvertedOutcome_realizable (coordinates generators : MvPolynomia
       rfl)
   · let rejected := (convertedRejection (L := L) (Carrier := Carrier) coordinates generators).withPrecondition
       (fun sizes arguments => True ∧ accepted sizes arguments = false) (by intros; trivial)
-    have found := ((convertedRejection_realizable (L := L) (Carrier := Carrier) coordinates generators).withPrecondition
-      rejected.precondition (by intros; trivial)).withEncodedOutput (unaryIndex coordinates)
-      (fun sizes arguments => ⟨(rejected.compute sizes arguments).val,
-        rejection_lt coordinates generators sizes arguments.val (by simp [accepted, arguments.property.2])⟩)
+    have bounded := ((convertedRejection_realizable (L := L) (Carrier := Carrier) coordinates generators).withPrecondition
+      rejected.precondition (by intros; trivial)).refineOutput
+      (fun sizes value => value.val < MvPolynomial.eval sizes coordinates) (by
+        intro sizes arguments
+        exact rejection_lt coordinates generators sizes arguments.val
+          (by simp [accepted, arguments.property.2]))
+    have found := bounded.reinterpretOutput (unaryIndex coordinates)
+      (fun _ value => ⟨value.val.val, value.property⟩)
       (by intros; rfl) (by intros; rfl)
     have ready := found.followedBy (sumInl_realizable (unaryIndex coordinates) frame) rfl (by intros; trivial)
     exact ready.withSpecification _ _ (by intro sizes arguments valid; exact valid) (by

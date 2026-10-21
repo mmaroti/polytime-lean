@@ -31,7 +31,7 @@ then reuses the same word as an ordinary bounded integer, without a new machine.
 
 namespace Polytime2.Computation.Realizable.Internal
 
-open EncodedDomain CallingConvention
+open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -43,13 +43,15 @@ noncomputable def integerOfParts (width : MvPolynomial Parameter ℕ) : Computat
 
 theorem integerOfParts_realizable (width : MvPolynomial Parameter ℕ) :
     (integerOfParts width).Realizable := by
-  apply (copy_realizable (booleans.prod (binaryNaturalsOfWidth width))).withEncoding
-    (target := integerOfParts width) (fun _ _ value => value)
-    (by intros; rfl) (by intros; rfl) (by intros; rfl) (by intros; trivial)
-  intro sizes arguments
-  apply congrArg tape
-  apply congrArg ArrayEncoding.bits
-  exact binaryIntegers_encode_parts width sizes ⟨arguments.val (), arguments.property⟩
+  have copied := (copy_realizable (booleans.prod (binaryNaturalsOfWidth width))).withPrecondition
+    (integerOfParts width).precondition (by intros; trivial)
+  have refined := copied.refineOutput
+    (fun _ parts => parts.1 = true → parts.2.val ≠ 0)
+    (fun _ arguments => arguments.property)
+  exact refined.reinterpretOutput (binaryIntegers width)
+    (fun sizes => (SignedEncoding.representationEquiv (MvPolynomial.eval sizes width)).symm)
+    (by intros; rfl)
+    (fun sizes parts => congrArg ArrayEncoding.bits (binaryIntegers_encode_parts width sizes parts))
 
 /-- Interpret an ordinary magnitude as a nonnegative signed integer. -/
 noncomputable def integerOfMagnitude (width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -95,20 +97,18 @@ theorem integerBooleanOperation_realizable {Argument : Type} [Fintype Argument]
   have table := (finiteOperation_realizable (fun _ : Argument => (booleans : EncodedDomain Empty))
     (binaryIntegers 1) (fun flags => ⟨(operation flags).val, by simpa using (operation flags).property⟩)).withConstantSizes
       (Parameter := Parameter)
-  apply table.withEncoding (target := integerBooleanOperation operation) (fun _ _ value => value)
-    (by intros; simp [integerBooleanOperation, Computation.withConstantSizes, finiteOperation, booleans, EncodedDomain.width, EncodedDomain.constant, fixed, ofCodec])
-    (by intros; simp [integerBooleanOperation, Computation.withConstantSizes, finiteOperation, EncodedDomain.constant, ofCodec])
-    ?_ (by intros; trivial) ?_
-  · intro name sizes value
-    apply congrArg tape
-    change ArrayEncoding.bits (booleans.encode sizes value) =
-      ArrayEncoding.bits (((booleans : EncodedDomain Empty).constant).encode sizes value)
-    erw [constant_encode_bits (booleans : EncodedDomain Empty) sizes value]
-    change ArrayEncoding.bits ((fixed finTwoEquiv.symm).encode sizes value) =
-      ArrayEncoding.bits ((fixed finTwoEquiv.symm).encode Empty.elim value)
-    erw [fixed_encode_bits finTwoEquiv.symm sizes value, fixed_encode_bits finTwoEquiv.symm Empty.elim value]
-  · intro sizes arguments
-    exact congrArg tape (words sizes (operation arguments.val))
+  have inputs := table.reinterpretInputs (fun _ => booleans) (fun _ _ value => value)
+    (by intros; simp [Computation.withConstantSizes, finiteOperation, booleans,
+      EncodedDomain.width, EncodedDomain.constant, fixed, ofCodec])
+    (fun _ sizes value => (fixed_encode_bits finTwoEquiv.symm sizes value).trans
+      ((fixed_encode_bits finTwoEquiv.symm Empty.elim value).symm.trans
+        (constant_encode_bits (booleans : EncodedDomain Empty) sizes value).symm))
+    (fun _ _ => True) (by intros; trivial)
+  exact inputs.reinterpretOutput (binaryIntegers 1)
+    (fun sizes value => ⟨value.val, by simpa using value.property⟩)
+    (by intros; simp [Computation.withConstantSizes, finiteOperation,
+      Computation.reinterpretInputs, EncodedDomain.constant, ofCodec])
+    (fun sizes value => words sizes ⟨value.val, by simpa using value.property⟩)
 
 /-- Reuse the unsigned nonzero scan at an exact polynomial magnitude width. -/
 noncomputable def naturalNonzero (width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -117,18 +117,22 @@ noncomputable def naturalNonzero (width : MvPolynomial Parameter ℕ) : Computat
 
 theorem naturalNonzero_realizable (width : MvPolynomial Parameter ℕ) :
     (naturalNonzero width).Realizable := by
-  have source := counterNonzero_realizable.substitute (fun _ : Unit => width)
-  apply source.withEncoding (target := naturalNonzero width) (fun _ _ value => value)
-    (by intros; simp [naturalNonzero, unaryMap, Computation.substitute, counterNonzero,
-      binaryNaturalsOfWidth, boundedIndexOfWidth, EncodedDomain.substitute_width,
-      SizeSubstitution.assignment, EncodedDomain.binaryNaturals])
-    (by intros; simp [naturalNonzero, unaryMap, Computation.substitute, counterNonzero,
-      EncodedDomain.substitute_width, booleans, fixed, ofCodec])
-    ?_ (by intros; trivial) ?_
-  · intro name sizes value
-    exact congrArg tape (binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
-  · intro sizes arguments
-    simp only [naturalNonzero, unaryMap, encoded, tape, Computation.substitute, counterNonzero,
-      EncodedDomain.substitute, booleans, fixed, ofCodec, ArrayEncoding.bits_cast]
+  have source := (counterNonzero_realizable.substitute (fun _ : Unit => width)).reinterpretInputs
+    (fun _ => binaryNaturalsOfWidth width) (fun _ _ value => value)
+    (by
+      intro name sizes
+      change (binaryNaturalsOfWidth width).width sizes =
+        ((binaryNaturals ()).substitute (fun _ : Unit => width)).width sizes
+      simp [SizeSubstitution.assignment])
+    (fun _ sizes value => binaryNaturals_substitute_bits (fun _ : Unit => width) () sizes value)
+    (fun _ _ => True) (by intros; trivial)
+  exact source.reinterpretOutput booleans (fun _ value => value)
+    (by
+      intro sizes
+      change booleans.width sizes = (booleans.substitute (fun _ : Unit => width)).width sizes
+      simp [booleans, fixed, ofCodec])
+    (fun sizes value => (fixed_encode_bits finTwoEquiv.symm sizes value).trans
+      ((fixed_encode_bits finTwoEquiv.symm (SizeSubstitution.assignment (fun _ : Unit => width) sizes) value).symm.trans
+        (substitute_encode_bits (booleans : EncodedDomain Unit) (fun _ : Unit => width) sizes value).symm))
 
 end Polytime2.Computation.Realizable.Internal

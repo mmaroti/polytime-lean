@@ -49,15 +49,12 @@ theorem integerMultiply_realizable (width : MvPolynomial Parameter ℕ) :
     ⟨value.val, value.isLt.trans_le (pow_le_pow_right₀ (by decide) (wider sizes))⟩
   have widenReady : (unaryMap (binaryNaturalsOfWidth width) output (fun _ _ => True)
       (fun sizes value => widened sizes value.val)).Realizable := by
-    exact (Realizable.Internal.naturalWiden_realizable width width).withEncodedOutput output
-      (fun sizes arguments => widened sizes (arguments.val ()))
-      (by intros; simp [output, Realizable.Internal.naturalWiden, encodingMap, unaryMap, two_mul])
-      (by
-        intro sizes arguments
-        simp [output, widened, Realizable.Internal.naturalWiden, encodingMap, unaryMap,
-          CallingConvention.encoded, CallingConvention.tape, binaryNaturalsOfWidth, boundedIndexOfWidth,
-          ofCodec, ArrayEncoding.bits_cast, BitVec.ofNatLT_finVal, BitVec.ofFin_eq_ofNat, two_mul]
-        rw [two_mul])
+    exact (Realizable.Internal.naturalWiden_realizable width width).reinterpretOutput output
+      (fun sizes value => ⟨value.val, by simpa only [two_mul] using value.isLt⟩)
+      (by intro sizes; change MvPolynomial.eval sizes (2 * width) = MvPolynomial.eval sizes (width + width)
+          rw [two_mul])
+      (fun sizes value => boundedIndexOfWidth_encode_congr _ _ _ _ (fun _ => le_rfl) (fun _ => le_rfl) sizes
+        (by rw [two_mul]) _ _ rfl)
   let magnitude (name : Bool) sizes (arguments : {arguments : (integerMultiply width).Arguments sizes // True}) :
       (binaryNaturalsOfWidth (if name then width else 2 * width)).Carrier sizes :=
     match name with

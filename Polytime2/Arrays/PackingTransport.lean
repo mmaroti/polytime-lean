@@ -61,12 +61,4 @@ theorem rawPack_bitArrayCast {firstLength secondLength firstWidth secondWidth : 
   cases widthEq
   rfl
 
-/-- Substitution changes size interpretation but retains canonical payload bits. -/
-theorem substitute_bits {Parameter NewParameter : Type} [Fintype Parameter] [Fintype NewParameter]
-    (domain : EncodedDomain NewParameter) (polynomials : NewParameter → MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ) (value : domain.Carrier (SizeSubstitution.assignment polynomials sizes)) :
-    ArrayEncoding.bits ((domain.substitute polynomials).encode sizes value) =
-      ArrayEncoding.bits (domain.encode (SizeSubstitution.assignment polynomials sizes) value) := by
-  simp only [EncodedDomain.substitute, EncodedDomain.ofCodec, ArrayEncoding.bits_cast]
-
 end Polytime2.ArrayPacking

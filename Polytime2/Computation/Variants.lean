@@ -102,11 +102,11 @@ theorem variantInjection_realizable (count : ℕ) (alternatives : Fin count → 
     (Parameter := Parameter)
   have tagContext := fixedTag.withArguments inputs ⟨Empty.elim, by intro name; cases name⟩ (by intro name; cases name)
   have tagRealizable : (Computation.mk inputs tag (fun _ _ => True) (fun _ _ => index)).Realizable := by
-    refine tagContext.withEncodedOutput tag (fun _ _ => index) ?_ ?_
+    refine tagContext.reinterpretOutput tag (fun _ value => value) ?_ ?_
     · intro sizes; simp [tag, EncodedDomain.constant, fixed, ofCodec, width, Computation.withConstantSizes, withArguments, Computation.constant]
-    · intro sizes arguments
+    · intro sizes value
       simp [tag, EncodedDomain.constant, fixed, ofCodec, Computation.withConstantSizes,
-        withArguments, Computation.constant, CallingConvention.encoded, ArrayEncoding.bits_cast]
+        withArguments, Computation.constant, ArrayEncoding.bits_cast]
   have packed := Realizable.pairOutputs inputs tag (record count fields) (fun _ _ => True)
     (fun _ _ => index) (fun sizes arguments name => values name sizes arguments) tagRealizable collected
   exact packed.withEncodedOutput (variant count alternatives) (fun _ arguments => ⟨index, arguments.val ()⟩)
@@ -122,21 +122,21 @@ theorem variantIs_realizable (count : ℕ) (alternatives : Fin count → Encoded
     (index : Fin count) : (variantIs count alternatives index).Realizable := by
   classical
   let tag : EncodedDomain Empty := fixed (Equiv.refl (Fin count))
-  have extracted := (variantTag_realizable count alternatives).withEncodedOutput (EncodedDomain.constant tag)
-    (fun _ value => (value.val ()).1)
+  have extracted := (variantTag_realizable count alternatives).reinterpretOutput (EncodedDomain.constant tag)
+    (fun _ value => value)
     (by intro sizes; simp [tag, EncodedDomain.constant, variantTag, fixed, ofCodec, width, unaryMap])
-    (by intro sizes values; simp [tag, EncodedDomain.constant, variantTag, fixed, ofCodec,
-      unaryMap, CallingConvention.encoded, ArrayEncoding.bits_cast])
+    (by intro sizes value; simp [tag, EncodedDomain.constant, variantTag, fixed, ofCodec,
+      unaryMap, ArrayEncoding.bits_cast])
   have predicate := (finitePredicate_realizable tag (fun (value : Fin count) => decide (value = index))).withConstantSizes
     (Parameter := Parameter)
   have composed := extracted.followedBy predicate rfl (by intros; trivial)
-  refine composed.withEncodedOutput EncodedDomain.booleans (fun _ value => decide ((value.val ()).1 = index)) ?_ ?_
+  refine composed.reinterpretOutput EncodedDomain.booleans (fun _ value => value) ?_ ?_
   · intro sizes
     simp [EncodedDomain.constant, finitePredicate, finiteOperation, withConstantSizes, followedBy,
       EncodedDomain.booleans, fixed, ofCodec, width]
-  · intro sizes values
+  · intro sizes value
     simp [EncodedDomain.constant, finitePredicate, finiteOperation, withConstantSizes, followedBy,
-      variantTag, unaryMap, EncodedDomain.booleans, fixed, ofCodec, CallingConvention.encoded, ArrayEncoding.bits_cast]
+      variantTag, unaryMap, EncodedDomain.booleans, fixed, ofCodec, ArrayEncoding.bits_cast]
 
 /-- Case analysis calls only the selected alternative's certified algorithm. -/
 noncomputable def variantCases (count : ℕ) (alternatives : Fin count → EncodedDomain.{0, 0} Parameter)

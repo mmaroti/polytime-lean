@@ -208,13 +208,8 @@ theorem signResults_realizable (width : MvPolynomial Parameter ℕ) : (signResul
           (arguments (.inl false)).val / (arguments (.inl true)).val
       rw [valid.2.1, quotient_magnitude _ _ valid.1]
       exact SignedEncoding.restore _)
-  have remainderSign := (booleanOperation_realizable (Parameter := Parameter) (Argument := Empty) (fun _ => false)).onResults
-    inputs allowed (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
-  have remainderParts := Realizable.pairOutputs inputs booleans word allowed _ _ remainderSign (field true)
-  have remainderConstructed := remainderParts.followedBy (Realizable.Internal.integerOfParts_realizable width) rfl (by
-    intro sizes arguments valid
-    change false = true → _
-    simp)
+  have remainderConstructed := (field true).followedBy
+    (Realizable.Internal.integerOfMagnitude_realizable width) rfl (by intros; trivial)
   have remainderReady : (Computation.mk inputs (binaryIntegers width) allowed
       (fun sizes arguments => ((signResults width).compute sizes arguments).2)).Realizable := by
     exact remainderConstructed.withSpecification allowed _ (by intros; assumption) (by

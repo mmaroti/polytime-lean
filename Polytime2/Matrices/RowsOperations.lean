@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
-import Polytime2.Computation.EncodedInputs
+import Polytime2.Computation.Reindex
 import Polytime2.Matrices.RowsPresentation
 
 /-! # Mathematical row transformations with hidden realizations -/
@@ -124,7 +124,7 @@ theorem rowTransform_realizable (writeSource : Bool) (scalar : EncodedDomain Emp
     match name with
     | 0 | 1 => coordinateValue 0 sizes
     | 2 | 3 => id
-  have ready := (rowTransformWithCapacity_realizable writeSource scalar internalOperation).withInternalSize.withEncodedInputs inputs map
+  have ready := (rowTransformWithCapacity_realizable writeSource scalar internalOperation).withInternalSize.reinterpretInputs inputs map
     (by intro name sizes; fin_cases name <;> rfl)
     (by intro name sizes value; fin_cases name
         exact coordinate_bits 0 sizes value

@@ -46,6 +46,44 @@ def reindexDomains (computation : Computation.{carrierLevel} Parameter InputName
     (computation.compute sizes
       ⟨(fun name => inputEquivalence name sizes (arguments.val name)), arguments.property⟩)
 
+/-- Change input meanings and admissibility before running a computation. -/
+def reinterpretInputs (computation : Computation.{carrierLevel} Parameter InputName)
+    (inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter)
+    (map : ∀ name sizes, (inputs name).Carrier sizes →
+      (computation.inputDomains name).Carrier sizes)
+    (allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop)
+    (compatible : ∀ sizes arguments, allowed sizes arguments →
+      computation.precondition sizes (fun name => map name sizes (arguments name))) :
+    Computation Parameter InputName where
+  inputDomains := inputs
+  outputDomain := computation.outputDomain
+  precondition := allowed
+  compute sizes arguments := computation.compute sizes
+    ⟨(fun name => map name sizes (arguments.val name)),
+      compatible sizes arguments.val arguments.property⟩
+
+/-- Apply a total mathematical map to the computed result. -/
+def reinterpretOutput (computation : Computation.{carrierLevel} Parameter InputName)
+    (output : EncodedDomain.{0, carrierLevel} Parameter)
+    (map : ∀ sizes, computation.outputDomain.Carrier sizes → output.Carrier sizes) :
+    Computation Parameter InputName where
+  inputDomains := computation.inputDomains
+  outputDomain := output
+  precondition := computation.precondition
+  compute sizes arguments := map sizes (computation.compute sizes arguments)
+
+/-- Strengthen the result type using a property proved for all admissible inputs.
+The predicate is a mathematical guarantee, not a runtime test. -/
+noncomputable def refineOutput
+    (computation : Computation.{carrierLevel} Parameter InputName)
+    (predicate : ∀ sizes, computation.outputDomain.Carrier sizes → Prop)
+    (correct : ∀ sizes arguments, predicate sizes (computation.compute sizes arguments)) :
+    Computation Parameter InputName := by
+  classical
+  exact ⟨computation.inputDomains, computation.outputDomain.restrict predicate,
+    computation.precondition,
+    fun sizes arguments => ⟨computation.compute sizes arguments, correct sizes arguments⟩⟩
+
 namespace Realizable
 
 /-- Reuse a machine unchanged when input maps and computed outputs preserve
@@ -163,6 +201,61 @@ theorem withEncodedOutput {computation : Computation.{carrierLevel} Parameter In
     (Computation.mk computation.inputDomains outputDomain computation.precondition compute).Realizable := by
   exact realizable.withEncoding (fun _ _ value => value) (by intros; rfl)
     sameWidth (by intros; rfl) (by intros; assumption) sameEncoding
+
+/-- Encoding-preserving input maps may restrict carriers and preconditions. -/
+theorem reinterpretInputs {computation : Computation.{carrierLevel} Parameter InputName}
+    (ready : computation.Realizable)
+    (inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter)
+    (map : ∀ name sizes, (inputs name).Carrier sizes →
+      (computation.inputDomains name).Carrier sizes)
+    (sameWidth : ∀ name sizes,
+      (inputs name).width sizes = (computation.inputDomains name).width sizes)
+    (sameBits : ∀ name sizes value,
+      EncodedDomain.ArrayEncoding.bits ((inputs name).encode sizes value) =
+        EncodedDomain.ArrayEncoding.bits
+          ((computation.inputDomains name).encode sizes (map name sizes value)))
+    (allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop)
+    (compatible : ∀ sizes arguments, allowed sizes arguments →
+      computation.precondition sizes (fun name => map name sizes (arguments name))) :
+    (computation.reinterpretInputs inputs map allowed compatible).Realizable := by
+  exact ready.withEncoding map sameWidth (by intros; rfl)
+    (fun name sizes value => congrArg tape (sameBits name sizes value))
+    compatible (by intros; rfl)
+
+/-- A total encoding-preserving output map changes only mathematical meaning. -/
+theorem reinterpretOutput {computation : Computation.{carrierLevel} Parameter InputName}
+    (ready : computation.Realizable)
+    (output : EncodedDomain.{0, carrierLevel} Parameter)
+    (map : ∀ sizes, computation.outputDomain.Carrier sizes → output.Carrier sizes)
+    (sameWidth : ∀ sizes, output.width sizes = computation.outputDomain.width sizes)
+    (sameBits : ∀ sizes value,
+      EncodedDomain.ArrayEncoding.bits (output.encode sizes (map sizes value)) =
+        EncodedDomain.ArrayEncoding.bits (computation.outputDomain.encode sizes value)) :
+    (computation.reinterpretOutput output map).Realizable := by
+  exact ready.withEncodedOutput output _ sameWidth
+    (fun sizes arguments => congrArg tape (sameBits sizes (computation.compute sizes arguments)))
+
+/-- Reuse the canonical codec when the output carrier is given by an equivalence. -/
+theorem reindexOutput {computation : Computation.{carrierLevel} Parameter InputName}
+    (ready : computation.Realizable)
+    (Carrier : (Parameter → ℕ) → Type carrierLevel)
+    (equivalence : ∀ sizes, Carrier sizes ≃ computation.outputDomain.Carrier sizes) :
+    (computation.reinterpretOutput (computation.outputDomain.reindex Carrier equivalence)
+      (fun sizes => (equivalence sizes).symm)).Realizable := by
+  apply ready.reinterpretOutput _ _ (by intros; rfl)
+  intro sizes value
+  change EncodedDomain.ArrayEncoding.bits (computation.outputDomain.encode sizes
+    ((equivalence sizes) ((equivalence sizes).symm value))) = _
+  rw [Equiv.apply_symm_apply]
+
+/-- A proved output property refines the carrier without checking it at runtime. -/
+theorem refineOutput {computation : Computation.{carrierLevel} Parameter InputName}
+    (ready : computation.Realizable)
+    (predicate : ∀ sizes, computation.outputDomain.Carrier sizes → Prop)
+    (correct : ∀ sizes arguments, predicate sizes (computation.compute sizes arguments)) :
+    (computation.refineOutput predicate correct).Realizable := by
+  classical
+  exact ready.withEncodedOutput _ _ (by intros; rfl) (by intros; rfl)
 
 end Realizable
 end Polytime2.Computation

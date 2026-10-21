@@ -150,20 +150,16 @@ noncomputable def pairConstructor
 theorem pairConstructor_realizable
     (left right : EncodedDomain.{0, carrierLevel} Parameter) :
     (pairConstructor left right).Realizable := by
-  refine (recordConstructor_realizable 2 ![left, right]).withEncodedOutput (left.prod right)
-    (fun _ values => (values.val 0, values.val 1)) ?_ ?_
+  refine (recordConstructor_realizable 2 ![left, right]).reinterpretOutput (left.prod right)
+    (fun _ values => (values 0, values 1)) ?_ ?_
   · intro sizes
-    simp [recordConstructor,
-      EncodedDomain.width, Fin.sum_univ_succ]
+    simp [recordConstructor, EncodedDomain.width, Fin.sum_univ_succ]
   · intro sizes values
-    change CallingConvention.buffer (Binary.word
-      (EncodedDomain.ArrayEncoding.bits ((left.prod right).encode sizes (values.val 0, values.val 1)))) =
-      CallingConvention.buffer (Binary.word
-        (EncodedDomain.ArrayEncoding.bits ((EncodedDomain.record 2 ![left, right]).encode sizes values.val)))
-    apply congrArg (fun bits => CallingConvention.buffer (Binary.word bits))
+    change EncodedDomain.ArrayEncoding.bits ((left.prod right).encode sizes (values 0, values 1)) =
+      EncodedDomain.ArrayEncoding.bits ((EncodedDomain.record 2 ![left, right]).encode sizes values)
     exact (EncodedDomain.bits_prod_encode left right sizes _).trans (by
       simpa [List.ofFn_succ] using
-        (EncodedDomain.bits_record_encode 2 ![left, right] sizes values.val).symm)
+        (EncodedDomain.bits_record_encode 2 ![left, right] sizes values).symm)
 
 /-- Collect two certified results from the same immutable arguments. -/
 theorem Realizable.pairOutputs {InputName : Type} [Fintype InputName]
@@ -217,9 +213,11 @@ theorem Realizable.recordOutputs {InputName : Type} [Fintype InputName]
     have tail := hypothesis (Fin.tail fields) (fun index => results index.succ) (fun index => realizable index.succ)
     have pair := Realizable.pairOutputs inputDomains (fields 0) (EncodedDomain.record count (Fin.tail fields))
       precondition (results 0) (fun sizes arguments index => results index.succ sizes arguments) (realizable 0) tail
-    refine pair.withEncodedOutput (EncodedDomain.record (count + 1) fields)
-      (fun sizes arguments index => results index sizes arguments) (fun _ => rfl) ?_
-    intro sizes arguments
-    rfl
+    have combined := pair.reinterpretOutput (EncodedDomain.record (count + 1) fields)
+      (fun _ values => Fin.cons values.1 values.2) (fun _ => rfl) (by intros; rfl)
+    exact combined.withSpecification precondition _ (by intros; assumption) (by
+      intro sizes arguments valid
+      funext index
+      exact Fin.cases rfl (fun _ => rfl) index)
 
 end Polytime2.Computation
