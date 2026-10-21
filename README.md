@@ -1,12 +1,10 @@
 # polytime
 
-A Lean project developing reusable frameworks for polynomial-time algorithms
+A Lean project developing a reusable framework for polynomial-time algorithms
 and their correctness and machine-runtime certificates.
 
-- [GOAL.md](GOAL.md): shared design requirements and comparison rules.
+- [GOAL.md](GOAL.md): design requirements.
 - [EXAMPLES.md](EXAMPLES.md): target algorithms and building-block libraries.
-- [Polytime1](Polytime1/README.md): single-tape implementation, coverage, and
-  next steps.
 - [Polytime2](Polytime2/README.md): multi-tape implementation, coverage, and
   next steps.
 
@@ -22,8 +20,8 @@ lake build
 Lean and Mathlib are pinned to `v4.35.0`. The cache command downloads compiled
 Mathlib artifacts.
 
-Build one implementation with `lake build Polytime1` or `lake build Polytime2`.
-Use `import Polytime1` or `import Polytime2` in Lean.
+Build the library with `lake build Polytime2`.
+Use `import Polytime2` in Lean.
 
 The projects under `temp/` are read-only reference material, excluded from
 version control and project dependencies.

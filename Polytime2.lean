@@ -219,5 +219,5 @@ import Polytime2.Examples.SMP.PreparedConsumer
 
 /-! # Polytime2
 
-Root module for the second implementation alternative.
+Root module for the polynomial-time algorithm framework.
 -/

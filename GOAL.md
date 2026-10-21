@@ -1,11 +1,10 @@
-# Shared framework specification
+# Framework specification
 
-This document records requirements shared by all implementations. Current
-coverage, execution designs, and implementation-specific next steps belong in
-each implementation's README; target algorithms belong in
-[EXAMPLES.md](EXAMPLES.md). Proposals and open questions are not yet settled
-decisions. The reference projects under `temp/` inform the design but remain
-outside this repository's implementation scope.
+This document records framework requirements. Current coverage, execution
+designs, and next steps belong in [Polytime2/README.md](Polytime2/README.md);
+target algorithms belong in [EXAMPLES.md](EXAMPLES.md). Proposals and open
+questions are not yet settled decisions. The reference projects under `temp/`
+inform the design but remain outside this repository's implementation scope.
 
 Size parameters have equal roles. The data layer has no distinguished N
 and no admissibility bounds between parameters. Algorithms will be polynomial
@@ -410,42 +409,6 @@ and reusable lemmas to new structures, and avoid speculative definitions.
   inside larger computations, including shared storage.
 - Retain complete external realization as the acceptance check; a general
   compiler or wholesale rewrite is not a prerequisite for improving reuse.
-
-## Alternative implementations and comparison
-
-Keep alternatives in one Lake package with the same pinned Lean and Mathlib
-dependencies. Each has a separate library, root module, source directory, and
-namespace: `Polytime1`, `Polytime2`, and similarly for later alternatives.
-See the root README for build commands and each alternative's README for its
-status.
-
-- Implementations must not import or refer to one another, including in
-  comments and implementation documentation. Record copied-proof provenance
-  only in repository-level documentation.
-- GOAL.md and EXAMPLES.md specify common mathematical goals, contracts, and edge
-  cases. Each alternative's README records its approach, coverage, and limits.
-  Different internal designs are allowed; departures from the common goals
-  must be explicit.
-- Share mathematical specifications only when useful duplication arises;
-  do not extract shared implementation infrastructure in advance.
-- Compare equivalent completed milestones. Mathematical correctness alone
-  is not equivalent to a complete external tape-runtime realization.
-
-Record comparisons at agreed milestones using these metrics:
-
-| Metric | What it measures |
-| --- | --- |
-| Algorithm and proof lines | Effort required from algorithm authors |
-| Reusable infrastructure lines | Initial framework investment |
-| Lean code lines, excluding comments and headers | Implementation size |
-| Physical details exposed in algorithm proofs | Distance from mathematics |
-| Build time with matching caches and scope | Verification cost |
-| Assumptions and missing realization obligations | Completeness of the result |
-
-Separate algorithm and infrastructure costs consistently, including any shared
-code, and record qualitative difficulties alongside line counts. The initial
-comparison targets are indexed lookup/update and bounded traversal, followed
-by Gauss–Jordan with the same external correctness and runtime obligations.
 
 ## Decisions still being discussed
 
