@@ -5,8 +5,8 @@ and their correctness and machine-runtime certificates.
 
 - [GOAL.md](GOAL.md): design requirements.
 - [EXAMPLES.md](EXAMPLES.md): target algorithms and building-block libraries.
-- [Polytime2](Polytime2/README.md): multi-tape implementation, coverage, and
-  next steps.
+- [Polytime2](Polytime2/README.md): navigation, topic guides, and proposed next
+  tasks.
 
 ## Setup and build
 

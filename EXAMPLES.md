@@ -26,6 +26,8 @@ compose their certified operations rather than each developing its own
 arithmetic, buffers, DAG machinery, or tape navigation. These are development
 requirements, not claims of current support.
 
+<a id="gauss-jordan"></a>
+
 ## 1. Gauss–Jordan elimination over a fixed finite field
 
 ### Mathematical problem and specialization
@@ -69,6 +71,8 @@ the output. Removing zero rows would be a separate algorithm and contract.
 
 This example exercises mathematical carriers, exact tuple shapes, nested
 loops, copying rows, and a full prepared-frame realization.
+
+<a id="smp-preparation"></a>
 
 ## 2. Single-sorted SMP to a monolith-prepared catalogue instance
 
@@ -212,6 +216,8 @@ values form a fixed finite set; in A^n the evaluations are their diagonal
 rows. If there are no closed terms, the set is empty. A small separate
 membership routine can handle this case, including n = 0, rather than
 assuming nonexistent nonempty coordinate images.
+
+<a id="smith-normal-form"></a>
 
 ## 3. Smith normal form for integer matrices and SMP span queries
 

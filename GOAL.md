@@ -1,10 +1,10 @@
 # Framework specification
 
-This document records framework requirements. Current coverage, execution
-designs, and next steps belong in [Polytime2/README.md](Polytime2/README.md);
-target algorithms belong in [EXAMPLES.md](EXAMPLES.md). Proposals and open
-questions are not yet settled decisions. The reference projects under `temp/`
-inform the design but remain outside this repository's implementation scope.
+This document records framework requirements. Topic guides and proposed tasks
+are linked from [Polytime2/README.md](Polytime2/README.md); target algorithms
+belong in [EXAMPLES.md](EXAMPLES.md). Proposals and open questions are not yet
+settled decisions. The reference projects under `temp/` inform the design but
+remain outside this repository's implementation scope.
 
 Size parameters have equal roles. The data layer has no distinguished N
 and no admissibility bounds between parameters. Algorithms will be polynomial

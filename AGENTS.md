@@ -5,6 +5,18 @@
 - Always fix typos and correct grammar when you notice them.
 - All markdown must be line wrapped at 80 columns.
 
+# Documentation
+
+- Start at `Polytime2/README.md` and read the topic guide relevant to the task.
+  Follow its source and example links; do not read unrelated guides by default.
+- Keep the main README as navigation, build instructions, and proposed tasks.
+  Put usage patterns and entry points in the nearest topic README, exact
+  mathematical contracts in Lean docstrings, project requirements in GOAL.md,
+  and target problems in EXAMPLES.md. Link instead of duplicating information.
+- Update the authoritative documentation when its interface changes. Put larger
+  proposals in `Polytime2/tasks/` with prerequisites and acceptance criteria;
+  remove completed task entries and obsolete task files.
+
 # Lean coding style
 
 - Name every Lean section and close it with a matching named `end`; avoid bare
