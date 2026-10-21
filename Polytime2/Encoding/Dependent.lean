@@ -40,6 +40,21 @@ theorem bits_setWidth {width capacity : ℕ} (bits : BitVec width) (fits : width
     · have outside : width ≤ position := Nat.le_of_not_gt inside
       simp [ArrayEncoding.bits, List.getElem_append, inside, BitVec.getLsbD_of_ge bits position outside]
 
+private theorem ofFin_setWidth {width capacity : ℕ}
+    (source : Fin (2 ^ width)) (target : Fin (2 ^ capacity)) (sameValue : target.val = source.val) :
+    BitVec.ofFin target = (BitVec.ofFin source).setWidth capacity := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_ofFin, BitVec.toNat_setWidth]
+  rw [← sameValue, Nat.mod_eq_of_lt target.isLt]
+
+/-- Increasing a natural word's capacity preserves its bits and appends zeros. -/
+theorem bits_ofFin_widen {width capacity : ℕ}
+    (source : Fin (2 ^ width)) (target : Fin (2 ^ capacity))
+    (sameValue : target.val = source.val) (fits : width ≤ capacity) :
+    ArrayEncoding.bits (BitVec.ofFin target) =
+      ArrayEncoding.bits (BitVec.ofFin source) ++ List.replicate (capacity - width) false := by
+  rw [ofFin_setWidth source target sameValue, bits_setWidth _ fits]
+
 /-- Truncation retains exactly the requested prefix of the canonical bits. -/
 theorem bits_setWidth_take {width length : ℕ} (bits : BitVec width) (fits : length ≤ width) :
     ArrayEncoding.bits (bits.setWidth length) = (ArrayEncoding.bits bits).take length := by
@@ -47,6 +62,13 @@ theorem bits_setWidth_take {width length : ℕ} (bits : BitVec width) (fits : le
   · simp [ArrayEncoding.bits, Nat.min_eq_left fits]
   · intro position leftWithin rightWithin
     simp [ArrayEncoding.bits, -BitVec.getLsbD_eq_getElem]
+
+/-- Reducing a natural word's capacity preserves its value when that value fits. -/
+theorem bits_ofFin_narrow {width capacity : ℕ}
+    (source : Fin (2 ^ capacity)) (target : Fin (2 ^ width))
+    (sameValue : target.val = source.val) (fits : width ≤ capacity) :
+    ArrayEncoding.bits (BitVec.ofFin target) = (ArrayEncoding.bits (BitVec.ofFin source)).take width := by
+  rw [ofFin_setWidth source target sameValue, bits_setWidth_take _ fits]
 
 /-- Polynomial-capacity zero padding retains every mathematical payload. -/
 theorem encode_setWidth_injective (domain : EncodedDomain Parameter) (sizes : Parameter → ℕ)

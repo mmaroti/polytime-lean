@@ -31,6 +31,29 @@ open MultiTape CallingConvention Realizable
 
 namespace Realizable.Internal
 
+variable {Parameter : Type} [Fintype Parameter]
+
+/-- Natural magnitudes widen by a derived polynomial number of zero bits. -/
+noncomputable def naturalWiden (width extra : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  encodingMap (EncodedDomain.binaryNaturalsOfWidth width)
+    (EncodedDomain.binaryNaturalsOfWidth (width + extra)) (fun sizes value =>
+      ⟨value.val, value.isLt.trans_le (pow_le_pow_right₀ (by decide)
+        (by simp only [map_add]; omega))⟩)
+
+theorem naturalWiden_realizable (width extra : MvPolynomial Parameter ℕ) :
+    (naturalWiden width extra).Realizable := by
+  apply zeroExtendEncoding_realizable (EncodedDomain.binaryNaturalsOfWidth width)
+    (EncodedDomain.binaryNaturalsOfWidth (width + extra)) extra
+  · intro sizes
+    simp
+  · intro sizes value
+    simp only [EncodedDomain.binaryNaturalsOfWidth_encode_bits]
+    have widened := EncodedDomain.bits_ofFin_widen value
+      (⟨value.val, value.isLt.trans_le (pow_le_pow_right₀ (by decide)
+        (by simp only [map_add]; omega))⟩ : Fin (2 ^ MvPolynomial.eval sizes (width + extra))) rfl
+      (by simp only [map_add]; omega)
+    simpa only [map_add, Nat.add_sub_cancel_left] using widened
+
 noncomputable def extraBitSizes : Unit → MvPolynomial Unit ℕ :=
   fun _ => MvPolynomial.X () + 1
 
@@ -56,13 +79,9 @@ theorem extraBitWiden_realizable :
   · intro sizes value
     simp only [extraBitDomain, EncodedDomain.substitute, EncodedDomain.binaryNaturals,
       EncodedDomain.ofCodec, EncodedDomain.ArrayEncoding.bits_cast]
-    have widened : BitVec.ofFin (extraBitWiden sizes value) =
-        (BitVec.ofFin value).setWidth (SizeSubstitution.assignment extraBitSizes sizes ()) := by
-      apply BitVec.eq_of_toNat_eq
-      simp only [BitVec.toNat_ofFin, BitVec.toNat_setWidth]
-      exact (Nat.mod_eq_of_lt (extraBitWiden sizes value).isLt).symm
-    rw [widened, EncodedDomain.bits_setWidth _ (by rw [extraBitSizes_eval]; omega)]
-    simp [extraBitSizes_eval]
+    have widened := EncodedDomain.bits_ofFin_widen value (extraBitWiden sizes value) rfl
+      (by rw [extraBitSizes_eval]; omega)
+    simpa [extraBitSizes_eval] using widened
 
 noncomputable def extraBitNarrow : Computation Unit Unit :=
   encodingMap extraBitDomain (EncodedDomain.binaryNaturals ())

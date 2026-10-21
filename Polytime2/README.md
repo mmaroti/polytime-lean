@@ -126,6 +126,25 @@ The directory reorganization preserved namespaces and declaration names.
   groups of moving heads and caller-supplied termination actions, including
   arithmetic carry outputs and Boolean guards. Empty words and arbitrary old
   output contents are supported; fixed-width slice copying remains distinct.
+- Signed integer codecs use the ordinary carrier `{z : ℤ // z.natAbs < 2^w}`
+  with one sign bit followed by exactly `w` magnitude bits. The product codec
+  supplies canonical storage; negative zero is rejected and width zero contains
+  only zero. Sign, zero testing, magnitude extraction, negation, comparison,
+  equality, addition, subtraction, multiplication, and nonnegative gcd have
+  realizability and standalone TM0 certificates. Addition/subtraction derive
+  magnitude width `w+1`; multiplication derives `2*w`. Gcd retains `w` and
+  includes `gcd(0,0)=0`. Signed Euclidean division binds one unsigned division
+  pass, then corrects and signs its stored pair. Quotient and nonnegative
+  remainder retain `w` and require only a nonzero divisor; both have TM0
+  certificates and separate public projections. Signed left shift multiplies
+  by `2^s` at derived magnitude width `w+s`; arithmetic right shift uses floor
+  division and retains `w`. Shift counts are mathematical sizes, with output
+  construction included in the polynomial cost. Both shifts have TM0
+  certificates. Magnitude bit length returns `Nat.size z.natAbs` in `Fin (w+1)`
+  with a TM0 certificate and at most `w` halving iterations. Extended gcd
+  returns the nonnegative gcd and Bézout coefficients at derived magnitude
+  width `1+(2*w+1)*(w+1)`, with `u*a+v*b=gcd(a,b)`. Its certified Euclidean
+  loop uses at most `2*w+1` steps and has a standalone TM0 certificate.
 - Runtime-width binary addition with a final carry digit, linear transition
   cost, preserved operands and neighboring storage, and restored heads. Its
   mathematical contract states exact natural-number addition.
@@ -540,11 +559,6 @@ executable implementations are not a requirement.
 For consolidation work, identify the implementations to replace before adding
 an abstraction, and measure net lines removed, including the new machinery.
 ## Longer-term goals
-
-### Integer arithmetic
-
-Add signed arithmetic and the remaining bit arithmetic needed for integer
-matrices, reusing generic arithmetic machinery.
 
 ### Algorithm notation
 

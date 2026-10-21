@@ -51,14 +51,13 @@ theorem remainder_half (left right : ℕ) (positive : 0 < right) (ordered : righ
     rw [quotientOne] at identity
     omega
 
-private theorem half_size (number : ℕ) (positive : 0 < number) :
-    Nat.size (number / 2) < Nat.size number := by
+/-- Halving a nonzero natural removes exactly one magnitude bit. -/
+theorem size_half (number : ℕ) (nonzero : number ≠ 0) :
+    Nat.size (number / 2) + 1 = Nat.size number := by
   induction number using Nat.binaryRec' with
-  | zero => omega
-  | bit bit rest nonzero induction =>
-    have bitNonzero : Nat.bit bit rest ≠ 0 := Nat.bit_ne_zero_iff.mpr nonzero
-    rw [Nat.bit_div_two, Nat.size_bit bitNonzero]
-    omega
+  | zero => contradiction
+  | bit bit rest nonzeroBit _ =>
+    rw [Nat.bit_div_two, Nat.size_bit (Nat.bit_ne_zero_iff.mpr nonzeroBit)]
 
 /-- Progress is measured in bits, including a possible initial operand swap. -/
 theorem decreases (value : Value) (active : condition value = true) :
@@ -74,7 +73,8 @@ theorem decreases (value : Value) (active : condition value = true) :
     have firstPositive : 0 < value.1 := by omega
     have halved := remainder_half value.1 value.2 positive ordered
     have sizeBound := Nat.size_le_size (show value.1 % value.2 ≤ value.1 / 2 by omega)
-    have smaller := sizeBound.trans_lt (half_size value.1 firstPositive)
+    have halvedSize := size_half value.1 (Nat.ne_of_gt firstPositive)
+    have smaller : Nat.size (value.1 % value.2) < Nat.size value.1 := by omega
     have reverse : ¬value.2 < value.1 % value.2 := by omega
     simp only [measure, advance, swapped, reverse, ↓reduceIte]
     omega

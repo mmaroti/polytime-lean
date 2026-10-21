@@ -42,6 +42,15 @@ def value : List Bool → ℕ
   | [] => 0
   | bit :: bits => bit.toNat + 2 * value bits
 
+/-- Concatenating little-endian words shifts the second word by the first width. -/
+theorem value_append (low high : List Bool) :
+    value (low ++ high) = value low + 2 ^ low.length * value high := by
+  induction low with
+  | nil => simp [value]
+  | cons bit bits hypothesis =>
+    simp only [List.cons_append, value, List.length_cons, pow_succ, hypothesis]
+    ring
+
 /-- A padded binary word fits its declared digit capacity. -/
 theorem value_lt_pow_length (bits : List Bool) : value bits < 2 ^ bits.length := by
   induction bits with

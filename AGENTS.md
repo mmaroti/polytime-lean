@@ -45,6 +45,9 @@
 
 # Reuse and consolidation
 
+- It is explicitly not a goal to find an optimal algorithm with respect to
+  execution time or space used. The goal is to find the shortest proof with
+  the most reuse that still yields a polynomial time algorithm.
 - Before adding a machine, codec, adapter, or realization proof, search for
   existing infrastructure that implements its constituent operations. Prefer
   composition and specialization over a separate implementation.

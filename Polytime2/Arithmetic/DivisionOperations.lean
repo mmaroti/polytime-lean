@@ -119,9 +119,10 @@ theorem binaryDivision_realizable : binaryDivision.Realizable := by
     (by intros; simp [substitute, binaryDivisionWithCapacity, EncodedDomain.substitute_width,
       extraBitDomain, EncodedDomain.width])
     (by intros; rfl)
-    (by intros; simp [substitute, binaryDivisionWithCapacity,
-      EncodedDomain.substitute_encode_bits, extraBitDomain,
-      EncodedDomain.ArrayEncoding.bits_append]; rfl)
+    (by
+      intro sizes value
+      exact EncodedDomain.substitute_prod_encode_bits (EncodedDomain.binaryNaturals ())
+        (EncodedDomain.binaryNaturals ()) extraBitSizes sizes value)
   have widened := transported.onResults binaryDivision.inputDomains binaryDivision.precondition
     (fun name sizes arguments => extraBitWiden sizes (arguments.val name))
     (by

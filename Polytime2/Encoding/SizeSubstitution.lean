@@ -16,6 +16,8 @@ limitations under the License.
 -/
 
 import Polytime2.Encoding.EncodedArray
+import Polytime2.Encoding.BinaryEncoding
+import Polytime2.Encoding.Records
 
 /-! # Polynomial substitution and majorization for size assignments
 
@@ -88,6 +90,16 @@ noncomputable def substitute (domain : EncodedDomain.{0, carrierLevel} NewParame
     (fun sizes => domain.decode_encode (SizeSubstitution.assignment substitution sizes))
     (fun sizes => domain.encode_decode (SizeSubstitution.assignment substitution sizes))
 
+/-- Exact polynomial word widths reuse the substituted unsigned word codec. -/
+theorem binaryNaturals_substitute_bits
+    (substitution : NewParameter → MvPolynomial Parameter ℕ) (name : NewParameter)
+    (sizes : Parameter → ℕ) (value : Fin (2 ^ MvPolynomial.eval sizes (substitution name))) :
+    ArrayEncoding.bits ((binaryNaturalsOfWidth (substitution name)).encode sizes value) =
+      ArrayEncoding.bits (((binaryNaturals name).substitute substitution).encode sizes value) := by
+  simp only [binaryNaturalsOfWidth, boundedIndexOfWidth, ofCodec, ArrayEncoding.bits_cast,
+    EncodedDomain.substitute, binaryNaturals, BitVec.ofNatLT_finVal]
+  rfl
+
 @[simp] theorem substitute_width (domain : EncodedDomain.{0, carrierLevel} NewParameter)
     (substitution : NewParameter → MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :
     (domain.substitute substitution).width sizes =
@@ -100,5 +112,25 @@ noncomputable def substitute (domain : EncodedDomain.{0, carrierLevel} NewParame
     ArrayEncoding.bits ((domain.substitute substitution).encode sizes value) =
       ArrayEncoding.bits (domain.encode (SizeSubstitution.assignment substitution sizes) value) := by
   simp only [substitute, ofCodec, ArrayEncoding.bits_cast]
+
+/-- Product fields keep their order and bits under exact size substitution. -/
+theorem substitute_prod_encode_bits
+    (left right : EncodedDomain.{0, carrierLevel} NewParameter)
+    (substitution : NewParameter → MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (value : left.Carrier (SizeSubstitution.assignment substitution sizes) ×
+      right.Carrier (SizeSubstitution.assignment substitution sizes)) :
+    ArrayEncoding.bits (((left.substitute substitution).prod (right.substitute substitution)).encode sizes value) =
+      ArrayEncoding.bits (((left.prod right).substitute substitution).encode sizes value) := by
+  calc
+    _ = ArrayEncoding.bits ((left.substitute substitution).encode sizes value.1) ++
+        ArrayEncoding.bits ((right.substitute substitution).encode sizes value.2) :=
+      bits_prod_encode (left.substitute substitution) (right.substitute substitution) sizes value
+    _ = ArrayEncoding.bits (left.encode (SizeSubstitution.assignment substitution sizes) value.1) ++
+        ArrayEncoding.bits (right.encode (SizeSubstitution.assignment substitution sizes) value.2) :=
+      congrArg₂ List.append (substitute_encode_bits left substitution sizes value.1)
+        (substitute_encode_bits right substitution sizes value.2)
+    _ = ArrayEncoding.bits ((left.prod right).encode (SizeSubstitution.assignment substitution sizes) value) :=
+      (bits_prod_encode left right (SizeSubstitution.assignment substitution sizes) value).symm
+    _ = _ := (substitute_encode_bits (left.prod right) substitution sizes value).symm
 
 end Polytime2.EncodedDomain

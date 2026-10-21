@@ -160,7 +160,27 @@ noncomputable def matrixCoordinates (rows columns : MvPolynomial Parameter ℕ) 
     (fun sizes => Fin (MvPolynomial.eval sizes rows) × Fin (MvPolynomial.eval sizes columns))
     (matrixCoordinateEquiv rows columns)
 
+/-- Binary naturals with an exact polynomial word width. -/
+noncomputable abbrev binaryNaturalsOfWidth (width : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  boundedIndexOfWidth (fun sizes => 2 ^ MvPolynomial.eval sizes width) width (fun _ => le_rfl)
+
+@[simp] theorem binaryNaturalsOfWidth_width (width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) :
+    (binaryNaturalsOfWidth width).width sizes = MvPolynomial.eval sizes width := rfl
+
+/-- Polynomial-width naturals retain the canonical bits of their ordinary finite value. -/
+@[simp] theorem binaryNaturalsOfWidth_encode_bits (width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) (value : (binaryNaturalsOfWidth width).Carrier sizes) :
+    ArrayEncoding.bits ((binaryNaturalsOfWidth width).encode sizes value) =
+      ArrayEncoding.bits (BitVec.ofFin value) := by
+  simp only [binaryNaturalsOfWidth, boundedIndexOfWidth, ofCodec, ArrayEncoding.bits_cast,
+    BitVec.ofNatLT_finVal]
+
 /-- Boolean results use one canonical bit, with no unused labels. -/
 noncomputable def booleans : EncodedDomain Parameter := fixed finTwoEquiv.symm
+
+@[simp] theorem booleans_width (sizes : Parameter → ℕ) : (booleans : EncodedDomain Parameter).width sizes = 1 := by
+  simp [booleans, fixed, ofCodec]
+  decide
 
 end Polytime2.EncodedDomain
