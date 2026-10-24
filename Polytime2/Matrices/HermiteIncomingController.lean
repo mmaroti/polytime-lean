@@ -53,20 +53,19 @@ private def updateAllowed (rows columns workspace pivots : MvPolynomial Paramete
 private noncomputable def update (rows columns workspace pivots : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (selected : ∀ name, (context rows columns pivots name).Carrier sizes)
     (state : (hermiteColumnState rows columns workspace).Carrier sizes) (token : (arrayPosition pivots).Carrier sizes) :
-    (hermiteColumnState rows columns workspace).Carrier sizes := by
-  classical
-  exact if valid : updateAllowed rows columns workspace pivots sizes selected state token then
-    (hermiteIncomingStageWithin rows columns workspace pivots).compute sizes
-      ⟨updateArguments rows columns workspace pivots sizes selected state token, valid⟩ else state
+    (hermiteColumnState rows columns workspace).Carrier sizes :=
+  ArrayFold.extend (updateAllowed rows columns workspace pivots sizes selected)
+    (fun state token valid => (hermiteIncomingStageWithin rows columns workspace pivots).compute sizes
+      ⟨updateArguments rows columns workspace pivots sizes selected state token, valid⟩) state token
 
 private theorem update_realizable (rows columns workspace pivots : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (context rows columns pivots) (arrayPosition pivots) (hermiteColumnState rows columns workspace)
       (updateAllowed rows columns workspace pivots) (update rows columns workspace pivots)).Realizable := by
-  classical
+  apply arrayFoldStep_of_partial_realizable
   let step := arrayFoldStep (context rows columns pivots) (arrayPosition pivots)
     (hermiteColumnState rows columns workspace) (updateAllowed rows columns workspace pivots)
     (update rows columns workspace pivots)
-  have executed := (hermiteIncomingStageWithin_realizable rows columns workspace pivots).onResults
+  exact (hermiteIncomingStageWithin_realizable rows columns workspace pivots).onResults
     step.inputDomains step.precondition
     (fun name sizes arguments => updateArguments rows columns workspace pivots sizes
       (fun original => arguments.val (.inl original)) (arguments.val (.inr false)) (arguments.val (.inr true)) name)
@@ -76,15 +75,8 @@ private theorem update_realizable (rows columns workspace pivots : MvPolynomial 
       · exact Realizable.argument step.inputDomains (.inl false) step.precondition
       · exact Realizable.argument step.inputDomains (.inl true) step.precondition
       · exact Realizable.argument step.inputDomains (.inr true) step.precondition
-      · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) false).withArguments
-          step.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition step.precondition (by intros; trivial)
-      · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) true).withArguments
-          step.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition step.precondition (by intros; trivial))
-  apply executed.withSpecification step.precondition step.compute (by intros; assumption)
-  intro sizes arguments valid
-  have permitted : updateAllowed rows columns workspace pivots sizes
-      (fun original => arguments (.inl original)) (arguments (.inr false)) (arguments (.inr true)) := valid
-  simp only [step, arrayFoldStep, update, dite_eq_left permitted, Computation.onResults]
+      · exact (Realizable.argument step.inputDomains (.inr false) step.precondition).fst
+      · exact (Realizable.argument step.inputDomains (.inr false) step.precondition).snd)
 
 private def initialAllowed (rows columns width pivots : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (selected : ∀ name, (context rows columns pivots name).Carrier sizes)
@@ -139,7 +131,7 @@ private theorem preserves (rows columns width pivots : MvPolynomial Parameter �
     invariant rows columns width pivots sizes selected initial (index.val + 1)
       (update rows columns (hermiteIncomingWorkspace width pivots) pivots sizes selected state index) := by
   have permitted := permits rows columns width pivots sizes selected initial state valid index before
-  simp only [update, dite_eq_left permitted]
+  simp only [update, ArrayFold.extend_of_allowed permitted]
   intro selectedRows pivotColumns rowEquation columnEquation
   have narrowed := hermiteIncomingStageWithin_correct rows columns (hermiteIncomingWorkspace width pivots) pivots sizes
     ⟨updateArguments rows columns (hermiteIncomingWorkspace width pivots) pivots sizes selected state index, permitted⟩
@@ -242,7 +234,7 @@ theorem hermiteIncomingController_correct (rows columns width pivots : MvPolynom
     (invariant rows columns width pivots sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr ())))
     (starts rows columns width pivots sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr ())))
     (fun index state before => preserves rows columns width pivots sizes (fun name => arguments.val (.inl name))
-      (arguments.val (.inr ())) state arguments.property index before) (MvPolynomial.eval sizes pivots) le_rfl
+      (arguments.val (.inr ())) state arguments.property index before)
   exact complete selectedRows pivotColumns rowEquation columnEquation
 
 /-- The complete traversal preserves the actual presentation and unimodular left basis. -/

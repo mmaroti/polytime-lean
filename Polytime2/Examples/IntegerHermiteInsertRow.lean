@@ -181,7 +181,7 @@ example {HostParameter Parameter : Type} [Fintype HostParameter] [Fintype Parame
   (integerHermiteInsertAtSize_realizable rows columns width names rankName).tm0
 
 private noncomputable def storedArguments :
-    (integerHermiteInsertStoredRank (1 : MvPolynomial Empty ℕ) 1 2).Arguments Empty.elim :=
+    (integerHermiteInsertHost (1 : MvPolynomial Empty ℕ) 1 2).Arguments Empty.elim :=
   fun _ name => match name with
     | 0 => (⟨0, ⟨Fin.elim0, by intro index; exact index.elim0⟩,
         ⟨Fin.elim0, by intro index; exact index.elim0⟩⟩, ⟨0, by norm_num⟩)
@@ -189,7 +189,7 @@ private noncomputable def storedArguments :
     | 2 => ⟨1, by intro row column; simp only [Matrix.one_apply]; split_ifs <;> norm_num⟩
 
 private theorem storedValid :
-    (integerHermiteInsertStoredRank (1 : MvPolynomial Empty ℕ) 1 2).precondition Empty.elim storedArguments := by
+    (integerHermiteInsertHost (1 : MvPolynomial Empty ℕ) 1 2).precondition Empty.elim storedArguments := by
   refine ⟨?_, ?_, ?_⟩
   · rintro ⟨index, _⟩
     exact index.elim0
@@ -198,30 +198,24 @@ private theorem storedValid :
   · intro row column before
     exact row.elim0
 
-example : (((integerHermiteInsertStoredRank (1 : MvPolynomial Empty ℕ) 1 2).compute Empty.elim
-    ⟨storedArguments, storedValid⟩).1 (.inr ())).val = 0 := rfl
-
-example {Parameter : Type} [Fintype Parameter] (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerHermiteInsertStoredRank rows columns width).TM0Realizable :=
-  (integerHermiteInsertStoredRank_realizable rows columns width).tm0
-
-example {Parameter : Type} [Fintype Parameter] (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteInsertStoredRank rows columns width).Arguments sizes //
-      (integerHermiteInsertStoredRank rows columns width).precondition sizes arguments}) :
-    (((integerHermiteInsertStoredRank rows columns width).compute sizes arguments).1 (.inr ())).val =
-      (arguments.val () 0).1.1 :=
-  integerHermiteInsertStoredRank_count rows columns width sizes arguments
+example :
+    let result := (integerHermiteInsertHost (1 : MvPolynomial Empty ℕ) 1 2).compute Empty.elim
+      ⟨storedArguments, storedValid⟩
+    result.1.2.val * (storedArguments () 1).val = result.1.1.val := by
+  have preserved := integerHermiteInsertHost_preserves 1 1 2 Empty.elim
+    ⟨storedArguments, storedValid⟩ (storedArguments () 1).val 1
+    (by simp [storedArguments]) (by simp [storedArguments])
+  simpa only [Matrix.mul_one] using preserved.1
 
 private noncomputable def oldStoredArguments :
-    (integerHermiteInsertStoredRank (2 : MvPolynomial Empty ℕ) 2 3).Arguments Empty.elim :=
+    (integerHermiteInsertHost (2 : MvPolynomial Empty ℕ) 2 3).Arguments Empty.elim :=
   fun _ name => match name with
     | 0 => (⟨1, Fin.castLEEmb (by norm_num), Fin.castLEEmb (by norm_num)⟩, ⟨1, by norm_num⟩)
     | 1 => oldPivotArguments true 2
     | 2 => oldPivotArguments true 3
 
 private theorem oldStoredValid :
-    (integerHermiteInsertStoredRank (2 : MvPolynomial Empty ℕ) 2 3).precondition Empty.elim oldStoredArguments := by
+    (integerHermiteInsertHost (2 : MvPolynomial Empty ℕ) 2 3).precondition Empty.elim oldStoredArguments := by
   refine ⟨?_, ?_, ?_⟩
   · rintro ⟨index, equal⟩
     have bound : index.val < 1 := index.isLt
@@ -236,8 +230,14 @@ private theorem oldStoredValid :
     have order : column.val < row.val := before
     omega
 
-example : (((integerHermiteInsertStoredRank (2 : MvPolynomial Empty ℕ) 2 3).compute Empty.elim
-    ⟨oldStoredArguments, oldStoredValid⟩).1 (.inr ())).val = 1 := rfl
+example :
+    let result := (integerHermiteInsertHost (2 : MvPolynomial Empty ℕ) 2 3).compute Empty.elim
+      ⟨oldStoredArguments, oldStoredValid⟩
+    result.1.2.val * (oldStoredArguments () 1).val = result.1.1.val ∧ IsUnit result.1.2.val.det := by
+  have preserved := integerHermiteInsertHost_preserves 2 2 3 Empty.elim
+    ⟨oldStoredArguments, oldStoredValid⟩ (oldStoredArguments () 1).val 1
+    (by simp [oldStoredArguments, oldPivotArguments]) (by simp [oldStoredArguments, oldPivotArguments])
+  simpa only [Matrix.mul_one] using preserved
 
 private noncomputable def namedFirstArguments :
     (integerHermiteInsertAtSize (1 : MvPolynomial Empty ℕ) 1 2 Empty.elim ()).Arguments (fun _ => 0)

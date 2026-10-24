@@ -52,32 +52,12 @@ noncomputable def integerRectangularDiagonalWithBases (rows columns rank diagona
 
 theorem integerRectangularDiagonalWithBases_realizable (rows columns rank diagonalWidth basisWidth : MvPolynomial Parameter ℕ) :
     (integerRectangularDiagonalWithBases rows columns rank diagonalWidth basisWidth).Realizable := by
-  let computation := integerRectangularDiagonalWithBases rows columns rank diagonalWidth basisWidth
-  let diagonal := (binaryNaturalsOfWidth (diagonalWidth)).arrayOfLength rank
-  let matrix := integerMatrices rank rank (basisWidth)
-  have entries := (pairProjection_realizable diagonal (matrix.prod matrix) false).withPrecondition computation.precondition
-    (by intros; trivial)
-  have bases := (pairProjection_realizable diagonal (matrix.prod matrix) true).withPrecondition computation.precondition
-    (by intros; trivial)
-  have first := (bases.followedBy (pairProjection_realizable matrix matrix false) rfl (by intros; trivial)).followedBy
-    (extendIntegerBasis_realizable rows rank (basisWidth)) rfl (by
-      intro sizes arguments valid
-      exact valid.1)
-  have second := (bases.followedBy (pairProjection_realizable matrix matrix true) rfl (by intros; trivial)).followedBy
-    (extendIntegerBasis_realizable columns rank (basisWidth)) rfl (by
-      intro sizes arguments valid
-      exact valid.2)
-  have fullDiagonal := entries.followedBy
-    (integerRectangularDiagonal_realizable rows columns rank (diagonalWidth)) rfl (by intros; trivial)
-  have fullBases := Realizable.pairOutputs computation.inputDomains
-    (integerMatrices rows rows (basisWidth + 1))
-    (integerMatrices columns columns (basisWidth + 1)) computation.precondition _ _ first second
-  have complete := Realizable.pairOutputs computation.inputDomains
-    (integerMatrices rows columns ((diagonalWidth) + 1))
-    ((integerMatrices rows rows (basisWidth + 1)).prod
-      (integerMatrices columns columns (basisWidth + 1)))
-    computation.precondition _ _ fullDiagonal fullBases
-  exact complete.withSpecification computation.precondition computation.compute
-    (by intros; assumption) (by intros; rfl)
+  have mapped := (integerRectangularDiagonal_realizable rows columns rank diagonalWidth).prodMap
+    ((extendIntegerBasis_realizable rows rank basisWidth).prodMap
+      (extendIntegerBasis_realizable columns rank basisWidth))
+  exact mapped.withSpecification
+    (integerRectangularDiagonalWithBases rows columns rank diagonalWidth basisWidth).precondition
+    (integerRectangularDiagonalWithBases rows columns rank diagonalWidth basisWidth).compute
+    (by intro sizes arguments valid; exact ⟨trivial, valid⟩) (by intros; rfl)
 
 end Polytime2.Computation

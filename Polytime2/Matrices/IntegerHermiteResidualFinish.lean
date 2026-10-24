@@ -54,13 +54,8 @@ private theorem residual_realizable (rows columns width length : MvPolynomial Pa
     (admissible : ∀ sizes, (∀ name, (inputs rows columns width length name).Carrier sizes) → Prop) :
     (Computation.mk (inputs rows columns width length) (arraySearchResult columns) admissible
       (fun sizes arguments => residual rows columns width length sizes arguments.val)).Realizable := by
-  exact (integerResidualPivot_realizable rows columns width).onResults (inputs rows columns width length) admissible
-    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 1)
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument (inputs rows columns width length) 0 admissible
-      · exact Realizable.argument (inputs rows columns width length) 1 admissible)
+  exact (integerResidualPivot_realizable rows columns width).onArguments (inputs rows columns width length) admissible
+    (fun choice => match choice with | false => 0 | true => 1) (by intro choice; cases choice <;> rfl) (by intros; trivial)
 
 private def extensionArguments (rows columns width length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : ∀ name, (inputs rows columns width length name).Carrier sizes)
@@ -112,9 +107,8 @@ theorem integerHermiteResidualFinish_realizable (rows columns width length : MvP
       computation.inputDomains (MultiTape.oneTape 1) (by intros; rfl)).withPrecondition admissible (by intros; trivial)
     have second := ((integerMatrixWiden_realizable rows rows width (width + 1) (2 * width + 1) (by ring)).withArguments
       computation.inputDomains (MultiTape.oneTape 2) (by intros; rfl)).withPrecondition admissible (by intros; trivial)
-    have matrices := Realizable.pairOutputs computation.inputDomains _ _ admissible _ _ first second
-    have complete := Realizable.pairOutputs computation.inputDomains _ _ admissible _ _ matrices
-      (residual_realizable rows columns width length admissible)
+    have matrices := first.prodMk second
+    have complete := matrices.prodMk (residual_realizable rows columns width length admissible)
     apply complete.withSpecification admissible _ (by intros; assumption)
     intro sizes arguments valid
     change (widened rows columns width length sizes arguments,
@@ -151,8 +145,7 @@ theorem integerHermiteResidualFinish_realizable (rows columns width length : MvP
         · exact Realizable.argument computation.inputDomains 1 admissible
         · exact Realizable.argument computation.inputDomains 2 admissible
         · exact Realizable.argument computation.inputDomains 3 admissible)
-    have complete := Realizable.pairOutputs computation.inputDomains _ _ admissible _ _ extended
-      (residual_realizable rows columns width length admissible)
+    have complete := extended.prodMk (residual_realizable rows columns width length admissible)
     apply complete.withSpecification admissible _ (by intros; assumption)
     intro sizes arguments valid
     dsimp only [computation, integerHermiteResidualFinish]

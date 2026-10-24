@@ -91,9 +91,8 @@ theorem gcd_realizable : gcd.Realizable := by
       omega)
     (by
       intro name
-      exact extraBitWiden_realizable.onResults gcd.inputDomains gcd.precondition
-        (fun _ _ arguments => arguments.val name) (by intros; trivial)
-        (by intro _; exact Realizable.argument _ name _))
+      exact extraBitWiden_realizable.onArguments gcd.inputDomains gcd.precondition
+        (fun _ => name) (by intro _; rfl) (by intros; trivial))
   have narrowed := widened.followedBy extraBitNarrow_realizable rfl (by intros; trivial)
   exact narrowed.withSpecification gcd.precondition gcd.compute
     (by intros; trivial) (by

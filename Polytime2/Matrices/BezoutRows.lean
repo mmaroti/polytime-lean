@@ -54,18 +54,20 @@ theorem coefficients_realizable (rows columns width : MvPolynomial Parameter ℕ
     ⟨(arguments.val 3).val (if choice then arguments.val 1 else arguments.val 0) (arguments.val 2),
       (arguments.val 3).property _ _⟩
   have elementReady (choice : Bool) : (Computation.mk inputs (binaryIntegers width) allowed (element choice)).Realizable := by
-    exact (integerMatrixEntry_realizable rows columns width).onResults inputs allowed
-      (fun name _ arguments => match name with
-        | 0 => if choice then arguments.val 1 else arguments.val 0
-        | 1 => arguments.val 2
-        | 2 => arguments.val 3) (by intros; trivial) (by
+    have selected := (integerMatrixEntry_realizable rows columns width).onArguments inputs allowed
+      (fun name => match name with
+        | 0 => if choice then 1 else 0
+        | 1 => 2
+        | 2 => 3) (by
           intro name
           fin_cases name
           · cases choice
-            · exact Realizable.argument inputs 0 allowed
-            · exact Realizable.argument inputs 1 allowed
-          · exact Realizable.argument inputs 2 allowed
-          · exact Realizable.argument inputs 3 allowed)
+            · rfl
+            · rfl
+          · rfl
+          · rfl) (by intros; trivial)
+    exact selected.withSpecification allowed (element choice)
+      (by intros; assumption) (by intro sizes arguments valid; cases choice <;> rfl)
   exact (Realizable.Internal.BezoutCoefficients.realizable width).onResults inputs allowed element
     (by intros; trivial) elementReady
 

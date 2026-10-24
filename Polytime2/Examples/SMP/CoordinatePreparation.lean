@@ -93,16 +93,7 @@ theorem coordinateConversion_realizable (length : MvPolynomial Parameter ℕ) :
     ⟨(fun choice => if choice then (Sum.inl false : Bool ⊕ Unit) else .inr ()), by
       intro first second equal; cases first <;> cases second <;> simp_all⟩
     (by intro choice; cases choice <;> rfl)
-  have values := Realizable.pairOutputs domains slot (slot.arrayOfLength length) (fun _ _ => True)
-    (fun _ arguments => checkedQuotientBlock (arguments.val (.inr ())) (arguments.val (.inl true)))
-    (fun _ arguments => fun index => checkedQuotientBlock (arguments.val (.inr ())) (arguments.val (.inl false) index))
-    target generators
-  have result := Realizable.pairOutputs domains image (slot.prod (slot.arrayOfLength length)) (fun _ _ => True)
-    (fun _ arguments => arguments.val (.inr ()))
-    (fun _ arguments => (checkedQuotientBlock (arguments.val (.inr ())) (arguments.val (.inl true)),
-      fun index => checkedQuotientBlock (arguments.val (.inr ())) (arguments.val (.inl false) index)))
-    retained values
-  have combined := closure.letThen result (fun _ => rfl) rfl (by intros; trivial)
+  have combined := closure.letThen (retained.prodMk (target.prodMk generators)) (fun _ => rfl) rfl (by intros; trivial)
   exact combined.withSpecification computation.precondition computation.compute (by intros; trivial) (by intros; rfl)
 
 end Polytime2.SMP

@@ -130,10 +130,7 @@ theorem zeroExtendEncoding_realizable (source target : EncodedDomain.{0, 0} Para
   let zeros := EncodedDomain.bitVectors extra
   have allocated := (zeroBits_realizable extra).withArguments inputs
     ⟨Empty.elim, by intro impossible; exact impossible.elim⟩ (by intro impossible; exact impossible.elim)
-  have pair := Realizable.pairOutputs inputs source zeros (fun _ _ => True)
-    (fun _ arguments => arguments.val ())
-    (fun sizes _ => BitVec.ofNat (MvPolynomial.eval sizes extra) 0) (copy_realizable source) allocated
-  exact pair.withEncodedOutput target (encodingMap source target compute).compute
+  exact ((copy_realizable source).prodMk (right := zeros) allocated).withEncodedOutput target (encodingMap source target compute).compute
     (by intro sizes; simpa [zeros, EncodedDomain.width, EncodedDomain.prod] using sameWidth sizes)
     (by
       intro sizes arguments

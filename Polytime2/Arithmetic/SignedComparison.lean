@@ -72,9 +72,8 @@ theorem integerLess_realizable (width : MvPolynomial Parameter ℕ) :
   have sign (name : Bool) :
       (Computation.mk inputs booleans (fun _ _ => True)
         (fun _ arguments => SignedEncoding.negative (arguments.val name).val)).Realizable := by
-    exact (integerNegative_realizable width).onResults inputs (fun _ _ => True)
-      (fun _ _ arguments => arguments.val name) (by intros; trivial)
-      (fun _ => Realizable.argument inputs name (fun _ _ => True))
+    exact (integerNegative_realizable width).onArguments inputs (fun _ _ => True)
+      (fun _ => name) (by intro _; rfl) (by intros; trivial)
   have magnitudes (reverse : Bool) :
       (Computation.mk inputs booleans (fun _ _ => True)
         (fun _ arguments => decide
@@ -85,9 +84,8 @@ theorem integerLess_realizable (width : MvPolynomial Parameter ℕ) :
         (arguments.val (if reverse then !name else name)).property⟩)
       (by intros; trivial) (by
         intro name
-        exact (integerMagnitude_realizable width).onResults inputs (fun _ _ => True)
-          (fun _ _ arguments => arguments.val (if reverse then !name else name)) (by intros; trivial)
-          (fun _ => Realizable.argument inputs (if reverse then !name else name) (fun _ _ => True)))
+        exact (integerMagnitude_realizable width).onArguments inputs (fun _ _ => True)
+          (fun _ => (if reverse then !name else name)) (by intro _; rfl) (by intros; trivial))
     cases reverse <;> exact compared
   have combined := (booleanOperation_realizable (Parameter := Parameter) (Argument := Bool × Bool)
     (fun flags => if flags (false, false) != flags (false, true) then flags (false, false)
@@ -110,9 +108,8 @@ theorem integerLess_realizable (width : MvPolynomial Parameter ℕ) :
 private theorem integerReverseLess_realizable (width : MvPolynomial Parameter ℕ) :
     (Computation.mk (fun _ : Bool => binaryIntegers width) booleans (fun _ _ => True)
       (fun _ arguments => decide ((arguments.val true).val < (arguments.val false).val))).Realizable := by
-  exact (integerLess_realizable width).onResults (fun _ => binaryIntegers width) (fun _ _ => True)
-    (fun name _ arguments => arguments.val (!name)) (by intros; trivial)
-    (fun name => Realizable.argument (fun _ => binaryIntegers width) (!name) (fun _ _ => True))
+  exact (integerLess_realizable width).onArguments (fun _ => binaryIntegers width) (fun _ _ => True)
+    (fun name => (!name)) (by intro name; rfl) (by intros; trivial)
 
 noncomputable def integerEqual (width : MvPolynomial Parameter ℕ) : Computation Parameter Bool where
   inputDomains _ := binaryIntegers width

@@ -73,14 +73,11 @@ private noncomputable def transformed (rows columns matrixWidth targetWidth : Mv
 private theorem transformed_realizable (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
     (transformed rows columns matrixWidth targetWidth).Realizable := by
   have actual := smith_realizable rows columns matrixWidth targetWidth
-  have payload := actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have bases := payload.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have left := bases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
   apply (integerMatrixMulVec_realizable rows rows (smithReductionLeftWidth rows columns matrixWidth) targetWidth).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
   intro choice
   cases choice
-  · exact left
+  · exact actual.snd.snd.fst
   · exact Realizable.argument _ true _
 
 /-- Decide whether an arbitrary rectangular integer system has an integer solution. -/
@@ -98,15 +95,12 @@ noncomputable def integerSystemFeasible
 theorem integerSystemFeasible_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
     (integerSystemFeasible rows columns matrixWidth targetWidth).Realizable := by
-  have payload := (smith_realizable rows columns matrixWidth targetWidth).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have diagonal := payload.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
   apply (integerDiagonalFeasible_realizable rows columns (smithReductionDiagonalWidth rows columns matrixWidth)
     (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth)).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
   intro choice
   cases choice
-  · exact diagonal
+  · exact (((smith_realizable rows columns matrixWidth targetWidth).snd).fst)
   · exact transformed_realizable rows columns matrixWidth targetWidth
 
 set_option maxHeartbeats 4000000 in
@@ -139,15 +133,12 @@ private noncomputable def coordinates (rows columns matrixWidth targetWidth : Mv
 
 private theorem coordinates_realizable (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
     (coordinates rows columns matrixWidth targetWidth).Realizable := by
-  have payload := (smith_realizable rows columns matrixWidth targetWidth).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have diagonal := payload.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
   apply (integerDiagonalSolution_realizable rows columns (smithReductionDiagonalWidth rows columns matrixWidth)
     (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth)).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
   intro choice
   cases choice
-  · exact diagonal
+  · exact (((smith_realizable rows columns matrixWidth targetWidth).snd).fst)
   · exact transformed_realizable rows columns matrixWidth targetWidth
 
 /-- Derive the original-coordinate witness capacity from the mathematical input sizes. -/
@@ -171,17 +162,13 @@ noncomputable def integerSystemWitness
 theorem integerSystemWitness_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
     (integerSystemWitness rows columns matrixWidth targetWidth).Realizable := by
-  have payload := (smith_realizable rows columns matrixWidth targetWidth).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have bases := payload.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have right := bases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
   apply (integerMatrixMulVec_realizable columns columns (smithReductionRightWidth rows columns matrixWidth)
     (smithReductionDiagonalWidth rows columns matrixWidth +
       (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth))).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
   intro choice
   cases choice
-  · exact right
+  · exact ((((smith_realizable rows columns matrixWidth targetWidth).snd).snd).snd)
   · exact coordinates_realizable rows columns matrixWidth targetWidth
 
 set_option maxHeartbeats 4000000 in
@@ -223,19 +210,15 @@ set_option maxHeartbeats 4000000 in
 theorem integerSystemQuotientCoordinates_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
     (integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).Realizable := by
-  have payload := (smith_realizable rows columns matrixWidth targetWidth).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have diagonal := payload.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have bases := payload.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have left := bases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
+  have payload := (smith_realizable rows columns matrixWidth targetWidth).snd
   apply (integerMatrixCyclicCoordinates_realizable rows columns
     (smithReductionDiagonalWidth rows columns matrixWidth)
     (smithReductionLeftWidth rows columns matrixWidth) targetWidth).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
   intro name
   fin_cases name
-  · exact diagonal
-  · exact left
+  · exact payload.fst
+  · exact payload.snd.fst
   · exact Realizable.argument _ true _
 
 

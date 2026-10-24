@@ -54,16 +54,17 @@ theorem integerTwoProducts_realizable (width : MvPolynomial Parameter ℕ) :
         else (if name then arguments.val 1 else arguments.val 0)), trivial⟩
   have ready (choice : Bool) :
       (Computation.mk inputs (binaryIntegers (2 * width)) (fun _ _ => True) (product choice)).Realizable := by
-    exact (integerMultiply_realizable width).onResults inputs (fun _ _ => True)
-      (fun name _ arguments => if choice then (if name then arguments.val 3 else arguments.val 2)
-        else (if name then arguments.val 1 else arguments.val 0))
-      (by intros; trivial) (by
+    have selected := (integerMultiply_realizable width).onArguments inputs (fun _ _ => True)
+      (fun name => if choice then (if name then 3 else 2)
+        else (if name then 1 else 0)) (by
         intro name
         cases choice <;> cases name
-        · exact Realizable.argument inputs 0 (fun _ _ => True)
-        · exact Realizable.argument inputs 1 (fun _ _ => True)
-        · exact Realizable.argument inputs 2 (fun _ _ => True)
-        · exact Realizable.argument inputs 3 (fun _ _ => True))
+        · rfl
+        · rfl
+        · rfl
+        · rfl) (by intros; trivial)
+    exact selected.withSpecification (fun _ _ => True) (product choice)
+      (by intros; trivial) (by intro sizes arguments valid; cases choice <;> rfl)
   have added := (integerAdd_realizable (2 * width)).onResults inputs (fun _ _ => True) product
     (by intros; trivial) ready
   exact added.withSpecification (fun _ _ => True) (integerTwoProducts width).compute

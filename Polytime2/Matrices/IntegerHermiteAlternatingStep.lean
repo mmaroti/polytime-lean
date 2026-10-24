@@ -53,8 +53,7 @@ private noncomputable def firstMatrix (dimension width : MvPolynomial Parameter 
 
 private theorem firstMatrix_realizable (dimension width : MvPolynomial Parameter ℕ) :
     (firstMatrix dimension width).Realizable :=
-  (pairProjection_realizable _ (hermitePivotSelection dimension dimension) false).followedBy
-    (pairProjection_realizable _ _ false) rfl (by intros; trivial)
+  (pairProjection_realizable _ (hermitePivotSelection dimension dimension) false).fst
 
 private noncomputable def secondSweep (dimension width : MvPolynomial Parameter ℕ) :=
   ((firstMatrix dimension width).followedBy (integerMatrixTranspose dimension dimension (firstWidth dimension width))
@@ -86,15 +85,12 @@ private theorem stopped_realizable (dimension width : MvPolynomial Parameter ℕ
     (integerMatrixWiden_realizable dimension dimension (firstWidth dimension width) (1 + secondWidth dimension width)
       (capacity dimension width) (by dsimp [capacity]; ring)) rfl (by intros; trivial)
   let firstDomain := integerMatrices dimension dimension (firstWidth dimension width)
-  have left := (pairProjection_realizable (firstDomain.prod firstDomain) (hermitePivotSelection dimension dimension) false).followedBy
-    (pairProjection_realizable firstDomain firstDomain true) rfl (by intros; trivial)
   have identity := (integerIdentity_realizable dimension).onResults (context dimension width) (fun _ _ => True)
     (fun name => nomatch name) (by intros; trivial) (fun name => nomatch name)
   have right := identity.followedBy (integerMatrixWiden_realizable dimension dimension 1
     (firstWidth dimension width + secondWidth dimension width) (capacity dimension width)
     (by dsimp [capacity]; ring)) rfl (by intros; trivial)
-  have bases := Realizable.pairOutputs (context dimension width) _ _ (fun _ _ => True) _ _ left right
-  exact Realizable.pairOutputs (context dimension width) _ _ (fun _ _ => True) _ _ matrix bases
+  exact matrix.prodMk (((pairProjection_realizable (firstDomain.prod firstDomain) (hermitePivotSelection dimension dimension) false).snd).prodMk right)
 
 private noncomputable def continued (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
   inputDomains := context dimension width
@@ -112,21 +108,17 @@ private noncomputable def continued (dimension width : MvPolynomial Parameter �
 
 private theorem continued_realizable (dimension width : MvPolynomial Parameter ℕ) :
     (continued dimension width).Realizable := by
-  have pair := (secondSweep_realizable dimension width).followedBy
-    (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrix := ((pair.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)).followedBy
+  have pair := (secondSweep_realizable dimension width).fst
+  have matrix := ((pair.fst).followedBy
     (integerMatrixTranspose_realizable dimension dimension (secondWidth dimension width)) rfl (by intros; trivial)).followedBy
     (integerMatrixWiden_realizable dimension dimension (secondWidth dimension width) (1 + firstWidth dimension width)
       (capacity dimension width) (by dsimp [capacity]; ring)) rfl (by intros; trivial)
   let firstDomain := integerMatrices dimension dimension (firstWidth dimension width)
-  have left := (pairProjection_realizable (firstDomain.prod firstDomain) (hermitePivotSelection dimension dimension) false).followedBy
-    (pairProjection_realizable firstDomain firstDomain true) rfl (by intros; trivial)
-  have right := ((pair.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)).followedBy
+  have right := ((pair.snd).followedBy
     (integerMatrixTranspose_realizable dimension dimension (secondWidth dimension width)) rfl (by intros; trivial)).followedBy
     (integerMatrixWiden_realizable dimension dimension (secondWidth dimension width) (1 + firstWidth dimension width)
       (capacity dimension width) (by dsimp [capacity]; ring)) rfl (by intros; trivial)
-  have bases := Realizable.pairOutputs (context dimension width) _ _ (fun _ _ => True) _ _ left right
-  exact Realizable.pairOutputs (context dimension width) _ _ (fun _ _ => True) _ _ matrix bases
+  exact matrix.prodMk (((pairProjection_realizable (firstDomain.prod firstDomain) (hermitePivotSelection dimension dimension) false).snd).prodMk right)
 
 private noncomputable def finish (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
   inputDomains := context dimension width
@@ -196,30 +188,5 @@ theorem integerHermiteAlternatingStepRaw_correct (dimension width : MvPolynomial
     dsimp only at secondCorrect
     rw [← secondCorrect]
     rfl
-
-/-- The pair retains the presentation and unimodularity of both actual bases. -/
-theorem integerHermiteAlternatingStepRaw_preserves (dimension width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteAlternatingStepRaw dimension width).Arguments sizes //
-      (integerHermiteAlternatingStepRaw dimension width).precondition sizes arguments}) :
-    let result := (integerHermiteAlternatingStepRaw dimension width).compute sizes arguments
-    result.2.1.val * (arguments.val ()).val * result.2.2.val = result.1.val ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det := by
-  have preserved := IntegerMatrix.hermiteAlternatingStep_preserves (arguments.val ()).val
-  rw [← integerHermiteAlternatingStepRaw_correct dimension width sizes arguments] at preserved
-  exact preserved
-
-/-- Positive lower triangular input remains suitable for the next alternating pair. -/
-theorem integerHermiteAlternatingStepRaw_triangular (dimension width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteAlternatingStepRaw dimension width).Arguments sizes //
-      (integerHermiteAlternatingStepRaw dimension width).precondition sizes arguments})
-    (lower : (arguments.val ()).val.IsLowerTriangular)
-    (positive : ∀ index, 0 < (arguments.val ()).val index index) :
-    let result := (integerHermiteAlternatingStepRaw dimension width).compute sizes arguments
-    result.1.val.IsLowerTriangular ∧ ∀ index, 0 < result.1.val index index := by
-  have shape := IntegerMatrix.hermiteAlternatingStep_triangular (arguments.val ()).val lower positive
-  rw [← integerHermiteAlternatingStepRaw_correct dimension width sizes arguments] at shape
-  exact shape
 
 end Polytime2.Computation

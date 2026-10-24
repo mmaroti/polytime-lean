@@ -106,13 +106,7 @@ theorem scanQueueStep_realizable (source state : EncodedDomain.{0, 0} Parameter)
   have tail := (arrayTail_realizable state length).withArguments computation.inputDomains
     ⟨(fun _ => false), by intro first second _; cases first; cases second; rfl⟩
     (by intro name; cases name; rfl)
-  have pair := Realizable.pairOutputs computation.inputDomains (state.arrayOfLength length) state
-    (fun _ _ => True)
-    (fun sizes arguments => Fin.tail (successorValues length sizes (arguments.val false)))
-    (fun sizes arguments => update sizes
-      (successorValues length sizes (arguments.val false) (Fin.last (MvPolynomial.eval sizes length)))
-      (arguments.val true)) tail computed
-  exact pair.reinterpretOutput computation.outputDomain
+  exact (tail.prodMk (left := state.arrayOfLength length) (right := state) computed).reinterpretOutput computation.outputDomain
     (fun sizes parts => snocValues length sizes parts.1 parts.2)
     (by intro sizes; simp [computation, scanQueueStep, EncodedDomain.arrayOfLength, EncodedDomain.ofCodec, Nat.add_mul])
     (fun sizes parts => arraySnoc_encode_bits state length sizes _ _)

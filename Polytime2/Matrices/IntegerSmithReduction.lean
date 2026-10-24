@@ -72,15 +72,11 @@ private theorem reduce_realizable (rows columns width : MvPolynomial Parameter �
     (reduce rows columns width).Realizable := by
   let computation := reduce rows columns width
   have actual := integerHermiteReduction_realizable rows columns width
-  have rank := actual.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrix := (actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)).followedBy
-    (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have prepared := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ rank matrix
   apply (integerRectangularCleanupHost_realizable rows columns (initialWidth rows columns width)).onResults
     computation.inputDomains computation.precondition _ (fun sizes arguments => permitted rows columns width sizes arguments)
   intro singleton
   cases singleton
-  exact prepared
+  exact (actual.fst.prodMk ((actual.snd).fst))
 
 /-- Smith reduction of arbitrary signed rectangular input with rank and both bases. -/
 noncomputable def integerSmithReduction (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
@@ -104,15 +100,8 @@ theorem integerSmithReduction_realizable (rows columns width : MvPolynomial Para
   let computation := integerSmithReduction rows columns width
   have first := integerHermiteReduction_realizable rows columns width
   have second := reduce_realizable rows columns width
-  have rank := first.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrix := second.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldBases := (first.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have newBases := second.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have oldLeft := oldBases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldRight := oldBases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have newLeft := newBases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have newRight := newBases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  have oldBases := (first.snd).snd
+  have newBases := second.snd
   have bases := (integerBasisCompose_realizable rows columns (leftWidth rows columns width) (rightWidth rows columns width)
     (smithReductionDiagonalWidth rows columns width) (smithReductionDiagonalWidth rows columns width)).onResults computation.inputDomains computation.precondition
     (fun name sizes arguments =>
@@ -122,12 +111,11 @@ theorem integerSmithReduction_realizable (rows columns width : MvPolynomial Para
     (by intros; trivial) (by
       intro name
       fin_cases name
-      · exact oldLeft
-      · exact oldRight
-      · exact newLeft
-      · exact newRight)
-  have full := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ matrix bases
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ rank full
+      · exact oldBases.fst
+      · exact oldBases.snd
+      · exact newBases.fst
+      · exact newBases.snd)
+  exact first.fst.prodMk (second.fst.prodMk bases)
 
 set_option maxHeartbeats 4000000 in
 private theorem cleanup_form (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

@@ -43,10 +43,7 @@ noncomputable def arraySnoc (element : EncodedDomain Parameter) (length : MvPoly
 theorem arraySnoc_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (arraySnoc element length).Realizable := by
   let computation := arraySnoc element length
-  have pair := Realizable.pairOutputs computation.inputDomains (element.arrayOfLength length) element
-    computation.precondition (fun _ arguments => arguments.val false) (fun _ arguments => arguments.val true)
-    (Realizable.argument computation.inputDomains false computation.precondition)
-    (Realizable.argument computation.inputDomains true computation.precondition)
+  have pair := (Realizable.argument computation.inputDomains false computation.precondition).prodMk (Realizable.argument computation.inputDomains true computation.precondition)
   apply pair.withEncodedOutput computation.outputDomain computation.compute
   · intro sizes
     change MvPolynomial.eval sizes ((length + 1) * element.widthPolynomial) =

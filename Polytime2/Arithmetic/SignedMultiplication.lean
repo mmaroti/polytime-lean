@@ -88,8 +88,7 @@ theorem integerMultiply_realizable (width : MvPolynomial Parameter ℕ) :
     exact signs.withSpecification (fun _ _ => True) _ (by intros; trivial) (by
       intro sizes arguments valid
       exact multiplication_sign (arguments false).val (arguments true).val)
-  have parts := Realizable.pairOutputs inputs booleans output (fun _ _ => True) _ _ negative product
-  have constructed := parts.followedBy (Realizable.Internal.integerOfParts_realizable (2 * width)) rfl (by
+  have constructed := (negative.prodMk product).followedBy (Realizable.Internal.integerOfParts_realizable (2 * width)) rfl (by
     intro sizes arguments valid
     change SignedEncoding.negative ((arguments false).val * (arguments true).val) = true →
       (arguments false).val.natAbs * (arguments true).val.natAbs ≠ 0

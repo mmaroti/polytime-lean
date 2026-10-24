@@ -34,21 +34,6 @@ open EncodedDomain
 
 variable {HostParameter Parameter : Type} [Fintype HostParameter] [Fintype Parameter]
 
-/-- A full matrix and its two square bases at a common entry width. -/
-noncomputable def integerMatrixPresentation (rows columns width : MvPolynomial Parameter ℕ) :=
-  (integerMatrices rows columns width).prod
-    ((integerMatrices rows rows width).prod (integerMatrices columns columns width))
-
-/-- Equal-width codec transport retains all three ordinary matrices. -/
-theorem integerMatrixPresentation_transport_values (rows columns sourceWidth targetWidth : MvPolynomial Parameter ℕ)
-    (sameWidth : sourceWidth = targetWidth)
-    (sameCodec : integerMatrixPresentation rows columns targetWidth = integerMatrixPresentation rows columns sourceWidth)
-    (sizes : Parameter → ℕ) (value : (integerMatrixPresentation rows columns sourceWidth).Carrier sizes) :
-    let converted : (integerMatrixPresentation rows columns targetWidth).Carrier sizes := sameCodec.symm ▸ value
-    (converted.1.val, converted.2.1.val, converted.2.2.val) = (value.1.val, value.2.1.val, value.2.2.val) := by
-  subst targetWidth
-  rfl
-
 private noncomputable def compactAtSizeInputs
     (rows columns matrixWidth leftWidth rightWidth : MvPolynomial HostParameter ℕ)
     (names : HostParameter → Parameter) : Fin 4 → EncodedDomain Parameter
@@ -113,8 +98,8 @@ theorem integerCompactAtSize_realizable
     (compactAtSizeValues rows columns matrixWidth leftWidth rightWidth names rankName) _
   intro name
   fin_cases name
-  · exact ready.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  · exact ready.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  · exact ready.fst
+  · exact ready.snd
   · exact ((integerMatrixRenamedView_realizable rows columns matrixWidth names).withArguments
       coordinates.inputDomains (MultiTape.oneTape 1) (by intros; rfl)).withPrecondition _ (by intros; trivial)
   · exact ((integerMatrixRenamedView_realizable rows rows leftWidth names).withArguments
@@ -161,48 +146,12 @@ theorem integerCompactAtSize_correct
       hermitePivotCoordinatesAtSize_injective rows columns names rankName sizes
         ⟨fun _ => arguments.val 0, arguments.property⟩⟩
 
-/-- Return the three matrices to the original host domains, preserving bits. -/
-noncomputable def integerCompactResultOriginalView
-    (rows columns matrixWidth leftWidth rightWidth : MvPolynomial HostParameter ℕ)
-    (names : HostParameter → Parameter) : Computation Parameter Unit :=
-  encodingMap
-    ((integerMatrices (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (MvPolynomial.rename names matrixWidth)).prod
-      ((integerMatrices (MvPolynomial.rename names rows) (MvPolynomial.rename names rows)
-        (MvPolynomial.rename names leftWidth)).prod
-      (integerMatrices (MvPolynomial.rename names columns) (MvPolynomial.rename names columns)
-        (MvPolynomial.rename names rightWidth))))
-    (((integerMatrices rows columns matrixWidth).prod
-      ((integerMatrices rows rows leftWidth).prod (integerMatrices columns columns rightWidth))).renameParameters names)
-    (fun sizes value =>
-      ((integerMatricesRenameEquiv rows columns matrixWidth names sizes).symm value.1,
-        (integerMatricesRenameEquiv rows rows leftWidth names sizes).symm value.2.1,
-        (integerMatricesRenameEquiv columns columns rightWidth names sizes).symm value.2.2))
-
-/-- Each matrix view retains its canonical word, so the whole result does too. -/
-theorem integerCompactResultOriginalView_realizable
-    (rows columns matrixWidth leftWidth rightWidth : MvPolynomial HostParameter ℕ)
-    (names : HostParameter → Parameter) :
-    (integerCompactResultOriginalView rows columns matrixWidth leftWidth rightWidth names).Realizable := by
-  apply encodingMap_realizable
-  · intro sizes
-    simp [EncodedDomain.width, integerMatrices, EncodedDomain.matrix,
-      EncodedDomain.arrayOfLength, EncodedDomain.reindex, binaryIntegers,
-      EncodedDomain.restrict, EncodedDomain.prod, MvPolynomial.eval_rename]
-  · intro sizes value
-    have matrixBits := integerMatricesRenameEquiv_symm_bits rows columns matrixWidth names sizes value.1
-    have leftBits := integerMatricesRenameEquiv_symm_bits rows rows leftWidth names sizes value.2.1
-    have rightBits := integerMatricesRenameEquiv_symm_bits columns columns rightWidth names sizes value.2.2
-    simp only [renameParameters_bits] at matrixBits leftBits rightBits
-    simp only [renameParameters_bits, bits_prod_encode, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
-    rw [← matrixBits, ← leftBits, ← rightBits]
-
 /-- Compaction returns the host result codec, independent of the named rank. -/
 noncomputable def integerCompactAtSizeOriginal
     (rows columns matrixWidth leftWidth rightWidth : MvPolynomial HostParameter ℕ)
     (names : HostParameter → Parameter) (rankName : Parameter) : Computation Parameter (Fin 4) :=
   (integerCompactAtSize rows columns matrixWidth leftWidth rightWidth names rankName).followedBy
-    (integerCompactResultOriginalView rows columns matrixWidth leftWidth rightWidth names) rfl (by intros; trivial)
+    (integerMatrixPresentationOriginalView rows columns matrixWidth leftWidth rightWidth names) rfl (by intros; trivial)
 
 /-- Compaction and the host result view are certified by composition. -/
 theorem integerCompactAtSizeOriginal_realizable
@@ -210,7 +159,7 @@ theorem integerCompactAtSizeOriginal_realizable
     (names : HostParameter → Parameter) (rankName : Parameter) :
     (integerCompactAtSizeOriginal rows columns matrixWidth leftWidth rightWidth names rankName).Realizable :=
   (integerCompactAtSize_realizable rows columns matrixWidth leftWidth rightWidth names rankName).followedBy
-    (integerCompactResultOriginalView_realizable rows columns matrixWidth leftWidth rightWidth names)
+    (integerMatrixPresentationOriginalView_realizable rows columns matrixWidth leftWidth rightWidth names)
     rfl (by intros; trivial)
 
 /-- Returning to host dimensions gives exactly the host pivot-permutation action. -/

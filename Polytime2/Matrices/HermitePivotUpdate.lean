@@ -56,8 +56,7 @@ theorem hermitePivotSelectionUpdate_realizable (rows columns : MvPolynomial Para
   have result (allowed : ∀ sizes, computation.Arguments sizes → Prop) :=
     (pairProjection_realizable (metadata.prod row) optional true).withPrecondition allowed (by intros; trivial)
   have old (allowed : ∀ sizes, computation.Arguments sizes → Prop) :=
-    ((pairProjection_realizable (metadata.prod row) optional false).followedBy
-      (pairProjection_realizable metadata row false) rfl (by intros; trivial)).withPrecondition allowed (by intros; trivial)
+    ((pairProjection_realizable (metadata.prod row) optional false).fst).withPrecondition allowed (by intros; trivial)
   apply Realizable.ofCases condition
   · exact (result computation.precondition).followedBy (arraySearchIsNone_realizable columns) rfl (by intros; trivial)
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = true
@@ -81,12 +80,9 @@ theorem hermitePivotSelectionUpdate_realizable (rows columns : MvPolynomial Para
     have extracted := (result allowed).followedBy (arraySearchFound_realizable columns) rfl (by
       intro sizes arguments valid
       exact present sizes ⟨arguments, valid⟩)
-    have source := ((pairProjection_realizable (metadata.prod row) optional false).followedBy
-      (pairProjection_realizable metadata row true) rfl (by intros; trivial)).withPrecondition allowed (by intros; trivial)
-    have coordinates := Realizable.pairOutputs computation.inputDomains row (boundedIndex columns) allowed
-      (fun _ arguments => (arguments.val ()).1.2) selected source extracted
-    have input := Realizable.pairOutputs computation.inputDomains metadata (row.prod (boundedIndex columns)) allowed
-      (fun _ arguments => (arguments.val ()).1.1) _ (old allowed) coordinates
+    have source := ((pairProjection_realizable (metadata.prod row) optional false).snd).withPrecondition allowed (by intros; trivial)
+    have coordinates := source.prodMk extracted
+    have input := (old allowed).prodMk coordinates
     have appended := input.followedBy (hermitePivotSelectionSnoc_realizable rows columns) rfl (by
       intro sizes arguments valid
       exact ⟨valid.1.1, valid.1.2 _ (Option.some_get (present sizes ⟨arguments, valid⟩)).symm⟩)

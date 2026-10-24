@@ -63,14 +63,10 @@ theorem arrayPack_realizable (element : EncodedDomain Parameter) (length : MvPol
       (boundedUnary length).Carrier sizes :=
     ⟨count (arguments.val false), Nat.lt_succ_of_le (count_le (arguments.val false))⟩
   have counted : (Computation.mk computation.inputDomains (boundedUnary length) computation.precondition countResult).Realizable :=
-    (packingCount_realizable length).onResults computation.inputDomains computation.precondition
-      (fun _ _ arguments => arguments.val false) (by intros; trivial)
-      (fun _ => Realizable.argument computation.inputDomains false computation.precondition)
+    (packingCount_realizable length).onArguments computation.inputDomains computation.precondition
+      (fun _ => false) (by intro _; rfl) (by intros; trivial)
   have packed := arrayPackRaw_realizable element length
-  have pair := Realizable.pairOutputs computation.inputDomains (boundedUnary length)
-    ((bitVectors element.widthPolynomial).arrayOfLength length) computation.precondition countResult
-    (arrayPackRaw element length).compute counted packed
-  apply pair.withEncodedOutput computation.outputDomain computation.compute (fun _ => rfl)
+  apply (counted.prodMk packed).withEncodedOutput computation.outputDomain computation.compute (fun _ => rfl)
   intro sizes arguments
   apply congrArg tape
   change ArrayEncoding.bits (((boundedUnary length).prod
@@ -112,9 +108,7 @@ noncomputable def boundedArrayCount (element : EncodedDomain Parameter) (length 
 
 theorem boundedArrayCount_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (boundedArrayCount element length).Realizable :=
-  (boundedArrayStorage_realizable element length).followedBy
-    (pairProjection_realizable (boundedUnary length) (bitVectors (length * element.widthPolynomial)) false)
-    rfl (by intros; trivial)
+  (boundedArrayStorage_realizable element length).fst
 
 noncomputable def boundedArrayPayload (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
@@ -124,9 +118,7 @@ noncomputable def boundedArrayPayload (element : EncodedDomain Parameter) (lengt
 
 theorem boundedArrayPayload_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (boundedArrayPayload element length).Realizable :=
-  (boundedArrayStorage_realizable element length).followedBy
-    (pairProjection_realizable (boundedUnary length) (bitVectors (length * element.widthPolynomial)) true)
-    rfl (by intros; trivial)
+  (boundedArrayStorage_realizable element length).snd
 
 /-- Retain one shared source-to-dense position table alongside the exact packed
 array. Related fields and dependency references can reuse this table. -/
@@ -141,14 +133,9 @@ noncomputable def arrayPackWithPositions (element : EncodedDomain Parameter) (le
 theorem arrayPackWithPositions_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (arrayPackWithPositions element length).Realizable := by
   let computation := arrayPackWithPositions element length
-  have positions := (prefixCounts_realizable length).onResults computation.inputDomains computation.precondition
-    (fun _ _ arguments => arguments.val false) (by intros; trivial)
-    (fun _ => Realizable.argument computation.inputDomains false computation.precondition)
-  exact Realizable.pairOutputs computation.inputDomains (boundedArray element length)
-    ((bitVectors (length + 1)).arrayOfLength length) computation.precondition
-    (arrayPack element length).compute
-    (fun sizes arguments => (prefixCounts length).compute sizes ⟨(fun _ => arguments.val false), trivial⟩)
-    (arrayPack_realizable element length) positions
+  have positions := (prefixCounts_realizable length).onArguments computation.inputDomains computation.precondition
+    (fun _ => false) (by intro _; rfl) (by intros; trivial)
+  exact (arrayPack_realizable element length).prodMk positions
 
 /-- Every active coordinate's stored position is its exact dense output index. -/
 theorem arrayPackWithPositions_rank (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ)

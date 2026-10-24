@@ -57,21 +57,11 @@ theorem integerMatrixGather_realizable (rows columns targetRows targetColumns wi
     ⟨(arguments 0).val (arguments 1 row) (arguments 2 column), (arguments 0).property _ _⟩
   let step := matrixTabulateStep computation.inputDomains scalar targetRows targetColumns operation
   have row := (arrayLookupWithIndex_realizable (boundedIndex rows) (arrayPosition targetRows) (fun _ index => index.val)
-    (arrayPosition_value targetRows) targetRows).onResults step.inputDomains step.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val (.inr false) | true => arguments.val (.inl 1))
-    (by intro sizes arguments; exact (arguments.val (.inr false)).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument step.inputDomains (.inr false) step.precondition
-      · exact Realizable.argument step.inputDomains (.inl 1) step.precondition)
+    (arrayPosition_value targetRows) targetRows).onArguments step.inputDomains step.precondition
+      (fun choice => match choice with | false => (.inr false) | true => (.inl 1)) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr false)).isLt)
   have column := (arrayLookupWithIndex_realizable (boundedIndex columns) (arrayPosition targetColumns) (fun _ index => index.val)
-    (arrayPosition_value targetColumns) targetColumns).onResults step.inputDomains step.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val (.inr true) | true => arguments.val (.inl 2))
-    (by intro sizes arguments; exact (arguments.val (.inr true)).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument step.inputDomains (.inr true) step.precondition
-      · exact Realizable.argument step.inputDomains (.inl 2) step.precondition)
+    (arrayPosition_value targetColumns) targetColumns).onArguments step.inputDomains step.precondition
+      (fun choice => match choice with | false => (.inr true) | true => (.inl 2)) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr true)).isLt)
   have entry : step.Realizable := (integerMatrixEntry_realizable rows columns width).onResults step.inputDomains step.precondition
     (fun name _ arguments => match name with
       | 0 => arguments.val (.inl 1) (arguments.val (.inr false))

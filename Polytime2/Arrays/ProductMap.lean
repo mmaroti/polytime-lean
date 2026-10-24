@@ -49,34 +49,29 @@ theorem arrayProductMap_realizable (source target : EncodedDomain.{0, 0} Paramet
   let innerOperation sizes (context : ∀ name, (innerContext name).Carrier sizes) value :=
     operation sizes (context ()) value
   let innerStep := arrayTransformStep innerContext source target innerOperation
-  have innerStepReady : innerStep.Realizable := step.onResults innerStep.inputDomains innerStep.precondition
-    (fun choice _ arguments => if choice then arguments.val (.inr ()) else arguments.val (.inl ()))
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument innerStep.inputDomains (.inl ()) innerStep.precondition
-      · exact Realizable.argument innerStep.inputDomains (.inr ()) innerStep.precondition)
+  have innerStepReady : innerStep.Realizable := step.onArguments innerStep.inputDomains innerStep.precondition
+    (fun choice => if choice then (.inr ()) else (.inl ())) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   have innerReady := arrayTransformAtParameter_realizable innerContext source target columns innerOperation innerStepReady
   let outerContext : Unit → EncodedDomain.{0, 0} Parameter := fun _ => source.array columns
   let outerOperation sizes (context : ∀ name, (outerContext name).Carrier sizes) value :=
     fun column => operation sizes value (context () column)
   let outerStep := arrayTransformStep outerContext source (target.array columns) outerOperation
-  have outerStepReady : outerStep.Realizable := innerReady.onResults outerStep.inputDomains outerStep.precondition
-    (fun name _ arguments => match name with
-      | .inl _ => arguments.val (.inr ())
-      | .inr _ => arguments.val (.inl ())) (by intros; trivial) (by
+  have outerStepReady : outerStep.Realizable := innerReady.onArguments outerStep.inputDomains outerStep.precondition
+    (fun name => match name with
+      | .inl _ => (.inr ())
+      | .inr _ => (.inl ())) (by
         intro name
         cases name with
-        | inl singleton => cases singleton; exact Realizable.argument outerStep.inputDomains (.inr ()) outerStep.precondition
-        | inr singleton => cases singleton; exact Realizable.argument outerStep.inputDomains (.inl ()) outerStep.precondition)
+        | inl singleton => cases singleton; rfl
+        | inr singleton => cases singleton; rfl) (by intros; trivial)
   have outerReady := arrayTransformAtParameter_realizable outerContext source (target.array columns) rows outerOperation outerStepReady
-  exact outerReady.onResults computation.inputDomains computation.precondition
-    (fun name _ arguments => match name with
-      | .inl _ => arguments.val true
-      | .inr _ => arguments.val false) (by intros; trivial) (by
+  exact outerReady.onArguments computation.inputDomains computation.precondition
+    (fun name => match name with
+      | .inl _ => true
+      | .inr _ => false) (by
         intro name
         cases name with
-        | inl singleton => cases singleton; exact Realizable.argument computation.inputDomains true computation.precondition
-        | inr singleton => cases singleton; exact Realizable.argument computation.inputDomains false computation.precondition)
+        | inl singleton => cases singleton; rfl
+        | inr singleton => cases singleton; rfl) (by intros; trivial)
 
 end Polytime2.Computation

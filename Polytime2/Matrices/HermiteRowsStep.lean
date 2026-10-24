@@ -80,17 +80,16 @@ theorem integerHermiteRowsStep_realizable (rows columns inputWidth : MvPolynomia
   let basis := integerMatrices rows rows width
   have advanced := (integerHermiteAdvance_realizable rows columns width).withPrecondition computation.precondition
     (permitted rows columns inputWidth)
-  have pair := advanced.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldMatrix := pair.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldBasis := pair.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have selection := advanced.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  have pair := advanced.fst
+  have oldMatrix := pair.fst
+  have oldBasis := pair.snd
+  have selection := advanced.snd
   have matrixReady := oldMatrix.followedBy (integerMatrixResize_realizable rows columns (hermiteInsertOutputWidth width rows) width)
     rfl (by intro sizes arguments valid; exact (fits rows columns inputWidth sizes ⟨arguments, valid⟩).1)
   have basisReady := oldBasis.followedBy (integerMatrixResize_realizable rows rows (hermiteInsertOutputWidth width rows) width)
     rfl (by intro sizes arguments valid; exact (fits rows columns inputWidth sizes ⟨arguments, valid⟩).2)
-  have matrices := Realizable.pairOutputs computation.inputDomains matrix basis computation.precondition _ _ matrixReady basisReady
-  have paired := Realizable.pairOutputs computation.inputDomains (matrix.prod basis) (hermitePivotSelection rows columns)
-    computation.precondition _ _ matrices selection
+  have matrices := matrixReady.prodMk basisReady
+  have paired := matrices.prodMk selection
   exact paired.withSpecification computation.precondition computation.compute (by intros; assumption) (by intros; rfl)
 
 /-- The fixed-workspace result is exactly the next canonical mathematical prefix. -/

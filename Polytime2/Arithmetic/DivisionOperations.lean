@@ -80,13 +80,8 @@ noncomputable def narrowDivisionPair : Computation Unit Unit :=
        ((BitVec.ofFin value.val.2).setWidth (sizes ())).toFin))
 
 theorem narrowDivisionPair_realizable : narrowDivisionPair.Realizable := by
-  have first := (pairProjection_realizable extraBitDomain extraBitDomain false).followedBy
-    extraBitNarrow_realizable rfl (by intros; trivial)
-  have second := (pairProjection_realizable extraBitDomain extraBitDomain true).followedBy
-    extraBitNarrow_realizable rfl (by intros; trivial)
-  exact Realizable.pairOutputs (fun _ : Unit => extraBitDomain.prod extraBitDomain)
-    (EncodedDomain.binaryNaturals ()) (EncodedDomain.binaryNaturals ()) (fun _ _ => True)
-    _ _ first second
+  exact (extraBitNarrow_realizable.prodMap extraBitNarrow_realizable).withSpecification
+    (fun _ _ => True) narrowDivisionPair.compute (by intros; trivial) (by intros; rfl)
 
 end Realizable.Internal
 
@@ -133,9 +128,8 @@ theorem binaryDivision_realizable : binaryDivision.Realizable := by
       exact ⟨arguments.property, by have bound := (arguments.val true).isLt; omega⟩)
     (by
       intro name
-      exact extraBitWiden_realizable.onResults binaryDivision.inputDomains binaryDivision.precondition
-        (fun _ _ arguments => arguments.val name) (by intros; trivial)
-        (by intro _; exact Realizable.argument _ name _))
+      exact extraBitWiden_realizable.onArguments binaryDivision.inputDomains binaryDivision.precondition
+        (fun _ => name) (by intro _; rfl) (by intros; trivial))
   have narrowed := widened.followedBy narrowDivisionPair_realizable rfl (by intros; trivial)
   exact narrowed.withSpecification binaryDivision.precondition binaryDivision.compute
     (by intro sizes arguments valid; exact valid) (by

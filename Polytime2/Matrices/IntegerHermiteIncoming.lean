@@ -99,7 +99,7 @@ theorem integerHermiteIncoming_realizable (rows columns width pivots : MvPolynom
     have second := ((integerMatrixWiden_realizable rows rows width (hermiteIncomingWorkspaceExtra width pivots)
       (hermiteIncomingWorkspace width pivots) rfl).withArguments (inputs rows columns width pivots)
       (MultiTape.oneTape 3) (by intros; rfl)).withPrecondition (allowed rows columns width pivots) (by intros; trivial)
-    exact Realizable.pairOutputs (inputs rows columns width pivots) _ _ (allowed rows columns width pivots) _ _ first second
+    exact first.prodMk second
 
 /-- The original-width interface returns precisely the mathematical incoming traversal. -/
 theorem integerHermiteIncoming_correct (rows columns width pivots : MvPolynomial Parameter ℕ)

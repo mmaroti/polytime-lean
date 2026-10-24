@@ -85,14 +85,8 @@ theorem diagonalCleanupStep_realizable (length productWidth basisWidth : MvPolyn
     exact naturalDiagonalIsChain_correct length (productWidth + 1) sizes (arguments 0)
   apply Realizable.ofCases (computation := computation) condition guard
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = true
-    have bases := Realizable.pairOutputs computation.inputDomains
-      (integerMatrices length length basisWidth) (integerMatrices length length basisWidth) allowed
-      (fun _ arguments => arguments.val 1) (fun _ arguments => arguments.val 2)
-      (Realizable.argument computation.inputDomains 1 allowed) (Realizable.argument computation.inputDomains 2 allowed)
-    have complete := Realizable.pairOutputs computation.inputDomains
-      ((binaryNaturalsOfWidth (productWidth + 1)).arrayOfLength length)
-      ((integerMatrices length length basisWidth).prod (integerMatrices length length basisWidth)) allowed
-      (fun _ arguments => arguments.val 0) _ (Realizable.argument computation.inputDomains 0 allowed) bases
+    have bases := (Realizable.argument computation.inputDomains 1 allowed).prodMk (Realizable.argument computation.inputDomains 2 allowed)
+    have complete := (Realizable.argument computation.inputDomains 0 allowed).prodMk bases
     apply complete.withSpecification allowed _ (by intros; assumption)
     intro sizes arguments valid
     have chain := of_decide_eq_true valid.2

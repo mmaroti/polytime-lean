@@ -45,14 +45,9 @@ theorem integerMatrixMultiply_realizable
       (computation.compute sizes ⟨arguments, trivial⟩).property row column⟩
   let step := matrixTabulateStep computation.inputDomains scalar rows columns operation
   have row := (integerMatrixRowWithIndex_realizable rows inner leftWidth (arrayPosition rows)
-    (fun _ index => index.val) (arrayPosition_value rows)).onResults step.inputDomains step.precondition
-    (fun choice _ arguments => match choice with
-      | false => arguments.val (.inr false) | true => arguments.val (.inl false))
-    (by intro sizes arguments; exact (arguments.val (.inr false)).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument step.inputDomains (.inr false) step.precondition
-      · exact Realizable.argument step.inputDomains (.inl false) step.precondition)
+    (fun _ index => index.val) (arrayPosition_value rows)).onArguments step.inputDomains step.precondition
+      (fun choice => match choice with
+      | false => (.inr false) | true => (.inl false)) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr false)).isLt)
   have transposed := (integerMatrixTranspose_realizable inner columns rightWidth).withArguments
     step.inputDomains (MultiTape.oneTape (.inl true)) (by intros; rfl)
   have column := (integerMatrixRowWithIndex_realizable columns inner rightWidth (arrayPosition columns)

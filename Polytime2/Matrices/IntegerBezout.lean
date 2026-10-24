@@ -88,20 +88,6 @@ theorem integerBezoutRows_realizable (rows columns width : MvPolynomial Paramete
   erw [Realizable.Internal.BezoutCoefficients.compute_matrix]
   rfl
 
-/-- The selected entries become the gcd and zero. -/
-theorem integerBezoutRows_eliminates (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerBezoutRows rows columns width).Arguments sizes //
-      (integerBezoutRows rows columns width).precondition sizes arguments}) :
-    let result := ((integerBezoutRows rows columns width).compute sizes arguments).val
-    result (arguments.val 0) (arguments.val 2) =
-      (Int.gcd ((arguments.val 3).val (arguments.val 0) (arguments.val 2))
-        ((arguments.val 3).val (arguments.val 1) (arguments.val 2)) : ℤ) ∧
-      result (arguments.val 1) (arguments.val 2) = 0 := by
-  exact IntegerMatrix.rowPair_bezout (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) arguments.property
-    (arguments.val 3).val (arguments.val 2)
-
-
 /-- The column version reuses the same Bézout step through transposition. -/
 noncomputable def integerBezoutColumns (rows columns width : MvPolynomial Parameter ℕ) :
     Computation Parameter (Fin 4) := by
@@ -154,54 +140,5 @@ theorem integerBezoutColumns_realizable (rows columns width : MvPolynomial Param
   have complete := eliminated.followedBy
     (integerMatrixTranspose_realizable columns rows (2 * (2 * width + 1) + 1)) rfl (by intros; trivial)
   exact complete.withSpecification allowed computation.compute (by intros; assumption) (by intros; rfl)
-
-theorem integerBezoutColumns_eliminates (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerBezoutColumns rows columns width).Arguments sizes //
-      (integerBezoutColumns rows columns width).precondition sizes arguments}) :
-    let result := ((integerBezoutColumns rows columns width).compute sizes arguments).val
-    result (arguments.val 2) (arguments.val 0) =
-      (Int.gcd ((arguments.val 3).val (arguments.val 2) (arguments.val 0))
-        ((arguments.val 3).val (arguments.val 2) (arguments.val 1)) : ℤ) ∧
-      result (arguments.val 2) (arguments.val 1) = 0 := by
-  exact IntegerMatrix.rowPair_bezout (Row := Fin (MvPolynomial.eval sizes columns))
-    (Column := Fin (MvPolynomial.eval sizes rows)) (arguments.val 0) (arguments.val 1) arguments.property
-      (arguments.val 3).val.transpose (arguments.val 2)
-
-
-/-- The row step has an explicit unimodular left transformation. -/
-theorem integerBezoutRows_equation (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerBezoutRows rows columns width).Arguments sizes //
-      (integerBezoutRows rows columns width).precondition sizes arguments}) :
-    let coefficients := IntegerMatrix.bezoutMatrix ((arguments.val 3).val (arguments.val 0) (arguments.val 2))
-      ((arguments.val 3).val (arguments.val 1) (arguments.val 2))
-    let left := IntegerMatrix.rowPair (Row := Fin (MvPolynomial.eval sizes rows)) (arguments.val 0) (arguments.val 1) coefficients
-      (1 : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes rows)) ℤ)
-    left * (arguments.val 3).val = ((integerBezoutRows rows columns width).compute sizes arguments).val ∧
-      IsUnit left.det := by
-  constructor
-  · exact (IntegerMatrix.rowPair_eq_mul (Row := Fin (MvPolynomial.eval sizes rows))
-      (arguments.val 0) (arguments.val 1) _ (arguments.val 3).val).symm
-  · exact IntegerMatrix.rowPair_unimodular (Row := Fin (MvPolynomial.eval sizes rows))
-      (arguments.val 0) (arguments.val 1) arguments.property _ (IntegerMatrix.bezoutMatrix_det _ _)
-
-/-- The column step has an explicit unimodular right transformation. -/
-theorem integerBezoutColumns_equation (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerBezoutColumns rows columns width).Arguments sizes //
-      (integerBezoutColumns rows columns width).precondition sizes arguments}) :
-    let coefficients := IntegerMatrix.bezoutMatrix ((arguments.val 3).val (arguments.val 2) (arguments.val 0))
-      ((arguments.val 3).val (arguments.val 2) (arguments.val 1))
-    let right := (IntegerMatrix.rowPair (Row := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) coefficients
-      (1 : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)).transpose
-    (arguments.val 3).val * right = ((integerBezoutColumns rows columns width).compute sizes arguments).val ∧
-      IsUnit right.det := by
-  constructor
-  · have equation := IntegerMatrix.rowPair_eq_mul (Row := Fin (MvPolynomial.eval sizes columns))
-      (arguments.val 0) (arguments.val 1)
-      (IntegerMatrix.bezoutMatrix ((arguments.val 3).val (arguments.val 2) (arguments.val 0))
-        ((arguments.val 3).val (arguments.val 2) (arguments.val 1))) (arguments.val 3).val.transpose
-    simpa only [integerBezoutColumns, Matrix.transpose_mul, Matrix.transpose_transpose] using (congrArg Matrix.transpose equation).symm
-  · simp only [Matrix.det_transpose]
-    exact IntegerMatrix.rowPair_unimodular (Row := Fin (MvPolynomial.eval sizes columns))
-      (arguments.val 0) (arguments.val 1) arguments.property _ (IntegerMatrix.bezoutMatrix_det _ _)
 
 end Polytime2.Computation

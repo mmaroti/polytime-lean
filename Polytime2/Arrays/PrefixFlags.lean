@@ -44,13 +44,8 @@ theorem arrayPrefixFlags_realizable (length : MvPolynomial Parameter ℕ) :
   apply arrayTabulate_realizable
   let step := arrayTransformStep (fun _ : Unit => arrayPosition (length + 1))
     (arrayPosition length) booleans (fun _ context index => decide (index.val < (context ()).val))
-  exact (positionsLess_realizable length (length + 1)).onResults step.inputDomains step.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val (.inr ()) | true => arguments.val (.inl ()))
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument step.inputDomains (.inr ()) step.precondition
-      · exact Realizable.argument step.inputDomains (.inl ()) step.precondition)
+  exact (positionsLess_realizable length (length + 1)).onArguments step.inputDomains step.precondition
+    (fun choice => match choice with | false => (.inr ()) | true => (.inl ())) (by intro choice; cases choice <;> rfl) (by intros; trivial)
 
 /-- A token is selected exactly when its position is strictly before the runtime prefix length. -/
 theorem arrayPrefixFlags_selected (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

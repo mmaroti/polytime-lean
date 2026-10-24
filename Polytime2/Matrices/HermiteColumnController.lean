@@ -119,7 +119,9 @@ private theorem prefix_preserves (rows columns width : MvPolynomial Parameter �
   unfold prefixInvariant
   rw [IntegerMatrix.hermiteColumnPrefix_succ]
   by_cases same : index = context false
-  · simp only [ite_eq_left same, hermiteColumnUpdate]
+  · simp only [hermiteColumnUpdate,
+      ArrayFold.extend_of_allowed permitted,
+      dite_eq_left same, ite_eq_left same]
     exact invariant
   · rw [ite_eq_right same]
     have computed := hermiteColumnUpdate_correct rows columns width (hermiteColumnWorkspace rows width)
@@ -198,7 +200,7 @@ theorem hermiteColumnController_correct (rows columns width : MvPolynomial Param
     (prefixInvariant rows columns width sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr ())))
     (prefix_starts rows columns width sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr ())))
     (fun index state valid => prefix_preserves rows columns width sizes (fun name => arguments.val (.inl name))
-      (arguments.val (.inr ())) state arguments.property index valid) (MvPolynomial.eval sizes rows) le_rfl
+      (arguments.val (.inr ())) state arguments.property index valid)
   exact invariant
 
 end Polytime2.Computation.Realizable.Internal

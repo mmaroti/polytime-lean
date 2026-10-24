@@ -39,12 +39,8 @@ noncomputable def arrayPackRawSized (element : EncodedDomain Parameter) (capacit
 
 theorem arrayPackRawSized_realizable (element : EncodedDomain Parameter) (capacity : Parameter)
     (length : MvPolynomial Parameter ℕ) : (arrayPackRawSized element capacity length).Realizable := by
-  let counter := EncodedDomain.binaryNaturals capacity
   let array := (EncodedDomain.bitVectors element.widthPolynomial).arrayOfLength length
-  have tail := (packingInitialized_realizable element capacity length).followedBy
-    (pairProjection_realizable counter (counter.prod array) true) rfl (by intros; trivial)
-  have result := tail.followedBy (pairProjection_realizable counter array true) rfl (by intros; trivial)
-  exact result.withSpecification (arrayPackRawSized element capacity length).precondition
+  exact (((packingInitialized_realizable element capacity length).snd).snd).withSpecification (arrayPackRawSized element capacity length).precondition
     (arrayPackRawSized element capacity length).compute (by intros; assumption) (by
       intro sizes arguments valid
       exact (packingInitialized_correct element capacity length sizes arguments valid).2.2)

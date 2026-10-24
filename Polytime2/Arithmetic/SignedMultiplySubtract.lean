@@ -46,9 +46,8 @@ theorem integerMultiplySubtract_realizable (width : MvPolynomial Parameter ℕ) 
   let productValue sizes (arguments : {arguments : (integerMultiplySubtract width).Arguments sizes // allowed sizes arguments}) :=
     (integerMultiply width).compute sizes ⟨(fun name => arguments.val (if name then 2 else 1)), trivial⟩
   have product : (Computation.mk inputs (binaryIntegers (2 * width)) allowed productValue).Realizable :=
-    (integerMultiply_realizable width).onResults inputs allowed
-      (fun name _ arguments => arguments.val (if name then 2 else 1)) (by intros; trivial)
-      (fun name => Realizable.argument inputs (if name then 2 else 1) allowed)
+    (integerMultiply_realizable width).onArguments inputs allowed
+      (fun name => (if name then 2 else 1)) (by intro name; rfl) (by intros; trivial)
   let widenValue sizes (value : (binaryIntegers width).Carrier sizes) :
       (binaryIntegers (2 * width)).Carrier sizes := ⟨value.val, value.property.trans_le
         (pow_le_pow_right₀ (by decide) (by rw [two_mul, map_add]; omega))⟩
@@ -57,8 +56,8 @@ theorem integerMultiplySubtract_realizable (width : MvPolynomial Parameter ℕ) 
     (by intro sizes; change (binaryIntegers (2 * width)).width sizes = (binaryIntegers (width + width)).width sizes
         rw [two_mul])
     (fun sizes value => binaryIntegers_encode_congr _ _ (two_mul width) sizes _ _ rfl)
-  have first := widened.onResults inputs allowed (fun _ _ arguments => arguments.val 0)
-    (by intros; trivial) (fun _ => Realizable.argument inputs 0 allowed)
+  have first := widened.onArguments inputs allowed
+    (fun _ => 0) (by intro _; rfl) (by intros; trivial)
   have difference := (integerSubtract_realizable (2 * width)).onResults inputs allowed
     (fun name sizes arguments => if name then productValue sizes arguments else widenValue sizes (arguments.val 0))
     (by intros; trivial) (by

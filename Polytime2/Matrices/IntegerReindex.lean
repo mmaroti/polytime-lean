@@ -66,16 +66,9 @@ theorem integerReindexWithBases_realizable
     (rows columns matrixWidth leftWidth rightWidth : MvPolynomial Parameter ℕ) :
     (integerReindexWithBases rows columns matrixWidth leftWidth rightWidth).Realizable := by
   let computation := integerReindexWithBases rows columns matrixWidth leftWidth rightWidth
-  have matrix := (integerMatrixGather_realizable rows columns rows columns matrixWidth).onResults
-    computation.inputDomains computation.precondition
-    (fun name _ arguments => match name with
-      | 0 => arguments.val 2 | 1 => arguments.val 0 | 2 => arguments.val 1)
-    (by intros; trivial) (by
-      intro name
-      fin_cases name
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+  have matrix := (integerMatrixGather_realizable rows columns rows columns matrixWidth).onArguments computation.inputDomains computation.precondition
+    (fun name => match name with
+      | 0 => 2 | 1 => 0 | 2 => 1) (by intro name; fin_cases name <;> rfl) (by intros; trivial)
   have left := (integerMatrixGather_realizable rows rows rows rows leftWidth).onResults
     computation.inputDomains computation.precondition
     (fun name _ arguments => match name with
@@ -98,33 +91,6 @@ theorem integerReindexWithBases_realizable
       · exact (arrayBoundedPositions_realizable columns).onResults _ _
           (fun name => nomatch name) (by intros; trivial) (fun name => nomatch name)
       · exact Realizable.argument computation.inputDomains 1 computation.precondition)
-  have bases := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ left right
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ matrix bases
-
-/-- Permutation maps preserve the presentation and both unit determinants. -/
-theorem integerReindexWithBases_preserves
-    (rows columns matrixWidth leftWidth rightWidth : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments :
-      (integerReindexWithBases rows columns matrixWidth leftWidth rightWidth).Arguments sizes //
-      (integerReindexWithBases rows columns matrixWidth leftWidth rightWidth).precondition sizes arguments})
-    (rowPermutation : Equiv.Perm (Fin (MvPolynomial.eval sizes rows)))
-    (columnPermutation : Equiv.Perm (Fin (MvPolynomial.eval sizes columns)))
-    (rowMap : arguments.val 0 = (fun index => rowPermutation index))
-    (columnMap : arguments.val 1 = (fun index => columnPermutation index))
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows))
-      (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 3).val * original * (arguments.val 4).val =
-      (arguments.val 2).val)
-    (leftUnit : IsUnit (arguments.val 3).val.det)
-    (rightUnit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerReindexWithBases rows columns matrixWidth leftWidth rightWidth).compute sizes arguments
-    result.2.1.val * original * result.2.2.val = result.1.val ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det := by
-  dsimp only [integerReindexWithBases]
-  rw [rowMap, columnMap]
-  exact IntegerMatrix.permuteWithBases_preserves rowPermutation columnPermutation
-    (arguments.val 2).val original (arguments.val 3).val (arguments.val 4).val
-    equation leftUnit rightUnit
+  exact matrix.prodMk (left.prodMk right)
 
 end Polytime2.Computation

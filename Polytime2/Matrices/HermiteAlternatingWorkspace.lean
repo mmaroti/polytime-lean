@@ -84,18 +84,18 @@ theorem integerHermiteAlternatingPair_realizable (dimension width : MvPolynomial
   let basisWidth := hermiteAlternatingBasisWidth dimension width
   have actual := (integerHermiteAlternatingStepRaw_realizable dimension width).withPrecondition
     computation.precondition (by intros; trivial)
-  have matrix := actual.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have bases := actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have left := bases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have right := bases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  have matrix := actual.fst
+  have bases := actual.snd
+  have left := bases.fst
+  have right := bases.snd
   have matrixReady := matrix.followedBy (integerMatrixResize_realizable dimension dimension capacity width)
     rfl (by intro sizes arguments valid; exact (fits dimension width sizes ⟨arguments, valid⟩).1)
   have leftReady := left.followedBy (integerMatrixResize_realizable dimension dimension firstWidth basisWidth)
     rfl (by intro sizes arguments valid; exact (fits dimension width sizes ⟨arguments, valid⟩).2.1)
   have rightReady := right.followedBy (integerMatrixResize_realizable dimension dimension capacity basisWidth)
     rfl (by intro sizes arguments valid; exact (fits dimension width sizes ⟨arguments, valid⟩).2.2)
-  have paired := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ leftReady rightReady
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ matrixReady paired
+  have paired := leftReady.prodMk rightReady
+  exact matrixReady.prodMk paired
 
 /-- Resizing retains exactly the mathematical pair and both actual bases. -/
 theorem integerHermiteAlternatingPair_correct (dimension width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -105,19 +105,6 @@ theorem integerHermiteAlternatingPair_correct (dimension width : MvPolynomial Pa
     (result.1.val, result.2.1.val, result.2.2.val) =
       IntegerMatrix.hermiteAlternatingStep (arguments.val ()).val :=
   integerHermiteAlternatingStepRaw_correct dimension width sizes ⟨arguments.val, trivial⟩
-
-/-- The fixed-width pair preserves its complete input invariant for the next pair. -/
-theorem integerHermiteAlternatingPair_next (dimension width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteAlternatingPair dimension width).Arguments sizes //
-      (integerHermiteAlternatingPair dimension width).precondition sizes arguments}) :
-    (integerHermiteAlternatingPair dimension width).precondition sizes
-      (fun _ => ((integerHermiteAlternatingPair dimension width).compute sizes arguments).1) := by
-  have shape := IntegerMatrix.hermiteAlternatingStep_triangular (arguments.val ()).val
-    arguments.property.1 arguments.property.2.1
-  have determinant := IntegerMatrix.hermiteAlternatingStep_det_natAbs (arguments.val ()).val
-  have same := integerHermiteAlternatingPair_correct dimension width sizes arguments
-  rw [← same] at shape determinant
-  exact ⟨shape.1, shape.2, determinant.trans_lt arguments.property.2.2⟩
 
 end Realizable.Internal
 

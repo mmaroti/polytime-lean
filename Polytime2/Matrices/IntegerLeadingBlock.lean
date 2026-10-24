@@ -146,20 +146,4 @@ theorem integerLeadingBlockDiagonalize_realizable (rows columns rank width : MvP
     (activeAllowed rows columns rank width) (fun _ _ valid => valid.choose)).followedBy
     (integerHermiteDiagonalize_realizable rank width) rfl (activePermitted rows columns rank width)
 
-/-- The square result is positive diagonal and presents exactly the extracted active block. -/
-theorem integerLeadingBlockDiagonalize_specification (rows columns rank width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerLeadingBlockDiagonalize rows columns rank width).Arguments sizes //
-      (integerLeadingBlockDiagonalize rows columns rank width).precondition sizes arguments}) :
-    let result := (integerLeadingBlockDiagonalize rows columns rank width).compute sizes arguments
-    let bounds := arguments.property.choose
-    let block := (arguments.val ()).val.submatrix (Fin.castLE bounds.1) (Fin.castLE bounds.2)
-    result.2.1.val * block * result.2.2.val = result.1.val ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det ∧
-      (∀ row column, row ≠ column → result.1.val row column = 0) ∧
-      (∀ index, 0 < result.1.val index index) :=
-  integerHermiteDiagonalize_specification rank width sizes
-    ⟨fun _ => (prepareActive rows columns rank width).compute sizes arguments,
-      activePermitted rows columns rank width sizes arguments.val arguments.property⟩
-
 end Polytime2.Computation

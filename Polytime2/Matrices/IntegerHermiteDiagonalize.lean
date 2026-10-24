@@ -59,8 +59,7 @@ private theorem initial_realizable (dimension width budget : MvPolynomial Parame
     (fun name => nomatch name) (by intros; trivial) (fun name => nomatch name)
   have basis := identity.followedBy (integerMatrixWiden_realizable dimension dimension 1 extra basisWidth rfl)
     rfl (by intros; trivial)
-  have bases := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ basis basis
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ matrix bases
+  exact matrix.prodMk (basis.prodMk basis)
 
 /-- Run a prescribed mathematical pair budget, preparing every fixed workspace internally. -/
 noncomputable def integerHermiteAlternatingRun (dimension width budget : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -83,7 +82,7 @@ theorem integerHermiteAlternatingRun_realizable (dimension width budget : MvPoly
     computation.inputDomains computation.precondition _ _
   intro name
   rcases name with singleton | choice
-  · exact (initial_realizable dimension width budget).followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
+  · exact (initial_realizable dimension width budget).fst
   · cases choice
     · exact initial_realizable dimension width budget
     · exact (arrayPositions_realizable budget).onResults computation.inputDomains computation.precondition
@@ -116,27 +115,5 @@ noncomputable def integerHermiteDiagonalize (dimension width : MvPolynomial Para
 theorem integerHermiteDiagonalize_realizable (dimension width : MvPolynomial Parameter ℕ) :
     (integerHermiteDiagonalize dimension width).Realizable :=
   integerHermiteAlternatingRun_realizable dimension width (hermiteAlternatingBudget dimension width)
-
-/-- The result is positive diagonal and retains the presentation and both unit determinants. -/
-theorem integerHermiteDiagonalize_specification (dimension width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteDiagonalize dimension width).Arguments sizes //
-      (integerHermiteDiagonalize dimension width).precondition sizes arguments}) :
-    let result := (integerHermiteDiagonalize dimension width).compute sizes arguments
-    result.2.1.val * (arguments.val ()).val * result.2.2.val = result.1.val ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det ∧
-      (∀ row column, row ≠ column → result.1.val row column = 0) ∧
-      (∀ index, 0 < result.1.val index index) := by
-  let budget := MvPolynomial.eval sizes (hermiteAlternatingBudget dimension width)
-  have presentation := IntegerMatrix.hermiteAlternatingRun_preserves budget (arguments.val ()).val
-  have shape := IntegerMatrix.hermiteAlternatingRun_triangular budget (arguments.val ()).val
-    arguments.property.1 arguments.property.2
-  have diagonal : ∀ row column, row ≠ column →
-      (IntegerMatrix.hermiteAlternatingRun budget (arguments.val ()).val).1 row column = 0 := by
-    simpa [budget, hermiteAlternatingBudget] using
-      IntegerMatrix.hermiteAlternatingRun_polynomial_budget (MvPolynomial.eval sizes width) (arguments.val ()).val
-        arguments.property.1 arguments.property.2 (arguments.val ()).property
-  have same := integerHermiteAlternatingRun_correct dimension width (hermiteAlternatingBudget dimension width) sizes arguments
-  rw [← same] at presentation shape diagonal
-  exact ⟨presentation.1, presentation.2.1, presentation.2.2, diagonal, shape.2⟩
 
 end Polytime2.Computation

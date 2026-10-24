@@ -97,8 +97,7 @@ theorem atComputedSizes {computation : Computation NewParameter InputName}
     (boundedSigmaIndex_realizable index (computedSizeAssignment bounds) payload inputCapacity
       (computedSizeWidth_bound bounds payload)).withSpecification allowed
         (fun _ arguments => (arguments.val ()).1) (by intros; trivial) (by intros; rfl)
-  have paired := Realizable.pairOutputs context index (bitVectors outputCapacity) allowed
-    (fun _ arguments => (arguments.val ()).1) result indexReady exactResult
+  have paired := indexReady.prodMk exactResult
   exact paired.withEncodedOutput target.outputDomain target.compute (fun _ => rfl) (by intros; rfl)
 
 /-- The unary call prepares its singleton argument record internally and keeps

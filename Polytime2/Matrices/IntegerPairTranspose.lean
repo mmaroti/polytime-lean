@@ -42,12 +42,10 @@ noncomputable def integerMatrixPairTranspose
 theorem integerMatrixPairTranspose_realizable
     (firstRows firstColumns secondRows secondColumns width : MvPolynomial Parameter ℕ) :
     (integerMatrixPairTranspose firstRows firstColumns secondRows secondColumns width).Realizable := by
-  let first := integerMatrices firstRows firstColumns width
-  let second := integerMatrices secondRows secondColumns width
-  have firstReady := (pairProjection_realizable first second false).followedBy
-    (integerMatrixTranspose_realizable firstRows firstColumns width) rfl (by intros; trivial)
-  have secondReady := (pairProjection_realizable first second true).followedBy
-    (integerMatrixTranspose_realizable secondRows secondColumns width) rfl (by intros; trivial)
-  exact Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _ firstReady secondReady
+  have mapped := (integerMatrixTranspose_realizable firstRows firstColumns width).prodMap
+    (integerMatrixTranspose_realizable secondRows secondColumns width)
+  exact mapped.withSpecification (fun _ _ => True)
+    (integerMatrixPairTranspose firstRows firstColumns secondRows secondColumns width).compute
+    (by intros; trivial) (by intros; rfl)
 
 end Polytime2.Computation

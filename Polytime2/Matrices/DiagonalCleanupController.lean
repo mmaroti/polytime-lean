@@ -60,40 +60,14 @@ private def stateAllowed (length productWidth basisWidth : MvPolynomial Paramete
 
 private noncomputable def stateAdvance (length productWidth basisWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ) (state : (diagonalCleanupState length productWidth basisWidth).Carrier sizes) :
-    (diagonalCleanupState length productWidth basisWidth).Carrier sizes := by
-  classical
-  exact if valid : stateAllowed length productWidth basisWidth sizes state then
-    (diagonalCleanupStep length productWidth basisWidth).compute sizes
-      ⟨stateArguments length productWidth basisWidth sizes state, valid⟩ else state
+    (diagonalCleanupState length productWidth basisWidth).Carrier sizes :=
+  ArrayFold.extend (fun state (_token : Unit) => stateAllowed length productWidth basisWidth sizes state)
+    (fun state _token valid => (diagonalCleanupStep length productWidth basisWidth).compute sizes
+      ⟨stateArguments length productWidth basisWidth sizes state, valid⟩) state ()
 
 private def stateValues (length productWidth basisWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (state : (diagonalCleanupState length productWidth basisWidth).Carrier sizes) :=
   ((fun index => (state.1 index).val), (state.2.1.val, state.2.2.val))
-
-private theorem stateAdvance_realizable (length productWidth basisWidth : MvPolynomial Parameter ℕ) :
-    (unaryMap (diagonalCleanupState length productWidth basisWidth)
-      (diagonalCleanupState length productWidth basisWidth) (stateAllowed length productWidth basisWidth)
-      (fun sizes state => stateAdvance length productWidth basisWidth sizes state.val)).Realizable := by
-  let domain := diagonalCleanupState length productWidth basisWidth
-  let inputs := fun _ : Unit => domain
-  let allowed sizes (arguments : ∀ name, (inputs name).Carrier sizes) :=
-    stateAllowed length productWidth basisWidth sizes (arguments ())
-  let values := (binaryNaturalsOfWidth (productWidth + 1)).arrayOfLength length
-  let matrix := integerMatrices length length basisWidth
-  have bases := (pairProjection_realizable values (matrix.prod matrix) true).withPrecondition allowed (by intros; trivial)
-  have step := (diagonalCleanupStep_realizable length productWidth basisWidth).onResults inputs allowed
-    (fun name sizes arguments => stateArguments length productWidth basisWidth sizes (arguments.val ()) name)
-    (fun _ arguments => arguments.property) (by
-      intro name
-      fin_cases name
-      · exact (pairProjection_realizable values (matrix.prod matrix) false).withPrecondition allowed (by intros; trivial)
-      · exact bases.followedBy (pairProjection_realizable matrix matrix false) rfl (by intros; trivial)
-      · exact bases.followedBy (pairProjection_realizable matrix matrix true) rfl (by intros; trivial))
-  apply step.withSpecification allowed _ (by intros; assumption)
-  intro sizes arguments valid
-  dsimp only [stateAdvance]
-  rw [dite_eq_left valid]
-  rfl
 
 private theorem stateAdvance_correct (length productWidth basisWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ) (state : (diagonalCleanupState length productWidth basisWidth).Carrier sizes)
@@ -102,8 +76,7 @@ private theorem stateAdvance_correct (length productWidth basisWidth : MvPolynom
       IntegerMatrix.diagonalCleanupWithBases 1 (stateValues length productWidth basisWidth sizes state).1
         (stateValues length productWidth basisWidth sizes state).2.1
         (stateValues length productWidth basisWidth sizes state).2.2 := by
-  dsimp only [stateAdvance]
-  rw [dite_eq_left valid]
+  simp only [stateAdvance, ArrayFold.extend_of_allowed, valid]
   exact diagonalCleanupStep_correct length productWidth basisWidth sizes
     ⟨stateArguments length productWidth basisWidth sizes state, valid⟩
 
@@ -212,10 +185,21 @@ private theorem controllerFold_realizable (length productWidth steps initialBasi
   let allowed sizes (_context : ∀ name, (context name).Carrier sizes) (state : domain.Carrier sizes)
       (_token : (arrayPosition steps).Carrier sizes) := stateAllowed length productWidth workspace sizes state
   have step : (arrayFoldStep context (arrayPosition steps) domain allowed update).Realizable := by
-    have ready := (stateAdvance_realizable length productWidth workspace).withArguments
-      (arrayFoldStep context (arrayPosition steps) domain allowed update).inputDomains
-      (MultiTape.oneTape (.inr false)) (fun _ => rfl)
-    exact ready.withSpecification _ _ (by intros; assumption) (by intros; rfl)
+    apply arrayFoldStep_of_partial_realizable context (arrayPosition steps) domain allowed
+      (fun sizes _context state _token valid => (diagonalCleanupStep length productWidth workspace).compute sizes
+        ⟨stateArguments length productWidth workspace sizes state, valid⟩)
+    let inputs := (arrayFoldStep context (arrayPosition steps) domain allowed update).inputDomains
+    let admissible sizes (arguments : ∀ name, (inputs name).Carrier sizes) :=
+      stateAllowed length productWidth workspace sizes (arguments (.inr false))
+    have state := Realizable.argument inputs (.inr false) admissible
+    exact (diagonalCleanupStep_realizable length productWidth workspace).onResults inputs admissible
+      (fun name sizes arguments => stateArguments length productWidth workspace sizes (arguments.val (.inr false)) name)
+      (fun _ arguments => arguments.property) (by
+        intro name
+        fin_cases name
+        · exact state.fst
+        · exact state.snd.fst
+        · exact state.snd.snd)
   exact arrayFold_realizable context (arrayPosition steps) domain steps admissible update allowed step
     (fun sizes _context _array initial count state => prefixInvariant length productWidth steps initialBasisWidth sizes initial count state)
     (fun sizes _context _array initial valid => prefixInvariant_starts length productWidth steps initialBasisWidth sizes initial valid)
@@ -273,7 +257,7 @@ theorem diagonalCleanupController_correct (length productWidth steps initialBasi
     (prefixInvariant length productWidth steps initialBasisWidth sizes (arguments.val ()))
     (prefixInvariant_starts length productWidth steps initialBasisWidth sizes (arguments.val ()) arguments.property)
     (fun index state valid => prefixInvariant_preserves length productWidth steps initialBasisWidth sizes
-      (arguments.val ()) state index valid) (MvPolynomial.eval sizes steps) le_rfl
+      (arguments.val ()) state index valid)
   exact invariant.2.2.2.2
 
 end Polytime2.Computation.Realizable.Internal

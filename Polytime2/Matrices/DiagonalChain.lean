@@ -52,12 +52,4 @@ theorem naturalDiagonalIsChain_correct (length width : MvPolynomial Parameter �
   rw [arrayAllTrue_correct, naturalDiagonalDivisibilityFlags_spec]
   exact ArraySearch.adjacentFlags_all (fun first second : ℕ => first ∣ second) (fun index => (values index).val)
 
-/-- The Boolean guard stops exactly when the optional search has no repair. -/
-theorem naturalDiagonalIsChain_search (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (values : ((binaryNaturalsOfWidth width).arrayOfLength length).Carrier sizes) :
-    (naturalDiagonalIsChain length width).compute sizes ⟨(fun _ => values), trivial⟩ = true ↔
-      (naturalDiagonalSearch length width).compute sizes ⟨(fun _ => values), trivial⟩ = none :=
-  (naturalDiagonalIsChain_correct length width sizes values).trans
-    (IntegerMatrix.diagonalViolation_none _).symm |>.trans (naturalDiagonalSearch_none length width sizes values).symm
-
 end Polytime2.Computation

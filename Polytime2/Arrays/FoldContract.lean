@@ -150,8 +150,8 @@ theorem arrayFold_realizable
         tapes (slots 1) = Realizable.Internal.ArrayFold.cursor arrayBits (index * elementWidth) ∧
         tapes (slots 2) = encoded accumulator sizes (state index)
       have stateInvariant : ∀ index, index ≤ count → invariant sizes values array seed index (state index) :=
-        ArrayFold.prefix_invariant _ _ _ _ (starts sizes values array seed valid)
-          (fun index value good => preserves sizes values array seed valid index value good)
+        fun index bounded => ArrayFold.prefix_invariant _ _ _ _ (starts sizes values array seed valid)
+          (fun index value good => preserves sizes values array seed valid index value good) index bounded
       have positionZero : position 0 = fun _ => 0 := by funext name; simp [position]
       have writablePosition : ∀ index name, readonly name = false → position index name = 0 := by
         intro index name writable
@@ -290,7 +290,7 @@ theorem arrayFold_realizable
           (by intro name; cases name with
             | inl name => exact (readTrace.readOnly_tape (.inr (.inl name)) rfl).trans (good.2.2.1 name)
             | inr choice => cases choice with
-              | false => simpa [extracted, sourceWiring, Realizable.Internal.inputTape, step, arrayFoldStep, arguments, slots_apply] using good.2.2.2.2.2.2
+              | false => simpa [extracted, sourceWiring, Realizable.Internal.inputTape, step, arrayFoldStep, arrayFoldPartialStep, arguments, slots_apply] using good.2.2.2.2.2.2
               | true => exact Function.update_self _ _ _)
           (by intro name; simpa only [sourcePositions] using readTrace.region (sourceWiring name) (good.1 (sourceWiring name)))
         have calledTrace := calledTrace.regions width (position index) (by

@@ -117,9 +117,7 @@ theorem arraySearchAdjacentPair_realizable (length : MvPolynomial Parameter ℕ)
   have second := first.followedBy (arrayIndexSuccessor_realizable length) rfl (by
     intro sizes arguments valid
     exact valid.2 _ (Option.some_get valid.1).symm)
-  have complete := Realizable.pairOutputs computation.inputDomains (boundedIndex length) (boundedIndex length)
-    computation.precondition _ _ first second
-  exact complete.withSpecification computation.precondition computation.compute
+  exact (first.prodMk second).withSpecification computation.precondition computation.compute
     (by intros; assumption) (by intros; rfl)
 
 /-- The extracted pair contains the returned coordinate and its actual successor. -/

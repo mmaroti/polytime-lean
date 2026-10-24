@@ -107,28 +107,20 @@ private theorem repairStore_realizable (length productWidth basisWidth : MvPolyn
     (repairStore length productWidth basisWidth).Realizable := by
   let computation := repairStore length productWidth basisWidth
   let width := productWidth + 1
-  let coordinates := (boundedIndex length).prod (boundedIndex length)
-  let values := (integerGcdLcm width).outputDomain
-  let bases := (integerMatrices length length basisWidth).prod (integerMatrices length length basisWidth)
   have result := Realizable.argument computation.inputDomains (.inr ()) computation.precondition
-  have pair := result.followedBy (pairProjection_realizable coordinates (values.prod bases) false) rfl (by intros; trivial)
-  have core := result.followedBy (pairProjection_realizable coordinates (values.prod bases) true) rfl (by intros; trivial)
-  have scalars := core.followedBy (pairProjection_realizable values bases false) rfl (by intros; trivial)
-  have basis := core.followedBy (pairProjection_realizable values bases true) rfl (by intros; trivial)
+  have pair := result.fst
+  have core := result.snd
+  have scalars := core.fst
   have stored := (diagonalStorePair_realizable length width).onResults computation.inputDomains computation.precondition
     (repairStoreArguments length productWidth basisWidth) (fun _ arguments => arguments.property) (by
       intro name
       fin_cases name
-      · exact pair.followedBy (pairProjection_realizable (boundedIndex length) (boundedIndex length) false) rfl (by intros; trivial)
-      · exact pair.followedBy (pairProjection_realizable (boundedIndex length) (boundedIndex length) true) rfl (by intros; trivial)
+      · exact pair.fst
+      · exact pair.snd
       · exact Realizable.argument computation.inputDomains (.inl 0) computation.precondition
-      · exact scalars.followedBy (pairProjection_realizable (binaryIntegers width) (binaryIntegers (2 * width)) false) rfl
-          (by intros; trivial)
-      · exact scalars.followedBy (pairProjection_realizable (binaryIntegers width) (binaryIntegers (2 * width)) true) rfl
-          (by intros; trivial))
-  have complete := Realizable.pairOutputs computation.inputDomains
-    ((binaryNaturalsOfWidth width).arrayOfLength length) bases computation.precondition _ _ stored basis
-  exact complete.withSpecification computation.precondition computation.compute
+      · exact scalars.fst
+      · exact scalars.snd)
+  exact (stored.prodMk core.snd).withSpecification computation.precondition computation.compute
     (by intros; assumption) (by intros; rfl)
 
 private noncomputable def repairPrepared (length productWidth basisWidth : MvPolynomial Parameter ℕ) :=

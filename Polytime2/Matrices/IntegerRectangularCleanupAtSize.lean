@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Matrices.IntegerRectangularCleanup
-import Polytime2.Matrices.IntegerCompactAtSize
+import Polytime2.Matrices.IntegerRename
 
 /-! # Host parameter views for divisibility cleanup at a named rank
 
@@ -69,7 +69,7 @@ private theorem outputWidth_rename (rows width : MvPolynomial HostParameter ℕ)
 
 private theorem compatible (rows columns width : MvPolynomial HostParameter ℕ)
     (names : HostParameter → Parameter) (rankName : Parameter) :
-    (integerCompactResultOriginalView rows columns (rectangularCleanupOutputWidth rows width)
+    (integerMatrixPresentationOriginalView rows columns (rectangularCleanupOutputWidth rows width)
       (rectangularCleanupOutputWidth rows width) (rectangularCleanupOutputWidth rows width) names).inputDomains () =
       (native rows columns width names rankName).outputDomain := by
   change ((integerMatrices (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
@@ -85,7 +85,7 @@ private theorem compatible (rows columns width : MvPolynomial HostParameter ℕ)
 noncomputable def integerRectangularCleanupAtSize (rows columns width : MvPolynomial HostParameter ℕ)
     (names : HostParameter → Parameter) (rankName : Parameter) : Computation Parameter Unit :=
   (native rows columns width names rankName).followedBy
-    (integerCompactResultOriginalView rows columns (rectangularCleanupOutputWidth rows width)
+    (integerMatrixPresentationOriginalView rows columns (rectangularCleanupOutputWidth rows width)
       (rectangularCleanupOutputWidth rows width) (rectangularCleanupOutputWidth rows width) names)
     (compatible rows columns width names rankName) (by intros; trivial)
 
@@ -94,7 +94,7 @@ theorem integerRectangularCleanupAtSize_realizable (rows columns width : MvPolyn
     (names : HostParameter → Parameter) (rankName : Parameter) :
     (integerRectangularCleanupAtSize rows columns width names rankName).Realizable :=
   (native_realizable rows columns width names rankName).followedBy
-    (integerCompactResultOriginalView_realizable rows columns (rectangularCleanupOutputWidth rows width)
+    (integerMatrixPresentationOriginalView_realizable rows columns (rectangularCleanupOutputWidth rows width)
       (rectangularCleanupOutputWidth rows width) (rectangularCleanupOutputWidth rows width) names)
     (compatible rows columns width names rankName) (by intros; trivial)
 
@@ -138,70 +138,19 @@ theorem integerRectangularCleanupAtSize_isSmithForm
     let result := (integerRectangularCleanupAtSize rows columns width names rankName).compute sizes arguments
     IntegerMatrix.IsSmithForm (arguments.val ()).val result.1.val result.2.1.val result.2.2.val (sizes rankName) := by
   let nativeArguments := fun _ : Unit => integerMatricesRenameValues rows columns width names sizes (arguments.val ())
-  have form := integerRectangularCleanupAtRank_isSmithForm
-    (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-    (MvPolynomial.X rankName) (MvPolynomial.rename names width) sizes
-    ⟨nativeArguments, arguments.property⟩
-  let original : (integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (rectangularCleanupOutputWidth (MvPolynomial.rename names rows) (MvPolynomial.rename names width))).Carrier sizes :=
-    (native rows columns width names rankName).compute sizes arguments
+  let original := (native rows columns width names rankName).compute sizes arguments
   have originalEq : original =
       (integerRectangularCleanupAtRank (MvPolynomial.rename names rows)
         (MvPolynomial.rename names columns) (MvPolynomial.X rankName)
         (MvPolynomial.rename names width)).compute sizes ⟨nativeArguments, arguments.property⟩ := by
     dsimp only [original, native, callee, Computation.onResults]
-  have originalForm : IntegerMatrix.IsSmithForm (nativeArguments ()).val
-      original.1.val original.2.1.val original.2.2.val
-      (MvPolynomial.eval sizes (MvPolynomial.X rankName)) := by
+  have form : IntegerMatrix.IsSmithForm (nativeArguments ()).val
+      original.1.val original.2.1.val original.2.2.val (MvPolynomial.eval sizes (MvPolynomial.X rankName)) := by
     rw [originalEq]
-    exact form
-  let codecEqual : integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (MvPolynomial.rename names (rectangularCleanupOutputWidth rows width)) =
-      integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-        (rectangularCleanupOutputWidth (MvPolynomial.rename names rows) (MvPolynomial.rename names width)) :=
-    compatible rows columns width names rankName
-  let converted : (integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (MvPolynomial.rename names (rectangularCleanupOutputWidth rows width))).Carrier sizes :=
-    codecEqual.symm ▸ original
-  have transported := integerMatrixPresentation_transport_values
-    (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-    (rectangularCleanupOutputWidth (MvPolynomial.rename names rows) (MvPolynomial.rename names width))
-    (MvPolynomial.rename names (rectangularCleanupOutputWidth rows width))
-    (outputWidth_rename rows width names) codecEqual sizes original
-  change (converted.1.val, converted.2.1.val, converted.2.2.val) =
-    (original.1.val, original.2.1.val, original.2.2.val) at transported
-  have convertedForm : IntegerMatrix.IsSmithForm (nativeArguments ()).val
-      converted.1.val converted.2.1.val converted.2.2.val
-      (MvPolynomial.eval sizes (MvPolynomial.X rankName)) := by
-    exact @IntegerMatrix.IsSmithForm.of_values
-      (MvPolynomial.eval sizes (MvPolynomial.rename names rows))
-      (MvPolynomial.eval sizes (MvPolynomial.rename names columns))
-      (nativeArguments ()).val (MvPolynomial.eval sizes (MvPolynomial.X rankName))
-      (original.1.val, original.2.1.val, original.2.2.val)
-      (converted.1.val, converted.2.1.val, converted.2.2.val) transported originalForm
-  have hostForm := @IntegerMatrix.IsSmithForm.cast
-    (MvPolynomial.eval sizes (MvPolynomial.rename names rows))
-    (MvPolynomial.eval sizes (MvPolynomial.rename names columns))
-    (MvPolynomial.eval (sizes ∘ names) rows) (MvPolynomial.eval (sizes ∘ names) columns)
-    (MvPolynomial.eval sizes (MvPolynomial.X rankName)) (sizes rankName)
-    (MvPolynomial.eval_rename names sizes rows) (MvPolynomial.eval_rename names sizes columns)
-    (MvPolynomial.eval_X rankName) (nativeArguments ()).val
-    converted.1.val converted.2.1.val converted.2.2.val convertedForm
-  have inputSame : (fun row column => (nativeArguments ()).val
-      (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)) = (arguments.val ()).val := by
-    funext row column
-    apply congrArg₂ (arguments.val ()).val <;> apply Fin.ext <;> rfl
-  have hostInput := congrArg (fun matrix => IntegerMatrix.IsSmithForm matrix
-    (fun row column => converted.1.val
-      (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column))
-    (fun row column => converted.2.1.val
-      (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-      (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm column))
-    (fun row column => converted.2.2.val
-      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm row)
-      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)) (sizes rankName)) inputSame
-  exact hostInput.mp hostForm
+    exact integerRectangularCleanupAtRank_isSmithForm (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
+      (MvPolynomial.X rankName) (MvPolynomial.rename names width) sizes ⟨nativeArguments, arguments.property⟩
+  exact integerMatrixPresentationOriginalView_isSmithForm rows columns (rectangularCleanupOutputWidth rows width)
+    names _ (outputWidth_rename rows width names) (compatible rows columns width names rankName)
+    sizes (arguments.val ()).val original _ _ (MvPolynomial.eval_X rankName) form
 
 end Polytime2.Computation

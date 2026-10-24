@@ -82,9 +82,7 @@ theorem arrayFoldGuardedUpdate_realizable (context : Context → EncodedDomain P
   let computation := arrayFoldStep context (booleans.prod element) accumulator
     (arrayFoldGuardedAllowed context element accumulator allowed) (arrayFoldGuardedUpdate context element accumulator update)
   let condition (_sizes : Parameter → ℕ) (arguments : computation.Arguments _sizes) := (arguments (.inr true)).1
-  have guard := ((pairProjection_realizable booleans element false).withArguments computation.inputDomains
-    (MultiTape.oneTape (.inr true)) (by intros; rfl)).withPrecondition computation.precondition (by intros; trivial)
-  apply Realizable.ofCases condition guard
+  apply Realizable.ofCases condition ((Realizable.argument computation.inputDomains (.inr true) computation.precondition).fst)
   · let selected sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = true
     have applied := step.onResults computation.inputDomains selected
       (fun name _ arguments => match name with
@@ -97,17 +95,16 @@ theorem arrayFoldGuardedUpdate_realizable (context : Context → EncodedDomain P
         · exact Realizable.argument computation.inputDomains (.inl name) selected
         · cases choice
           · exact Realizable.argument computation.inputDomains (.inr false) selected
-          · exact ((pairProjection_realizable booleans element true).withArguments computation.inputDomains
-              (MultiTape.oneTape (.inr true)) (by intros; rfl)).withPrecondition selected (by intros; trivial))
+          · exact (Realizable.argument computation.inputDomains (.inr true) selected).snd)
     apply applied.withSpecification selected _ (by intros; assumption)
     intro sizes arguments valid
     have active : (arguments (.inr true)).1 = true := valid.2
-    simp [computation, arrayFoldStep, Computation.onResults, arrayFoldGuardedUpdate, active]
+    simp [computation, arrayFoldStep, arrayFoldPartialStep, Computation.onResults, arrayFoldGuardedUpdate, active]
   · let skipped sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = false
     have copied := Realizable.argument computation.inputDomains (.inr false) skipped
     apply copied.withSpecification skipped _ (by intros; assumption)
     intro sizes arguments valid
     have inactive : (arguments (.inr true)).1 = false := valid.2
-    simp [computation, arrayFoldStep, arrayFoldGuardedUpdate, inactive]
+    simp [computation, arrayFoldStep, arrayFoldPartialStep, arrayFoldGuardedUpdate, inactive]
 
 end Polytime2.Computation

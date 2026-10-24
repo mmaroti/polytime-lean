@@ -89,12 +89,7 @@ noncomputable def integerCyclicCoordinate (modulusWidth valueWidth : MvPolynomia
 theorem integerCyclicCoordinate_realizable (modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
     (integerCyclicCoordinate modulusWidth valueWidth).Realizable := by
   let computation := integerCyclicCoordinate modulusWidth valueWidth
-  have paired := Realizable.pairOutputs computation.inputDomains (binaryNaturalsOfWidth modulusWidth)
-    (binaryIntegers (modulusWidth + valueWidth)) computation.precondition
-    (fun _ arguments => arguments.val false)
-    (fun sizes arguments => (remainder modulusWidth valueWidth).compute sizes arguments)
-    (Realizable.argument computation.inputDomains false computation.precondition)
-    (remainder_realizable modulusWidth valueWidth)
+  have paired := (Realizable.argument computation.inputDomains false computation.precondition).prodMk (remainder_realizable modulusWidth valueWidth)
   apply paired.withEncodedOutput computation.outputDomain computation.compute (by intros; rfl)
   intro sizes arguments
   apply congrArg CallingConvention.tape

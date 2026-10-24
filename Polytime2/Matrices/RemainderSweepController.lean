@@ -54,17 +54,17 @@ private def updateAllowed (rows columns workspace : MvPolynomial Parameter ℕ) 
 private noncomputable def update (rows columns workspace : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (context : ∀ name, (hermiteColumnContext rows columns name).Carrier sizes)
     (state : (hermiteColumnState rows columns workspace).Carrier sizes) (target : (boundedIndex rows).Carrier sizes) :
-    (hermiteColumnState rows columns workspace).Carrier sizes := by
-  classical
-  exact if valid : updateAllowed rows columns workspace sizes context state target then
-    let result := IntegerMatrix.rowRemainderWithLeft
-      (Row := Fin (MvPolynomial.eval sizes rows)) (context false) target (context true) state.1.val state.2.val
-    (⟨result.1, valid.2.2.1⟩, ⟨result.2, valid.2.2.2⟩) else state
+    (hermiteColumnState rows columns workspace).Carrier sizes :=
+  ArrayFold.extend (updateAllowed rows columns workspace sizes context)
+    (fun state target valid =>
+      let result := IntegerMatrix.rowRemainderWithLeft
+        (Row := Fin (MvPolynomial.eval sizes rows)) (context false) target (context true) state.1.val state.2.val
+      (⟨result.1, valid.2.2.1⟩, ⟨result.2, valid.2.2.2⟩)) state target
 
 private theorem update_realizable (rows columns workspace : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (hermiteColumnContext rows columns) (boundedIndex rows) (hermiteColumnState rows columns workspace)
       (updateAllowed rows columns workspace) (update rows columns workspace)).Realizable := by
-  classical
+  apply arrayFoldStep_of_partial_realizable
   let step := arrayFoldStep (hermiteColumnContext rows columns) (boundedIndex rows) (hermiteColumnState rows columns workspace)
     (updateAllowed rows columns workspace) (update rows columns workspace)
   have raw := (integerRowRemainderWithLeft_realizable rows columns workspace).onResults
@@ -77,22 +77,13 @@ private theorem update_realizable (rows columns workspace : MvPolynomial Paramet
       · exact Realizable.argument step.inputDomains (.inl false) step.precondition
       · exact Realizable.argument step.inputDomains (.inr true) step.precondition
       · exact Realizable.argument step.inputDomains (.inl true) step.precondition
-      · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) false).withArguments
-          step.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition step.precondition (by intros; trivial)
-      · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) true).withArguments
-          step.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition step.precondition (by intros; trivial))
-  have narrowed := raw.followedBy
+      · exact (Realizable.argument step.inputDomains (.inr false) step.precondition).fst
+      · exact (Realizable.argument step.inputDomains (.inr false) step.precondition).snd)
+  exact raw.followedBy
     (integerMatrixPairNarrow_realizable rows columns rows rows (2 * workspace + 1) (2 * workspace + 1) workspace
       (by intro sizes; simp only [map_add, map_mul, map_ofNat, map_one]; omega)
       (by intro sizes; simp only [map_add, map_mul, map_ofNat, map_one]; omega)) rfl
     (by intro sizes arguments valid; exact valid.2.2)
-  apply narrowed.withSpecification step.precondition step.compute (by intros; assumption)
-  intro sizes arguments valid
-  have permitted : updateAllowed rows columns workspace sizes (fun name => arguments (.inl name))
-      (arguments (.inr false)) (arguments (.inr true)) := valid
-  simp only [step, arrayFoldStep, update, dite_eq_left permitted, Computation.onResults,
-    Computation.followedBy, integerMatrixPairNarrow]
-  rfl
 
 private theorem update_correct (rows columns workspace : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (context : ∀ name, (hermiteColumnContext rows columns name).Carrier sizes)
@@ -101,7 +92,7 @@ private theorem update_correct (rows columns workspace : MvPolynomial Parameter 
     let result := update rows columns workspace sizes context state target
     (result.1.val, result.2.val) = IntegerMatrix.rowRemainderWithLeft
       (Row := Fin (MvPolynomial.eval sizes rows)) (context false) target (context true) state.1.val state.2.val := by
-  simp only [update, dite_eq_left valid]
+  simp only [update, ArrayFold.extend_of_allowed valid]
   rfl
 
 private def initialAllowed (rows columns width length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -223,7 +214,6 @@ theorem remainderSweepController_correct (rows columns width length : MvPolynomi
       (arguments.val (.inr true)) (arguments.val (.inr false))) (by rfl)
     (fun index state before => preserves rows columns width length sizes (fun name => arguments.val (.inl name))
       (arguments.val (.inr true)) (arguments.val (.inr false)) state arguments.property index before)
-    (MvPolynomial.eval sizes length) le_rfl
   have takeAll : (List.ofFn (arguments.val (.inr true))).take (MvPolynomial.eval sizes length) =
       List.ofFn (arguments.val (.inr true)) := by simp
   simpa only [invariant, takeAll, remainderSweepController, arrayFold] using complete

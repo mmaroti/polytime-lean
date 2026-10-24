@@ -109,10 +109,8 @@ theorem diagonalSelectedRepair_realizable (length diagonalWidth basisWidth : MvP
           ((selectedCoordinates length diagonalWidth basisWidth).compute sizes arguments).2 else
           ((selectedCoordinates length diagonalWidth basisWidth).compute sizes arguments).1)).Realizable := by
     cases chooseSecond
-    · exact coordinates.followedBy
-        (pairProjection_realizable (boundedIndex length) (boundedIndex length) false) rfl (by intros; trivial)
-    · exact coordinates.followedBy
-        (pairProjection_realizable (boundedIndex length) (boundedIndex length) true) rfl (by intros; trivial)
+    · exact coordinates.fst
+    · exact coordinates.snd
   have entry (chooseSecond : Bool) :
       (Computation.mk computation.inputDomains (binaryIntegers diagonalWidth) computation.precondition
         (fun sizes arguments => ⟨((arguments.val 0
@@ -147,10 +145,7 @@ theorem diagonalSelectedRepair_realizable (length diagonalWidth basisWidth : MvP
       · exact entry true
       · exact Realizable.argument computation.inputDomains 1 computation.precondition
       · exact Realizable.argument computation.inputDomains 2 computation.precondition)
-  have complete := Realizable.pairOutputs computation.inputDomains
-    ((boundedIndex length).prod (boundedIndex length))
-    (diagonalBasisStepWithin length diagonalWidth basisWidth).outputDomain computation.precondition _ _ coordinates repaired
-  exact complete.withSpecification computation.precondition computation.compute
+  exact (coordinates.prodMk repaired).withSpecification computation.precondition computation.compute
     (by intros; assumption) (by intros; rfl)
 
 /-- The selected coordinates agree with the mathematical cleanup schedule. -/
@@ -191,24 +186,5 @@ theorem diagonalSelectedRepair_bases (length diagonalWidth basisWidth : MvPolyno
   let innerArguments := fun name => selectedArguments length diagonalWidth basisWidth name sizes arguments
   have valid := selectedArguments_valid length diagonalWidth basisWidth sizes arguments
   exact integerDiagonalBasisStep_correct length diagonalWidth basisWidth sizes ⟨innerArguments, valid.1⟩
-
-/-- The selected repair preserves the full presentation and unimodularity. -/
-theorem diagonalSelectedRepair_preserves (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (diagonalSelectedRepair length diagonalWidth basisWidth).Arguments sizes //
-      (diagonalSelectedRepair length diagonalWidth basisWidth).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes length)) (Fin (MvPolynomial.eval sizes length)) ℤ)
-    (equation : (arguments.val 1).val * original * (arguments.val 2).val =
-      Matrix.diagonal (fun index => ((arguments.val 0 index).val : ℤ)))
-    (leftUnit : IsUnit (arguments.val 1).val.det) (rightUnit : IsUnit (arguments.val 2).val.det) :
-    let result := (diagonalSelectedRepair length diagonalWidth basisWidth).compute sizes arguments
-    result.2.2.1.val * original * result.2.2.2.val = Matrix.diagonal
-      (fun index => (IntegerMatrix.diagonalNormalizePair (fun position => (arguments.val 0 position).val)
-        result.1.1 result.1.2 index : ℤ)) ∧
-      IsUnit result.2.2.1.val.det ∧ IsUnit result.2.2.2.val.det := by
-  let innerArguments := fun name => selectedArguments length diagonalWidth basisWidth name sizes arguments
-  have valid := selectedArguments_valid length diagonalWidth basisWidth sizes arguments
-  exact integerDiagonalBasisStep_preserves length diagonalWidth basisWidth sizes
-    ⟨innerArguments, valid.1⟩ (fun index => (arguments.val 0 index).val) rfl rfl original equation leftUnit rightUnit
 
 end Polytime2.Computation.Realizable.Internal

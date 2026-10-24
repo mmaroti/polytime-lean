@@ -54,18 +54,14 @@ private theorem columnResult_realizable (rows columns width : MvPolynomial Param
   let rank := boundedUnary columns
   have rankReady := pairProjection_realizable rank (matrix.prod (left.prod right)) false
   have triple := pairProjection_realizable rank (matrix.prod (left.prod right)) true
-  have matrixReady := (triple.followedBy (pairProjection_realizable matrix (left.prod right) false)
-    rfl (by intros; trivial)).followedBy (integerMatrixTranspose_realizable columns rows workspace)
+  have matrixReady := (triple.fst).followedBy (integerMatrixTranspose_realizable columns rows workspace)
     rfl (by intros; trivial)
-  have bases := triple.followedBy (pairProjection_realizable matrix (left.prod right) true) rfl (by intros; trivial)
-  have leftReady := (bases.followedBy (pairProjection_realizable left right true) rfl (by intros; trivial)).followedBy
+  have bases := triple.snd
+  have leftReady := (bases.snd).followedBy
     (integerMatrixTranspose_realizable rows rows 1) rfl (by intros; trivial)
-  have rightReady := (bases.followedBy (pairProjection_realizable left right false) rfl (by intros; trivial)).followedBy
+  have rightReady := (bases.fst).followedBy
     (integerMatrixTranspose_realizable columns columns workspace) rfl (by intros; trivial)
-  let context := (columnResult rows columns width).inputDomains
-  have paired := Realizable.pairOutputs context _ _ (fun _ _ => True) _ _ leftReady rightReady
-  have matrices := Realizable.pairOutputs context _ _ (fun _ _ => True) _ _ matrixReady paired
-  exact Realizable.pairOutputs context _ _ (fun _ _ => True) _ _ rankReady matrices
+  exact rankReady.prodMk (matrixReady.prodMk (leftReady.prodMk rightReady))
 
 /-- The complete transpose-dual compact column pass with both actual bases. -/
 noncomputable def integerCompactHermiteColumns (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -91,18 +87,5 @@ theorem integerCompactHermiteColumns_correct (rows columns width : MvPolynomial 
   have actual := integerCompactHermiteRows_correct columns rows width sizes
     ⟨fun _ => (integerMatrixTranspose rows columns width).compute sizes ⟨arguments.val, trivial⟩, trivial⟩
   exact congrArg (fun result => (result.1, result.2.1.transpose, result.2.2.2.transpose, result.2.2.1.transpose)) actual
-
-/-- Column normalization retains both bases and the compact transpose specification. -/
-theorem integerCompactHermiteColumns_specification (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerCompactHermiteColumns rows columns width).Arguments sizes //
-      (integerCompactHermiteColumns rows columns width).precondition sizes arguments}) :
-    let result := (integerCompactHermiteColumns rows columns width).compute sizes arguments
-    result.2.2.1.val * (arguments.val ()).val * result.2.2.2.val = result.2.1.val ∧
-      IsUnit result.2.2.1.val.det ∧ IsUnit result.2.2.2.val.det ∧
-      IntegerMatrix.IsCompactRowHermite result.1.val result.2.1.val.transpose := by
-  have correct := IntegerMatrix.compactHermiteColumns_correct (arguments.val ()).val
-  rw [← integerCompactHermiteColumns_correct rows columns width sizes arguments] at correct
-  exact correct
 
 end Polytime2.Computation

@@ -58,14 +58,9 @@ theorem integerMatrixMulVec_realizable
     computation.compute sizes ⟨arguments, trivial⟩ row
   let step := arrayTransformStep computation.inputDomains (arrayPosition rows) scalar operation
   have row := (integerMatrixRowWithIndex_realizable rows columns matrixWidth (arrayPosition rows)
-    (fun _ index => index.val) (arrayPosition_value rows)).onResults step.inputDomains step.precondition
-    (fun choice _ arguments => match choice with
-      | false => arguments.val (.inr ()) | true => arguments.val (.inl false))
-    (by intro sizes arguments; exact (arguments.val (.inr ())).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument step.inputDomains (.inr ()) step.precondition
-      · exact Realizable.argument step.inputDomains (.inl false) step.precondition)
+    (fun _ index => index.val) (arrayPosition_value rows)).onArguments step.inputDomains step.precondition
+      (fun choice => match choice with
+      | false => (.inr ()) | true => (.inl false)) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr ())).isLt)
   let arrays choice sizes (arguments : {arguments : step.Arguments sizes // step.precondition sizes arguments}) :
       ((integerDotProduct columns matrixWidth valueWidth).inputDomains choice).Carrier sizes :=
     match choice with

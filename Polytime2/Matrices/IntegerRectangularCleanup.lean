@@ -169,21 +169,17 @@ theorem integerRectangularCleanupAtRank_realizable (rows columns rank width : Mv
   let basisWidth := positiveDiagonalBasisWidth rank width + 1
   let target := rectangularCleanupOutputWidth rows width
   have actual := integerRectangularCleanup_realizable rows columns rank width
-  have matrix := actual.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have bases := actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have left := bases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have right := bases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have matrixReady := matrix.followedBy (integerMatrixResize_realizable rows columns matrixWidth target) rfl (by
+  have bases := actual.snd
+  have matrixReady := actual.fst.followedBy (integerMatrixResize_realizable rows columns matrixWidth target) rfl (by
     intro sizes arguments valid
     exact (outputFits rows columns rank width sizes ⟨arguments, valid⟩).1)
-  have leftReady := left.followedBy (integerMatrixResize_realizable rows rows basisWidth target) rfl (by
+  have leftReady := bases.fst.followedBy (integerMatrixResize_realizable rows rows basisWidth target) rfl (by
     intro sizes arguments valid
     exact (outputFits rows columns rank width sizes ⟨arguments, valid⟩).2.1)
-  have rightReady := right.followedBy (integerMatrixResize_realizable columns columns basisWidth target) rfl (by
+  have rightReady := bases.snd.followedBy (integerMatrixResize_realizable columns columns basisWidth target) rfl (by
     intro sizes arguments valid
     exact (outputFits rows columns rank width sizes ⟨arguments, valid⟩).2.2)
-  have paired := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ leftReady rightReady
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ matrixReady paired
+  exact matrixReady.prodMk (leftReady.prodMk rightReady)
 
 /-- Returning the host-derived width preserves the full Smith contract. -/
 theorem integerRectangularCleanupAtRank_isSmithForm (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

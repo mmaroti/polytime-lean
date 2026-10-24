@@ -34,10 +34,7 @@ noncomputable def binaryRemainder : Computation Unit Bool where
     lt_trans (Nat.mod_lt _ arguments.property) (arguments.val true).isLt⟩
 
 theorem binaryRemainder_realizable : binaryRemainder.Realizable := by
-  have projected := binaryDivision_realizable.followedBy
-    (pairProjection_realizable (EncodedDomain.binaryNaturals ())
-      (EncodedDomain.binaryNaturals ()) true) rfl (by intros; trivial)
-  exact projected.withSpecification binaryRemainder.precondition binaryRemainder.compute
+  exact binaryDivision_realizable.snd.withSpecification binaryRemainder.precondition binaryRemainder.compute
     (by intros; assumption) (by intros; rfl)
 
 end Polytime2.Computation

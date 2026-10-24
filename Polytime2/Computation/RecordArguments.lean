@@ -58,6 +58,16 @@ namespace Realizable
 
 open MultiTape CallingConvention Internal
 
+/-- Select one immutable argument under any mathematical precondition. -/
+theorem argument (inputs : InputName → EncodedDomain Parameter) (name : InputName)
+    (allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop) :
+    (Computation.mk inputs (inputs name) allowed (fun _ arguments => arguments.val name)).Realizable := by
+  have selected := (copy_realizable (inputs name)).withArguments inputs
+    ⟨(fun _ : Unit => name), by intro first second equal; cases first; cases second; rfl⟩
+    (by intro singleton; cases singleton; rfl)
+  exact selected.withSpecification allowed (fun _ arguments => arguments.val name)
+    (by intros; trivial) (by intros; rfl)
+
 /-- The generic record adapter includes all argument extraction and preserves
 its public input, including for an empty argument family. -/
 theorem withRecordArgument {computation : Computation Parameter InputName}
@@ -216,6 +226,26 @@ theorem onResults {ContextName : Type} [Fintype ContextName]
   exact named.followedBy realizable.withRecordArgument rfl (by
     intro sizes arguments premise
     exact valid sizes ⟨arguments, premise⟩)
+
+/-- Select any static family of context arguments, including repeated names.
+The caller proves the callee's admissibility on exactly the selected values. -/
+theorem onArguments {ContextName : Type} [Fintype ContextName]
+    {computation : Computation Parameter InputName} (realizable : computation.Realizable)
+    (context : ContextName → EncodedDomain Parameter)
+    (allowed : ∀ sizes, (∀ name, (context name).Carrier sizes) → Prop)
+    (selection : InputName → ContextName)
+    (domainEqual : ∀ name, context (selection name) = computation.inputDomains name)
+    (valid : ∀ sizes (arguments : {arguments // allowed sizes arguments}), computation.precondition sizes
+      (fun name => domainEqual name ▸ arguments.val (selection name))) :
+    (computation.onResults context allowed
+      (fun name _ arguments => domainEqual name ▸ arguments.val (selection name)) valid).Realizable := by
+  rcases computation with ⟨domains, output, permitted, values⟩
+  have domainsEqual : domains = fun name => context (selection name) :=
+    funext (fun name => (domainEqual name).symm)
+  subst domains
+  apply realizable.onResults context allowed _ valid
+  intro name
+  exact argument context (selection name) allowed
 
 end Realizable
 end Polytime2.Computation

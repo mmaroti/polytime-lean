@@ -98,15 +98,12 @@ theorem coordinateBlockMap_realizable (generators : MvPolynomial Parameter ℕ)
   let payload := block.prod (block.arrayOfLength generators)
   have mapped := (finiteOperation_realizable (fun _ : Unit => elementDomain (Option (SIBlock L Carrier)))
     target (fun values => operation (values ()))).withConstantSizes (Parameter := Parameter)
-  have first := ((pairProjection_realizable image payload true).followedBy
-    (pairProjection_realizable block (block.arrayOfLength generators) false) rfl (by intros; trivial)).followedBy
+  have first := ((pairProjection_realizable image payload true).fst).followedBy
       mapped rfl (by intros; trivial)
-  have columns := ((pairProjection_realizable image payload true).followedBy
-    (pairProjection_realizable block (block.arrayOfLength generators) true) rfl (by intros; trivial)).followedBy
+  have columns := ((pairProjection_realizable image payload true).snd).followedBy
       (mapArray_realizable block target.constant generators (fun _ value => operation value) mapped)
       rfl (by intros; trivial)
-  exact Realizable.pairOutputs (coordinateBlockMap generators target operation).inputDomains target.constant
-    (target.constant.arrayOfLength generators) (fun _ _ => True) _ _ first columns
+  exact first.prodMk columns
 
 /-- Acceptance remains explicit even when an image has no nontrivial SI sort. -/
 noncomputable def coordinateAccepted (generators : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
@@ -120,9 +117,7 @@ theorem coordinateAccepted_realizable (generators : MvPolynomial Parameter ℕ) 
   let image : EncodedDomain Parameter := (subalgebraDomain L Carrier).constant
   let block : EncodedDomain Parameter := (elementDomain (Option (SIBlock L Carrier))).constant
   let payload := block.prod (block.arrayOfLength generators)
-  have target := (pairProjection_realizable image payload true).followedBy
-    (pairProjection_realizable block (block.arrayOfLength generators) false) rfl (by intros; trivial)
-  exact target.followedBy ((finitePredicate_realizable (elementDomain (Option (SIBlock L Carrier)))
+  exact ((pairProjection_realizable image payload true).fst).followedBy ((finitePredicate_realizable (elementDomain (Option (SIBlock L Carrier)))
     (fun value => value.isSome)).withConstantSizes (Parameter := Parameter)) rfl (by intros; trivial)
 
 /-- Keep one target-acceptance bit per original coordinate. -/

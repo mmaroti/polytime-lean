@@ -68,7 +68,6 @@ theorem packingStep_realizable (element : EncodedDomain Parameter) (capacity : P
   let counter := EncodedDomain.binaryNaturals capacity
   let raw := EncodedDomain.bitVectors element.widthPolynomial
   let array := raw.arrayOfLength length
-  let state := packingState element capacity length
   let Arguments sizes := {arguments : ∀ name, (inputs name).Carrier sizes // allowed sizes arguments}
   let source sizes (arguments : Arguments sizes) := (arguments.val (.inr false)).1
   let destination sizes (arguments : Arguments sizes) := (arguments.val (.inr false)).2.1
@@ -78,13 +77,12 @@ theorem packingStep_realizable (element : EncodedDomain Parameter) (capacity : P
     arguments.val (.inl ()) ⟨(source sizes arguments).val, arguments.property.1⟩
   have stateReady := Realizable.argument inputs (.inr false) allowed
   have sourceReady : (Computation.mk inputs counter allowed source).Realizable :=
-    stateReady.followedBy (pairProjection_realizable counter (counter.prod array) false) rfl (by intros; trivial)
-  have tailReady := stateReady.followedBy
-    (pairProjection_realizable counter (counter.prod array) true) rfl (by intros; trivial)
+    stateReady.fst
+  have tailReady := stateReady.snd
   have destinationReady : (Computation.mk inputs counter allowed destination).Realizable :=
-    tailReady.followedBy (pairProjection_realizable counter array false) rfl (by intros; trivial)
+    tailReady.fst
   have storageReady : (Computation.mk inputs array allowed storage).Realizable :=
-    tailReady.followedBy (pairProjection_realizable counter array true) rfl (by intros; trivial)
+    tailReady.snd
   have replacementReady : (Computation.mk inputs raw allowed replacement).Realizable :=
     (Realizable.argument inputs (.inr true) allowed).followedBy
       (encode_realizable element) rfl (by intros; trivial)
@@ -147,11 +145,7 @@ theorem packingStep_realizable (element : EncodedDomain Parameter) (capacity : P
       flagReady destinationNextReady destinationReady
   have finalStorageReady : (Computation.mk inputs array allowed finalStorage).Realizable :=
     Realizable.conditional inputs array allowed flag updated storage flagReady updateReady storageReady
-  have tailResult := Realizable.pairOutputs inputs counter array allowed
-    finalDestination finalStorage finalDestinationReady finalStorageReady
-  exact Realizable.pairOutputs inputs counter (counter.prod array) allowed sourceNext
-    (fun sizes arguments => (finalDestination sizes arguments, finalStorage sizes arguments))
-    sourceNextReady tailResult
+  exact sourceNextReady.prodMk (finalDestinationReady.prodMk finalStorageReady)
 
 /-- Total update for the fold compiler. The invariant ensures the guarded
 branch is taken at each actual source position. -/
@@ -160,10 +154,10 @@ noncomputable def packingAdvance (element : EncodedDomain Parameter) (capacity :
     (flags : Fin (MvPolynomial.eval sizes length) → Bool)
     (current : (packingState element capacity length).Carrier sizes)
     (value : element.Carrier sizes) : (packingState element capacity length).Carrier sizes :=
-  if valid : current.1.val < MvPolynomial.eval sizes length ∧ current.2.1.val ≤ current.1.val then
-    (packingStep element capacity length).compute sizes
-      ⟨(fun | .inl _ => flags | .inr false => current | .inr true => value), valid⟩
-  else current
+  ArrayFold.extend (fun current _value =>
+    current.1.val < MvPolynomial.eval sizes length ∧ current.2.1.val ≤ current.1.val)
+    (fun current value valid => (packingStep element capacity length).compute sizes
+      ⟨(fun | .inl _ => flags | .inr false => current | .inr true => value), valid⟩) current value
 
 /-- The certified update is directly usable by the public array-fold rule. -/
 theorem packingAdvance_realizable (element : EncodedDomain Parameter) (capacity : Parameter)
@@ -172,20 +166,8 @@ theorem packingAdvance_realizable (element : EncodedDomain Parameter) (capacity 
       element (packingState element capacity length)
       (fun sizes _ current _ => current.1.val < MvPolynomial.eval sizes length ∧ current.2.1.val ≤ current.1.val)
       (fun sizes flags current value => packingAdvance element capacity length sizes (flags ()) current value)).Realizable := by
-  apply (packingStep_realizable element capacity length).withSpecification
-    (packingStep element capacity length).precondition _ (by intros; assumption)
-  intro sizes arguments valid
-  change (packingStep element capacity length).compute sizes ⟨arguments, valid⟩ =
-    packingAdvance element capacity length sizes (arguments (.inl ())) (arguments (.inr false)) (arguments (.inr true))
-  have permitted : (arguments (.inr false)).1.val < MvPolynomial.eval sizes length ∧
-      (arguments (.inr false)).2.1.val ≤ (arguments (.inr false)).1.val := valid
-  rw [packingAdvance, dite_eq_left permitted]
-  congr 1
-  apply Subtype.ext
-  funext name
-  rcases name with singleton | choice
-  · cases singleton; rfl
-  · cases choice <;> rfl
+  apply arrayFoldStep_of_partial_realizable
+  exact packingStep_realizable element capacity length
 
 /-- Each permitted update advances the source once and the output at most once.
 The source capacity is large enough to represent the final cursor as well. -/
@@ -200,7 +182,7 @@ theorem packingAdvance_cursors (element : EncodedDomain Parameter) (capacity : P
     (packingAdvance element capacity length sizes flags current value).2.1.val ≤ processed + 1 := by
   have permitted : current.1.val < MvPolynomial.eval sizes length ∧ current.2.1.val ≤ current.1.val := by
     constructor <;> omega
-  rw [packingAdvance, dite_eq_left permitted]
+  simp only [packingAdvance, ArrayFold.extend, dite_eq_left permitted]
   dsimp only [packingStep]
   constructor
   · change (current.1.val + 1) % 2 ^ sizes capacity = processed + 1

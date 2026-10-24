@@ -66,18 +66,20 @@ private theorem coefficient_realizable (rows columns width : MvPolynomial Parame
       (arguments.val 3).property _ _⟩
   have entryReady (source : Bool) :
       (Computation.mk computation.inputDomains (binaryIntegers width) computation.precondition (entry source)).Realizable := by
-    exact (integerMatrixEntry_realizable rows columns width).onResults computation.inputDomains computation.precondition
-      (fun name _ arguments => match name with
-        | 0 => if source then arguments.val 0 else arguments.val 1
-        | 1 => arguments.val 2
-        | 2 => arguments.val 3) (by intros; trivial) (by
+    have selected := (integerMatrixEntry_realizable rows columns width).onArguments computation.inputDomains computation.precondition
+      (fun name => match name with
+        | 0 => if source then 0 else 1
+        | 1 => 2
+        | 2 => 3) (by
           intro name
           fin_cases name
           · cases source
-            · exact Realizable.argument computation.inputDomains 1 computation.precondition
-            · exact Realizable.argument computation.inputDomains 0 computation.precondition
-          · exact Realizable.argument computation.inputDomains 2 computation.precondition
-          · exact Realizable.argument computation.inputDomains 3 computation.precondition)
+            · rfl
+            · rfl
+          · rfl
+          · rfl) (by intros; trivial)
+    exact selected.withSpecification computation.precondition (entry source)
+      (by intros; assumption) (by intro sizes arguments valid; cases source <;> rfl)
   have divided := (integerQuotient_realizable width).onResults computation.inputDomains computation.precondition entry
     (fun _ arguments => ne_of_gt arguments.property.2) entryReady
   have negated := divided.followedBy (integerNegate_realizable width) rfl (by intros; trivial)
@@ -113,7 +115,7 @@ private theorem stage_realizable (rows columns width : MvPolynomial Parameter �
   let computation := stage rows columns width
   have first := (application_realizable rows columns width false).withPrecondition computation.precondition (by intros; trivial)
   have second := (application_realizable rows columns width true).withPrecondition computation.precondition (by intros; trivial)
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ first second
+  exact first.prodMk second
 
 /-- Reduce a target entry modulo a positive pivot and update the actual left basis. -/
 noncomputable def integerRowRemainderWithLeft (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
@@ -132,43 +134,6 @@ theorem integerRowRemainderWithLeft_correct (rows columns width : MvPolynomial P
     (result.1.val, result.2.val) = IntegerMatrix.rowRemainderWithLeft
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := rfl
-
-/-- The selected output is a genuine nonnegative remainder below the unchanged pivot. -/
-theorem integerRowRemainderWithLeft_range (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRowRemainderWithLeft rows columns width).Arguments sizes //
-      (integerRowRemainderWithLeft rows columns width).precondition sizes arguments}) :
-    let result := (integerRowRemainderWithLeft rows columns width).compute sizes arguments
-    0 ≤ result.1.val (arguments.val 1) (arguments.val 2) ∧
-      result.1.val (arguments.val 1) (arguments.val 2) < (arguments.val 3).val (arguments.val 0) (arguments.val 2) := by
-  have pure := IntegerMatrix.rowRemainder_range (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) (arguments.val 2)
-    (arguments.val 3).val arguments.property.2
-  have transfer := congrArg (fun matrices =>
-    0 ≤ matrices.1 (arguments.val 1) (arguments.val 2) ∧
-      matrices.1 (arguments.val 1) (arguments.val 2) < (arguments.val 3).val (arguments.val 0) (arguments.val 2))
-    (integerRowRemainderWithLeft_correct rows columns width sizes arguments)
-  exact transfer.mpr pure
-
-/-- Both the original-to-current equation and unimodularity of the left basis survive. -/
-theorem integerRowRemainderWithLeft_preserves (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRowRemainderWithLeft rows columns width).Arguments sizes //
-      (integerRowRemainderWithLeft rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 4).val * original * right = (arguments.val 3).val)
-    (unit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerRowRemainderWithLeft rows columns width).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  have pure := And.intro
-    (IntegerMatrix.rowRemainderWithLeft_equation (Row := Fin (MvPolynomial.eval sizes rows))
-      (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) (arguments.val 2)
-      (arguments.val 3).val original (arguments.val 4).val right equation)
-    (IntegerMatrix.rowRemainderWithLeft_unimodular (Row := Fin (MvPolynomial.eval sizes rows))
-      (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) arguments.property.1
-      (arguments.val 2) (arguments.val 3).val (arguments.val 4).val unit)
-  have transfer := congrArg (fun matrices => matrices.2 * original * right = matrices.1 ∧ IsUnit matrices.2.det)
-    (integerRowRemainderWithLeft_correct rows columns width sizes arguments)
-  exact transfer.mpr pure
 
 private noncomputable def columnInputs (rows columns width : MvPolynomial Parameter ℕ) : Fin 5 → EncodedDomain Parameter
   | 0 | 1 => boundedIndex columns
@@ -225,26 +190,5 @@ theorem integerColumnRemainderWithRight_correct (rows columns width : MvPolynomi
     (result.1.val, result.2.val) = IntegerMatrix.columnRemainderWithRight
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := rfl
-
-/-- The transposed computation retains the presentation and unimodularity of the right basis. -/
-theorem integerColumnRemainderWithRight_preserves (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerColumnRemainderWithRight rows columns width).Arguments sizes //
-      (integerColumnRemainderWithRight rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (left : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes rows)) ℤ)
-    (equation : left * original * (arguments.val 4).val = (arguments.val 3).val)
-    (unit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerColumnRemainderWithRight rows columns width).compute sizes arguments
-    left * original * result.2.val = result.1.val ∧ IsUnit result.2.val.det := by
-  have pure := And.intro
-    (IntegerMatrix.columnRemainderWithRight_equation (Row := Fin (MvPolynomial.eval sizes rows))
-      (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) (arguments.val 2)
-      (arguments.val 3).val original left (arguments.val 4).val equation)
-    (IntegerMatrix.columnRemainderWithRight_unimodular (Row := Fin (MvPolynomial.eval sizes rows))
-      (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1) arguments.property.1
-      (arguments.val 2) (arguments.val 3).val (arguments.val 4).val unit)
-  have transfer := congrArg (fun matrices => left * original * matrices.2 = matrices.1 ∧ IsUnit matrices.2.det)
-    (integerColumnRemainderWithRight_correct rows columns width sizes arguments)
-  exact transfer.mpr pure
 
 end Polytime2.Computation

@@ -64,18 +64,18 @@ theorem matrixTabulate_realizable (context : Context → EncodedDomain.{0, 0} Pa
   let innerOperation sizes (arguments : ∀ name, (innerContext name).Carrier sizes) column :=
     operation sizes (fun name => arguments (.inl name)) (arguments (.inr ())) column
   let innerStep := arrayTransformStep innerContext (EncodedDomain.arrayPosition columns) target innerOperation
-  have innerReady : innerStep.Realizable := step.onResults innerStep.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | .inl original => arguments.val (.inl (.inl original))
-      | .inr false => arguments.val (.inl (.inr ()))
-      | .inr true => arguments.val (.inr ())) (by intros; trivial) (by
+  have innerReady : innerStep.Realizable := step.onArguments innerStep.inputDomains (fun _ _ => True)
+    (fun name => match name with
+      | .inl original => (.inl (.inl original))
+      | .inr false => (.inl (.inr ()))
+      | .inr true => (.inr ())) (by
         intro name
         cases name with
-        | inl original => exact Realizable.argument innerStep.inputDomains (.inl (.inl original)) (fun _ _ => True)
+        | inl original => rfl
         | inr coordinate =>
           cases coordinate
-          · exact Realizable.argument innerStep.inputDomains (.inl (.inr ())) (fun _ _ => True)
-          · exact Realizable.argument innerStep.inputDomains (.inr ()) (fun _ _ => True))
+          · rfl
+          · rfl) (by intros; trivial)
   have inner := arrayTabulate_realizable innerContext target columns innerOperation innerReady
   have outer := arrayTabulate_realizable context (target.arrayOfLength columns) rows
     (fun sizes arguments row column => operation sizes arguments row column) inner

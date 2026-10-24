@@ -66,15 +66,10 @@ theorem arrayZipWith_realizable (context : Context → EncodedDomain.{0, 0} Para
     target tabulateOperation
   have entry (choice : Bool) := (Realizable.Internal.arrayLookupWithIndex_realizable
     (if choice then second else first) (EncodedDomain.arrayPosition length) (fun _ index => index.val)
-    (EncodedDomain.arrayPosition_value length) length).onResults tabulateStep.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | false => arguments.val (.inr ())
-      | true => arguments.val (.inl (.inr choice)))
-    (by intro sizes arguments; exact (arguments.val (.inr ())).isLt) (by
-      intro name
-      cases name
-      · exact Realizable.argument tabulateStep.inputDomains (.inr ()) (fun _ _ => True)
-      · exact Realizable.argument tabulateStep.inputDomains (.inl (.inr choice)) (fun _ _ => True))
+    (EncodedDomain.arrayPosition_value length) length).onArguments tabulateStep.inputDomains (fun _ _ => True)
+      (fun name => match name with
+      | false => (.inr ())
+      | true => (.inl (.inr choice))) (by intro name; cases name <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr ())).isLt)
   have tabulateReady : tabulateStep.Realizable := step.onResults tabulateStep.inputDomains (fun _ _ => True)
     (fun name _ arguments => match name with
       | .inl original => arguments.val (.inl (.inl original))

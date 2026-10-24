@@ -88,13 +88,8 @@ noncomputable def integerMatrixEntry (rows columns width : MvPolynomial Paramete
 theorem integerMatrixEntry_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (integerMatrixEntry rows columns width).Realizable := by
   let computation := integerMatrixEntry rows columns width
-  have row := (integerMatrixRow_realizable rows columns width).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
+  have row := (integerMatrixRow_realizable rows columns width).onArguments computation.inputDomains computation.precondition
+    (fun choice => match choice with | false => 0 | true => 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   exact (arrayLookup_realizable (binaryIntegers width) columns).onResults computation.inputDomains computation.precondition
     (fun choice sizes arguments => match choice with
       | false => arguments.val 1
@@ -126,30 +121,24 @@ private theorem integerRowCombine_realizable (columns width : MvPolynomial Param
     (integerMultiplyAdd width).compute sizes ⟨![first, coefficients (), second], trivial⟩
   let step := arrayZipWithStep context (binaryIntegers width) (binaryIntegers width)
     (binaryIntegers (2 * width + 1)) operation
-  have scalar : step.Realizable := (integerMultiplyAdd_realizable width).onResults
-    step.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | 0 => arguments.val (.inr false)
-      | 1 => arguments.val (.inl ())
-      | 2 => arguments.val (.inr true)) (by intros; trivial) (by
-        intro name
-        fin_cases name
-        · exact Realizable.argument step.inputDomains (.inr false) (fun _ _ => True)
-        · exact Realizable.argument step.inputDomains (.inl ()) (fun _ _ => True)
-        · exact Realizable.argument step.inputDomains (.inr true) (fun _ _ => True))
+  have scalar : step.Realizable := (integerMultiplyAdd_realizable width).onArguments step.inputDomains (fun _ _ => True)
+    (fun name => match name with
+      | 0 => (.inr false)
+      | 1 => (.inl ())
+      | 2 => (.inr true)) (by intro name; fin_cases name <;> rfl) (by intros; trivial)
   exact (arrayZipWith_realizable context (binaryIntegers width) (binaryIntegers width)
-    (binaryIntegers (2 * width + 1)) columns operation scalar).onResults computation.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | .inl () => arguments.val 2
-      | .inr false => arguments.val 0
-      | .inr true => arguments.val 1) (by intros; trivial) (by
+    (binaryIntegers (2 * width + 1)) columns operation scalar).onArguments computation.inputDomains (fun _ _ => True)
+      (fun name => match name with
+      | .inl () => 2
+      | .inr false => 0
+      | .inr true => 1) (by
         intro name
         cases name with
-        | inl singleton => cases singleton; exact Realizable.argument computation.inputDomains 2 (fun _ _ => True)
+        | inl singleton => cases singleton; rfl
         | inr choice =>
           cases choice
-          · exact Realizable.argument computation.inputDomains 0 (fun _ _ => True)
-          · exact Realizable.argument computation.inputDomains 1 (fun _ _ => True))
+          · rfl
+          · rfl) (by intros; trivial)
 
 
 /-- Widen matrix entries before reusing whole-row array operations. -/
@@ -242,19 +231,10 @@ theorem integerRowAdd_realizable (rows columns width : MvPolynomial Parameter �
         (by simp only [map_add]; omega))⟩ : (binaryIntegers capacity).Carrier sizes)
   have original := (Realizable.Internal.integerMatrixWidenForRows_realizable
     rows columns width (width + 1) capacity widthEqual).withArguments inputs (MultiTape.oneTape 3) (fun _ => rfl)
-  have selected (name : Fin 2) := (Realizable.Internal.integerMatrixRow_realizable rows columns width).onResults
+  have selected (name : Fin 2) := (Realizable.Internal.integerMatrixRow_realizable rows columns width).onArguments
     inputs (fun _ _ => True)
-    (fun choice _ arguments => match choice with
-      | false => if name = 0 then arguments.val 0 else arguments.val 1
-      | true => arguments.val 3) (by intros; trivial) (by
-        intro choice
-        cases choice
-        · by_cases first : name = 0
-          · simpa only [first, ↓reduceIte, inputs, computation, integerRowAdd,
-              Realizable.Internal.integerMatrixRow] using Realizable.argument inputs 0 (fun _ _ => True)
-          · simpa only [first, ↓reduceIte, inputs, computation, integerRowAdd,
-              Realizable.Internal.integerMatrixRow] using Realizable.argument inputs 1 (fun _ _ => True)
-        · exact Realizable.argument inputs 3 (fun _ _ => True))
+    (fun choice => match choice with | false => if name = 0 then 0 else 1 | true => 3)
+    (by intro choice; cases choice <;> fin_cases name <;> rfl) (by intros; trivial)
   have combined := (Realizable.Internal.integerRowCombine_realizable columns width).onResults
     inputs (fun _ _ => True)
     (fun name sizes arguments => match name with

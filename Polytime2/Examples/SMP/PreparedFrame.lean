@@ -57,9 +57,7 @@ theorem packedSorts_realizable (coordinates generators : MvPolynomial Parameter 
     (packedSorts (L := L) (Carrier := Carrier) coordinates generators).Realizable := by
   apply Realizable.recordOutputs
   intro sort
-  exact Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _
-    (packSort_realizable coordinates generators (entry sort))
-    (packSources_realizable coordinates generators (entry sort))
+  exact (packSort_realizable coordinates generators (entry sort)).prodMk (packSources_realizable coordinates generators (entry sort))
 
 /-- Compute the shared size assignment and attach all packed fields, using
 ordinary composition rather than a conversion-specific machine controller. -/
@@ -120,18 +118,14 @@ noncomputable def readPackedSources (coordinates generators : MvPolynomial Param
 theorem readPackedSources_realizable (coordinates generators : MvPolynomial Parameter ℕ)
     (sort : SortIndex (L := L) (Carrier := Carrier)) :
     (readPackedSources (L := L) (Carrier := Carrier) coordinates generators sort).Realizable := by
-  let column := (typedColumn generators (entry sort)).outputDomain
   let source := EncodedDomain.boundedArray (EncodedDomain.bitVectors (coordinates + 1)) coordinates
-  have second := (packedSortView_realizable coordinates generators sort).followedBy
-    (pairProjection_realizable ((EncodedDomain.boundedArray column coordinates).renameParameters Sum.inl)
-      (source.renameParameters Sum.inl) true) rfl (by intros; trivial)
   apply (boundedArrayAtSize_realizable (EncodedDomain.bitVectors (coordinates + 1)) coordinates
     (Sum.inl : Parameter → Parameter ⊕ Multisorted.Parameter (Nat.card (SICatalogue L Carrier)))
     (.inr (.inl sort)) ((EncodedDomain.bitVectors (coordinates + 1)).renameParameters Sum.inl)
     (fun _ => True) (fun _ _ value => value) (by intros; exact EncodedDomain.renameParameters_bits _ _ _ _)).onResults
   intro name
   cases name
-  exact second.withSpecification _ _ (by intros; trivial) (by intros; rfl)
+  exact ((packedSortView_realizable coordinates generators sort).snd).withSpecification _ _ (by intros; trivial) (by intros; rfl)
 
 
 end Polytime2.SMP.Prepared

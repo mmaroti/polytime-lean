@@ -57,11 +57,7 @@ theorem integerGcdLcm_realizable (width : MvPolynomial Parameter ℕ) : (integer
   have guard := (integerGcd_realizable width).followedBy (integerIsZero_realizable width) rfl (by intros; trivial)
   apply Realizable.ofCases (computation := computation) condition guard
   · let allowed sizes arguments := True ∧ condition sizes arguments = true
-    have assembled := Realizable.pairOutputs inputs (binaryIntegers width) (binaryIntegers (2 * width)) allowed
-      (fun sizes arguments => (integerGcd width).compute sizes ⟨arguments.val, trivial⟩)
-      (fun sizes arguments => (integerMultiply width).compute sizes ⟨arguments.val, trivial⟩)
-      ((integerGcd_realizable width).withPrecondition allowed (by intros; trivial))
-      ((integerMultiply_realizable width).withPrecondition allowed (by intros; trivial))
+    have assembled := ((integerGcd_realizable width).withPrecondition allowed (by intros; trivial)).prodMk ((integerMultiply_realizable width).withPrecondition allowed (by intros; trivial))
     apply assembled.withSpecification allowed (fun sizes arguments => computation.compute sizes ⟨arguments.val, trivial⟩) (by intros; trivial)
     intro sizes arguments valid
     have zero : Int.gcd (arguments false).val (arguments true).val = 0 := by
@@ -96,9 +92,7 @@ theorem integerGcdLcm_realizable (width : MvPolynomial Parameter ℕ) : (integer
         cases choice
         · exact dividedReady
         · exact Realizable.argument inputs true allowed)
-    have assembled := Realizable.pairOutputs inputs (binaryIntegers width) (binaryIntegers (2 * width)) allowed
-      (fun sizes arguments => (integerGcd width).compute sizes ⟨arguments.val, trivial⟩) _
-      ((integerGcd_realizable width).withPrecondition allowed (by intros; trivial)) multiplied
+    have assembled := ((integerGcd_realizable width).withPrecondition allowed (by intros; trivial)).prodMk multiplied
     exact assembled.withSpecification allowed (fun sizes arguments => computation.compute sizes ⟨arguments.val, trivial⟩) (by intros; trivial) (by intros; rfl)
 
 /-- The two returned entries retain the product and satisfy divisibility, even at zero. -/

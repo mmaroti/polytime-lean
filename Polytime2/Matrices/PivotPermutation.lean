@@ -68,25 +68,16 @@ theorem pivotPermutationStep_realizable (dimension count : MvPolynomial Paramete
       simpa using Fintype.card_le_of_injective (α := Fin (MvPolynomial.eval sizes count))
           (β := Fin (MvPolynomial.eval sizes dimension)) (arguments.val 0) arguments.property)⟩
   have image := (arrayLookupWithIndex_realizable coordinate position (fun _ index => index.val)
-    (arrayPosition_value count) dimension).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 2 | true => arguments.val 1) (by
+    (arrayPosition_value count) dimension).onArguments computation.inputDomains computation.precondition
+      (fun choice => match choice with | false => 2 | true => 1) (by intro choice; cases choice <;> rfl) (by
       intro sizes arguments
       have bound : MvPolynomial.eval sizes count ≤ MvPolynomial.eval sizes dimension := by
         simpa using Fintype.card_le_of_injective (α := Fin (MvPolynomial.eval sizes count))
           (β := Fin (MvPolynomial.eval sizes dimension)) (arguments.val 0) arguments.property
-      exact (arguments.val 2).isLt.trans_le bound) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+      exact (arguments.val 2).isLt.trans_le bound)
   have desired := (arrayLookupWithIndex_realizable coordinate position (fun _ index => index.val)
-    (arrayPosition_value count) count).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 2 | true => arguments.val 0)
-    (by intro sizes arguments; exact (arguments.val 2).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition)
+    (arrayPosition_value count) count).onArguments computation.inputDomains computation.precondition
+      (fun choice => match choice with | false => 2 | true => 0) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val 2).isLt)
   have updated := (arraySwapValues_realizable coordinate dimension).onResults computation.inputDomains computation.precondition
     (fun name sizes arguments => match name with
       | .inl false => current sizes arguments
@@ -130,30 +121,21 @@ private def stepArguments (dimension count : MvPolynomial Parameter ℕ) (sizes 
 
 private noncomputable def permutationUpdate (dimension count : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (selected : ∀ _ : Unit, (selectedDomain dimension count).Carrier sizes)
-    (table : (tableDomain dimension).Carrier sizes) (position : (arrayPosition count).Carrier sizes) := by
-  classical
-  exact if valid : Function.Injective (selected ()) then
-    (pivotPermutationStep dimension count).compute sizes ⟨stepArguments dimension count sizes selected table position, valid⟩ else table
+    (table : (tableDomain dimension).Carrier sizes) (position : (arrayPosition count).Carrier sizes) :=
+  ArrayFold.extend (fun _ _ => Function.Injective (selected ()))
+    (fun table position valid => (pivotPermutationStep dimension count).compute sizes
+      ⟨stepArguments dimension count sizes selected table position, valid⟩) table position
 
 private theorem permutationUpdate_realizable (dimension count : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (fun _ : Unit => selectedDomain dimension count) (arrayPosition count) (tableDomain dimension)
       (fun _ selected _ _ => Function.Injective (selected ())) (permutationUpdate dimension count)).Realizable := by
-  classical
+  apply arrayFoldStep_of_partial_realizable
   let computation := arrayFoldStep (fun _ : Unit => selectedDomain dimension count) (arrayPosition count) (tableDomain dimension)
     (fun _ selected _ _ => Function.Injective (selected ())) (permutationUpdate dimension count)
-  have executed := (pivotPermutationStep_realizable dimension count).onResults computation.inputDomains computation.precondition
-    (fun name sizes arguments => stepArguments dimension count sizes (fun _ => arguments.val (.inl ()))
-      (arguments.val (.inr false)) (arguments.val (.inr true)) name)
-    (by intro sizes arguments; exact arguments.property) (by
-      intro name
-      fin_cases name
-      · exact Realizable.argument computation.inputDomains (.inl ()) computation.precondition
-      · exact Realizable.argument computation.inputDomains (.inr false) computation.precondition
-      · exact Realizable.argument computation.inputDomains (.inr true) computation.precondition)
-  apply executed.withSpecification computation.precondition computation.compute (by intros; assumption)
-  intro sizes arguments valid
-  have good : Function.Injective (arguments (.inl ())) := valid
-  simp only [computation, arrayFoldStep, permutationUpdate, dite_eq_left good, Computation.onResults]
+  exact (pivotPermutationStep_realizable dimension count).onArguments
+    computation.inputDomains computation.precondition
+    (fun name => match name with | 0 => .inl () | 1 => .inr false | 2 => .inr true)
+    (by intro name; fin_cases name <;> rfl) (by intro sizes arguments; exact arguments.property)
 
 private def permutationInvariant (dimension count : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (selected : ∀ _ : Unit, (selectedDomain dimension count).Carrier sizes)
@@ -175,7 +157,7 @@ private theorem permutationPreserves (dimension count : MvPolynomial Parameter �
   obtain ⟨within, previous⟩ := before embedding same
   refine ⟨position.isLt, ?_⟩
   dsimp only [permutationUpdate]
-  rw [dite_eq_left injective]
+  rw [ArrayFold.extend_of_allowed injective]
   exact pivotPermutationStep_correct dimension count sizes
     ⟨stepArguments dimension count sizes selected table position, injective⟩ embedding same previous
 
@@ -242,7 +224,6 @@ theorem pivotPermutationTable_correct (dimension count : MvPolynomial Parameter 
     (permutationInvariant dimension count sizes (fun _ => arguments.val ()))
     (by intro embedding same; exact ⟨Nat.zero_le _, rfl⟩)
     (fun index table before => permutationPreserves dimension count sizes (fun _ => arguments.val ()) arguments.property index table before)
-    (MvPolynomial.eval sizes count) (by rfl)
   obtain ⟨within, equal⟩ := reached selected same
   exact equal
 

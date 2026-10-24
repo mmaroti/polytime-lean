@@ -83,8 +83,7 @@ theorem projectComputedFrame_realizable (bounds : NewParameter → MvPolynomial 
       exact congrArg (fun bits => ArrayEncoding.bits ((computedSizeDomain fullBounds).encode sizes frame.val.1) ++ bits)
         (ArrayEncoding.bits_setWidth_congr (renameParameters_bits payload Sum.inr _ frame.val.2))
     · simp only [ArrayEncoding.bits, List.length_ofFn]
-  have paired := Realizable.pairOutputs computation.inputDomains index (bitVectors capacity)
-    computation.precondition sizesResult bitsResult indexReady bitsReady
+  have paired := indexReady.prodMk bitsReady
   exact paired.withEncodedOutput computation.outputDomain computation.compute (fun _ => rfl) (by intros; rfl)
 
 end Polytime2.Computation

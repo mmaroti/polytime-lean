@@ -48,10 +48,7 @@ theorem integerShiftLeft_realizable (width amount : MvPolynomial Parameter ℕ) 
     (integerShiftLeft width amount).Realizable := by
   have magnitude := (integerMagnitude_realizable width).followedBy
     (Realizable.Internal.naturalShiftLeft_realizable width amount) rfl (by intros; trivial)
-  have parts := Realizable.pairOutputs (integerShiftLeft width amount).inputDomains
-    booleans (binaryNaturalsOfWidth (width + amount)) (fun _ _ => True) _ _
-    (integerNegative_realizable width) magnitude
-  have constructed := parts.followedBy (Realizable.Internal.integerOfParts_realizable (width + amount)) rfl (by
+  have constructed := ((integerNegative_realizable width).prodMk magnitude).followedBy (Realizable.Internal.integerOfParts_realizable (width + amount)) rfl (by
     intro sizes arguments valid
     change SignedEncoding.negative (arguments ()).val = true →
       (arguments ()).val.natAbs * 2 ^ MvPolynomial.eval sizes amount ≠ 0

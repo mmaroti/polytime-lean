@@ -66,27 +66,17 @@ theorem hermiteIncomingCoordinates_realizable (rows columns pivots : MvPolynomia
     intro sizes index
     exact (Binary.value_bits _).trans (by simp [arrayPosition, boundedIndexOfWidth])
   have source := (arrayLookupWithIndex_realizable (boundedIndex rows) (arrayPosition pivots)
-    (fun _ index => index.val) numeric (pivots + 1)).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 2 | true => arguments.val 0)
-    (by
+    (fun _ index => index.val) numeric (pivots + 1)).onArguments computation.inputDomains computation.precondition
+      (fun choice => match choice with | false => 2 | true => 0) (by intro choice; cases choice <;> rfl) (by
       intro sizes arguments
       change (arguments.val 2).val < MvPolynomial.eval sizes (pivots + 1)
       simp only [map_add, map_one]
-      exact Nat.lt_succ_of_lt (arguments.val 2).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition)
+      exact Nat.lt_succ_of_lt (arguments.val 2).isLt)
   have incoming := (arrayLast_realizable (boundedIndex rows) pivots).withArguments computation.inputDomains
     (MultiTape.oneTape 0) (by intros; rfl)
   have column := (arrayLookupWithIndex_realizable (boundedIndex columns) (arrayPosition pivots)
-    (fun _ index => index.val) numeric pivots).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 2 | true => arguments.val 1)
-    (by intro sizes arguments; exact (arguments.val 2).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+    (fun _ index => index.val) numeric pivots).onArguments computation.inputDomains computation.precondition
+      (fun choice => match choice with | false => 2 | true => 1) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val 2).isLt)
   have count := (arrayPositionWiden_realizable pivots 2).withArguments computation.inputDomains
     (MultiTape.oneTape 2) (by intros; rfl)
   have countAligned := count.withEncodedOutput (arrayPosition (pivots + 1 + 1))
@@ -106,15 +96,7 @@ theorem hermiteIncomingCoordinates_realizable (rows columns pivots : MvPolynomia
         Computation.withArguments, map_add, map_one, map_ofNat, Nat.add_assoc]
       congr 2 <;> try simp [map_add, map_one, map_ofNat, Nat.add_assoc]
       congr 1 <;> simp [map_add, map_one, map_ofNat, Nat.add_assoc])
-  have lastPair := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ column countAligned
-  have remaining := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ incoming lastPair
-  have prepared := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ source remaining
+  have prepared := source.prodMk (incoming.prodMk (column.prodMk countAligned))
   exact prepared.withSpecification computation.precondition computation.compute (by intros; assumption) (by intros; rfl)
-
-/-- The prepared prefix length is exactly the selected pivot's ordinary numeric position. -/
-theorem hermiteIncomingCoordinates_count (rows columns pivots : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (hermiteIncomingCoordinates rows columns pivots).Arguments sizes //
-      (hermiteIncomingCoordinates rows columns pivots).precondition sizes arguments}) :
-    ((hermiteIncomingCoordinates rows columns pivots).compute sizes arguments).2.2.2.val = (arguments.val 2).val := rfl
 
 end Polytime2.Computation.Realizable.Internal

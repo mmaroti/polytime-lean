@@ -59,23 +59,11 @@ theorem integerBasisCompose_realizable
     (rows columns oldLeft oldRight newLeft newRight : MvPolynomial Parameter ℕ) :
     (integerBasisCompose rows columns oldLeft oldRight newLeft newRight).Realizable := by
   let computation := integerBasisCompose rows columns oldLeft oldRight newLeft newRight
-  have left := (integerMatrixMultiply_realizable rows rows rows newLeft oldLeft).onResults
-    computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 2 | true => arguments.val 0)
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition)
-  have right := (integerMatrixMultiply_realizable columns columns columns oldRight newRight).onResults
-    computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 1 | true => arguments.val 3)
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition
-      · exact Realizable.argument computation.inputDomains 3 computation.precondition)
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ left right
+  have left := (integerMatrixMultiply_realizable rows rows rows newLeft oldLeft).onArguments computation.inputDomains computation.precondition
+    (fun choice => match choice with | false => 2 | true => 0) (by intro choice; cases choice <;> rfl) (by intros; trivial)
+  have right := (integerMatrixMultiply_realizable columns columns columns oldRight newRight).onArguments computation.inputDomains computation.precondition
+    (fun choice => match choice with | false => 1 | true => 3) (by intro choice; cases choice <;> rfl) (by intros; trivial)
+  exact left.prodMk right
 
 /-- The returned bases are exactly the two ordinary matrix products. -/
 theorem integerBasisCompose_correct

@@ -41,12 +41,8 @@ noncomputable def elementsSwap (domain : EncodedDomain.{0, 0} Parameter) : Compu
 theorem elementsSwap_realizable (domain : EncodedDomain.{0, 0} Parameter) : (elementsSwap domain).Realizable := by
   classical
   let inputs : Fin 3 → EncodedDomain.{0, 0} Parameter := fun _ => domain
-  have compare (other : Fin 3) := (elementsEqual_realizable domain).onResults inputs (fun _ _ => True)
-    (fun choice _ arguments => if choice then arguments.val other else arguments.val 2) (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument inputs 2 (fun _ _ => True)
-      · exact Realizable.argument inputs other (fun _ _ => True))
+  have compare (other : Fin 3) := (elementsEqual_realizable domain).onArguments inputs (fun _ _ => True)
+    (fun choice => if choice then other else 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   have second := Realizable.conditional inputs domain (fun _ _ => True)
     (fun _ arguments => decide (arguments.val 2 = arguments.val 1))
     (fun _ arguments => arguments.val 0) (fun _ arguments => arguments.val 2)

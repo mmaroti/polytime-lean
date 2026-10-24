@@ -7,6 +7,12 @@ row-major array storage. Start with [Operations.lean](Operations.lean) for
 coordinate-pair access, or [EntryOperations.lean](EntryOperations.lean) for
 separate row and column arguments.
 
+For intermediate operations, transfer preservation and entry properties using
+the exact `_correct` or `_compute` theorem and the corresponding mathematical
+`IntegerMatrix` theorem. For example, combine
+`integerBezoutRowsWithLeft_compute` with `bezoutRowsWithLeft_equation` from
+[BezoutTrackingMath.lean](BezoutTrackingMath.lean).
+
 ## Choose an interface
 
 | Need | Source |
@@ -160,8 +166,9 @@ Its only input precondition is a positive selected pivot;
 rectangular middle-source reduction, a one-row source skip, and the dual
 [row reduction] with the actual right basis.
 [Pair transposition][pair transpose] is shared with Bézout and remainder
-tracking. Use the protected-block theorems
-in these interfaces to retain completed blocks;
+tracking. Use the mathematical protected-block theorems in
+[HermiteProtectedMath.lean](HermiteProtectedMath.lean) to retain completed
+blocks.
 [HermiteProtected.lean](../Examples/HermiteProtected.lean) checks an earlier
 diagonal entry and a nonidentity protected basis row.
 Hermite sweeps use the mathematical [interleaved stage][stage], reducing earlier
@@ -291,8 +298,8 @@ negative off-diagonal entries are checked in
 composes the row sweep, guard, and optional transpose-dual sweep, with exact
 agreement, actual bases, preservation, triangularity, and TM0 certification.
 [HermiteAlternatingWorkspace.lean](HermiteAlternatingWorkspace.lean) resizes
-all three outputs at a common determinant bound and preserves the next-pair
-invariant. Its public wrapper derives the common width internally, requiring
+all three outputs at a common determinant bound. Its public wrapper derives
+the common width internally, requiring
 only positive lower triangular input. Exact agreement, realizability, and TM0
 certification are checked. The mathematical forward update now agrees with
 the recursive run, including both accumulated bases, and every prefix fits
@@ -328,11 +335,13 @@ agreement, supported-input presentation preservation, realizability, and TM0
 are checked.
 [IntegerRectangularHermiteAtSize.lean](IntegerRectangularHermiteAtSize.lean)
 provides the named-rank host adapter. It reuses the canonical parameter views
-and returns all three matrices in their original host domains. Host-coordinate
+and returns all three matrices in their original host domains. The shared
+presentation views and transport theorems are in
+[IntegerRename.lean](IntegerRename.lean). Host-coordinate
 admissibility, realizability, TM0, and rank-zero admissibility are checked.
 [IntegerRectangularHermiteStoredRank.lean][stored rank Hermite]
-reads the supplied rank, invokes the computed-size call, and removes its header.
-Rank equality, realizability, TM0, and rank-zero admissibility are checked.
+reads the supplied rank and uses the shared host-result call, keeping its
+header internal. Realizability, TM0, and rank-zero admissibility are checked.
 Named-rank and stored-rank host results now agree exactly with the mathematical
 rectangular run. Supported-input presentation preservation and unimodularity
 are proved, and the zero-matrix check passes. Initialization now returns its
@@ -632,8 +641,8 @@ at a width derived from the original width and row count, independent of rank.
 [IntegerResize.lean](IntegerResize.lean) reuses widening and narrowing for any
 pair of widths when the entries fit the target bound.
 [Stored-rank insertion](IntegerHermiteStoredRank.lean) now reads metadata,
-frames original sizes and actual rank, and invokes that callee, with a TM0
-certificate and exact retained-rank contract. Its public precondition requires
+invokes that callee through the shared host-result call, and returns no size
+header. Its TM0 certificate includes preparation. The precondition requires
 an excluded incoming row and a positive upper pivot block. Rank-zero and
 nonzero-rank examples use this interface. Its host-sized values return ordinary
 matrices and an optional column, with exact mathematical insertion and
@@ -642,9 +651,8 @@ by the shared insertion congruence rule.
 [HermiteInsertionResult.lean](HermiteInsertionResult.lean) reconstructs the
 complete host codec, including the optional column, without changing bits.
 The stored-rank call uses this rank-independent output codec.
-`integerHermiteInsertHost` extracts the host payload with realizability, TM0,
-exact-insertion, and presentation-preservation certificates. It replaces the
-separate semantic value adapter.
+`integerHermiteInsertHost` returns the host payload directly, with
+realizability, TM0, exact-insertion, and presentation-preservation certificates.
 [IntegerHermiteAdvance.lean](IntegerHermiteAdvance.lean) combines insertion
 with updated pivot embeddings. Returned columns are proved excluded from the
 old selection; dependent rows retain metadata and independent rows append the

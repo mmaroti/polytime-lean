@@ -45,9 +45,7 @@ theorem naturalShiftLeft_realizable (width amount : MvPolynomial Parameter ℕ) 
   let inputs : Unit → EncodedDomain Parameter := fun _ => source
   have zeroReady := (zeroBits_realizable amount).withArguments inputs
     ⟨Empty.elim, by intro impossible; exact impossible.elim⟩ (by intro impossible; exact impossible.elim)
-  have pair := Realizable.pairOutputs inputs zeros source (fun _ _ => True)
-    (fun _ _ => 0) (fun _ arguments => arguments.val ()) zeroReady (copy_realizable source)
-  have shifted := pair.reinterpretOutput (binaryNaturalsOfWidth (width + amount))
+  have shifted := (zeroReady.prodMk (left := zeros) (copy_realizable source)).reinterpretOutput (binaryNaturalsOfWidth (width + amount))
     (fun sizes parts => ((BitVec.ofFin parts.2 ++ parts.1).cast
       (by simp only [map_add])).toFin)
     (by intros; simp [source, zeros, EncodedDomain.width, Nat.add_comm]) (by

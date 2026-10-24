@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Matrices.DiagonalBasisStep
+import Polytime2.Matrices.DiagonalTrackingMath
 import Polytime2.Matrices.IntegerPairNarrow
 
 /-! # Returning cleanup bases to a fixed workspace
@@ -47,23 +48,13 @@ noncomputable def diagonalBasisNarrow (length diagonalWidth basisWidth : MvPolyn
 
 theorem diagonalBasisNarrow_realizable (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ) :
     (diagonalBasisNarrow length diagonalWidth basisWidth).Realizable := by
-  let computation := diagonalBasisNarrow length diagonalWidth basisWidth
-  let values := (integerGcdLcm diagonalWidth).outputDomain
-  let left := integerMatrices length length ((2 * diagonalWidth + 1) + basisWidth + 1)
-  let right := integerMatrices length length ((2 * (2 * diagonalWidth + 1)) + basisWidth + 1)
-  have bases := pairProjection_realizable values (left.prod right) true
-  have narrowed := (bases.withPrecondition computation.precondition (by intros; trivial)).followedBy
+  have mapped := (copy_realizable (integerGcdLcm diagonalWidth).outputDomain).prodMap
     (integerMatrixPairNarrow_realizable length length length length
       ((2 * diagonalWidth + 1) + basisWidth + 1) ((2 * (2 * diagonalWidth + 1)) + basisWidth + 1) basisWidth
-      (by intro sizes; simp only [map_add]; omega) (by intro sizes; simp only [map_add]; omega)) rfl
-    (by intro sizes arguments valid; exact valid)
-  have kept := (pairProjection_realizable values (left.prod right) false).withPrecondition
-    computation.precondition (by intros; trivial)
-  have complete := Realizable.pairOutputs computation.inputDomains values
-    ((integerMatrices length length basisWidth).prod (integerMatrices length length basisWidth))
-    computation.precondition _ _ kept narrowed
-  exact complete.withSpecification computation.precondition computation.compute
-    (by intros; assumption) (by intros; rfl)
+      (by intro sizes; simp only [map_add]; omega) (by intro sizes; simp only [map_add]; omega))
+  exact mapped.withSpecification (diagonalBasisNarrow length diagonalWidth basisWidth).precondition
+    (diagonalBasisNarrow length diagonalWidth basisWidth).compute
+    (by intro sizes arguments valid; exact ⟨trivial, valid⟩) (by intros; rfl)
 
 set_option backward.isDefEq.respectTransparency false in
 /-- A prefix bound with enough room discharges the fixed-workspace narrowing. -/
@@ -121,25 +112,5 @@ theorem diagonalBasisStepWithin_realizable (length diagonalWidth basisWidth : Mv
       prefixWidth leftBound rightBound room)
   exact complete.withSpecification computation.precondition computation.compute
     (by intros; assumption) (by intros; rfl)
-
-/-- Fixed-workspace repair retains all values of the original coupled operation. -/
-theorem diagonalBasisStepWithin_values (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (diagonalBasisStepWithin length diagonalWidth basisWidth).Arguments sizes //
-      (diagonalBasisStepWithin length diagonalWidth basisWidth).precondition sizes arguments}) :
-    let result := (diagonalBasisStepWithin length diagonalWidth basisWidth).compute sizes arguments
-    let original := (integerDiagonalBasisStep length diagonalWidth basisWidth).compute sizes
-      ⟨arguments.val, arguments.property.1⟩
-    result.1 = original.1 ∧ result.2.1.val = original.2.1.val ∧ result.2.2.val = original.2.2.val := ⟨rfl, rfl, rfl⟩
-
-/-- Narrowing changes only the encodings of the bases. -/
-theorem diagonalBasisNarrow_values (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (diagonalBasisNarrow length diagonalWidth basisWidth).Arguments sizes //
-      (diagonalBasisNarrow length diagonalWidth basisWidth).precondition sizes arguments}) :
-    let result := (diagonalBasisNarrow length diagonalWidth basisWidth).compute sizes arguments
-    result.1 = (arguments.val ()).1 ∧
-      result.2.1.val = (arguments.val ()).2.1.val ∧
-      result.2.2.val = (arguments.val ()).2.2.val := ⟨rfl, rfl, rfl⟩
 
 end Polytime2.Computation.Realizable.Internal

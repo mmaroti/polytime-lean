@@ -82,12 +82,7 @@ private theorem packingSeed_realizable (element : EncodedDomain Parameter) (capa
   have zeroArray : (Computation.mk (Empty.elim : Empty → EncodedDomain Parameter) array
       (fun _ _ => True) (fun _ _ => fun _ => 0)).Realizable :=
     zeroBitArray_realizable element.widthPolynomial length
-  have tail := Realizable.pairOutputs Empty.elim counter array (fun _ _ => True)
-    (fun sizes _ => (⟨0, by positivity⟩ : Fin (2 ^ sizes capacity))) (fun _ _ => fun _ => 0)
-    zeroCounter zeroArray
-  exact Realizable.pairOutputs Empty.elim counter (counter.prod array) (fun _ _ => True)
-    (fun sizes _ => (⟨0, by positivity⟩ : Fin (2 ^ sizes capacity)))
-    (fun sizes _ => ((⟨0, by positivity⟩ : Fin (2 ^ sizes capacity)), fun _ => 0)) zeroCounter tail
+  exact zeroCounter.prodMk (zeroCounter.prodMk zeroArray)
 
 /-- The mask and values are the only mathematical inputs. Initialization of
 both counters and all capacity blocks is charged to the algorithm. -/

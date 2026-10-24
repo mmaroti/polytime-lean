@@ -55,16 +55,15 @@ private def allowed (rows columns width : MvPolynomial Parameter ℕ) (sizes : P
 
 private noncomputable def update (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (original : ∀ _ : Unit, (integerMatrices rows columns width).Carrier sizes)
-    (state : (stateDomain rows columns width).Carrier sizes) (source : (boundedIndex rows).Carrier sizes) := by
-  classical
-  exact if valid : allowed rows columns width sizes original state source then
-    (integerHermiteRowsStep rows columns width).compute sizes
-      ⟨updateArguments rows columns width sizes state source, valid⟩ else state
+    (state : (stateDomain rows columns width).Carrier sizes) (source : (boundedIndex rows).Carrier sizes) :=
+  ArrayFold.extend (allowed rows columns width sizes original)
+    (fun state source valid => (integerHermiteRowsStep rows columns width).compute sizes
+      ⟨updateArguments rows columns width sizes state source, valid⟩) state source
 
 private theorem update_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (fun _ : Unit => integerMatrices rows columns width) (boundedIndex rows) (stateDomain rows columns width)
       (allowed rows columns width) (update rows columns width)).Realizable := by
-  classical
+  apply arrayFoldStep_of_partial_realizable
   let state := stateDomain rows columns width
   let step := arrayFoldStep (fun _ : Unit => integerMatrices rows columns width) (boundedIndex rows) state
     (allowed rows columns width) (update rows columns width)
@@ -74,31 +73,20 @@ private theorem update_realizable (rows columns width : MvPolynomial Parameter �
   let metadata := hermitePivotSelection rows columns
   let fields : Fin 3 → EncodedDomain Parameter
     | 0 => metadata.prod (boundedIndex rows) | 1 => matrix | 2 => basis
-  have selection := ((pairProjection_realizable (matrix.prod basis) metadata true).withArguments
-    step.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition step.precondition (by intros; trivial)
   have source := Realizable.argument step.inputDomains (.inr true) step.precondition
-  have selected := Realizable.pairOutputs step.inputDomains metadata (boundedIndex rows) step.precondition _ _ selection source
-  have pair := ((pairProjection_realizable (matrix.prod basis) metadata false).withArguments
-    step.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition step.precondition (by intros; trivial)
-  have first := pair.followedBy (pairProjection_realizable matrix basis false) rfl (by intros; trivial)
-  have second := pair.followedBy (pairProjection_realizable matrix basis true) rfl (by intros; trivial)
+  have pair := (Realizable.argument step.inputDomains (.inr false) step.precondition).fst
   have recordReady := Realizable.recordOutputs step.inputDomains 3 fields step.precondition
     (fun name sizes arguments => updateArguments rows columns width sizes
       (arguments.val (.inr false)) (arguments.val (.inr true)) () name) (by
         intro name
         fin_cases name
-        · exact selected
-        · exact first
-        · exact second)
-  have executed := (integerHermiteRowsStep_realizable rows columns width).onResults step.inputDomains step.precondition
+        · exact (((Realizable.argument step.inputDomains (.inr false) step.precondition).snd).prodMk source)
+        · exact pair.fst
+        · exact pair.snd)
+  exact (integerHermiteRowsStep_realizable rows columns width).onResults step.inputDomains step.precondition
     (fun _ sizes arguments => updateArguments rows columns width sizes
       (arguments.val (.inr false)) (arguments.val (.inr true)) ())
     (by intro sizes arguments; exact arguments.property) (by intro name; cases name; exact recordReady)
-  apply executed.withSpecification step.precondition step.compute (by intros; assumption)
-  intro sizes arguments valid
-  have gate : allowed rows columns width sizes (fun name => arguments (.inl name))
-      (arguments (.inr false)) (arguments (.inr true)) := valid
-  simp only [step, arrayFoldStep, update, dite_eq_left gate, Computation.onResults]
 
 private def invariant (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (original : ∀ _ : Unit, (integerMatrices rows columns width).Carrier sizes)
@@ -130,7 +118,7 @@ private theorem preserves (rows columns width : MvPolynomial Parameter ℕ) (siz
   obtain ⟨within, same⟩ := before
   refine ⟨source.isLt, ?_⟩
   dsimp only [update]
-  rw [dite_eq_left valid]
+  rw [ArrayFold.extend_of_allowed valid]
   exact integerHermiteRowsStep_correct rows columns width sizes
     ⟨updateArguments rows columns width sizes state source, valid⟩ (original ()) same
 
@@ -196,7 +184,6 @@ theorem hermiteRowsController_correct (rows columns width : MvPolynomial Paramet
     (invariant rows columns width sizes (fun _ => arguments.val (.inl ())))
     ⟨Nat.zero_le _, arguments.property⟩
     (fun index state before => preserves rows columns width sizes (fun _ => arguments.val (.inl ())) index state before)
-    (MvPolynomial.eval sizes rows) (by rfl)
   obtain ⟨within, same⟩ := reached
   exact same
 
@@ -214,8 +201,6 @@ private theorem initial_realizable (rows columns width : MvPolynomial Parameter 
     (initial rows columns width).Realizable := by
   let computation := initial rows columns width
   let capacity := hermiteRowsWorkspace width rows
-  let matrix := integerMatrices rows columns capacity
-  let basis := integerMatrices rows rows capacity
   have matrixReady := integerMatrixResize_realizable rows columns width capacity
   have identity := (integerIdentity_realizable rows).onResults computation.inputDomains computation.precondition
     (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
@@ -229,10 +214,7 @@ private theorem initial_realizable (rows columns width : MvPolynomial Parameter 
       (arguments ()).property 0 (Nat.zero_le _)).1)
   have metadata := (hermitePivotSelectionEmpty_realizable rows columns).onResults computation.inputDomains computation.precondition
     (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
-  have matrices := Realizable.pairOutputs computation.inputDomains matrix basis computation.precondition _ _ boundedMatrix basisReady
-  have result := Realizable.pairOutputs computation.inputDomains (matrix.prod basis) (hermitePivotSelection rows columns)
-    computation.precondition _ _ matrices metadata
-  exact result.withSpecification computation.precondition computation.compute (by intros; trivial) (by intros; rfl)
+  exact ((boundedMatrix.prodMk basisReady).prodMk metadata).withSpecification computation.precondition computation.compute (by intros; trivial) (by intros; rfl)
 
 /-- Complete integer row normalization with actual basis and pivot embeddings.
 The original matrix bound is the only input requirement; all storage is derived. -/

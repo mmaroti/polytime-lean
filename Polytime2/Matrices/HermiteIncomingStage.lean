@@ -126,22 +126,18 @@ theorem hermiteIncomingStage_realizable (rows columns width pivots : MvPolynomia
   have prepared := ((hermiteIncomingCoordinates_realizable rows columns pivots).withArguments host
     (Fin.castLEEmb (by decide : 3 ≤ 5)) (by intro name; fin_cases name <;> rfl)).withPrecondition
     valid (by intros; trivial)
-  have source := prepared.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have remaining := prepared.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have incoming := remaining.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have lastPair := remaining.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have column := lastPair.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have count := lastPair.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  have remaining := prepared.snd
+  have lastPair := remaining.snd
   apply (integerHermiteRowStagePrefix_realizable rows columns width (pivots + 1)).onResults
   intro name
   fin_cases name
-  · exact source
-  · exact incoming
-  · exact column
+  · exact prepared.fst
+  · exact remaining.fst
+  · exact lastPair.fst
   · exact Realizable.argument host 3 valid
   · exact Realizable.argument host 4 valid
   · exact Realizable.argument host 0 valid
-  · exact count
+  · exact lastPair.snd
 
 /-- The computed matrices are exactly the forward-prefix mathematical stage. -/
 theorem hermiteIncomingStage_correct (rows columns width pivots : MvPolynomial Parameter ℕ)
@@ -194,20 +190,5 @@ theorem hermiteIncomingStage_prefix (rows columns width pivots : MvPolynomial Pa
   exact moved.trans (IntegerMatrix.hermiteIncomingPrefix_succ_forward
     (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns)) selectedRows (arguments.val 1)
     (arguments.val 2) matrix left).symm
-
-/-- The incoming stage retains the actual presentation and unimodular basis. -/
-theorem hermiteIncomingStage_preserves (rows columns width pivots : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (hermiteIncomingStage rows columns width pivots).Arguments sizes //
-      (hermiteIncomingStage rows columns width pivots).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 4).val * original * right = (arguments.val 3).val)
-    (unit : IsUnit (arguments.val 4).val.det) :
-    let result := (hermiteIncomingStage rows columns width pivots).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det :=
-  integerHermiteRowStagePrefix_preserves rows columns width (pivots + 1) sizes
-    ⟨stageArguments rows columns width pivots sizes arguments.val, arguments.property⟩
-    original right equation unit
 
 end Polytime2.Computation.Realizable.Internal

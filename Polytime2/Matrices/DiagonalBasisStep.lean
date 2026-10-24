@@ -17,7 +17,6 @@ limitations under the License.
 
 import Polytime2.Matrices.IntegerDiagonalPair
 import Polytime2.Matrices.IntegerRowPair
-import Polytime2.Matrices.DiagonalTrackingMath
 
 /-! # Certified coupled diagonal cleanup and basis updates
 
@@ -127,13 +126,8 @@ private theorem basisStage_realizable (length diagonalWidth basisWidth : MvPolyn
     (basisStage length diagonalWidth basisWidth).Realizable := by
   let domains := basisStepHost length diagonalWidth basisWidth
   let allowed := basisStepAllowed length diagonalWidth basisWidth
-  have values := ((pairProjection_realizable (integerGcdLcm diagonalWidth).outputDomain
-    (integerDiagonalPairCoefficients diagonalWidth).outputDomain false).withArguments domains
-      (MultiTape.oneTape (.inr ())) (fun _ => rfl)).withPrecondition allowed (by intros; trivial)
-  have bases := Realizable.pairOutputs domains _ _ allowed _ _
-    (basisApplication_realizable length diagonalWidth basisWidth false)
-    (basisApplication_realizable length diagonalWidth basisWidth true)
-  exact Realizable.pairOutputs domains _ _ allowed _ _ values bases
+  have bases := (basisApplication_realizable length diagonalWidth basisWidth false).prodMk (basisApplication_realizable length diagonalWidth basisWidth true)
+  exact ((Realizable.argument domains (.inr ()) allowed).fst).prodMk bases
 
 /-- Normalize two diagonal entries and update both accumulated square basis matrices. -/
 noncomputable def integerDiagonalBasisStep (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ) :
@@ -150,12 +144,8 @@ noncomputable def integerDiagonalBasisStep (length diagonalWidth basisWidth : Mv
 theorem integerDiagonalBasisStep_realizable (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ) :
     (integerDiagonalBasisStep length diagonalWidth basisWidth).Realizable := by
   let computation := integerDiagonalBasisStep length diagonalWidth basisWidth
-  have prepared := (integerDiagonalPair_realizable diagonalWidth).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => if choice then arguments.val 3 else arguments.val 2) (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition
-      · exact Realizable.argument computation.inputDomains 3 computation.precondition)
+  have prepared := (integerDiagonalPair_realizable diagonalWidth).onArguments computation.inputDomains computation.precondition
+    (fun choice => if choice then 3 else 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   have complete := prepared.letThen (basisStage_realizable length diagonalWidth basisWidth)
     (fun _ => rfl) rfl (by intros; assumption)
   exact complete.withSpecification computation.precondition computation.compute (by intros; assumption) (by intros; rfl)
@@ -197,32 +187,5 @@ theorem integerDiagonalBasisStep_natural_values (length diagonalWidth basisWidth
   refine ⟨values.1, values.2.trans ?_⟩
   simpa only [Nat.cast_mul, Int.natCast_ediv] using congrArg (fun value : ℕ => (value : ℤ))
     (IntegerMatrix.diagonalPair_lcm (diagonal (arguments.val 0)) (diagonal (arguments.val 1)))
-
-set_option backward.isDefEq.respectTransparency false in
-/-- Matching diagonal entries preserve the original presentation and unimodularity of both bases. -/
-theorem integerDiagonalBasisStep_preserves (length diagonalWidth basisWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerDiagonalBasisStep length diagonalWidth basisWidth).Arguments sizes //
-      (integerDiagonalBasisStep length diagonalWidth basisWidth).precondition sizes arguments})
-    (diagonal : Fin (MvPolynomial.eval sizes length) → ℕ)
-    (firstEntry : (arguments.val 2).val = (diagonal (arguments.val 0) : ℤ))
-    (secondEntry : (arguments.val 3).val = (diagonal (arguments.val 1) : ℤ))
-    (original : Matrix (Fin (MvPolynomial.eval sizes length)) (Fin (MvPolynomial.eval sizes length)) ℤ)
-    (equation : (arguments.val 4).val * original * (arguments.val 5).val =
-      Matrix.diagonal (fun index => (diagonal index : ℤ)))
-    (leftUnit : IsUnit (arguments.val 4).val.det) (rightUnit : IsUnit (arguments.val 5).val.det) :
-    let result := (integerDiagonalBasisStep length diagonalWidth basisWidth).compute sizes arguments
-    result.2.1.val * original * result.2.2.val = Matrix.diagonal
-      (fun index => (IntegerMatrix.diagonalNormalizePair diagonal (arguments.val 0) (arguments.val 1) index : ℤ)) ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det := by
-  have computed := integerDiagonalBasisStep_correct length diagonalWidth basisWidth sizes arguments
-  have leftEqual := congrArg Prod.fst computed
-  have rightEqual := congrArg Prod.snd computed
-  dsimp only at leftEqual rightEqual
-  rw [firstEntry, secondEntry] at leftEqual rightEqual
-  have preserved := IntegerMatrix.diagonalNormalizePair_preserves diagonal (arguments.val 0) (arguments.val 1)
-    arguments.property original (arguments.val 4).val (arguments.val 5).val equation leftUnit rightUnit
-  dsimp only
-  erw [leftEqual, rightEqual]
-  exact preserved
 
 end Polytime2.Computation

@@ -78,12 +78,11 @@ private noncomputable def diagonalAndBases (rank width : MvPolynomial Parameter 
 
 private theorem diagonalAndBases_realizable (rank width : MvPolynomial Parameter ℕ) :
     (diagonalAndBases rank width).Realizable := by
-  let matrix := integerMatrices rank rank (entryWidth rank width)
-  let basis := integerMatrices rank rank (basisWidth rank width)
-  have diagonal := (pairProjection_realizable matrix (basis.prod basis) false).followedBy
-    (integerMatrixDiagonalMagnitudes_realizable rank (entryWidth rank width)) rfl (by intros; trivial)
-  exact Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _ diagonal
-    (pairProjection_realizable matrix (basis.prod basis) true)
+  have mapped := (integerMatrixDiagonalMagnitudes_realizable rank (entryWidth rank width)).prodMap
+    (copy_realizable ((integerMatrices rank rank (basisWidth rank width)).prod
+      (integerMatrices rank rank (basisWidth rank width))))
+  exact mapped.withSpecification (fun _ _ => True) (diagonalAndBases rank width).compute
+    (by intros; trivial) (by intros; rfl)
 
 private noncomputable def assemble (rows columns rank width : MvPolynomial Parameter ℕ) :=
   ((diagonalAndBases rank width).withPrecondition
@@ -151,17 +150,5 @@ theorem integerRectangularHermite_correct (rows columns rank width : MvPolynomia
         ⟨fun _ => square.2.2, arguments.property.1.2⟩
       exact extended.trans (congrArg (IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes columns) arguments.property.1.2)
         (congrArg (fun result => result.2.2) same))
-
-/-- Both full bases present the rectangular embedding of the original active matrix. -/
-theorem integerRectangularHermite_preserves (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRectangularHermite rows columns rank width).Arguments sizes //
-      (integerRectangularHermite rows columns rank width).precondition sizes arguments}) :
-    let result := (integerRectangularHermite rows columns rank width).compute sizes arguments
-    result.2.1.val * IntegerMatrix.rectangularBlock arguments.property.1.1 arguments.property.1.2 (arguments.val ()).val *
-        result.2.2.val = result.1.val ∧ IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det := by
-  have preserved := IntegerMatrix.rectangularHermiteRun_preserves arguments.property.1.1 arguments.property.1.2
-    (MvPolynomial.eval sizes width) (arguments.val ()).val
-  rw [← integerRectangularHermite_correct rows columns rank width sizes arguments] at preserved
-  exact preserved
 
 end Polytime2.Computation

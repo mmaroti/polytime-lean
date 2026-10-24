@@ -139,6 +139,27 @@ theorem pairProjection_realizable (left right : EncodedDomain.{0, carrierLevel} 
     exact ⟨EncodedDomain.ArrayEncoding.bits (left.encode sizes value.val.1), [],
       by simp [EncodedDomain.ArrayEncoding.bits_append], by simp⟩
 
+/-- Project the first component of any certified product-valued computation,
+retaining its original arguments and admissibility condition. -/
+theorem Realizable.fst {InputName : Type} [Fintype InputName]
+    {inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter}
+    {left right : EncodedDomain.{0, carrierLevel} Parameter}
+    {allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop}
+    {values : ∀ sizes, {arguments // allowed sizes arguments} → (left.prod right).Carrier sizes}
+    (realizable : (Computation.mk inputs (left.prod right) allowed values).Realizable) :
+    (Computation.mk inputs left allowed (fun sizes arguments => (values sizes arguments).1)).Realizable :=
+  realizable.followedBy (pairProjection_realizable left right false) rfl (by intros; trivial)
+
+/-- Project the second component with the same arguments and precondition. -/
+theorem Realizable.snd {InputName : Type} [Fintype InputName]
+    {inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter}
+    {left right : EncodedDomain.{0, carrierLevel} Parameter}
+    {allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop}
+    {values : ∀ sizes, {arguments // allowed sizes arguments} → (left.prod right).Carrier sizes}
+    (realizable : (Computation.mk inputs (left.prod right) allowed values).Realizable) :
+    (Computation.mk inputs right allowed (fun sizes arguments => (values sizes arguments).2)).Realizable :=
+  realizable.followedBy (pairProjection_realizable left right true) rfl (by intros; trivial)
+
 /-- Binary construction retains the ordinary pair carrier. -/
 noncomputable def pairConstructor
     (left right : EncodedDomain.{0, carrierLevel} Parameter) : Computation Parameter (Fin 2) where
@@ -193,6 +214,46 @@ theorem Realizable.pairOutputs {InputName : Type} [Fintype InputName]
   have complete := firstRealizable.letThen continuation (fun _ => rfl) rfl (by intros; assumption)
   exact complete
 
+/-- Pair two certified results on the same arguments and precondition.
+Domains and result functions are inferred from the two certificates. -/
+theorem Realizable.prodMk {InputName : Type} [Fintype InputName]
+    {inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter}
+    {left right : EncodedDomain.{0, carrierLevel} Parameter}
+    {allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop}
+    {first : ∀ sizes, {arguments // allowed sizes arguments} → left.Carrier sizes}
+    {second : ∀ sizes, {arguments // allowed sizes arguments} → right.Carrier sizes}
+    (firstRealizable : (Computation.mk inputs left allowed first).Realizable)
+    (secondRealizable : (Computation.mk inputs right allowed second).Realizable) :
+    (Computation.mk inputs (left.prod right) allowed
+      (fun sizes arguments => (first sizes arguments, second sizes arguments))).Realizable :=
+  Realizable.pairOutputs inputs left right allowed first second firstRealizable secondRealizable
+
+/-- Apply two unary computations to the two components of one ordinary pair.
+Both component preconditions must hold; the result is their ordinary pair. -/
+noncomputable def prodMap (first second : Computation.{carrierLevel} Parameter Unit) :
+    Computation Parameter Unit where
+  inputDomains _ := (first.inputDomains ()).prod (second.inputDomains ())
+  outputDomain := first.outputDomain.prod second.outputDomain
+  precondition sizes arguments :=
+    first.precondition sizes (fun _ => (arguments ()).1) ∧
+      second.precondition sizes (fun _ => (arguments ()).2)
+  compute sizes arguments :=
+    (first.compute sizes ⟨fun _ => (arguments.val ()).1, arguments.property.1⟩,
+      second.compute sizes ⟨fun _ => (arguments.val ()).2, arguments.property.2⟩)
+
+/-- Product mapping reuses the two certified computations and projections. -/
+theorem Realizable.prodMap {first second : Computation.{carrierLevel} Parameter Unit}
+    (firstRealizable : first.Realizable) (secondRealizable : second.Realizable) :
+    (first.prodMap second).Realizable := by
+  let computation := first.prodMap second
+  have left := ((pairProjection_realizable (first.inputDomains ()) (second.inputDomains ()) false).withPrecondition
+    computation.precondition (by intros; trivial)).followedBy firstRealizable rfl
+    (by intro sizes arguments valid; exact valid.1)
+  have right := ((pairProjection_realizable (first.inputDomains ()) (second.inputDomains ()) true).withPrecondition
+    computation.precondition (by intros; trivial)).followedBy secondRealizable rfl
+    (by intro sizes arguments valid; exact valid.2)
+  exact left.prodMk right
+
 /-- Assemble any finite family of results, sharing the same immutable inputs. -/
 theorem Realizable.recordOutputs {InputName : Type} [Fintype InputName]
     (inputDomains : InputName → EncodedDomain.{0, carrierLevel} Parameter)
@@ -211,8 +272,7 @@ theorem Realizable.recordOutputs {InputName : Type} [Fintype InputName]
       (by intros; trivial) (by intros; funext index; exact Fin.elim0 index)
   | succ count hypothesis =>
     have tail := hypothesis (Fin.tail fields) (fun index => results index.succ) (fun index => realizable index.succ)
-    have pair := Realizable.pairOutputs inputDomains (fields 0) (EncodedDomain.record count (Fin.tail fields))
-      precondition (results 0) (fun sizes arguments index => results index.succ sizes arguments) (realizable 0) tail
+    have pair := (realizable 0).prodMk tail
     have combined := pair.reinterpretOutput (EncodedDomain.record (count + 1) fields)
       (fun _ values => Fin.cons values.1 values.2) (fun _ => rfl) (by intros; rfl)
     exact combined.withSpecification precondition _ (by intros; assumption) (by

@@ -101,8 +101,7 @@ noncomputable def boundedSigmaIndex : Computation Parameter Unit :=
 
 theorem boundedSigmaIndex_realizable :
     (boundedSigmaIndex index assignment payload capacity fits).Realizable :=
-  (boundedSigmaStorage_realizable index assignment payload capacity fits).followedBy
-    (pairProjection_realizable _ _ false) rfl (by intros; trivial)
+  (boundedSigmaStorage_realizable index assignment payload capacity fits).fst
 
 /-- Read the padded payload as a fixed-capacity binary word. -/
 noncomputable def boundedSigmaPayload : Computation Parameter Unit :=
@@ -111,8 +110,7 @@ noncomputable def boundedSigmaPayload : Computation Parameter Unit :=
 
 theorem boundedSigmaPayload_realizable :
     (boundedSigmaPayload index assignment payload capacity fits).Realizable :=
-  (boundedSigmaStorage_realizable index assignment payload capacity fits).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  (boundedSigmaStorage_realizable index assignment payload capacity fits).snd
 
 end BoundedPairs
 

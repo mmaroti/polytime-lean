@@ -74,14 +74,8 @@ theorem indexedMap_realizable (parameterDomain elementDomain : EncodedDomain Emp
       elementDomain.Carrier Empty.elim) :
     (indexedMap parameterDomain elementDomain length operation).Realizable := by
   let computation := indexedMap parameterDomain elementDomain length operation
-  have lookup := (arrayLookup_realizable elementDomain.constant length).onResults
-    computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 1)
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 1 computation.precondition)
+  have lookup := (arrayLookup_realizable elementDomain.constant length).onArguments computation.inputDomains computation.precondition
+    (fun choice => match choice with | false => 0 | true => 1) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   have mapped := ((finiteTable_realizable parameterDomain elementDomain elementDomain operation).withConstantSizes).onResults
     computation.inputDomains computation.precondition
     (fun choice sizes arguments => match choice with

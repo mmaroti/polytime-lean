@@ -138,42 +138,5 @@ theorem integerHermiteRowStage_correct (rows columns width length : MvPolynomial
       (arguments.val 0) (arguments.val 1) (arguments.val 2) (List.ofFn (arguments.val 5))
       (arguments.val 3).val (arguments.val 4).val := rfl
 
-/-- The stage clears the incoming entry and leaves canonical remainders at every earlier row. -/
-theorem integerHermiteRowStage_entries (rows columns width length : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStage rows columns width length).Arguments sizes //
-      (integerHermiteRowStage rows columns width length).precondition sizes arguments}) :
-    let result := (integerHermiteRowStage rows columns width length).compute sizes arguments
-    result.1.val (arguments.val 0) (arguments.val 2) =
-      Int.gcd ((arguments.val 3).val (arguments.val 0) (arguments.val 2))
-        ((arguments.val 3).val (arguments.val 1) (arguments.val 2)) ∧
-    result.1.val (arguments.val 1) (arguments.val 2) = 0 ∧
-    ∀ index, 0 ≤ result.1.val (arguments.val 5 index) (arguments.val 2) ∧
-      result.1.val (arguments.val 5 index) (arguments.val 2) <
-        (Int.gcd ((arguments.val 3).val (arguments.val 0) (arguments.val 2))
-          ((arguments.val 3).val (arguments.val 1) (arguments.val 2)) : ℤ) := by
-  have entries := IntegerMatrix.hermiteRowStage_entries (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-    arguments.property.1 (arguments.val 2) (List.ofFn (arguments.val 5)) arguments.property.2.2.1
-    arguments.property.2.2.2.1 arguments.property.2.2.2.2 (arguments.val 3).val (arguments.val 4).val
-    arguments.property.2.1
-  exact ⟨entries.1, entries.2.1, fun index => entries.2.2 _ (List.mem_ofFn.mpr ⟨index, rfl⟩)⟩
-
-/-- The actual accumulated basis retains the presentation and unimodularity. -/
-theorem integerHermiteRowStage_preserves (rows columns width length : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStage rows columns width length).Arguments sizes //
-      (integerHermiteRowStage rows columns width length).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 4).val * original * right = (arguments.val 3).val)
-    (unit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerHermiteRowStage rows columns width length).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  exact IntegerMatrix.hermiteRowStage_preserves (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-    arguments.property.1 (arguments.val 2) (List.ofFn (arguments.val 5)) arguments.property.2.2.2.1
-    (arguments.val 3).val original (arguments.val 4).val right equation unit
-
 end Polytime2.Computation
 

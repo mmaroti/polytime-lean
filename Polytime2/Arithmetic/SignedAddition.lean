@@ -183,8 +183,7 @@ theorem integerAdd_realizable (width : MvPolynomial Parameter ℕ) :
       apply Bool.eq_iff_iff.mpr
       simp [onResults, integerLess, SignedEncoding.negative]
       omega)
-  have parts := Realizable.pairOutputs inputs booleans output (fun _ _ => True) _ magnitude negative magnitudeReady
-  have constructed := parts.followedBy (Realizable.Internal.integerOfParts_realizable (width + 1)) rfl (by
+  have constructed := (negative.prodMk magnitudeReady).followedBy (Realizable.Internal.integerOfParts_realizable (width + 1)) rfl (by
     intro sizes arguments valid
     change SignedEncoding.negative ((arguments false).val + (arguments true).val) = true →
       (magnitude sizes ⟨arguments, valid⟩).val ≠ 0

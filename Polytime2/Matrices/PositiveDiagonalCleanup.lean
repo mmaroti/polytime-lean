@@ -102,13 +102,7 @@ private theorem initialState_realizable (length width : MvPolynomial Parameter �
   have diagonal := (widenedDiagonal_realizable length width).withPrecondition computation.precondition (by intros; trivial)
   have identity := (initialIdentity_realizable length width).onResults computation.inputDomains computation.precondition
     (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
-  have bases := Realizable.pairOutputs computation.inputDomains (integerMatrices length length (positiveDiagonalBasisWidth length width))
-    (integerMatrices length length (positiveDiagonalBasisWidth length width)) computation.precondition _ _ identity identity
-  have complete := Realizable.pairOutputs computation.inputDomains
-    ((binaryNaturalsOfWidth (positiveDiagonalProductWidth length width + 1)).arrayOfLength length)
-    ((integerMatrices length length (positiveDiagonalBasisWidth length width)).prod (integerMatrices length length (positiveDiagonalBasisWidth length width)))
-    computation.precondition _ _ diagonal bases
-  exact complete.withSpecification computation.precondition computation.compute
+  exact (diagonal.prodMk (identity.prodMk identity)).withSpecification computation.precondition computation.compute
     (by intros; assumption) (by intros; rfl)
 
 private theorem initialState_entries (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

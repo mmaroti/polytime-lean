@@ -64,9 +64,7 @@ theorem integerOfMagnitude_realizable (width : MvPolynomial Parameter ℕ) :
   have sign := (booleanOperation_realizable (Parameter := Parameter) (Argument := Empty) (fun _ => false)).onResults
     inputs (fun _ _ => True) (fun impossible => impossible.elim) (by intros; trivial)
     (fun impossible => impossible.elim)
-  have parts := Realizable.pairOutputs inputs booleans (binaryNaturalsOfWidth width)
-    (fun _ _ => True) _ _ sign (copy_realizable (binaryNaturalsOfWidth width))
-  have constructed := parts.followedBy (integerOfParts_realizable width) rfl (by
+  have constructed := (sign.prodMk (copy_realizable (binaryNaturalsOfWidth width))).followedBy (integerOfParts_realizable width) rfl (by
     intro sizes arguments valid
     change false = true → _
     simp)

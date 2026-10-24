@@ -107,8 +107,7 @@ theorem variantInjection_realizable (count : ℕ) (alternatives : Fin count → 
     · intro sizes value
       simp [tag, EncodedDomain.constant, fixed, ofCodec, Computation.withConstantSizes,
         withArguments, Computation.constant, ArrayEncoding.bits_cast]
-  have packed := Realizable.pairOutputs inputs tag (record count fields) (fun _ _ => True)
-    (fun _ _ => index) (fun sizes arguments name => values name sizes arguments) tagRealizable collected
+  have packed := tagRealizable.prodMk collected
   exact packed.withEncodedOutput (variant count alternatives) (fun _ arguments => ⟨index, arguments.val ()⟩)
     (fun _ => rfl) (fun _ _ => rfl)
 

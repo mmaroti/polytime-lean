@@ -61,36 +61,33 @@ noncomputable def hermiteColumnUpdate (rows columns columnWidth workspace : MvPo
     (state : (hermiteColumnState rows columns workspace).Carrier sizes) (token : (boundedIndex rows).Carrier sizes) :
     (hermiteColumnState rows columns workspace).Carrier sizes := by
   classical
-  exact if token = context false then state
-    else if valid : (integerHermiteRowStepWithin rows columns columnWidth workspace).precondition sizes
-        (updateArguments rows columns workspace sizes context state token) then
+  exact ArrayFold.extend (hermiteColumnUpdateAllowed rows columns columnWidth workspace sizes context)
+    (fun state token valid => if same : token = context false then state else
       (integerHermiteRowStepWithin rows columns columnWidth workspace).compute sizes
-        ⟨updateArguments rows columns workspace sizes context state token, valid⟩ else state
+        ⟨updateArguments rows columns workspace sizes context state token, valid same⟩) state token
 
 theorem hermiteColumnUpdate_realizable (rows columns columnWidth workspace : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (hermiteColumnContext rows columns) (boundedIndex rows) (hermiteColumnState rows columns workspace)
       (hermiteColumnUpdateAllowed rows columns columnWidth workspace)
       (hermiteColumnUpdate rows columns columnWidth workspace)).Realizable := by
+  apply arrayFoldStep_of_partial_realizable
   classical
-  let computation := arrayFoldStep (hermiteColumnContext rows columns) (boundedIndex rows)
+  let computation := arrayFoldPartialStep (hermiteColumnContext rows columns) (boundedIndex rows)
     (hermiteColumnState rows columns workspace) (hermiteColumnUpdateAllowed rows columns columnWidth workspace)
-    (hermiteColumnUpdate rows columns columnWidth workspace)
+    (fun sizes context state token valid => if same : token = context false then state else
+      (integerHermiteRowStepWithin rows columns columnWidth workspace).compute sizes
+        ⟨updateArguments rows columns workspace sizes context state token, valid same⟩)
   let condition (_sizes : Parameter → ℕ) (arguments : computation.Arguments _sizes) :=
     decide (arguments (.inr true) = arguments (.inl false))
-  have guard := (elementsEqual_realizable (boundedIndex rows)).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => if choice then arguments.val (.inl false) else arguments.val (.inr true))
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument computation.inputDomains (.inr true) computation.precondition
-      · exact Realizable.argument computation.inputDomains (.inl false) computation.precondition)
+  have guard := (elementsEqual_realizable (boundedIndex rows)).onArguments computation.inputDomains computation.precondition
+    (fun choice => if choice then (.inl false) else (.inr true)) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   apply Realizable.ofCases condition guard
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = true
     have copied := Realizable.argument computation.inputDomains (.inr false) allowed
     apply copied.withSpecification allowed _ (by intros; assumption)
     intro sizes arguments valid
     have same : arguments (.inr true) = arguments (.inl false) := of_decide_eq_true valid.2
-    simp only [computation, arrayFoldStep, hermiteColumnUpdate, ite_eq_left same]
+    simp only [computation, arrayFoldPartialStep, dite_eq_left same]
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = false
     have updated := (integerHermiteRowStepWithin_realizable rows columns columnWidth workspace).onResults
       computation.inputDomains allowed (fun name sizes arguments => updateArguments rows columns workspace sizes
@@ -101,16 +98,12 @@ theorem hermiteColumnUpdate_realizable (rows columns columnWidth workspace : MvP
         · exact Realizable.argument computation.inputDomains (.inl false) allowed
         · exact Realizable.argument computation.inputDomains (.inr true) allowed
         · exact Realizable.argument computation.inputDomains (.inl true) allowed
-        · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) false).withArguments
-            computation.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition allowed (by intros; trivial)
-        · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) true).withArguments
-            computation.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition allowed (by intros; trivial))
+        · exact (Realizable.argument computation.inputDomains (.inr false) allowed).fst
+        · exact (Realizable.argument computation.inputDomains (.inr false) allowed).snd)
     apply updated.withSpecification allowed _ (by intros; assumption)
     intro sizes arguments valid
     have different : arguments (.inr true) ≠ arguments (.inl false) := of_decide_eq_false valid.2
-    have permitted := valid.1 different
-    simp only [computation, arrayFoldStep, Computation.onResults,
-      hermiteColumnUpdate, ite_eq_right different, dite_eq_left permitted]
+    simp only [computation, arrayFoldPartialStep, Computation.onResults, dite_eq_right different]
 
 /-- Every permitted nonsource update is exactly the mathematical Hermite step. -/
 theorem hermiteColumnUpdate_correct (rows columns columnWidth workspace : MvPolynomial Parameter ℕ)
@@ -121,7 +114,7 @@ theorem hermiteColumnUpdate_correct (rows columns columnWidth workspace : MvPoly
     (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStep
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (context false) token (context true) state.1.val state.2.val := by
-  simp only [hermiteColumnUpdate, ite_eq_right different, dite_eq_left (valid different)]
+  simp only [hermiteColumnUpdate, ArrayFold.extend_of_allowed valid, dite_eq_right different]
   exact integerHermiteRowStepWithin_correct rows columns columnWidth workspace sizes
     ⟨updateArguments rows columns workspace sizes context state token, valid different⟩
 

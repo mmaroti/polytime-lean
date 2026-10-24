@@ -94,17 +94,12 @@ private theorem atWidth_realizable (rows columns width : MvPolynomial Parameter 
   apply Realizable.ofCases (computation := step) within tested
   · let allowed sizes arguments := step.precondition sizes arguments ∧ within sizes arguments = true
     have row := (integerMatrixRowWithIndex_realizable rows columns width (arrayPosition columns)
-      (fun _ index => index.val) (arrayPosition_value columns)).onResults step.inputDomains allowed
-      (fun choice _ arguments => match choice with
-        | false => arguments.val (.inr ()) | true => arguments.val (.inl false))
-      (by
+      (fun _ index => index.val) (arrayPosition_value columns)).onArguments step.inputDomains allowed
+        (fun choice => match choice with
+        | false => (.inr ()) | true => (.inl false)) (by intro choice; cases choice <;> rfl) (by
         intro sizes arguments
         change (arguments.val (.inr ())).val < MvPolynomial.eval sizes rows
-        exact of_decide_eq_true arguments.property.2) (by
-        intro choice
-        cases choice
-        · exact Realizable.argument step.inputDomains (.inr ()) allowed
-        · exact Realizable.argument step.inputDomains (.inl false) allowed)
+        exact of_decide_eq_true arguments.property.2)
     let divisorArguments choice sizes (arguments : {arguments : step.Arguments sizes // allowed sizes arguments}) :
         ((arrayLookupWithIndex (binaryIntegers width) (arrayPosition columns) (fun _ index => index.val) columns).inputDomains choice).Carrier sizes :=
       match choice with
@@ -122,17 +117,12 @@ private theorem atWidth_realizable (rows columns width : MvPolynomial Parameter 
         · exact Realizable.argument step.inputDomains (.inr ()) allowed
         · exact row)
     have numerator := (arrayLookupWithIndex_realizable (binaryIntegers width) (arrayPosition columns)
-      (fun _ index => index.val) (arrayPosition_value columns) rows).onResults step.inputDomains allowed
-      (fun choice _ arguments => match choice with
-        | false => arguments.val (.inr ()) | true => arguments.val (.inl true))
-      (by
+      (fun _ index => index.val) (arrayPosition_value columns) rows).onArguments step.inputDomains allowed
+        (fun choice => match choice with
+        | false => (.inr ()) | true => (.inl true)) (by intro choice; cases choice <;> rfl) (by
         intro sizes arguments
         change (arguments.val (.inr ())).val < MvPolynomial.eval sizes rows
-        exact of_decide_eq_true arguments.property.2) (by
-        intro choice
-        cases choice
-        · exact Realizable.argument step.inputDomains (.inr ()) allowed
-        · exact Realizable.argument step.inputDomains (.inl true) allowed)
+        exact of_decide_eq_true arguments.property.2)
     let quotientArguments choice sizes (arguments : {arguments : step.Arguments sizes // allowed sizes arguments}) :
         (binaryIntegers width).Carrier sizes :=
       match choice with

@@ -181,13 +181,13 @@ theorem integerHermiteAlternatingAdvance_realizable (dimension width budget : Mv
     let step sizes (arguments : {arguments : computation.Arguments sizes // branch.precondition sizes arguments}) :=
       (integerHermiteAlternatingPair dimension width).compute sizes
         ⟨fun _ => (arguments.val ()).1, permitted sizes arguments⟩
-    have pairMatrix := pair.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-    have pairBases := pair.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-    have stepLeft := pairBases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-    have stepRight := pairBases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+    have pairMatrix := pair.fst
+    have pairBases := pair.snd
+    have stepLeft := pairBases.fst
+    have stepRight := pairBases.snd
     have oldBases := (pairProjection_realizable matrix (basis.prod basis) true).withPrecondition branch.precondition (by intros; trivial)
-    have oldLeft := oldBases.followedBy (pairProjection_realizable basis basis false) rfl (by intros; trivial)
-    have oldRight := oldBases.followedBy (pairProjection_realizable basis basis true) rfl (by intros; trivial)
+    have oldLeft := oldBases.fst
+    have oldRight := oldBases.snd
     have products := (integerBasisCompose_realizable dimension dimension basisWidth basisWidth stepWidth stepWidth).onResults
       computation.inputDomains branch.precondition
       (fun name sizes arguments => match name with
@@ -208,14 +208,14 @@ theorem integerHermiteAlternatingAdvance_realizable (dimension width budget : Mv
         change (integerMatrixIsDiagonal dimension width).compute sizes ⟨fun _ => (arguments.val ()).1, trivial⟩ = false at rejected
         rw [accepted] at rejected
         contradiction)
-    have left := (products.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)).followedBy
+    have left := (products.fst).followedBy
       (integerMatrixResize_realizable dimension dimension (dimension + stepWidth + basisWidth) basisWidth) rfl
       (by intro sizes arguments valid; exact (bounded sizes ⟨arguments, valid⟩).2.1)
-    have right := (products.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)).followedBy
+    have right := (products.snd).followedBy
       (integerMatrixResize_realizable dimension dimension (dimension + basisWidth + stepWidth) basisWidth) rfl
       (by intro sizes arguments valid; exact (bounded sizes ⟨arguments, valid⟩).2.2)
-    have bases := Realizable.pairOutputs computation.inputDomains _ _ branch.precondition _ _ left right
-    have completed := Realizable.pairOutputs computation.inputDomains _ _ branch.precondition _ _ pairMatrix bases
+    have bases := left.prodMk right
+    have completed := pairMatrix.prodMk bases
     apply completed.withSpecification branch.precondition branch.compute (by intros; assumption)
     intro sizes arguments valid
     have notDiagonal : ¬ ∀ row column, row ≠ column → (arguments ()).1.val row column = 0 := by

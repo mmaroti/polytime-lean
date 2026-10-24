@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Matrices.IntegerRectangularHermiteAtRank
-import Polytime2.Matrices.IntegerCompactAtSize
+import Polytime2.Matrices.IntegerRename
 
 /-! # Host parameter views for rectangular Hermite reduction at a named rank
 
@@ -69,7 +69,7 @@ private theorem outputWidth_rename (rows width : MvPolynomial HostParameter ℕ)
 
 private theorem compatible (rows columns width : MvPolynomial HostParameter ℕ)
     (names : HostParameter → Parameter) (rankName : Parameter) :
-    (integerCompactResultOriginalView rows columns (rectangularHermiteOutputWidth rows width)
+    (integerMatrixPresentationOriginalView rows columns (rectangularHermiteOutputWidth rows width)
       (rectangularHermiteOutputWidth rows width) (rectangularHermiteOutputWidth rows width) names).inputDomains () =
       (native rows columns width names rankName).outputDomain := by
   change ((integerMatrices (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
@@ -85,7 +85,7 @@ private theorem compatible (rows columns width : MvPolynomial HostParameter ℕ)
 noncomputable def integerRectangularHermiteAtSize (rows columns width : MvPolynomial HostParameter ℕ)
     (names : HostParameter → Parameter) (rankName : Parameter) : Computation Parameter Unit :=
   (native rows columns width names rankName).followedBy
-    (integerCompactResultOriginalView rows columns (rectangularHermiteOutputWidth rows width)
+    (integerMatrixPresentationOriginalView rows columns (rectangularHermiteOutputWidth rows width)
       (rectangularHermiteOutputWidth rows width) (rectangularHermiteOutputWidth rows width) names)
     (compatible rows columns width names rankName) (by intros; trivial)
 
@@ -94,7 +94,7 @@ theorem integerRectangularHermiteAtSize_realizable (rows columns width : MvPolyn
     (names : HostParameter → Parameter) (rankName : Parameter) :
     (integerRectangularHermiteAtSize rows columns width names rankName).Realizable :=
   (native_realizable rows columns width names rankName).followedBy
-    (integerCompactResultOriginalView_realizable rows columns (rectangularHermiteOutputWidth rows width)
+    (integerMatrixPresentationOriginalView_realizable rows columns (rectangularHermiteOutputWidth rows width)
       (rectangularHermiteOutputWidth rows width) (rectangularHermiteOutputWidth rows width) names)
     (compatible rows columns width names rankName) (by intros; trivial)
 
@@ -138,68 +138,41 @@ theorem integerRectangularHermiteAtSize_correct (rows columns width : MvPolynomi
         ((arguments.val ()).val.submatrix (Fin.castLE rowBound) (Fin.castLE columnBound)) := by
   let nativeArguments := fun _ : Unit => integerMatricesRenameValues rows columns width names sizes (arguments.val ())
   let nativeBounds := arguments.property.choose
-  have actual := integerRectangularHermiteAtRank_correct (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-    (MvPolynomial.X rankName) (MvPolynomial.rename names width) sizes ⟨nativeArguments, arguments.property⟩
-  let nativeBlock := (nativeArguments ()).val.submatrix (Fin.castLE nativeBounds.1) (Fin.castLE nativeBounds.2)
-  let hostBlock := (arguments.val ()).val.submatrix (Fin.castLE rowBound) (Fin.castLE columnBound)
+  let original := (native rows columns width names rankName).compute sizes arguments
+  have actual : (original.1.val, original.2.1.val, original.2.2.val) =
+      IntegerMatrix.rectangularHermiteRun nativeBounds.1 nativeBounds.2
+        (MvPolynomial.eval sizes (MvPolynomial.rename names width))
+        ((nativeArguments ()).val.submatrix (Fin.castLE nativeBounds.1) (Fin.castLE nativeBounds.2)) :=
+    integerRectangularHermiteAtRank_correct (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
+      (MvPolynomial.X rankName) (MvPolynomial.rename names width) sizes ⟨nativeArguments, arguments.property⟩
   have agreement := IntegerMatrix.rectangularHermiteRun_congr
     (MvPolynomial.eval_rename names sizes rows) (MvPolynomial.eval_rename names sizes columns)
     (MvPolynomial.eval_X rankName) (MvPolynomial.eval_rename names sizes width)
-    nativeBounds.1 nativeBounds.2 rowBound columnBound nativeBlock hostBlock (by
+    nativeBounds.1 nativeBounds.2 rowBound columnBound
+    ((nativeArguments ()).val.submatrix (Fin.castLE nativeBounds.1) (Fin.castLE nativeBounds.2))
+    ((arguments.val ()).val.submatrix (Fin.castLE rowBound) (Fin.castLE columnBound)) (by
       intro row column otherRow otherColumn rowSame columnSame
-      change (arguments.val ()).val _ _ = (arguments.val ()).val _ _
-      apply congrArg₂ (arguments.val ()).val
-      · exact Fin.ext rowSame
-      · exact Fin.ext columnSame)
-  let original : (integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (rectangularHermiteOutputWidth (MvPolynomial.rename names rows) (MvPolynomial.rename names width))).Carrier sizes :=
-    (native rows columns width names rankName).compute sizes arguments
-  have transported := integerMatrixPresentation_transport_values (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-    (rectangularHermiteOutputWidth (MvPolynomial.rename names rows) (MvPolynomial.rename names width))
-    (MvPolynomial.rename names (rectangularHermiteOutputWidth rows width)) (outputWidth_rename rows width names)
+      apply congrArg₂ (arguments.val ()).val <;> exact Fin.ext (by assumption))
+  have values := integerMatrixPresentationOriginalView_values rows columns
+    (rectangularHermiteOutputWidth rows width) (rectangularHermiteOutputWidth rows width)
+    (rectangularHermiteOutputWidth rows width) names _ _ _
+    (outputWidth_rename rows width names) (outputWidth_rename rows width names) (outputWidth_rename rows width names)
     (compatible rows columns width names rankName) sizes original
-  let codecEqual : integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (MvPolynomial.rename names (rectangularHermiteOutputWidth rows width)) =
-      integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-        (rectangularHermiteOutputWidth (MvPolynomial.rename names rows) (MvPolynomial.rename names width)) :=
-    compatible rows columns width names rankName
-  let converted : (integerMatrixPresentation (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-      (MvPolynomial.rename names (rectangularHermiteOutputWidth rows width))).Carrier sizes :=
-    codecEqual.symm ▸ original
-  change (converted.1.val, converted.2.1.val, converted.2.2.val) =
-    (original.1.val, original.2.1.val, original.2.2.val) at transported
-  have same := transported.trans actual
-  have outputValues :
-      let result := (integerRectangularHermiteAtSize rows columns width names rankName).compute sizes arguments
-      (result.1.val, result.2.1.val, result.2.2.val) =
-        ((fun row column => converted.1.val
-          (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-          (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)),
-        (fun row column => converted.2.1.val
-          (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-          (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm column)),
-        (fun row column => converted.2.2.val
-          (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm row)
-          (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column))) := by
-    rfl
-  dsimp only
-  apply outputValues.trans
+  have transported := congrArg (fun result =>
+    ((fun row column => result.1 (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
+      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)),
+    (fun row column => result.2.1 (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
+      (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm column)),
+    (fun row column => result.2.2 (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm row)
+      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)))) actual
+  apply values.trans (transported.trans ?_)
   apply Prod.ext
   · funext row column
-    have entry := congrArg (fun result => result.1
-      (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-      (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)) same
-    exact entry.trans (agreement.1 _ _ row column rfl rfl)
+    exact agreement.1 _ _ row column rfl rfl
   · apply Prod.ext
     · funext row column
-      have entry := congrArg (fun result => result.2.1
-        (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm row)
-        (Fin.cast (MvPolynomial.eval_rename names sizes rows).symm column)) same
-      exact entry.trans (agreement.2.1 _ _ row column rfl rfl)
+      exact agreement.2.1 _ _ row column rfl rfl
     · funext row column
-      have entry := congrArg (fun result => result.2.2
-        (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm row)
-        (Fin.cast (MvPolynomial.eval_rename names sizes columns).symm column)) same
-      exact entry.trans (agreement.2.2 _ _ row column rfl rfl)
+      exact agreement.2.2 _ _ row column rfl rfl
 
 end Polytime2.Computation

@@ -88,14 +88,9 @@ theorem integerMatrixRowDiagonal_realizable (rows columns width : MvPolynomial P
   apply Realizable.ofCases (computation := step) within tested
   · let allowed sizes arguments := step.precondition sizes arguments ∧ within sizes arguments = true
     have row := (integerMatrixRowWithIndex_realizable rows columns width (arrayPosition rows)
-      (fun _ index => index.val) (arrayPosition_value rows)).onResults step.inputDomains allowed
-      (fun choice _ arguments => match choice with
-        | false => arguments.val (.inr ()) | true => arguments.val (.inl ()))
-      (by intro sizes arguments; exact (arguments.val (.inr ())).isLt) (by
-        intro choice
-        cases choice
-        · exact Realizable.argument step.inputDomains (.inr ()) allowed
-        · exact Realizable.argument step.inputDomains (.inl ()) allowed)
+      (fun _ index => index.val) (arrayPosition_value rows)).onArguments step.inputDomains allowed
+        (fun choice => match choice with
+        | false => (.inr ()) | true => (.inl ())) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr ())).isLt)
     have read := (arrayLookupWithIndex_realizable (binaryIntegers width) (arrayPosition rows)
       (fun _ index => index.val) (arrayPosition_value rows) columns).onResults step.inputDomains allowed
       (fun choice sizes arguments => match choice with

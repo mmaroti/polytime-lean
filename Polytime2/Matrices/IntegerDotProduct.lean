@@ -49,32 +49,25 @@ private def dotFits (length leftWidth rightWidth : MvPolynomial Parameter ℕ) (
 
 private noncomputable def dotUpdate (length leftWidth rightWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (context : ∀ name, (dotContext length leftWidth rightWidth name).Carrier sizes)
-    (value : (dotAccumulator length leftWidth rightWidth).Carrier sizes) (index : (arrayPosition length).Carrier sizes) := by
-  classical
-  exact if valid : dotFits length leftWidth rightWidth sizes context value index then
-    ⟨value.val + (context false index).val * (context true index).val, valid⟩ else value
+    (value : (dotAccumulator length leftWidth rightWidth).Carrier sizes) (index : (arrayPosition length).Carrier sizes) :=
+  ArrayFold.extend (dotFits length leftWidth rightWidth sizes context)
+    (fun value index valid => ⟨value.val + (context false index).val * (context true index).val, valid⟩) value index
 
 private theorem dotUpdate_realizable (length leftWidth rightWidth : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (dotContext length leftWidth rightWidth) (arrayPosition length)
       (dotAccumulator length leftWidth rightWidth) (dotFits length leftWidth rightWidth)
       (dotUpdate length leftWidth rightWidth)).Realizable := by
-  classical
+  apply arrayFoldStep_of_partial_realizable
   let computation := arrayFoldStep (dotContext length leftWidth rightWidth) (arrayPosition length)
     (dotAccumulator length leftWidth rightWidth) (dotFits length leftWidth rightWidth)
     (dotUpdate length leftWidth rightWidth)
   let capacity := length + leftWidth + rightWidth
   have lookup (choice : Bool) := (arrayLookupWithIndex_realizable
     (binaryIntegers (if choice then rightWidth else leftWidth)) (arrayPosition length)
-    (fun _ index => index.val) (arrayPosition_value length) length).onResults
-    computation.inputDomains computation.precondition
-    (fun name _ arguments => match name with
-      | false => arguments.val (.inr true)
-      | true => arguments.val (.inl choice))
-    (by intro sizes arguments; exact (arguments.val (.inr true)).isLt) (by
-      intro name
-      cases name
-      · exact Realizable.argument computation.inputDomains (.inr true) computation.precondition
-      · exact Realizable.argument computation.inputDomains (.inl choice) computation.precondition)
+    (fun _ index => index.val) (arrayPosition_value length) length).onArguments computation.inputDomains computation.precondition
+      (fun name => match name with
+      | false => (.inr true)
+      | true => (.inl choice)) (by intro name; cases name <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr true)).isLt)
   have left := (lookup false).followedBy (integerWidenTo_realizable leftWidth (length + rightWidth) capacity (by dsimp [capacity]; ring))
     rfl (by intros; trivial)
   have right := (lookup true).followedBy (integerWidenTo_realizable rightWidth (length + leftWidth) capacity (by dsimp [capacity]; ring))
@@ -94,21 +87,9 @@ private theorem dotUpdate_realizable (length leftWidth rightWidth : MvPolynomial
       · exact Realizable.argument computation.inputDomains (.inr false) computation.precondition
       · exact left
       · exact right)
-  have narrowed := arithmetic.followedBy
+  exact arithmetic.followedBy
     (integerNarrowAtWidths_realizable (2 * capacity + 1) capacity (by intro sizes; simp only [map_add, map_mul, map_one, MvPolynomial.eval_ofNat]; omega))
     rfl (by intro sizes arguments valid; exact valid)
-  apply narrowed.withSpecification computation.precondition computation.compute (by intros; assumption)
-  intro sizes arguments valid
-  apply Subtype.ext
-  have good : dotFits length leftWidth rightWidth sizes (fun name => arguments (.inl name))
-      (arguments (.inr false)) (arguments (.inr true)) := valid
-  change _ = (dotUpdate length leftWidth rightWidth sizes (fun name => arguments (.inl name))
-    (arguments (.inr false)) (arguments (.inr true))).val
-  rw [show dotUpdate length leftWidth rightWidth sizes (fun name => arguments (.inl name))
-      (arguments (.inr false)) (arguments (.inr true)) =
-      ⟨(arguments (.inr false)).val + (arguments (.inl false) (arguments (.inr true))).val *
-        (arguments (.inl true) (arguments (.inr true))).val, good⟩ from dite_eq_left good]
-  rfl
 
 private def dotPrefix {length : ℕ} (left right : Fin length → ℤ) (count : ℕ) : ℤ :=
   ∑ index ∈ Finset.univ.filter (fun index => index.val < count), left index * right index
@@ -146,7 +127,7 @@ private theorem dotUpdate_prefix (length leftWidth rightWidth : MvPolynomial Par
     change (value.val + (context false index).val * (context true index).val).natAbs < _
     rw [before, ← dotPrefix_succ]
     exact dotPrefix_bound length leftWidth rightWidth sizes context (index.val + 1)
-  simp only [dotUpdate, dite_eq_left fits]
+  simp only [dotUpdate, ArrayFold.extend_of_allowed fits]
   rw [before, dotPrefix_succ]
 
 private noncomputable def dotFold (length leftWidth rightWidth : MvPolynomial Parameter ℕ) :=
@@ -218,7 +199,6 @@ theorem integerDotProduct_correct (length leftWidth rightWidth : MvPolynomial Pa
       (fun index => (arguments.val true index).val) count)
     (by simp [initial, dotPrefix])
     (fun index value before => dotUpdate_prefix length leftWidth rightWidth sizes arguments.val index value before)
-    (MvPolynomial.eval sizes length) (by rfl)
   have all : Finset.univ.filter (fun index : Fin (MvPolynomial.eval sizes length) =>
       index.val < MvPolynomial.eval sizes length) = Finset.univ := by
     ext index

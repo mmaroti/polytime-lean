@@ -123,9 +123,8 @@ theorem arrayPackRaw_realizable (element : EncodedDomain Parameter)
     cases choice
     · exact Realizable.argument target.inputDomains false target.precondition
     · have encoded := mapArray_realizable element raw length element.encode (encode_realizable element)
-      exact encoded.onResults target.inputDomains target.precondition
-        (fun _ sizes arguments => arguments.val true) (by intros; trivial)
-        (fun _ => Realizable.argument target.inputDomains true target.precondition)
+      exact encoded.onArguments target.inputDomains target.precondition
+        (fun _ => true) (by intro _; rfl) (by intros; trivial)
   exact (arrayPackBits_realizable element.widthPolynomial length).onResults target.inputDomains target.precondition
     values (by intros; trivial) producers
 

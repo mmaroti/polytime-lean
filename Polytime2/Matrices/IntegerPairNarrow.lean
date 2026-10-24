@@ -49,17 +49,7 @@ theorem integerMatrixPairNarrow_realizable
     (firstFits : ∀ sizes, MvPolynomial.eval sizes targetWidth ≤ MvPolynomial.eval sizes firstWidth)
     (secondFits : ∀ sizes, MvPolynomial.eval sizes targetWidth ≤ MvPolynomial.eval sizes secondWidth) :
     (integerMatrixPairNarrow firstRows firstColumns secondRows secondColumns firstWidth secondWidth targetWidth).Realizable := by
-  let computation := integerMatrixPairNarrow firstRows firstColumns secondRows secondColumns firstWidth secondWidth targetWidth
-  let first := integerMatrices firstRows firstColumns firstWidth
-  let second := integerMatrices secondRows secondColumns secondWidth
-  have firstReady := ((pairProjection_realizable first second false).withPrecondition computation.precondition
-    (by intros; trivial)).followedBy
-    (integerMatrixNarrow_realizable firstRows firstColumns firstWidth targetWidth firstFits) rfl
-    (by intro sizes arguments valid; exact valid.1)
-  have secondReady := ((pairProjection_realizable first second true).withPrecondition computation.precondition
-    (by intros; trivial)).followedBy
-    (integerMatrixNarrow_realizable secondRows secondColumns secondWidth targetWidth secondFits) rfl
-    (by intro sizes arguments valid; exact valid.2)
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ firstReady secondReady
+  exact (integerMatrixNarrow_realizable firstRows firstColumns firstWidth targetWidth firstFits).prodMap
+    (integerMatrixNarrow_realizable secondRows secondColumns secondWidth targetWidth secondFits)
 
 end Polytime2.Computation

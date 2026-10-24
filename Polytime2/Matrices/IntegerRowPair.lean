@@ -58,36 +58,29 @@ private theorem integerRowsLinear_realizable (columns coefficientWidth matrixWid
       | 0 => coefficients false | 1 => first | 2 => coefficients true | 3 => second), trivial⟩
   let step := arrayZipWithStep context (binaryIntegers matrixWidth) (binaryIntegers matrixWidth)
     (binaryIntegers (coefficientWidth + matrixWidth + 1)) operation
-  have scalar : step.Realizable := (integerTwoProductsAtWidths_realizable coefficientWidth matrixWidth).onResults
-    step.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | 0 => arguments.val (.inl false)
-      | 1 => arguments.val (.inr false)
-      | 2 => arguments.val (.inl true)
-      | 3 => arguments.val (.inr true)) (by intros; trivial) (by
-        intro name
-        fin_cases name
-        · exact Realizable.argument step.inputDomains (.inl false) (fun _ _ => True)
-        · exact Realizable.argument step.inputDomains (.inr false) (fun _ _ => True)
-        · exact Realizable.argument step.inputDomains (.inl true) (fun _ _ => True)
-        · exact Realizable.argument step.inputDomains (.inr true) (fun _ _ => True))
+  have scalar : step.Realizable := (integerTwoProductsAtWidths_realizable coefficientWidth matrixWidth).onArguments step.inputDomains (fun _ _ => True)
+    (fun name => match name with
+      | 0 => (.inl false)
+      | 1 => (.inr false)
+      | 2 => (.inl true)
+      | 3 => (.inr true)) (by intro name; fin_cases name <;> rfl) (by intros; trivial)
   exact (arrayZipWith_realizable context (binaryIntegers matrixWidth) (binaryIntegers matrixWidth)
-    (binaryIntegers (coefficientWidth + matrixWidth + 1)) columns operation scalar).onResults computation.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | .inl false => arguments.val 2
-      | .inl true => arguments.val 3
-      | .inr false => arguments.val 0
-      | .inr true => arguments.val 1) (by intros; trivial) (by
+    (binaryIntegers (coefficientWidth + matrixWidth + 1)) columns operation scalar).onArguments computation.inputDomains (fun _ _ => True)
+      (fun name => match name with
+      | .inl false => 2
+      | .inl true => 3
+      | .inr false => 0
+      | .inr true => 1) (by
         intro name
         cases name with
         | inl choice =>
           cases choice
-          · exact Realizable.argument computation.inputDomains 2 (fun _ _ => True)
-          · exact Realizable.argument computation.inputDomains 3 (fun _ _ => True)
+          · rfl
+          · rfl
         | inr choice =>
           cases choice
-          · exact Realizable.argument computation.inputDomains 0 (fun _ _ => True)
-          · exact Realizable.argument computation.inputDomains 1 (fun _ _ => True))
+          · rfl
+          · rfl) (by intros; trivial)
 
 
 end Polytime2.Computation.Realizable.Internal
@@ -138,17 +131,13 @@ theorem integerRowPairAtWidths_realizable (rows columns coefficientWidth matrixW
         | false => if choice then arguments.val 1 else arguments.val 0
         | true => arguments.val 6), trivial⟩
   have selectedReady (choice : Bool) : (Computation.mk inputs
-      ((binaryIntegers matrixWidth).arrayOfLength columns) (fun _ _ => True) (selected choice)).Realizable :=
-    (Realizable.Internal.integerMatrixRow_realizable rows columns matrixWidth).onResults inputs (fun _ _ => True)
-      (fun name _ arguments => match name with
-        | false => if choice then arguments.val 1 else arguments.val 0
-        | true => arguments.val 6) (by intros; trivial) (by
-          intro name
-          cases name
-          · cases choice
-            · exact Realizable.argument inputs 0 (fun _ _ => True)
-            · exact Realizable.argument inputs 1 (fun _ _ => True)
-          · exact Realizable.argument inputs 6 (fun _ _ => True))
+      ((binaryIntegers matrixWidth).arrayOfLength columns) (fun _ _ => True) (selected choice)).Realizable := by
+    have ready := (Realizable.Internal.integerMatrixRow_realizable rows columns matrixWidth).onArguments inputs (fun _ _ => True)
+      (fun name => match name with
+        | false => if choice then 1 else 0
+        | true => 6) (by intro name; cases choice <;> cases name <;> rfl) (by intros; trivial)
+    exact ready.withSpecification (fun _ _ => True) (selected choice)
+      (by intros; trivial) (by intro sizes arguments valid; cases choice <;> rfl)
   let combined (choice : Bool) sizes (arguments : {arguments : computation.Arguments sizes // True}) :=
     (Realizable.Internal.integerRowsLinear columns coefficientWidth matrixWidth).compute sizes
       ⟨(fun name => match name with

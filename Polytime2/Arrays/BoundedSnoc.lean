@@ -17,8 +17,7 @@ limitations under the License.
 
 import Polytime2.Arrays.PackingRead
 import Polytime2.Arithmetic.UnarySuccessor
-import Polytime2.Computation.ComputedFrame
-import Polytime2.Computation.ComputedCall
+import Polytime2.Computation.ComputedHost
 
 /-! # Appending at the decoded length of a bounded array
 
@@ -55,9 +54,7 @@ private theorem callee_realizable (element : EncodedDomain Parameter) (capacity 
   let renamed := element.renameParameters (Sum.inl : Parameter → Parameter ⊕ Unit)
   have viewed := (renamedPairView_realizable (boundedArray element capacity) element
     (Sum.inl : Parameter → Parameter ⊕ Unit)).withPrecondition computation.precondition (by intros; trivial)
-  have packed := viewed.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have appended := viewed.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have live := packed.followedBy
+  have live := viewed.fst.followedBy
     (boundedArrayAtSize_realizable element capacity Sum.inl (.inr ()) renamed (fun _ => True)
       (fun _ _ value => value) (by intro sizes valid value; exact renameParameters_bits element Sum.inl sizes value)) rfl
     (by intro sizes arguments valid; exact ⟨valid, trivial⟩)
@@ -73,7 +70,7 @@ private theorem callee_realizable (element : EncodedDomain Parameter) (capacity 
         intro choice
         cases choice
         · exact polynomial
-        · exact appended)
+        · exact viewed.snd)
   apply complete.withSpecification computation.precondition computation.compute (by intros; assumption)
   intro sizes arguments valid
   rfl
@@ -81,47 +78,30 @@ private theorem callee_realizable (element : EncodedDomain Parameter) (capacity 
 private noncomputable def rankBounds (capacity : MvPolynomial Parameter ℕ) : Unit → MvPolynomial Parameter ℕ :=
   fun _ => capacity
 
-private noncomputable def frame (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ) :=
-  (extendedSizeFrame (rankBounds capacity) (source element capacity)).onResults
-    (fun _ : Unit => source element capacity) (fun _ _ => True)
-    (fun choice _ arguments => match choice with
-      | false => fun _ => (arguments.val ()).1.1
-      | true => arguments.val ()) (by intros; trivial)
+private def counts (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) (value : (source element capacity).Carrier sizes) :
+    (computedSizeDomain (rankBounds capacity)).Carrier sizes := fun _ => value.1.1
 
-private theorem frame_realizable (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ) :
-    (frame element capacity).Realizable := by
-  let context := fun _ : Unit => source element capacity
-  have count := (pairProjection_realizable (boundedArray element capacity) element false).followedBy
+private theorem readers_realizable (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ)
+    (name : Unit) :
+    (unaryMap (source element capacity) (boundedUnary (rankBounds capacity name)) (fun _ _ => True)
+      (fun sizes value => counts element capacity sizes value.val name)).Realizable :=
+  (pairProjection_realizable (boundedArray element capacity) element false).followedBy
     (boundedArrayCount_realizable element capacity) rfl (by intros; trivial)
-  have header : (Computation.mk context (computedSizeDomain (rankBounds capacity)) (fun _ _ => True)
-      (fun _ arguments _ => (arguments.val ()).1.1)).Realizable := by
-    apply Realizable.namedRecordOutputs
-    intro name
-    cases name
-    exact count
-  apply (extendedSizeFrame_realizable (rankBounds capacity) (source element capacity)).onResults
-    context (fun _ _ => True)
-    (fun choice _ arguments => match choice with
-      | false => fun _ => (arguments.val ()).1.1
-      | true => arguments.val ()) (by intros; trivial)
-  intro choice
-  cases choice
-  · exact header
-  · exact Realizable.argument context () (fun _ _ => True)
 
 /-- Append at the decoded count, retaining the old size assignment with the live result array. -/
 noncomputable def boundedArraySnocCall (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
-  (frame element capacity).followedBy
-    ((callee element capacity).atComputedUnarySizes (extendedSizeBounds (rankBounds capacity))) rfl
-    (by intro sizes arguments valid; rfl)
+  ((callee element capacity).atComputedHostInput (rankBounds capacity)
+    (source element capacity) (counts element capacity) rfl).withPrecondition
+    (fun _ _ => True) (by intros; rfl)
 
 /-- Frame preparation and live-array appending reuse the generic computed-size call. -/
 theorem boundedArraySnocCall_realizable (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ) :
     (boundedArraySnocCall element capacity).Realizable :=
-  (frame_realizable element capacity).followedBy
-    ((callee_realizable element capacity).atComputedUnarySizes (extendedSizeBounds (rankBounds capacity))) rfl
-    (by intro sizes arguments valid; rfl)
+  ((callee_realizable element capacity).atComputedHostInput (rankBounds capacity)
+    (source element capacity) (counts element capacity) rfl
+    (readers_realizable element capacity)).withPrecondition _ (by intros; rfl)
 
 /-- The callee receives the stored count rather than the capacity bound. -/
 theorem boundedArraySnocCall_count (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ)
@@ -150,8 +130,8 @@ theorem boundedArraySnocCall_last (element : EncodedDomain Parameter) (capacity 
       change (arguments.val ()).1.1.val < (result.1 (.inr ())).val + 1
       rw [boundedArraySnocCall_count]
       omega⟩
-  dsimp only [boundedArraySnocCall, Computation.followedBy, Computation.atComputedUnarySizes, frame,
-    Computation.onResults, extendedSizeFrame, callee, snocValues]
+  dsimp only [boundedArraySnocCall, Computation.withPrecondition, Computation.atComputedHostInput,
+    counts, callee, snocValues]
   change Fin.snoc (n := MvPolynomial.eval actual (MvPolynomial.X (Sum.inr () : Parameter ⊕ Unit)))
     (α := fun _ => element.Carrier sizes) _ (arguments.val ()).2 (Fin.cast (by simp) index) = _
   have atLast : Fin.cast (by simp) index = Fin.last (MvPolynomial.eval actual (MvPolynomial.X (Sum.inr () : Parameter ⊕ Unit))) := by
@@ -186,12 +166,13 @@ theorem boundedArraySnocCall_get (element : EncodedDomain Parameter) (capacity :
       change position.val < (result.1 (.inr ())).val
       rw [boundedArraySnocCall_count]
       exact position.isLt⟩
-  dsimp only [boundedArraySnocCall, Computation.followedBy, Computation.atComputedUnarySizes, frame,
-    Computation.onResults, extendedSizeFrame, callee, snocValues]
+  dsimp only [boundedArraySnocCall, Computation.withPrecondition, Computation.atComputedHostInput,
+    counts, callee, snocValues]
   change Fin.snoc (n := MvPolynomial.eval actual (MvPolynomial.X (Sum.inr () : Parameter ⊕ Unit)))
     (α := fun _ => element.Carrier sizes) _ (arguments.val ()).2 (Fin.cast (by simp) index) = _
   have before : Fin.cast (by simp) index = old.castSucc := by apply Fin.ext; rfl
   rw [before, Fin.snoc_castSucc]
+  rfl
 
 private theorem live_bits (element : EncodedDomain Parameter) (capacity : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
@@ -317,9 +298,7 @@ theorem boundedArraySnoc_realizable (element : EncodedDomain Parameter) (capacit
     intro sizes arguments valid
     exact valid)
   have contents := (payload_realizable element capacity).withPrecondition computation.precondition (by intros; trivial)
-  have paired := Realizable.pairOutputs computation.inputDomains (boundedUnary capacity)
-    (bitVectors (capacity * element.widthPolynomial)) computation.precondition _ _ header contents
-  apply paired.withEncodedOutput computation.outputDomain computation.compute (by intros; rfl)
+  apply (header.prodMk contents).withEncodedOutput computation.outputDomain computation.compute (by intros; rfl)
   intro sizes arguments
   have exactPayload := payload_correct element capacity sizes ⟨arguments.val, trivial⟩
   exact congrArg (fun word => CallingConvention.encoded

@@ -130,13 +130,10 @@ theorem extendedSizeFrame_realizable
           exact MvPolynomial.eval_X parameter)
     | inr parameter =>
       exact (namedRecordProjection_realizable
-        (fun parameter => EncodedDomain.boundedUnary (bounds parameter)) parameter).onResults
-          computation.inputDomains computation.precondition
-          (fun _ => fun sizes arguments => arguments.val false) (by intros; trivial)
-          (fun _ => Realizable.argument computation.inputDomains false computation.precondition)
-  have pair := Realizable.pairOutputs computation.inputDomains index payload computation.precondition
-    result (fun _ arguments => arguments.val true) indexReady
-    (Realizable.argument computation.inputDomains true computation.precondition)
+        (fun parameter => EncodedDomain.boundedUnary (bounds parameter)) parameter).onArguments
+          computation.inputDomains computation.precondition (fun _ => false)
+          (by intros; rfl) (by intros; trivial)
+  have pair := indexReady.prodMk (right := payload) (Realizable.argument computation.inputDomains true computation.precondition)
   apply pair.withEncodedOutput computation.outputDomain computation.compute
   · intro sizes
     change MvPolynomial.eval sizes (index.widthPolynomial +

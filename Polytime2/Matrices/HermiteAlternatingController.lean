@@ -41,41 +41,28 @@ private def values (dimension width budget : MvPolynomial Parameter ℕ) (sizes 
     (state : (hermiteAlternatingState dimension width budget).Carrier sizes) :=
   (state.1.val, state.2.1.val, state.2.2.val)
 
-private noncomputable def update (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (_original : ∀ name, (context dimension width name).Carrier sizes)
-    (state : (hermiteAlternatingState dimension width budget).Carrier sizes)
-    (_token : (arrayPosition budget).Carrier sizes) := by
-  classical
-  exact if valid : (integerHermiteAlternatingAdvance dimension width budget).precondition sizes (fun _ => state) then
-    (integerHermiteAlternatingAdvance dimension width budget).compute sizes ⟨fun _ => state, valid⟩ else state
-
 private def allowed (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (_original : ∀ name, (context dimension width name).Carrier sizes)
     (state : (hermiteAlternatingState dimension width budget).Carrier sizes)
     (_token : (arrayPosition budget).Carrier sizes) : Prop :=
   (integerHermiteAlternatingAdvance dimension width budget).precondition sizes (fun _ => state)
 
+private noncomputable def update (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (_original : ∀ name, (context dimension width name).Carrier sizes)
+    (state : (hermiteAlternatingState dimension width budget).Carrier sizes)
+    (_token : (arrayPosition budget).Carrier sizes) :=
+  ArrayFold.extend (allowed dimension width budget sizes _original)
+    (fun state _token valid => (integerHermiteAlternatingAdvance dimension width budget).compute sizes
+      ⟨fun _ => state, valid⟩) state _token
+
 private theorem update_realizable (dimension width budget : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (context dimension width) (arrayPosition budget) (hermiteAlternatingState dimension width budget)
       (allowed dimension width budget) (update dimension width budget)).Realizable := by
-  classical
+  apply arrayFoldStep_of_partial_realizable
   let step := arrayFoldStep (context dimension width) (arrayPosition budget) (hermiteAlternatingState dimension width budget)
     (allowed dimension width budget) (update dimension width budget)
-  have ready := (integerHermiteAlternatingAdvance_realizable dimension width budget).onResults
-    step.inputDomains step.precondition (fun _ _ arguments => arguments.val (.inr false))
-    (by intro sizes arguments; exact arguments.property)
-    (fun _ => Realizable.argument step.inputDomains (.inr false) step.precondition)
-  apply ready.withSpecification step.precondition step.compute (by intros; assumption)
-  intro sizes arguments valid
-  have permitted : (integerHermiteAlternatingAdvance dimension width budget).precondition sizes
-      (fun _ => arguments (.inr false)) := valid
-  change _ = update dimension width budget sizes (fun name => arguments (.inl name))
-    (arguments (.inr false)) (arguments (.inr true))
-  rw [show update dimension width budget sizes (fun name => arguments (.inl name))
-      (arguments (.inr false)) (arguments (.inr true)) =
-      (integerHermiteAlternatingAdvance dimension width budget).compute sizes
-        ⟨fun _ => arguments (.inr false), permitted⟩ from dite_eq_left permitted]
-  rfl
+  exact (integerHermiteAlternatingAdvance_realizable dimension width budget).onArguments step.inputDomains step.precondition
+    (fun _ => (.inr false)) (by intro _; rfl) (by intro sizes arguments; exact arguments.property)
 
 private def admissible (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (original : ∀ name, (context dimension width name).Carrier sizes)
@@ -114,7 +101,7 @@ private theorem preserves (dimension width budget : MvPolynomial Parameter ℕ) 
   have permitted : (integerHermiteAlternatingAdvance dimension width budget).precondition sizes (fun _ => state) :=
     permits dimension width budget sizes original tokens initial valid index state before
   dsimp only [invariant, update]
-  rw [dite_eq_left permitted]
+  rw [ArrayFold.extend_of_allowed permitted]
   have same := integerHermiteAlternatingAdvance_correct dimension width budget sizes ⟨fun _ => state, permitted⟩
   change values dimension width budget sizes _ = _ at same
   rw [same]
@@ -155,6 +142,5 @@ theorem hermiteAlternatingController_correct (dimension width budget : MvPolynom
     arguments.property.2.2.2
     (fun index state before => preserves dimension width budget sizes (fun _ => arguments.val (.inl ()))
       (arguments.val (.inr true)) (arguments.val (.inr false)) arguments.property index state before)
-    (MvPolynomial.eval sizes budget) (by rfl)
 
 end Polytime2.Computation

@@ -105,12 +105,8 @@ theorem integerHermiteRowStageUpdate_realizable (rows columns width : MvPolynomi
   · exact Realizable.argument (inputs rows columns width) 0 (allowed rows columns width)
   · exact Realizable.argument (inputs rows columns width) 2 (allowed rows columns width)
   · exact Realizable.argument (inputs rows columns width) 3 (allowed rows columns width)
-  · exact (elimination_realizable rows columns width).followedBy
-      (pairProjection_realizable (integerMatrices rows columns (intermediateWidth width))
-        (integerMatrices rows rows (intermediateWidth width)) false) rfl (by intros; trivial)
-  · exact (elimination_realizable rows columns width).followedBy
-      (pairProjection_realizable (integerMatrices rows columns (intermediateWidth width))
-        (integerMatrices rows rows (intermediateWidth width)) true) rfl (by intros; trivial)
+  · exact (elimination_realizable rows columns width).fst
+  · exact (elimination_realizable rows columns width).snd
 
 /-- The returned matrices are exactly one mathematical interleaved stage with the selected earlier row. -/
 theorem integerHermiteRowStageUpdate_correct (rows columns width : MvPolynomial Parameter ℕ)
@@ -122,22 +118,5 @@ theorem integerHermiteRowStageUpdate_correct (rows columns width : MvPolynomial 
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 3) [arguments.val 2]
       (arguments.val 4).val (arguments.val 5).val := rfl
-
-/-- The actual returned basis preserves the presentation and unimodularity. -/
-theorem integerHermiteRowStageUpdate_preserves (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStageUpdate rows columns width).Arguments sizes //
-      (integerHermiteRowStageUpdate rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 5).val * original * right = (arguments.val 4).val)
-    (unit : IsUnit (arguments.val 5).val.det) :
-    let result := (integerHermiteRowStageUpdate rows columns width).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  exact IntegerMatrix.hermiteRowStage_preserves (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-    arguments.property.1 (arguments.val 3) [arguments.val 2]
-    (by simpa only [List.mem_singleton] using arguments.property.2.1)
-    (arguments.val 4).val original (arguments.val 5).val right equation unit
 
 end Polytime2.Computation

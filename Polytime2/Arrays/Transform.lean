@@ -106,11 +106,7 @@ theorem update_realizable
   have tail := (arrayTail_realizable raw length).withArguments inputs
     ⟨(fun _ => .inr false), by intro first second _; cases first; cases second; rfl⟩
     (by intro name; cases name; rfl)
-  have pair := Realizable.pairOutputs inputs (raw.arrayOfLength length) raw (fun _ _ => True)
-    (fun sizes arguments => Fin.tail (successorValues length sizes (arguments.val (.inr false))))
-    (fun sizes arguments => target.encode sizes (operation sizes (fun name => arguments.val (.inl name)) (arguments.val (.inr true))))
-    tail encoded
-  exact pair.reinterpretOutput queue
+  exact (tail.prodMk (left := raw.arrayOfLength length) (right := raw) encoded).reinterpretOutput queue
     (fun sizes parts => snocValues length sizes parts.1 parts.2)
     (by intro sizes; simp [queue, raw, EncodedDomain.arrayOfLength, EncodedDomain.ofCodec, Nat.add_mul])
     (fun sizes parts => arraySnoc_encode_bits raw length sizes _ _)

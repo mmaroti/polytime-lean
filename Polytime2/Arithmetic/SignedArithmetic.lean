@@ -68,9 +68,7 @@ theorem integerNegate_realizable (width : MvPolynomial Parameter ℕ) :
       cases name
       · exact integerNegative_realizable width
       · exact integerIsZero_realizable width)
-  have parts := Realizable.pairOutputs inputs booleans (binaryNaturalsOfWidth width) (fun _ _ => True)
-    _ _ negative (integerMagnitude_realizable width)
-  have constructed := parts.followedBy (Realizable.Internal.integerOfParts_realizable width) rfl (by
+  have constructed := (negative.prodMk (integerMagnitude_realizable width)).followedBy (Realizable.Internal.integerOfParts_realizable width) rfl (by
     intro sizes arguments valid
     change (!SignedEncoding.negative (arguments ()).val && !decide ((arguments ()).val = 0)) = true →
       (arguments ()).val.natAbs ≠ 0

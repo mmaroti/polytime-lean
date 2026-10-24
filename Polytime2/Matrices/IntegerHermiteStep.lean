@@ -72,33 +72,6 @@ theorem integerHermiteRowStep_correct (rows columns width : MvPolynomial Paramet
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := rfl
 
-/-- The certified operation returns the positive gcd pivot and clears the target. -/
-theorem integerHermiteRowStep_entries (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStep rows columns width).Arguments sizes //
-      (integerHermiteRowStep rows columns width).precondition sizes arguments}) :
-    let result := (integerHermiteRowStep rows columns width).compute sizes arguments
-    result.1.val (arguments.val 0) (arguments.val 2) =
-      Int.gcd ((arguments.val 3).val (arguments.val 0) (arguments.val 2))
-        ((arguments.val 3).val (arguments.val 1) (arguments.val 2)) ∧
-      result.1.val (arguments.val 1) (arguments.val 2) = 0 := by
-  exact IntegerMatrix.hermiteRowStep_entries (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-    arguments.property.1 (arguments.val 2) (arguments.val 3).val (arguments.val 4).val arguments.property.2
-
-/-- The returned basis preserves the presentation and unimodularity. -/
-theorem integerHermiteRowStep_preserves (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStep rows columns width).Arguments sizes //
-      (integerHermiteRowStep rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 4).val * original * right = (arguments.val 3).val)
-    (unit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerHermiteRowStep rows columns width).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  exact IntegerMatrix.hermiteRowStep_preserves (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-    arguments.property.1 (arguments.val 2) (arguments.val 3).val original (arguments.val 4).val right equation unit
-
 private def hermiteEntrySelection (source : Bool) : Fin 3 ↪ Fin 5 :=
   ⟨(fun name => match name with | 0 => if source then 0 else 1 | 1 => 2 | 2 => 3), by
     intro first second equal
@@ -132,16 +105,12 @@ private theorem hermiteRemainder_realizable (rows columns width : MvPolynomial P
           (pow_le_pow_right₀ (by decide) (by simp only [map_add, map_mul, map_ofNat, map_one]; omega))⟩,
          ⟨result.2.val, fun row column => (result.2.property row column).trans_le
           (pow_le_pow_right₀ (by decide) (by simp only [map_add, map_mul, map_ofNat, map_one]; omega))⟩))).Realizable := by
-  let first := integerMatrices rows columns (2 * width + 1)
-  let second := integerMatrices rows rows (2 * width + 1)
   have widthEqual : 2 * (2 * width + 1) + 1 = (2 * width + 1) + (2 * width + 2) := by ring
-  have matrix := (pairProjection_realizable first second false).followedBy
-    (integerMatrixWiden_realizable rows columns (2 * width + 1) (2 * width + 2)
-      (2 * (2 * width + 1) + 1) widthEqual) rfl (by intros; trivial)
-  have basis := (pairProjection_realizable first second true).followedBy
+  have mapped := (integerMatrixWiden_realizable rows columns (2 * width + 1) (2 * width + 2)
+    (2 * (2 * width + 1) + 1) widthEqual).prodMap
     (integerMatrixWiden_realizable rows rows (2 * width + 1) (2 * width + 2)
-      (2 * (2 * width + 1) + 1) widthEqual) rfl (by intros; trivial)
-  have widened := Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _ matrix basis
+      (2 * (2 * width + 1) + 1) widthEqual)
+  have widened := mapped.withPrecondition (fun _ _ => True) (by intros; trivial)
   have complete := (integerRowRemainderWithLeft_realizable rows columns width).followedBy widened rfl (by intros; trivial)
   exact complete.withSpecification (integerHermiteRowStep rows columns width).precondition _
     (by intros; assumption) (by intros; rfl)

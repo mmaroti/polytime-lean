@@ -15,9 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Arrays.PackingResult
+import Polytime2.Arrays.PackingRead
 import Polytime2.Encoding.ParameterRename
-import Polytime2.Computation.ComputedCall
+import Polytime2.Computation.ComputedHost
 import Polytime2.Computation.ComputedRecord
 
 /-! # Preparing packed arrays for calls at the retained count
@@ -35,58 +35,17 @@ open EncodedDomain ArrayPacking CallingConvention
 variable {Parameter : Type} [Fintype Parameter]
 
 noncomputable def packingCallBounds (length : MvPolynomial Parameter ℕ) :
-    Parameter ⊕ Unit → MvPolynomial Parameter ℕ := Sum.elim MvPolynomial.X (fun _ => length)
+    Parameter ⊕ Unit → MvPolynomial Parameter ℕ := extendedSizeBounds (fun _ : Unit => length)
 
 /-- Retain the original mathematical sizes and add the actual packed length. -/
 def packingCallSizes (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (retained : Fin (MvPolynomial.eval sizes length + 1)) :
     (computedSizeDomain (packingCallBounds length)).Carrier sizes :=
-  fun name => match name with
-    | .inl parameter => ⟨sizes parameter, by simp [packingCallBounds]⟩
-    | .inr _ => retained
+  extendedSizeValues (fun _ : Unit => length) sizes (fun _ => retained)
 
 /-- A callee's elements may still depend on any of the caller's sizes. -/
 noncomputable def packingPayload (element : EncodedDomain Parameter) : EncodedDomain (Parameter ⊕ Unit) :=
   (element.renameParameters Sum.inl).array (.inr ())
-
-private theorem packingPayload_bits (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ) (retained : Fin (MvPolynomial.eval sizes length + 1))
-    (values : Fin retained.val → element.Carrier sizes) :
-    ArrayEncoding.bits ((packingPayload element).encode
-      (computedSizeAssignment (packingCallBounds length) sizes (packingCallSizes length sizes retained)) values) =
-      ArrayEncoding.bits (ArrayEncoding.encode (element.encode sizes) retained.val values) := by
-  simp only [packingPayload, array_encode_bits, ArrayEncoding.bits_encode,
-    renameParameters_bits]
-  rfl
-
-private theorem packingCall_capacity (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
-    SizeSubstitution.polynomial (packingCallBounds length)
-      (namedRecord (fun _ : Unit => packingPayload element)).widthPolynomial = length * element.widthPolynomial := by
-  rw [namedRecord_unit_widthPolynomial]
-  simp [packingPayload, array_widthPolynomial, renameParameters, ofCodec,
-    SizeSubstitution.polynomial, MvPolynomial.bind₁_rename, MvPolynomial.bind₁_X_left, packingCallBounds, Function.comp_def]
-
-private theorem packingSizeRecord_realizable {InputName : Type} [Fintype InputName]
-    (inputs : InputName → EncodedDomain Parameter)
-    (allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop)
-    (length : MvPolynomial Parameter ℕ)
-    (retained : ∀ sizes, {arguments // allowed sizes arguments} → Fin (MvPolynomial.eval sizes length + 1))
-    (countReady : (Computation.mk inputs (boundedUnary length) allowed retained).Realizable) :
-    (Computation.mk inputs (computedSizeDomain (packingCallBounds length)) allowed
-      (fun sizes arguments => packingCallSizes length sizes (retained sizes arguments))).Realizable := by
-  let sizesResult sizes arguments := packingCallSizes length sizes (retained sizes arguments)
-  apply Realizable.namedRecordOutputs
-  intro name
-  cases name with
-  | inl parameter =>
-    have evaluated := (polynomialUnarySize_realizable (MvPolynomial.X parameter)).onResults
-      inputs allowed (fun impossible => impossible.elim) (by intros; trivial) (fun impossible => impossible.elim)
-    exact evaluated.withSpecification allowed
-      (fun sizes arguments => sizesResult sizes arguments (.inl parameter)) (by intros; trivial) (by
-        intro sizes arguments valid
-        apply Fin.ext
-        exact MvPolynomial.eval_X parameter)
-  | inr singleton => cases singleton; exact countReady
 
 /-- Convert an existing exact packed array to the standard computed-size call
 frame. The count is read from the value, without repeating packing. -/
@@ -99,43 +58,17 @@ noncomputable def boundedArrayCallFrame (element : EncodedDomain Parameter) (len
 
 theorem boundedArrayCallFrame_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (boundedArrayCallFrame element length).Realizable := by
-  let computation := boundedArrayCallFrame element length
-  let bounds := packingCallBounds length
-  let retained sizes (arguments : {arguments : computation.Arguments sizes // computation.precondition sizes arguments}) :=
-    (arguments.val ()).1
-  let sizesResult sizes arguments := packingCallSizes length sizes (retained sizes arguments)
-  have indexReady := packingSizeRecord_realizable computation.inputDomains computation.precondition length retained
-    (boundedArrayCount_realizable element length)
-  have pair := Realizable.pairOutputs computation.inputDomains (computedSizeDomain bounds)
-    (bitVectors (length * element.widthPolynomial)) computation.precondition sizesResult
-    (boundedArrayPayload element length).compute indexReady (boundedArrayPayload_realizable element length)
-  apply pair.withEncodedOutput computation.outputDomain computation.compute
-  · intro sizes
-    change MvPolynomial.eval sizes ((computedSizeDomain bounds).widthPolynomial +
-      SizeSubstitution.polynomial bounds (namedRecord (fun _ : Unit => packingPayload element)).widthPolynomial) = _
-    rw [packingCall_capacity]
-  · intro sizes arguments
-    let values := (arguments.val ()).2
-    let assignment := computedSizeAssignment bounds sizes (sizesResult sizes arguments)
-    let payload := namedRecord (fun _ : Unit => packingPayload element)
-    have prefixBits : ArrayEncoding.bits (payload.encode assignment (fun _ => values)) =
-        ArrayEncoding.bits (ArrayEncoding.encode (element.encode sizes) (retained sizes arguments).val values) :=
-      (namedRecord_unit_bits (packingPayload element) assignment values).trans
-        (packingPayload_bits element length sizes (retained sizes arguments) values)
-    have capacityEq : MvPolynomial.eval sizes (SizeSubstitution.polynomial bounds payload.widthPolynomial) =
-        MvPolynomial.eval sizes (length * element.widthPolynomial) := by rw [packingCall_capacity]
-    apply congrArg tape
-    change ArrayEncoding.bits ((atComputedSizeDomain bounds payload).encode sizes
-      ⟨sizesResult sizes arguments, fun _ => values⟩) =
-        ArrayEncoding.bits (((computedSizeDomain bounds).prod
-          (bitVectors (length * element.widthPolynomial))).encode sizes
-          (sizesResult sizes arguments, (boundedArrayPayload element length).compute sizes arguments))
-    exact (boundedSigma_encode_bits _ _ _ _ _ sizes _).trans
-      ((congrArg (fun bits => ArrayEncoding.bits
-        ((computedSizeDomain bounds).encode sizes (sizesResult sizes arguments)) ++ bits)
-        (ArrayEncoding.bits_setWidth_congr_of_eq prefixBits capacityEq)).trans
-          (bits_prod_encode (computedSizeDomain bounds) (bitVectors (length * element.widthPolynomial))
-            sizes (sizesResult sizes arguments, (boundedArrayPayload element length).compute sizes arguments)).symm)
+  have read := boundedArrayAtSize_realizable element length
+    (Sum.inl : Parameter → Parameter ⊕ Unit) (.inr ()) (element.renameParameters Sum.inl)
+    (fun _ => True) (fun _ _ value => value)
+    (by intros; exact renameParameters_bits _ _ _ _)
+  have called := (read.atComputedHostInput (fun _ : Unit => length) (boundedArray element length)
+    (fun _ value _ => value.1) rfl (fun _ => boundedArrayCount_realizable element length)).withPrecondition
+    (fun _ _ => True) (by intros; exact ⟨rfl, trivial⟩)
+  have framed := called.followedBy (recordComputedFrame_realizable (packingCallBounds length) (packingPayload element))
+    rfl (by intros; trivial)
+  exact framed.withSpecification (fun _ _ => True)
+    (boundedArrayCallFrame element length).compute (by intros; trivial) (by intros; rfl)
 
 /-- Pack a mask-selected array and prepare its exact result for a consumer at
 the computed count. Both stages use the same public mathematical interface. -/

@@ -81,8 +81,7 @@ noncomputable def stage (width : MvPolynomial Parameter ℕ) : Computation Param
   compute sizes arguments := (arguments.val (), (rightFromLeft width).compute sizes arguments)
 
 theorem stage_realizable (width : MvPolynomial Parameter ℕ) : (stage width).Realizable := by
-  exact Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _
-    (Realizable.argument (stage width).inputDomains () (fun _ _ => True)) (rightFromLeft_realizable width)
+  exact (Realizable.argument (stage width).inputDomains () (fun _ _ => True)).prodMk (rightFromLeft_realizable width)
 
 noncomputable def computation (width : MvPolynomial Parameter ℕ) :=
   (BezoutCoefficients.computation width).followedBy (stage width) rfl (by intros; trivial)

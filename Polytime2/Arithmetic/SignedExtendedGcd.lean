@@ -156,16 +156,12 @@ private theorem division_realizable (width : MvPolynomial Parameter ℕ) :
     · exact Subtype.ext (remainder_eq width sizes (arguments ()) valid.1))
 
 theorem quotient_realizable (width : MvPolynomial Parameter ℕ) : (quotient width).Realizable :=
-  (division_realizable width).followedBy
-    (pairProjection_realizable (binaryIntegers (coefficientWidth width)) (binaryIntegers (coefficientWidth width)) false)
-    rfl (by intros; trivial)
+  (division_realizable width).fst
 
 theorem remainder_realizable (width : MvPolynomial Parameter ℕ) :
     (unaryMap (state width) (binaryIntegers (coefficientWidth width)) (active width)
       (fun sizes value => advance width sizes value 1)).Realizable :=
-  (division_realizable width).followedBy
-    (pairProjection_realizable (binaryIntegers (coefficientWidth width)) (binaryIntegers (coefficientWidth width)) true)
-    rfl (by intros; trivial)
+  (division_realizable width).snd
 
 theorem coefficient_realizable (width : MvPolynomial Parameter ℕ) (second : Bool) :
     (unaryMap (state width) (binaryIntegers (coefficientWidth width)) (active width)
@@ -386,10 +382,7 @@ theorem extract_realizable (width : MvPolynomial Parameter ℕ) : (extract width
     allowed (by intros; trivial)
   have right := (recordProjection_realizable 6 (fun _ => binaryIntegers (coefficientWidth width)) 3).withPrecondition
     allowed (by intros; trivial)
-  have coefficients := Realizable.pairOutputs inputs (binaryIntegers (coefficientWidth width))
-    (binaryIntegers (coefficientWidth width)) allowed _ _ left right
-  exact Realizable.pairOutputs inputs (binaryIntegers width)
-    ((binaryIntegers (coefficientWidth width)).prod (binaryIntegers (coefficientWidth width))) allowed _ _ first coefficients
+  exact first.prodMk (left.prodMk right)
 
 end Polytime2.Computation.Realizable.Internal.IntegerExtendedGcd
 

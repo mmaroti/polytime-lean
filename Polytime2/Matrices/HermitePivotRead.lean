@@ -68,18 +68,15 @@ theorem hermitePivotSelectionAtSize_realizable
     (by intro sizes valid value; exact renameParameters_bits element hostNames sizes value)).reinterpretInputs
     computation.inputDomains convert (by intros; rfl) (by intros; rfl)
     computation.precondition (by intro sizes arguments valid; exact ⟨valid, trivial⟩)
-  have first := (renamedPairView_realizable (boundedIndex rows) (boundedIndex columns) hostNames).followedBy
-    (pairProjection_realizable row column false) rfl (by intros; trivial)
-  have second := (renamedPairView_realizable (boundedIndex rows) (boundedIndex columns) hostNames).followedBy
-    (pairProjection_realizable row column true) rfl (by intros; trivial)
+  have first := (renamedPairView_realizable (boundedIndex rows) (boundedIndex columns) hostNames).fst
+  have second := (renamedPairView_realizable (boundedIndex rows) (boundedIndex columns) hostNames).snd
   have firstMap := mapArrayAtParameter_realizable renamed row rankName (fun _ value => value.1)
     (first.withSpecification (fun _ _ => True) (fun _ value => (value.val ()).1) (by intros; trivial) (by intros; rfl))
   have secondMap := mapArrayAtParameter_realizable renamed column rankName (fun _ value => value.2)
     (second.withSpecification (fun _ _ => True) (fun _ value => (value.val ()).2) (by intros; trivial) (by intros; rfl))
   have firstReady := live.followedBy firstMap rfl (by intros; trivial)
   have secondReady := live.followedBy secondMap rfl (by intros; trivial)
-  exact Realizable.pairOutputs computation.inputDomains (row.array rankName) (column.array rankName)
-    computation.precondition _ _ firstReady secondReady
+  exact firstReady.prodMk secondReady
 
 /-- Prepare the selected rows followed by the incoming row, and the old pivot columns. -/
 noncomputable def hermitePivotIncomingAtSize
@@ -103,19 +100,11 @@ theorem hermitePivotIncomingAtSize_realizable
     (rankName : Parameter) :
     (hermitePivotIncomingAtSize rows columns hostNames rankName).Realizable := by
   let computation := hermitePivotIncomingAtSize rows columns hostNames rankName
-  let metadata := (hermitePivotSelection rows columns).renameParameters hostNames
   let row := (boundedIndex rows).renameParameters hostNames
-  let column := (boundedIndex columns).renameParameters hostNames
   have viewed := (renamedPairView_realizable (hermitePivotSelection rows columns) (boundedIndex rows) hostNames).withPrecondition computation.precondition (by intros; trivial)
-  have selected := viewed.followedBy (pairProjection_realizable metadata row false) rfl (by intros; trivial)
-  have incoming := viewed.followedBy (pairProjection_realizable metadata row true) rfl (by intros; trivial)
-  have read := selected.followedBy (hermitePivotSelectionAtSize_realizable rows columns hostNames rankName)
+  have read := viewed.fst.followedBy (hermitePivotSelectionAtSize_realizable rows columns hostNames rankName)
     rfl (by intro sizes arguments valid; exact valid)
-  have oldRows := read.followedBy (pairProjection_realizable (row.array rankName) (column.array rankName) false)
-    rfl (by intros; trivial)
-  have oldColumns := read.followedBy (pairProjection_realizable (row.array rankName) (column.array rankName) true)
-    rfl (by intros; trivial)
-  have polynomial := oldRows.reinterpretOutput (row.arrayOfLength (MvPolynomial.X rankName))
+  have polynomial := read.fst.reinterpretOutput (row.arrayOfLength (MvPolynomial.X rankName))
     (fun sizes => arrayParameterEquiv row rankName sizes) (by intros; rfl)
     (by intro sizes values; exact (array_X_encode_bits row rankName sizes values).symm)
   have appended := (arraySnoc_realizable row (MvPolynomial.X rankName)).onResults
@@ -127,10 +116,8 @@ theorem hermitePivotIncomingAtSize_realizable
         intro choice
         cases choice
         · exact polynomial
-        · exact incoming)
-  exact Realizable.pairOutputs computation.inputDomains
-    (row.arrayOfLength (MvPolynomial.X rankName + 1)) (column.array rankName)
-    computation.precondition _ _ appended oldColumns
+        · exact viewed.snd)
+  exact appended.prodMk read.snd
 
 /-- An excluded incoming row gives distinct selected rows; old pivot columns remain distinct. -/
 theorem hermitePivotIncomingAtSize_injective
@@ -177,29 +164,23 @@ theorem hermitePivotInsertionCoordinates_realizable
     (rows columns : MvPolynomial HostParameter ℕ) (hostNames : HostParameter → Parameter)
     (rankName : Parameter) :
     (hermitePivotInsertionCoordinates rows columns hostNames rankName).Realizable := by
-  let computation := hermitePivotInsertionCoordinates rows columns hostNames rankName
   let row := (boundedIndex rows).renameParameters hostNames
   let column := (boundedIndex columns).renameParameters hostNames
   let targetRow := boundedIndex (MvPolynomial.rename hostNames rows)
   let targetColumn := boundedIndex (MvPolynomial.rename hostNames columns)
   let length : MvPolynomial Parameter ℕ := MvPolynomial.X rankName
   have ready := hermitePivotIncomingAtSize_realizable rows columns hostNames rankName
-  have selected := ready.followedBy (pairProjection_realizable (row.arrayOfLength (length + 1))
-    (column.array rankName) false) rfl (by intros; trivial)
-  have oldColumns := ready.followedBy (pairProjection_realizable (row.arrayOfLength (length + 1))
-    (column.array rankName) true) rfl (by intros; trivial)
   have rowMap := mapArray_realizable row targetRow (length + 1)
     (fun sizes index => Fin.cast (MvPolynomial.eval_rename hostNames sizes rows).symm index)
     (renamedIndexView_realizable rows hostNames)
   have columnMap := mapArrayAtParameter_realizable column targetColumn rankName
     (fun sizes index => Fin.cast (MvPolynomial.eval_rename hostNames sizes columns).symm index)
     (renamedIndexView_realizable columns hostNames)
-  have rowsReady := selected.followedBy rowMap rfl (by intros; trivial)
-  have columnsReady := (oldColumns.followedBy columnMap rfl (by intros; trivial)).reinterpretOutput
+  have rowsReady := ready.fst.followedBy rowMap rfl (by intros; trivial)
+  have columnsReady := (ready.snd.followedBy columnMap rfl (by intros; trivial)).reinterpretOutput
     (targetColumn.arrayOfLength length) (fun sizes => arrayParameterEquiv targetColumn rankName sizes)
     (by intros; rfl) (by intro sizes values; exact (array_X_encode_bits targetColumn rankName sizes values).symm)
-  exact Realizable.pairOutputs computation.inputDomains (targetRow.arrayOfLength (length + 1))
-    (targetColumn.arrayOfLength length) computation.precondition _ _ rowsReady columnsReady
+  exact rowsReady.prodMk columnsReady
 
 /-- Renaming coordinate domains preserves distinctness for the insertion inputs. -/
 theorem hermitePivotInsertionCoordinates_injective
@@ -254,8 +235,7 @@ theorem hermitePivotCoordinatesAtSize_realizable
   have first : (Computation.mk computation.inputDomains
       ((boundedIndex (MvPolynomial.rename hostNames rows)).arrayOfLength (MvPolynomial.X rankName))
       computation.precondition (fun sizes arguments => (computation.compute sizes arguments).1)).Realizable := by
-    have projected := ready.followedBy
-      (pairProjection_realizable (row.array rankName) (column.array rankName) false) rfl (by intros; trivial)
+    have projected := ready.fst
     have mapped := projected.followedBy
       (mapArrayAtParameter_realizable row (boundedIndex (MvPolynomial.rename hostNames rows)) rankName
         (fun sizes index => Fin.cast (MvPolynomial.eval_rename hostNames sizes rows).symm index)
@@ -266,8 +246,7 @@ theorem hermitePivotCoordinatesAtSize_realizable
   have second : (Computation.mk computation.inputDomains
       ((boundedIndex (MvPolynomial.rename hostNames columns)).arrayOfLength (MvPolynomial.X rankName))
       computation.precondition (fun sizes arguments => (computation.compute sizes arguments).2)).Realizable := by
-    have projected := ready.followedBy
-      (pairProjection_realizable (row.array rankName) (column.array rankName) true) rfl (by intros; trivial)
+    have projected := ready.snd
     have mapped := projected.followedBy
       (mapArrayAtParameter_realizable column (boundedIndex (MvPolynomial.rename hostNames columns)) rankName
         (fun sizes index => Fin.cast (MvPolynomial.eval_rename hostNames sizes columns).symm index)
@@ -275,7 +254,7 @@ theorem hermitePivotCoordinatesAtSize_realizable
     exact mapped.reinterpretOutput _
       (fun sizes => arrayParameterEquiv (boundedIndex (MvPolynomial.rename hostNames columns)) rankName sizes)
       (by intros; rfl) (by intro sizes values; exact (array_X_encode_bits _ rankName sizes values).symm)
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ first second
+  exact first.prodMk second
 
 /-- Reading and renaming the two embeddings preserves injectivity. -/
 theorem hermitePivotCoordinatesAtSize_injective

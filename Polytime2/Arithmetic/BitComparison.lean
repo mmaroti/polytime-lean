@@ -94,9 +94,8 @@ noncomputable def bitsEqual (width : MvPolynomial Parameter ℕ) : Computation P
 theorem bitsEqual_realizable (width : MvPolynomial Parameter ℕ) : (bitsEqual width).Realizable := by
   let computation := bitsEqual width
   have forward := bitsLess_realizable width
-  have backward := forward.onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => arguments.val (!choice)) (by intros; trivial)
-    (fun choice => Realizable.argument computation.inputDomains (!choice) computation.precondition)
+  have backward := forward.onArguments computation.inputDomains computation.precondition
+    (fun choice => (!choice)) (by intro choice; rfl) (by intros; trivial)
   have combined := (booleanOperation_realizable (Parameter := Parameter)
     (fun flags : Bool → Bool => !(flags false) && !(flags true))).onResults
       computation.inputDomains computation.precondition

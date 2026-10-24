@@ -106,11 +106,10 @@ theorem integerHermiteExtendPivot_realizable (rows columns width length : MvPoly
   let valid := allowed rows columns width length
   have signReady := ((integerPositivePivotWithLeft_realizable rows columns width).withArguments host
     (Fin.castLEEmb (by decide : 4 ≤ 5)) (by intro name; fin_cases name <;> rfl)).withPrecondition valid (by intros; trivial)
-  have first := (signReady.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)).followedBy
+  have first := (signReady.fst).followedBy
     (integerMatrixWiden_realizable rows columns width (width + 1) (2 * width + 1) (by ring)) rfl (by intros; trivial)
-  have second := (signReady.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)).followedBy
+  have second := (signReady.snd).followedBy
     (integerMatrixWiden_realizable rows rows width (width + 1) (2 * width + 1) (by ring)) rfl (by intros; trivial)
-  have pair := Realizable.pairOutputs host _ _ valid _ _ first second
   apply (remainderSweepController_realizable rows columns width length).onResults host valid
     (preparedValues rows columns width length) (prepared_valid rows columns width length)
   intro name
@@ -119,7 +118,7 @@ theorem integerHermiteExtendPivot_realizable (rows columns width length : MvPoly
     · exact Realizable.argument host 0 valid
     · exact Realizable.argument host 1 valid
   · cases choice
-    · exact pair
+    · exact (first.prodMk second)
     · exact Realizable.argument host 4 valid
 
 /-- The returned matrices are the exact sign-normalized mathematical remainder sweep. -/
@@ -158,32 +157,5 @@ theorem integerHermiteExtendPivot_embedding (rows columns width length : MvPolyn
     (IntegerMatrix.positivePivotWithLeft (Row := Fin (MvPolynomial.eval sizes rows))
       (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
       (arguments.val 2).val (arguments.val 3).val).2) rowList)
-
-/-- Pivot extension preserves the full accumulated presentation and unimodular left basis. -/
-theorem integerHermiteExtendPivot_preserves (rows columns width length : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteExtendPivot rows columns width length).Arguments sizes //
-      (integerHermiteExtendPivot rows columns width length).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 3).val * original * right = (arguments.val 2).val)
-    (unit : IsUnit (arguments.val 3).val.det) :
-    let result := (integerHermiteExtendPivot rows columns width length).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  have signedPreserves := IntegerMatrix.positivePivotWithLeft_preserves
-    (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-    (arguments.val 0) (arguments.val 1) (arguments.val 2).val original (arguments.val 3).val right equation unit
-  have swept := IntegerMatrix.rowRemainderSweep_preserves
-    (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-    (arguments.val 0) (arguments.val 1) (List.ofFn (arguments.val 4)) arguments.property.2.1
-    (IntegerMatrix.positivePivotWithLeft (Row := Fin (MvPolynomial.eval sizes rows))
-      (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-      (arguments.val 2).val (arguments.val 3).val).1 original
-    (IntegerMatrix.positivePivotWithLeft (Row := Fin (MvPolynomial.eval sizes rows))
-      (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-      (arguments.val 2).val (arguments.val 3).val).2 right signedPreserves.1 signedPreserves.2
-  have transfer := congrArg (fun matrices => matrices.2 * original * right = matrices.1 ∧ IsUnit matrices.2.det)
-    (integerHermiteExtendPivot_correct rows columns width length sizes arguments)
-  exact transfer.mpr swept
 
 end Polytime2.Computation

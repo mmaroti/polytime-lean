@@ -64,6 +64,12 @@ For a fold, supply the step computation, an invariant, initialization, and
 preservation proofs. The public realization rules are in
 [FoldContract.lean](FoldContract.lean); use the total rule when all updates are
 admissible.
+For a proof-dependent step, certify `arrayFoldPartialStep` by composition, then
+use `arrayFoldStep_of_partial_realizable` for its `ArrayFold.extend` update.
+The invariant supplies admissibility without a runtime test. Use
+`ArrayFold.extend_of_allowed` when proving prefix simulation;
+`ArrayFold.prefix_invariant` defaults to the full array length and also accepts
+an explicit prefix length and bound.
 [SwapValues.lean](SwapValues.lean) exchanges two values throughout an array;
 its use in pivot-permutation tables preserves the element codec and length.
 

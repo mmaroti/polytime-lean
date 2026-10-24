@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Matrices.IntegerHermiteColumn
+import Polytime2.Matrices.HermiteProtectedMath
 
 /-! # Reducing an active column without disturbing an earlier block
 

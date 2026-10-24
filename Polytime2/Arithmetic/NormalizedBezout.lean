@@ -132,19 +132,14 @@ theorem nonzeroStage_realizable (width : MvPolynomial Parameter ℕ) : (nonzeroS
   let allowed := nonzeroAllowed width
   let capacity := workspaceWidth width
   have quotientReady : (Computation.mk domains (binaryIntegers capacity) allowed (quotient width)).Realizable :=
-    (integerQuotient_realizable capacity).onResults domains allowed
-      (fun choice _ arguments => if choice then arguments.val 2 else arguments.val 1)
-      (by
+    (integerQuotient_realizable capacity).onArguments domains allowed
+      (fun choice => if choice then 2 else 1) (by intro choice; cases choice <;> rfl) (by
         intro sizes arguments
         change (arguments.val 2).val ≠ 0
         rw [arguments.property.1.2.2.1]
         intro zero
         have gcdZero : Int.gcd (arguments.val 0).val (arguments.val 1).val = 0 := by exact_mod_cast zero
-        exact arguments.property.2 (Int.eq_zero_of_gcd_eq_zero_right gcdZero)) (by
-        intro choice
-        cases choice
-        · exact Realizable.argument domains 1 allowed
-        · exact Realizable.argument domains 2 allowed)
+        exact arguments.property.2 (Int.eq_zero_of_gcd_eq_zero_right gcdZero))
   have remainderReady : (Computation.mk domains (binaryIntegers capacity) allowed (remainder width)).Realizable :=
     (integerRemainder_realizable capacity).onResults domains allowed
       (fun choice sizes arguments => if choice then quotient width sizes arguments else arguments.val 3)
@@ -184,9 +179,7 @@ theorem nonzeroStage_realizable (width : MvPolynomial Parameter ℕ) : (nonzeroS
     (result_le_workspace width)) rfl (by
       intro sizes arguments valid
       exact (Int.natAbs_ediv_le_natAbs _ _).trans_lt (numerator_bound width sizes ⟨arguments, valid⟩))
-  have paired := Realizable.pairOutputs domains (binaryIntegers (resultWidth width))
-    (binaryIntegers (resultWidth width)) allowed _ _ leftNarrow rightNarrow
-  apply paired.withSpecification allowed (nonzeroStage width).compute (by intros; assumption)
+  apply (leftNarrow.prodMk rightNarrow).withSpecification allowed (nonzeroStage width).compute (by intros; assumption)
   intro sizes arguments valid
   apply Prod.ext <;> apply Subtype.ext
   · change (arguments 3).val % ((arguments 1).val / (arguments 2).val) = _
@@ -230,9 +223,7 @@ theorem zeroStage_realizable (width : MvPolynomial Parameter ℕ) : (zeroStage w
     (fun _ => ⟨0, by decide⟩)).followedBy widen rfl (by intros; trivial)).withArguments domains
       ⟨Empty.elim, by intro name; exact name.elim⟩ (by intro name; exact name.elim)).withPrecondition allowed
         (by intros; trivial)
-  have paired := Realizable.pairOutputs domains (binaryIntegers capacity) (binaryIntegers capacity)
-    allowed _ _ signed zero
-  apply paired.withSpecification allowed (zeroStage width).compute (by intros; assumption)
+  apply (signed.prodMk zero).withSpecification allowed (zeroStage width).compute (by intros; assumption)
   intro sizes arguments valid
   apply Prod.ext <;> apply Subtype.ext
   · have correct := zero_coefficient (arguments 0).val
@@ -316,9 +307,7 @@ theorem integerNormalizedExtendedGcd_realizable (width : MvPolynomial Parameter 
     ((binaryIntegers rawWidth).prod (binaryIntegers rawWidth)) false).withArguments domains
       (MultiTape.oneTape (.inr ())) (fun _ => rfl)
   have leftCoefficient := ((pairProjection_realizable (binaryIntegers width)
-    ((binaryIntegers rawWidth).prod (binaryIntegers rawWidth)) true).followedBy
-      (pairProjection_realizable (binaryIntegers rawWidth) (binaryIntegers rawWidth) false)
-      rfl (by intros; trivial)).withArguments domains (MultiTape.oneTape (.inr ())) (fun _ => rfl)
+    ((binaryIntegers rawWidth).prod (binaryIntegers rawWidth)) true).fst).withArguments domains (MultiTape.oneTape (.inr ())) (fun _ => rfl)
   have producers (name : Fin 4) : (Computation.mk domains
       (Realizable.Internal.NormalizedBezout.inputs width name) allowed (values name)).Realizable := by
     fin_cases name
@@ -339,9 +328,7 @@ theorem integerNormalizedExtendedGcd_realizable (width : MvPolynomial Parameter 
     · exact congrArg (fun result => result.2.1.val) arguments.property
   have coefficients := (Realizable.Internal.NormalizedBezout.stage_realizable width).onResults
     domains allowed values compatible producers
-  have packaged := Realizable.pairOutputs domains (binaryIntegers width)
-    ((binaryIntegers coefficientWidth).prod (binaryIntegers coefficientWidth)) allowed _ _
-    (divisor.withPrecondition allowed (by intros; trivial)) coefficients
+  have packaged := (divisor.withPrecondition allowed (by intros; trivial)).prodMk coefficients
   have result := (integerExtendedGcd_realizable width).letThen packaged (fun _ => rfl) rfl (by intros; rfl)
   exact result.withSpecification (fun _ _ => True) (integerNormalizedExtendedGcd width).compute
     (by intros; trivial) (by intros; rfl)

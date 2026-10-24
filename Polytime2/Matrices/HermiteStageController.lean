@@ -55,20 +55,20 @@ def hermiteStageUpdateAllowed (rows columns workspace : MvPolynomial Parameter �
 noncomputable def hermiteStageUpdate (rows columns workspace : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (context : ∀ name, (hermiteStageContext rows columns name).Carrier sizes)
     (state : (hermiteColumnState rows columns workspace).Carrier sizes) (token : (boundedIndex rows).Carrier sizes) :
-    (hermiteColumnState rows columns workspace).Carrier sizes := by
-  classical
-  exact if valid : hermiteStageUpdateAllowed rows columns workspace sizes context state token then
-    (integerHermiteRowStageUpdateWithin rows columns workspace).compute sizes
-      ⟨updateArguments rows columns workspace sizes context state token, valid⟩ else state
+    (hermiteColumnState rows columns workspace).Carrier sizes :=
+  ArrayFold.extend (hermiteStageUpdateAllowed rows columns workspace sizes context)
+    (fun state token valid => (integerHermiteRowStageUpdateWithin rows columns workspace).compute sizes
+      ⟨updateArguments rows columns workspace sizes context state token, valid⟩) state token
 
 /-- The conditional proof fallback adds no runtime bounds test under the fold contract. -/
 theorem hermiteStageUpdate_realizable (rows columns workspace : MvPolynomial Parameter ℕ) :
     (arrayFoldStep (hermiteStageContext rows columns) (boundedIndex rows) (hermiteColumnState rows columns workspace)
       (hermiteStageUpdateAllowed rows columns workspace) (hermiteStageUpdate rows columns workspace)).Realizable := by
+  apply arrayFoldStep_of_partial_realizable
   let computation := arrayFoldStep (hermiteStageContext rows columns) (boundedIndex rows)
     (hermiteColumnState rows columns workspace) (hermiteStageUpdateAllowed rows columns workspace)
     (hermiteStageUpdate rows columns workspace)
-  have updated := (integerHermiteRowStageUpdateWithin_realizable rows columns workspace).onResults
+  exact (integerHermiteRowStageUpdateWithin_realizable rows columns workspace).onResults
     computation.inputDomains computation.precondition
     (fun name sizes arguments => updateArguments rows columns workspace sizes
       (fun original => arguments.val (.inl original)) (arguments.val (.inr false)) (arguments.val (.inr true)) name)
@@ -79,18 +79,8 @@ theorem hermiteStageUpdate_realizable (rows columns workspace : MvPolynomial Par
       · exact Realizable.argument computation.inputDomains (.inl 1) computation.precondition
       · exact Realizable.argument computation.inputDomains (.inr true) computation.precondition
       · exact Realizable.argument computation.inputDomains (.inl 2) computation.precondition
-      · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) false).withArguments
-          computation.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition computation.precondition (by intros; trivial)
-      · exact ((pairProjection_realizable (integerMatrices rows columns workspace) (integerMatrices rows rows workspace) true).withArguments
-          computation.inputDomains (MultiTape.oneTape (.inr false)) (by intros; rfl)).withPrecondition computation.precondition (by intros; trivial))
-  apply updated.withSpecification computation.precondition _ (by intros; assumption)
-  intro sizes arguments valid
-  have permitted : hermiteStageUpdateAllowed rows columns workspace sizes
-      (fun name => arguments (.inl name)) (arguments (.inr false)) (arguments (.inr true)) := valid
-  change _ = hermiteStageUpdate rows columns workspace sizes
-    (fun name => arguments (.inl name)) (arguments (.inr false)) (arguments (.inr true))
-  rw [hermiteStageUpdate, dite_eq_left permitted]
-  rfl
+      · exact (Realizable.argument computation.inputDomains (.inr false) computation.precondition).fst
+      · exact (Realizable.argument computation.inputDomains (.inr false) computation.precondition).snd)
 
 /-- Each permitted token performs exactly its singleton mathematical stage. -/
 theorem hermiteStageUpdate_correct (rows columns workspace : MvPolynomial Parameter ℕ)
@@ -101,7 +91,7 @@ theorem hermiteStageUpdate_correct (rows columns workspace : MvPolynomial Parame
     (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStage
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (context 0) (context 1) (context 2) [token] state.1.val state.2.val := by
-  simp only [hermiteStageUpdate, dite_eq_left valid]
+  simp only [hermiteStageUpdate, ArrayFold.extend_of_allowed valid]
   exact integerHermiteRowStageUpdateWithin_correct rows columns workspace sizes
     ⟨updateArguments rows columns workspace sizes context state token, valid⟩
 
@@ -260,7 +250,6 @@ theorem hermiteStageController_correct (rows columns width length : MvPolynomial
     (fun index state valid => prefix_preserves rows columns width length sizes
       (fun name => arguments.val (.inl name)) (arguments.val (.inr true))
       (arguments.val (.inr false)) state arguments.property index valid)
-    (MvPolynomial.eval sizes length) le_rfl
   have takeAll : (List.ofFn (arguments.val (.inr true))).take (MvPolynomial.eval sizes length) =
       List.ofFn (arguments.val (.inr true)) := List.take_of_length_le (by simp)
   simpa only [takeAll, pairValues, hermiteStageController, arrayFold] using invariant matrix left original
@@ -435,7 +424,6 @@ theorem hermiteStagePrefixController_correct (rows columns width length : MvPoly
     (fun index state valid => selected_preserves rows columns width length sizes
       (fun name => arguments.val (.inl name)) (arguments.val (.inr true))
       (arguments.val (.inr false)) state arguments.property index valid)
-    (MvPolynomial.eval sizes length) le_rfl
   simpa only [Nat.min_eq_right selection.1, pairValues, hermiteStagePrefixController, arrayFold] using
     invariant count selection matrix left original
 

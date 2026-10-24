@@ -59,21 +59,18 @@ theorem pairField_realizable (width : MvPolynomial Parameter ℕ)
       (fun _ arguments => if second then (arguments.val (.inr ())).2 else (arguments.val (.inr ())).1)).Realizable := by
   cases second with
   | false =>
-    exact (pairProjection_realizable (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) false).onResults
-      (context width) allowed (fun _ _ arguments => arguments.val (.inr ())) (by intros; trivial)
-      (fun _ => Realizable.argument (context width) (.inr ()) allowed)
+    exact (pairProjection_realizable (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) false).onArguments (context width) allowed
+      (fun _ => (.inr ())) (by intro _; rfl) (by intros; trivial)
   | true =>
-    exact (pairProjection_realizable (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) true).onResults
-      (context width) allowed (fun _ _ arguments => arguments.val (.inr ())) (by intros; trivial)
-      (fun _ => Realizable.argument (context width) (.inr ()) allowed)
+    exact (pairProjection_realizable (binaryNaturalsOfWidth width) (binaryNaturalsOfWidth width) true).onArguments (context width) allowed
+      (fun _ => (.inr ())) (by intro _; rfl) (by intros; trivial)
 
 theorem originalSign_realizable (width : MvPolynomial Parameter ℕ)
     (allowed : ∀ sizes, (∀ name, (context width name).Carrier sizes) → Prop) (name : Bool) :
     (Computation.mk (context width) booleans allowed
       (fun _ arguments => SignedEncoding.negative (arguments.val (.inl name)).val)).Realizable :=
-  (integerNegative_realizable width).onResults (context width) allowed
-    (fun _ _ arguments => arguments.val (.inl name)) (by intros; trivial)
-    (fun _ => Realizable.argument (context width) (.inl name) allowed)
+  (integerNegative_realizable width).onArguments (context width) allowed
+    (fun _ => (.inl name)) (by intro _; rfl) (by intros; trivial)
 
 /-- The correction consumes the stored unsigned pair under its mathematical contract. -/
 theorem correctedWords_realizable (width : MvPolynomial Parameter ℕ) :
@@ -116,9 +113,8 @@ theorem correctedWords_realizable (width : MvPolynomial Parameter ℕ) :
       rw [← valid.2.1, ← valid.2.2] at expected
       cases correction : adjust (arguments (.inl false)).val (arguments (.inr ())).2.val <;>
         simpa only [quotientWord, naturalIncrement, unaryMap, correction, Bool.false_eq_true, ↓reduceIte] using expected)
-  have divisorMagnitude := (integerMagnitude_realizable width).onResults inputs allowed
-    (fun _ _ arguments => arguments.val (.inl true)) (by intros; trivial)
-    (fun _ => Realizable.argument inputs (.inl true) allowed)
+  have divisorMagnitude := (integerMagnitude_realizable width).onArguments inputs allowed
+    (fun _ => (.inl true)) (by intro _; rfl) (by intros; trivial)
   have reduced := (naturalSubtract_realizable width).onResults inputs allowed
     (fun name _ arguments => if name then (arguments.val (.inr ())).2 else
       ⟨(arguments.val (.inl true)).val.natAbs, (arguments.val (.inl true)).property⟩)
@@ -146,7 +142,7 @@ theorem correctedWords_realizable (width : MvPolynomial Parameter ℕ) :
         rfl
       cases correction : adjust (arguments (.inl false)).val (arguments (.inr ())).2.val <;>
         simpa only [correction, Bool.false_eq_true, ↓reduceIte, remainderWord, remainderDifference] using expected)
-  exact Realizable.pairOutputs inputs word word allowed _ _ quotientReady remainderReady
+  exact quotientReady.prodMk remainderReady
 
 def correctedAdmissible (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : ∀ name, (context width name).Carrier sizes) : Prop :=
@@ -164,7 +160,6 @@ noncomputable def signResults (width : MvPolynomial Parameter ℕ) : Computation
 theorem signResults_realizable (width : MvPolynomial Parameter ℕ) : (signResults width).Realizable := by
   let inputs := context width
   let allowed := correctedAdmissible width
-  let word := binaryNaturalsOfWidth width
   have field := pairField_realizable width allowed
   have originalSign := originalSign_realizable width allowed
   have quotientNonzero := (field false).followedBy (Realizable.Internal.naturalNonzero_realizable width)
@@ -189,8 +184,7 @@ theorem signResults_realizable (width : MvPolynomial Parameter ℕ) : (signResul
         decide (0 < (arguments (.inr ())).1.val)) = _
       rw [valid.2.1]
       exact quotient_sign _ _ valid.1)
-  have quotientParts := Realizable.pairOutputs inputs booleans word allowed _ _ quotientSign (field false)
-  have quotientConstructed := quotientParts.followedBy (Realizable.Internal.integerOfParts_realizable width) rfl (by
+  have quotientConstructed := (quotientSign.prodMk (field false)).followedBy (Realizable.Internal.integerOfParts_realizable width) rfl (by
     intro sizes arguments valid
     change SignedEncoding.negative ((arguments (.inl false)).val / (arguments (.inl true)).val) = true →
       (arguments (.inr ())).1.val ≠ 0
@@ -218,7 +212,7 @@ theorem signResults_realizable (width : MvPolynomial Parameter ℕ) : (signResul
       change ((arguments (.inr ())).2.val : ℤ) = (arguments (.inl false)).val % (arguments (.inl true)).val
       rw [valid.2.2]
       exact (correct _ _ valid.1).2)
-  exact Realizable.pairOutputs inputs (binaryIntegers width) (binaryIntegers width) allowed _ _ quotientReady remainderReady
+  exact quotientReady.prodMk remainderReady
 
 noncomputable def continuation (width : MvPolynomial Parameter ℕ) : Computation Parameter (Bool ⊕ Unit) where
   inputDomains := context width
@@ -259,9 +253,8 @@ theorem integerDivision_realizable (width : MvPolynomial Parameter ℕ) :
     (by intro sizes arguments; exact Int.natAbs_pos.mpr arguments.property)
     (by
       intro name
-      exact (integerMagnitude_realizable width).onResults inputs allowed
-        (fun _ _ arguments => arguments.val name) (by intros; trivial)
-        (fun _ => Realizable.argument inputs name allowed))
+      exact (integerMagnitude_realizable width).onArguments inputs allowed
+        (fun _ => name) (by intro _; rfl) (by intros; trivial))
   have complete := divided.letThen (Realizable.Internal.SignedDivision.continuation_realizable width)
     (fun _ => rfl) rfl (by
       intro sizes arguments valid
@@ -278,8 +271,7 @@ noncomputable def integerQuotient (width : MvPolynomial Parameter ℕ) : Computa
 
 theorem integerQuotient_realizable (width : MvPolynomial Parameter ℕ) :
     (integerQuotient width).Realizable := by
-  exact ((integerDivision_realizable width).followedBy
-    (pairProjection_realizable (binaryIntegers width) (binaryIntegers width) false) rfl (by intros; trivial)).withSpecification
+  exact ((integerDivision_realizable width).fst).withSpecification
       (integerQuotient width).precondition (integerQuotient width).compute (by intros; assumption) (by intros; rfl)
 
 /-- The Euclidean remainder is nonnegative even for a negative divisor. -/
@@ -291,8 +283,7 @@ noncomputable def integerRemainder (width : MvPolynomial Parameter ℕ) : Comput
 
 theorem integerRemainder_realizable (width : MvPolynomial Parameter ℕ) :
     (integerRemainder width).Realizable := by
-  exact ((integerDivision_realizable width).followedBy
-    (pairProjection_realizable (binaryIntegers width) (binaryIntegers width) true) rfl (by intros; trivial)).withSpecification
+  exact ((integerDivision_realizable width).snd).withSpecification
       (integerRemainder width).precondition (integerRemainder width).compute (by intros; assumption) (by intros; rfl)
 
 theorem integerRemainder_correct (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

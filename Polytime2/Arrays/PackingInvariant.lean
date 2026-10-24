@@ -74,7 +74,7 @@ theorem packingInvariant_advance (element : EncodedDomain Parameter) (capacity :
   have cursor := packingAdvance_cursors element capacity length sizes flags current (values index)
     index.val source (by omega) index.isLt fits
   refine ⟨cursor.1, ?_, ?_, ?_⟩
-  · rw [packingAdvance, dite_eq_left permitted]
+  · simp only [packingAdvance, ArrayFold.extend, dite_eq_left permitted]
     dsimp only [packingStep]
     rw [currentIndex, prefix_succ]
     by_cases selected : flags index = true
@@ -82,7 +82,7 @@ theorem packingInvariant_advance (element : EncodedDomain Parameter) (capacity :
       rw [destination, Nat.mod_eq_of_lt (by omega)]
     · simpa only [ite_eq_right selected, Nat.add_zero] using destination
   · intro active before
-    rw [packingAdvance, dite_eq_left permitted]
+    simp only [packingAdvance, ArrayFold.extend, dite_eq_left permitted]
     dsimp only [packingStep]
     rw [currentIndex]
     by_cases earlier : active.val.val < index.val
@@ -113,7 +113,7 @@ theorem packingInvariant_advance (element : EncodedDomain Parameter) (capacity :
         exact destination.symm
       rw [location, Function.update_self, same]
   · intro position beyond
-    rw [packingAdvance, dite_eq_left permitted]
+    simp only [packingAdvance, ArrayFold.extend, dite_eq_left permitted]
     dsimp only [packingStep]
     rw [currentIndex]
     have nextCount := prefix_succ flags index
@@ -152,7 +152,6 @@ theorem packingInitialized_correct (element : EncodedDomain Parameter) (capacity
     (packingInvariant element capacity length sizes flags values)
     (packingInvariant_zero element capacity length sizes flags values)
     (fun index current good => packingInvariant_advance element capacity length sizes flags values index current valid good)
-    (MvPolynomial.eval sizes length) le_rfl
   let result := (packingInitialized element capacity length).compute sizes ⟨arguments, valid⟩
   change packingInvariant element capacity length sizes flags values
     (MvPolynomial.eval sizes length) result at invariant

@@ -109,8 +109,7 @@ theorem loop_realizable (width : MvPolynomial Parameter ℕ) :
       (integerShiftRight_realizable width 1) rfl (by intros; trivial)).withPrecondition allowed (by intros; trivial)
     have count := ((pairProjection_realizable (binaryIntegers width) (binaryNaturalsOfWidth (width + 1)) true).followedBy
       (naturalIncrement_realizable (width + 1)) rfl (by intros; trivial)).withPrecondition allowed (by intros; trivial)
-    have paired := Realizable.pairOutputs (fun _ : Unit => state width) (binaryIntegers width)
-      (binaryNaturalsOfWidth (width + 1)) allowed _ _ current count
+    have paired := current.prodMk count
     exact paired.withSpecification allowed _ (by intros; assumption) (by
       intro sizes arguments valid
       apply Prod.ext
@@ -172,17 +171,12 @@ theorem integerBitLength_realizable (width : MvPolynomial Parameter ℕ) :
     (by intro sizes value; exact binaryNaturalsOfWidth_encode_bits _ _ _)
   have count := zeros.withArguments inputs
     ⟨Empty.elim, by intro impossible; exact impossible.elim⟩ (by intro impossible; exact impossible.elim)
-  have initial := Realizable.pairOutputs inputs (binaryIntegers width) (binaryNaturalsOfWidth (width + 1))
-    (fun _ _ => True) _ _ magnitude count
-  have loop := initial.followedBy (Realizable.Internal.IntegerBitLength.loop_realizable width) rfl (by
+  have loop := (magnitude.prodMk count).followedBy (Realizable.Internal.IntegerBitLength.loop_realizable width) rfl (by
     intro sizes arguments valid
     change 0 ≤ ((arguments ()).val.natAbs : ℤ) ∧
       0 + Nat.size ((arguments ()).val.natAbs : ℤ).natAbs ≤ MvPolynomial.eval sizes width
     exact ⟨Int.natCast_nonneg _, by simpa only [Int.natAbs_natCast, Nat.zero_add] using Nat.size_le.mpr (arguments ()).property⟩)
-  have projected := loop.followedBy
-    (pairProjection_realizable (binaryIntegers width) (binaryNaturalsOfWidth (width + 1)) true) rfl
-    (by intros; trivial)
-  have refined := projected.refineOutput
+  have refined := loop.snd.refineOutput
     (fun sizes value => value.val < MvPolynomial.eval sizes (width + 1)) (by
       intro sizes arguments
       change 0 + Nat.size ((arguments.val ()).val.natAbs : ℤ).natAbs <

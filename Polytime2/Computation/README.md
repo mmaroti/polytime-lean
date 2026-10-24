@@ -18,8 +18,10 @@ add it to the foundation rather than unpacking a realization in a caller.
 | Feed one result to a unary computation | `followedBy`, [composition][seq] |
 | Retain original arguments alongside a computed result | `letThen`, [seq] |
 | Prepare arguments from shared inputs | `onResults`, [arguments][args] |
-| Select arguments from a context | `withArguments`, [selection][select] |
-| Collect results in a product or record | [Records.lean](Records.lean) |
+| Select distinct arguments | `withArguments`, [selection][select] |
+| Select arbitrary arguments, including repeated names | `onArguments`, [args] |
+| Pair, project, or map | `prodMk`, `fst`, `snd`, `prodMap`, [records] |
+| Collect results in a record | [records] |
 | Pass an argument family on one record tape | [RecordArguments.lean][args] |
 | Branch on a Boolean or mathematical sum | [Branch.lean][branch], [sums] |
 | Certify a computation under complementary guards | [Conditional.lean][cases] |
@@ -32,12 +34,21 @@ add it to the foundation rather than unpacking a realization in a caller.
 [cases]: Conditional.lean
 [sums]: Sums.lean
 [real]: Realizable.lean
+[records]: Records.lean
 
 Use `letThen` when a continuation needs one computed value more than once.
 `onResults` certifies independent argument producers on a shared immutable
 context; it does not promise to evaluate common subexpressions only once.
 `withPrecondition` strengthens admissibility, and `withSpecification` exposes a
 mathematically equal answer without changing its domain.
+
+Use `ready.fst` and `ready.snd` to project certified results, and
+`firstReady.prodMk secondReady` to pair results on the same arguments and
+precondition. `firstReady.prodMap secondReady` applies unary computations to
+the two components of a pair; both component preconditions must hold.
+`onArguments` selects a static family from a shared context, with no
+injectivity obligation. Supply matching domains and the callee’s mathematical
+admissibility proof. Use `onResults` when preparation computes new values.
 
 [Equality.lean](Equality.lean) compares elements of any canonical encoded domain
 by mathematical equality, reusing the certified bit comparison.
@@ -79,6 +90,16 @@ For sizes computed from input data, start with
 `atComputedUnarySizes` prepares a singleton argument record internally and
 retains the actual sizes with the result. Callers prove the consumer's
 precondition at those sizes. Working capacities and padding remain private.
+
+For counts read from an unchanged host input, use
+[ComputedHost.lean](ComputedHost.lean). `atComputedHostInput` retains a
+size-dependent result; `atComputedHostSizes` returns a host-sized result and
+removes the internal header. Both rules include count reading, size preparation,
+and the callee's realization. Supply certified count readers and the callee's
+mathematical admissibility proof. `withRenamedRecordArgument` supplies renamed
+arguments from one host record without repeating codec transport proofs.
+Use `atComputedHostSizes_compute` to evaluate a host-result call explicitly;
+its result function has a reduction boundary for predictable proof checking.
 
 For loops, use [While.lean](While.lean) with a mathematical invariant, a
 strictly decreasing measure, and a polynomial bound. Progress is proof data,

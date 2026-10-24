@@ -108,17 +108,4 @@ theorem naturalDiagonalSearch_found (length width : MvPolynomial Parameter ℕ) 
     (fun position => ⟨((values position).val : ℤ), by simpa using (values position).isLt⟩) index found
   simpa only [Int.natCast_dvd_natCast] using failed
 
-/-- Every repair selected by the certified scan consumes at least one potential bit. -/
-theorem naturalDiagonalSearch_progress (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (values : ((binaryNaturalsOfWidth width).arrayOfLength length).Carrier sizes)
-    (positive : ∀ index, 0 < (values index).val) (index : Fin (MvPolynomial.eval sizes length))
-    (found : (naturalDiagonalSearch length width).compute sizes ⟨(fun _ => values), trivial⟩ = some index) :
-    ∃ successor : Fin (MvPolynomial.eval sizes length), successor.val = index.val + 1 ∧
-      (IntegerMatrix.diagonalPotential (IntegerMatrix.diagonalNormalizePair
-        (fun position => (values position).val) index successor)).size <
-          (IntegerMatrix.diagonalPotential (fun position => (values position).val)).size := by
-  obtain ⟨successor, adjacent, failure⟩ := naturalDiagonalSearch_found length width sizes values index found
-  exact ⟨successor, adjacent, IntegerMatrix.diagonalNormalizePair_size_decreases
-    (fun position => (values position).val) positive index successor adjacent failure⟩
-
 end Polytime2.Computation

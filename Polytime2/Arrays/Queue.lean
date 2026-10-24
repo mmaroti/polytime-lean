@@ -114,9 +114,7 @@ theorem arrayTail_realizable (element : EncodedDomain Parameter)
         MvPolynomial.eval sizes length + 1 by simp)]
       simp [List.ofFn_succ, successorValues, Fin.tail, EncodedDomain.ArrayEncoding.bits_append,
         EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.ArrayEncoding.bits_encode]
-  have projected := split.followedBy (pairProjection_realizable element (element.arrayOfLength length) true)
-    (by rfl) (by intros; trivial)
-  exact projected.withSpecification (arrayTail element length).precondition (arrayTail element length).compute
+  exact split.snd.withSpecification (arrayTail element length).precondition (arrayTail element length).compute
     (by intros; trivial) (by intros; rfl)
 
 /-- Split off the last element of a nonempty runtime-width array. -/
@@ -147,8 +145,7 @@ noncomputable def arrayLast (element : EncodedDomain Parameter)
 
 theorem arrayLast_realizable (element : EncodedDomain Parameter)
     (length : MvPolynomial Parameter ℕ) : (arrayLast element length).Realizable :=
-  (arrayUnsnoc_realizable element length).followedBy
-    (pairProjection_realizable (element.arrayOfLength length) element true) rfl (by intros; trivial)
+  (arrayUnsnoc_realizable element length).snd
 
 /-- Drop the final accumulator to retain the strict prefix values. -/
 noncomputable def arrayInit (element : EncodedDomain Parameter)
@@ -158,8 +155,7 @@ noncomputable def arrayInit (element : EncodedDomain Parameter)
 
 theorem arrayInit_realizable (element : EncodedDomain Parameter)
     (length : MvPolynomial Parameter ℕ) : (arrayInit element length).Realizable :=
-  (arrayUnsnoc_realizable element length).followedBy
-    (pairProjection_realizable (element.arrayOfLength length) element false) rfl (by intros; trivial)
+  (arrayUnsnoc_realizable element length).fst
 
 /-- Append at the mathematical boundary while normalizing polynomial evaluation. -/
 noncomputable def snocValues {Element : Type} (length : MvPolynomial Parameter ℕ)

@@ -83,12 +83,10 @@ theorem integerCompactSelected_realizable
     context allowed (compactResults rows columns count matrixWidth leftWidth rightWidth) (by intros; trivial)
   intro name
   fin_cases name
-  · exact (pivotPermutationTable_realizable rows count).onResults context allowed
-      (fun _ _ arguments => arguments.val 0) (by intro sizes arguments; exact arguments.property.1)
-      (fun _ => Realizable.argument context 0 allowed)
-  · exact (pivotPermutationTable_realizable columns count).onResults context allowed
-      (fun _ _ arguments => arguments.val 1) (by intro sizes arguments; exact arguments.property.2)
-      (fun _ => Realizable.argument context 1 allowed)
+  · exact (pivotPermutationTable_realizable rows count).onArguments context allowed
+      (fun _ => 0) (by intro _; rfl) (by intro sizes arguments; exact arguments.property.1)
+  · exact (pivotPermutationTable_realizable columns count).onArguments context allowed
+      (fun _ => 1) (by intro _; rfl) (by intro sizes arguments; exact arguments.property.2)
   · exact Realizable.argument context 2 allowed
   · exact Realizable.argument context 3 allowed
   · exact Realizable.argument context 4 allowed
@@ -120,34 +118,5 @@ theorem integerCompactSelected_correct
   dsimp only [integerCompactSelected, Computation.onResults, integerReindexWithBases,
     compactResults, IntegerMatrix.permuteWithBases]
   rw [rowTable, columnTable]
-
-/-- Compaction retains the original matrix presentation and unimodular bases. -/
-theorem integerCompactSelected_preserves
-    (rows columns count matrixWidth leftWidth rightWidth : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments :
-      (integerCompactSelected rows columns count matrixWidth leftWidth rightWidth).Arguments sizes //
-      (integerCompactSelected rows columns count matrixWidth leftWidth rightWidth).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows))
-      (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 3).val * original * (arguments.val 4).val =
-      (arguments.val 2).val)
-    (leftUnit : IsUnit (arguments.val 3).val.det)
-    (rightUnit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerCompactSelected rows columns count matrixWidth leftWidth rightWidth).compute sizes arguments
-    result.2.1.val * original * result.2.2.val = result.1.val ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det := by
-  let selectedRows : Fin (MvPolynomial.eval sizes count) ↪ Fin (MvPolynomial.eval sizes rows) :=
-    ⟨arguments.val 0, arguments.property.1⟩
-  let selectedColumns : Fin (MvPolynomial.eval sizes count) ↪ Fin (MvPolynomial.eval sizes columns) :=
-    ⟨arguments.val 1, arguments.property.2⟩
-  have preserved := IntegerMatrix.permuteWithBases_preserves
-    (IntegerMatrix.pivotPermutation selectedRows) (IntegerMatrix.pivotPermutation selectedColumns)
-    (arguments.val 2).val original (arguments.val 3).val (arguments.val 4).val
-    equation leftUnit rightUnit
-  have same := integerCompactSelected_correct rows columns count matrixWidth leftWidth rightWidth sizes arguments
-  dsimp only at same
-  rw [← same] at preserved
-  exact preserved
 
 end Polytime2.Computation

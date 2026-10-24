@@ -64,9 +64,7 @@ private noncomputable def pairedPasses (rows columns width : MvPolynomial Parame
 
 private theorem pairedPasses_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (pairedPasses rows columns width).Realizable :=
-  Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _
-    (Realizable.argument (fun _ : Unit => (firstPass rows columns width).outputDomain) () (fun _ _ => True))
-    (runSecond_realizable rows columns width)
+  (Realizable.argument (fun _ : Unit => (firstPass rows columns width).outputDomain) () (fun _ _ => True)).prodMk (runSecond_realizable rows columns width)
 
 private noncomputable def initialProducts (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
   inputDomains _ := (pairedPasses rows columns width).outputDomain
@@ -91,14 +89,14 @@ private theorem initialProducts_realizable (rows columns width : MvPolynomial Pa
   let newDomain := (secondPass rows columns width).outputDomain
   have first := pairProjection_realizable oldDomain newDomain false
   have second := pairProjection_realizable oldDomain newDomain true
-  have oldMatrices := first.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have newMatrices := second.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have oldBases := oldMatrices.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have newBases := newMatrices.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have oldLeft := oldBases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldRight := oldBases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have newLeft := newBases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have newRight := newBases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  have oldMatrices := first.snd
+  have newMatrices := second.snd
+  have oldBases := oldMatrices.snd
+  have newBases := newMatrices.snd
+  have oldLeft := oldBases.fst
+  have oldRight := oldBases.snd
+  have newLeft := newBases.fst
+  have newRight := newBases.snd
   have bases := (integerBasisCompose_realizable rows columns (hermiteRowsWorkspace width rows) 1 1
     (hermiteRowsWorkspace (hermiteRowsWorkspace width rows) columns)).onResults context (fun _ _ => True)
     (fun name _ arguments => match name with
@@ -111,10 +109,10 @@ private theorem initialProducts_realizable (rows columns width : MvPolynomial Pa
       · exact oldRight
       · exact newLeft
       · exact newRight)
-  have rank := second.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrix := newMatrices.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrices := Realizable.pairOutputs context _ _ (fun _ _ => True) _ _ matrix bases
-  exact Realizable.pairOutputs context _ _ (fun _ _ => True) _ _ rank matrices
+  have rank := second.fst
+  have matrix := newMatrices.fst
+  have matrices := matrix.prodMk bases
+  exact rank.prodMk matrices
 
 /-- Initial row and column stabilization, with both accumulated unimodular bases. -/
 private noncomputable def initialRaw (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -176,17 +174,17 @@ theorem integerCompactHermiteInitial_realizable (rows columns width : MvPolynomi
     (integerCompactHermiteInitial rows columns width).Realizable := by
   let computation := integerCompactHermiteInitial rows columns width
   have actual := initialRaw_realizable rows columns width
-  have rank := actual.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrices := actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have matrix := matrices.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have bases := matrices.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  have rank := actual.fst
+  have matrices := actual.snd
+  have matrix := matrices.fst
+  have bases := matrices.snd
   have resized := matrix.followedBy
     (integerMatrixResize_realizable rows columns (hermiteRowsWorkspace (hermiteRowsWorkspace width rows) columns)
       (IntegerMatrix.hermiteInitialWidth rows columns width)) rfl (by
         intro sizes arguments valid
         exact initialEntryFits rows columns width sizes ⟨arguments, valid⟩)
-  have together := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ resized bases
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ rank together
+  have together := resized.prodMk bases
+  exact rank.prodMk together
 
 /-- Returning the mathematical entry width preserves the exact initialization result. -/
 theorem integerCompactHermiteInitial_correct (rows columns width : MvPolynomial Parameter ℕ)

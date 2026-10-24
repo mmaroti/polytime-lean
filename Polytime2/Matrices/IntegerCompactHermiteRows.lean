@@ -65,8 +65,8 @@ private theorem sweepRecord_realizable (rows columns width : MvPolynomial Parame
   intro name
   fin_cases name
   · exact selected
-  · exact pair.followedBy (pairProjection_realizable matrix basis false) rfl (by intros; trivial)
-  · exact pair.followedBy (pairProjection_realizable matrix basis true) rfl (by intros; trivial)
+  · exact pair.fst
+  · exact pair.snd
   · exact (integerIdentity_realizable columns).onResults context (fun _ _ => True)
       (fun name => nomatch name) (by intros; trivial) (fun name => nomatch name)
 
@@ -87,7 +87,7 @@ private theorem finishSweep_realizable (rows columns width : MvPolynomial Parame
     ((integerMatrices rows columns (hermiteRowsWorkspace width rows)).prod
       (integerMatrices rows rows (hermiteRowsWorkspace width rows))) (hermitePivotSelection rows columns) true).followedBy
     (hermitePivotSelectionRank_realizable rows columns) rfl (by intros; trivial)
-  exact Realizable.pairOutputs (sweepContext rows columns width) _ _ (fun _ _ => True) _ _ rank compacted
+  exact rank.prodMk compacted
 
 /-- Complete compact row normalization with input-derived workspace and both bases. -/
 noncomputable def integerCompactHermiteRows (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -117,18 +117,5 @@ theorem integerCompactHermiteRows_correct (rows columns width : MvPolynomial Par
   apply Prod.ext
   · rfl
   · exact compacted
-
-/-- Compact row normalization retains both bases and the normalized leading block. -/
-theorem integerCompactHermiteRows_specification (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerCompactHermiteRows rows columns width).Arguments sizes //
-      (integerCompactHermiteRows rows columns width).precondition sizes arguments}) :
-    let result := (integerCompactHermiteRows rows columns width).compute sizes arguments
-    result.2.2.1.val * (arguments.val ()).val * result.2.2.2.val = result.2.1.val ∧
-      IsUnit result.2.2.1.val.det ∧ IsUnit result.2.2.2.val.det ∧
-      IntegerMatrix.IsCompactRowHermite result.1.val result.2.1.val := by
-  have correct := IntegerMatrix.compactHermiteRows_correct (arguments.val ()).val
-  rw [← integerCompactHermiteRows_correct rows columns width sizes arguments] at correct
-  exact correct
 
 end Polytime2.Computation

@@ -16,13 +16,13 @@ limitations under the License.
 -/
 
 import Polytime2.Matrices.IntegerHermiteInsertAtSize
-import Polytime2.Computation.ComputedCall
+import Polytime2.Computation.ComputedHost
 
 /-! # Automatic insertion at the stored Hermite rank
 
 Read the rank from the pivot selection and retain the host matrix dimensions.
 The computed-size call uses the complete named-rank insertion callee. Its
-result retains the actual rank so subsequent metadata updates can reuse it.
+result returns the host matrices and optional new column directly.
 -/
 
 set_option backward.isDefEq.respectTransparency false
@@ -47,67 +47,39 @@ private noncomputable def unpack (rows columns width : MvPolynomial Parameter �
     | 1 => value 1
     | 2 => value 2
 
-private noncomputable def callee (rows columns width : MvPolynomial Parameter ℕ) :
-    Computation (Parameter ⊕ Unit) Unit :=
-  (integerHermiteInsertAtSizeOriginal rows columns width Sum.inl (.inr ())).onResults
-    (fun _ => (record 3 (fields rows columns width)).renameParameters Sum.inl)
-    (fun sizes arguments => (integerHermiteInsertAtSizeOriginal rows columns width Sum.inl (.inr ())).precondition sizes
-      (unpack rows columns width sizes (arguments ())))
-    (fun name sizes arguments => unpack rows columns width sizes (arguments.val ()) name) (by intro sizes arguments; exact arguments.property)
+private noncomputable def callee (rows columns width : MvPolynomial Parameter ℕ) :=
+  (integerHermiteInsertAtSizeOriginal rows columns width Sum.inl (.inr ())).withRenamedRecordArgument
+    (fields rows columns width) Sum.inl (by intro name; fin_cases name <;> rfl)
 
 private theorem callee_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (callee rows columns width).Realizable := by
-  apply (integerHermiteInsertAtSizeOriginal_realizable rows columns width Sum.inl (.inr ())).onResults
-    (fun _ => (record 3 (fields rows columns width)).renameParameters Sum.inl)
-    (fun sizes arguments => (integerHermiteInsertAtSizeOriginal rows columns width Sum.inl (.inr ())).precondition sizes
-      (unpack rows columns width sizes (arguments ())))
-    (fun name sizes arguments => unpack rows columns width sizes (arguments.val ()) name) (by intro sizes arguments; exact arguments.property)
-  intro name
-  fin_cases name
-  · exact (recordProjectionAtNames_realizable 3 (fields rows columns width) 0
-      (Sum.inl : Parameter → Parameter ⊕ Unit)).withPrecondition _ (by intros; trivial)
-  · exact (recordProjectionAtNames_realizable 3 (fields rows columns width) 1
-      (Sum.inl : Parameter → Parameter ⊕ Unit)).withPrecondition _ (by intros; trivial)
-  · exact (recordProjectionAtNames_realizable 3 (fields rows columns width) 2
-      (Sum.inl : Parameter → Parameter ⊕ Unit)).withPrecondition _ (by intros; trivial)
+    (callee rows columns width).Realizable :=
+  (integerHermiteInsertAtSizeOriginal_realizable rows columns width Sum.inl (.inr ())).withRenamedRecordArgument
+    (fields rows columns width) Sum.inl (by intro name; fin_cases name <;> rfl)
 
 private noncomputable def bounds (rows : MvPolynomial Parameter ℕ) : Unit → MvPolynomial Parameter ℕ := fun _ => rows
 
-private noncomputable def frame (rows columns width : MvPolynomial Parameter ℕ) :=
-  (extendedSizeFrame (bounds rows) (record 3 (fields rows columns width))).onResults
-    (fun _ : Unit => record 3 (fields rows columns width)) (fun _ _ => True)
-    (fun choice _ arguments => match choice with
-      | false => fun _ => ⟨(arguments.val () 0).1.1, Nat.lt_succ_of_le (by
-          simpa only [bounds, Fintype.card_fin] using Fintype.card_le_of_injective (arguments.val () 0).1.2.1 (arguments.val () 0).1.2.1.injective)⟩
-      | true => arguments.val ()) (by intros; trivial)
+private noncomputable def counts (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (value : (record 3 (fields rows columns width)).Carrier sizes) : (computedSizeDomain (bounds rows)).Carrier sizes :=
+  fun _ => (hermitePivotSelectionRank rows columns).compute sizes ⟨fun _ => (value 0).1, trivial⟩
 
-private theorem frame_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (frame rows columns width).Realizable := by
-  let context : Unit → EncodedDomain Parameter := fun _ => record 3 (fields rows columns width)
-  have selected := (recordProjection_realizable 3 (fields rows columns width) 0).followedBy
-    (pairProjection_realizable (hermitePivotSelection rows columns) (boundedIndex rows) false) rfl (by intros; trivial)
-  have rank := selected.followedBy (hermitePivotSelectionRank_realizable rows columns) rfl (by intros; trivial)
-  apply (extendedSizeFrame_realizable (bounds rows) (record 3 (fields rows columns width))).onResults
-    context (fun _ _ => True) _ (by intros; trivial)
-  intro choice
-  cases choice
-  · apply Realizable.namedRecordOutputs
-    intro name
-    cases name
-    exact rank
-  · exact Realizable.argument context () (fun _ _ => True)
+private noncomputable def frame (rows columns width : MvPolynomial Parameter ℕ) :=
+  computedHostFrame (bounds rows) (record 3 (fields rows columns width)) (counts rows columns width)
+
+private theorem readers_realizable (rows columns width : MvPolynomial Parameter ℕ) (name : Unit) :
+    (unaryMap (record 3 (fields rows columns width)) (boundedUnary (bounds rows name)) (fun _ _ => True)
+      (fun sizes value => counts rows columns width sizes value.val name)).Realizable := by
+  have selected := (recordProjection_realizable 3 (fields rows columns width) 0).fst
+  exact selected.followedBy (hermitePivotSelectionRank_realizable rows columns) rfl (by intros; trivial)
 
 private noncomputable def call (rows columns width : MvPolynomial Parameter ℕ) :=
-  (callee rows columns width).atComputedUnarySizes (extendedSizeBounds (bounds rows))
+  (callee rows columns width).atComputedHostSizes (bounds rows)
+    (record 3 (fields rows columns width)) (hermiteInsertionResult rows columns (hermiteInsertOutputWidth width rows))
+    (counts rows columns width) rfl rfl
 
 /-- Insert using the rank decoded from metadata; no caller-supplied rank size is needed. -/
 private noncomputable def implementation (rows columns width : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
-  (call rows columns width).onResults (frame rows columns width).inputDomains
-    (fun sizes arguments => (call rows columns width).precondition sizes
-      (fun _ => (frame rows columns width).compute sizes ⟨arguments, trivial⟩))
-    (fun _ sizes arguments => (frame rows columns width).compute sizes ⟨arguments.val, trivial⟩)
-    (by intro sizes arguments; exact arguments.property)
+  call rows columns width
 
 /-- An excluded incoming row and a positive upper pivot block permit the stored-rank call. -/
 private theorem implementation_permitted (rows columns width : MvPolynomial Parameter ℕ)
@@ -118,8 +90,7 @@ private theorem implementation_permitted (rows columns width : MvPolynomial Para
     (upper : ∀ row column, column < row → (arguments () 1).val
       ((arguments () 0).1.2.1 row) ((arguments () 0).1.2.2 column) = 0) :
     (implementation rows columns width).precondition sizes arguments := by
-  dsimp only [implementation, Computation.onResults, call, Computation.atComputedUnarySizes,
-    callee]
+  dsimp only [implementation, call, Computation.atComputedHostSizes, Computation.atComputedHostInput, callee, Computation.onResults]
   apply integerHermiteInsertAtSize_permitted
   · rfl
   · exact excluded
@@ -128,7 +99,7 @@ private theorem implementation_permitted (rows columns width : MvPolynomial Para
 
 /-- Insert at the decoded rank. The incoming row is excluded from the old selection,
 whose pivot block has positive diagonal and zeros below it. -/
-noncomputable def integerHermiteInsertStoredRank (rows columns width : MvPolynomial Parameter ℕ) :
+noncomputable def integerHermiteInsertHost (rows columns width : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
   (implementation rows columns width).withPrecondition
     (fun _ arguments => (arguments () 0).2 ∉ Set.range (arguments () 0).1.2.1 ∧
@@ -140,27 +111,27 @@ noncomputable def integerHermiteInsertStoredRank (rows columns width : MvPolynom
       exact implementation_permitted rows columns width sizes arguments valid.1 valid.2.1 valid.2.2)
 
 /-- Rank extraction, frame preparation, and the full computed-size call are certified. -/
-theorem integerHermiteInsertStoredRank_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerHermiteInsertStoredRank rows columns width).Realizable := by
-  have ready : (implementation rows columns width).Realizable := by
-    apply ((callee_realizable rows columns width).atComputedUnarySizes (extendedSizeBounds (bounds rows))).onResults
-      (frame rows columns width).inputDomains _ _ (by intro sizes arguments; exact arguments.property)
-    intro name
-    cases name
-    exact (frame_realizable rows columns width).withPrecondition _ (by intros; trivial)
+theorem integerHermiteInsertHost_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerHermiteInsertHost rows columns width).Realizable := by
+  have ready : (implementation rows columns width).Realizable :=
+    (callee_realizable rows columns width).atComputedHostSizes (bounds rows)
+      (record 3 (fields rows columns width)) (hermiteInsertionResult rows columns (hermiteInsertOutputWidth width rows))
+      (counts rows columns width) rfl rfl
+      (readers_realizable rows columns width)
   exact ready.withPrecondition _ (by
     intro sizes arguments valid
     exact implementation_permitted rows columns width sizes arguments valid.1 valid.2.1 valid.2.2)
 
 /-- In the host dimensions, the stored-rank values are exactly mathematical insertion. -/
-theorem integerHermiteInsertStoredRank_correct (rows columns width : MvPolynomial Parameter ℕ)
+theorem integerHermiteInsertHost_correct (rows columns width : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteInsertStoredRank rows columns width).Arguments sizes //
-      (integerHermiteInsertStoredRank rows columns width).precondition sizes arguments}) :
-    let result := (integerHermiteInsertStoredRank rows columns width).compute sizes arguments
-    ((result.2.1.1.val, result.2.1.2.val), result.2.2) =
+    (arguments : {arguments : (integerHermiteInsertHost rows columns width).Arguments sizes //
+      (integerHermiteInsertHost rows columns width).precondition sizes arguments}) :
+    let result := (integerHermiteInsertHost rows columns width).compute sizes arguments
+    ((result.1.1.val, result.1.2.val), result.2) =
       IntegerMatrix.hermiteInsertRow (Fin.Embedding.snoc (arguments.val () 0).1.2.1 arguments.property.1)
         (arguments.val () 0).1.2.2 (arguments.val () 1).val (arguments.val () 2).val := by
+  simp only [integerHermiteInsertHost, implementation, call, Computation.withPrecondition, atComputedHostSizes_compute]
   let framed := (frame rows columns width).compute sizes ⟨arguments.val, trivial⟩
   let actual := computedSizeAssignment (extendedSizeBounds (bounds rows)) sizes framed.1
   let values := unpack rows columns width actual framed.2
@@ -169,57 +140,6 @@ theorem integerHermiteInsertStoredRank_correct (rows columns width : MvPolynomia
       arguments.property.1 arguments.property.2.1 arguments.property.2.2
   exact integerHermiteInsertAtSizeOriginal_correct rows columns width Sum.inl (.inr ()) actual
     ⟨values, valid⟩ rfl arguments.property.1
-
-/-- The retained runtime rank is exactly the input pivot-selection rank. -/
-theorem integerHermiteInsertStoredRank_count (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteInsertStoredRank rows columns width).Arguments sizes //
-      (integerHermiteInsertStoredRank rows columns width).precondition sizes arguments}) :
-    (((integerHermiteInsertStoredRank rows columns width).compute sizes arguments).1 (.inr ())).val =
-      (arguments.val () 0).1.1 := rfl
-
-/-- Insert at the stored rank and return only the fixed-width host result. -/
-noncomputable def integerHermiteInsertHost (rows columns width : MvPolynomial Parameter ℕ) :
-    Computation Parameter Unit where
-  inputDomains := (integerHermiteInsertStoredRank rows columns width).inputDomains
-  outputDomain := hermiteInsertionResult rows columns (hermiteInsertOutputWidth width rows)
-  precondition := (integerHermiteInsertStoredRank rows columns width).precondition
-  compute sizes arguments := ((integerHermiteInsertStoredRank rows columns width).compute sizes arguments).2
-
-/-- The computed-size header is projected away after a bit-preserving host-frame view. -/
-theorem integerHermiteInsertHost_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerHermiteInsertHost rows columns width).Realizable := by
-  let payload := hermiteInsertionResult rows columns (hermiteInsertOutputWidth width rows)
-  let index := computedSizeDomain (extendedSizeBounds (bounds rows))
-  let computation := integerHermiteInsertStoredRank rows columns width
-  have viewed := (integerHermiteInsertStoredRank_realizable rows columns width).withEncodedOutput
-    (index.prod payload)
-    (fun sizes arguments => let result := computation.compute sizes arguments; (result.1, result.2)) (by
-      intro sizes
-      change MvPolynomial.eval sizes (index.widthPolynomial + payload.widthPolynomial) =
-        MvPolynomial.eval sizes (index.widthPolynomial + SizeSubstitution.polynomial (extendedSizeBounds (bounds rows))
-          (payload.renameParameters (Sum.inl : Parameter → Parameter ⊕ Unit)).widthPolynomial)
-      rw [extendedSize_payloadWidth]) (by
-      intro sizes arguments
-      apply congrArg CallingConvention.tape
-      let counts : (computedSizeDomain (bounds rows)).Carrier sizes := fun _ =>
-        ⟨(arguments.val () 0).1.1, Nat.lt_succ_of_le (by
-          simpa only [bounds, Fintype.card_fin] using Fintype.card_le_of_injective
-            (arguments.val () 0).1.2.1 (arguments.val () 0).1.2.1.injective)⟩
-      exact (extendedSizeFrame_encode_bits (bounds rows) payload sizes counts
-        (computation.compute sizes arguments).2).symm)
-  exact viewed.followedBy (pairProjection_realizable index payload true) rfl (by intros; trivial)
-
-/-- The unframed host result agrees with mathematical insertion in both pivot outcomes. -/
-theorem integerHermiteInsertHost_correct (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteInsertHost rows columns width).Arguments sizes //
-      (integerHermiteInsertHost rows columns width).precondition sizes arguments}) :
-    let result := (integerHermiteInsertHost rows columns width).compute sizes arguments
-    ((result.1.1.val, result.1.2.val), result.2) =
-      IntegerMatrix.hermiteInsertRow (Fin.Embedding.snoc (arguments.val () 0).1.2.1 arguments.property.1)
-        (arguments.val () 0).1.2.2 (arguments.val () 1).val (arguments.val () 2).val :=
-  integerHermiteInsertStoredRank_correct rows columns width sizes arguments
 
 /-- Host output retains the accumulated presentation and unimodular left basis. -/
 theorem integerHermiteInsertHost_preserves (rows columns width : MvPolynomial Parameter ℕ)

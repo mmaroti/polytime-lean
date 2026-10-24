@@ -47,13 +47,8 @@ def indexedCopy : Polytime2.Computation Bool (Fin 3) where
     (arguments.val 2 (arguments.val 0))
 
 theorem indexedCopy_realizable : indexedCopy.Realizable := by
-  have read := (arrayLookup_realizable element length).onResults originalDomains (fun _ _ => True)
-    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
-    (by intros; trivial) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument originalDomains 0 (fun _ _ => True)
-      · exact Realizable.argument originalDomains 2 (fun _ _ => True))
+  have read := (arrayLookup_realizable element length).onArguments originalDomains (fun _ _ => True)
+    (fun choice => match choice with | false => 0 | true => 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   exact (arrayUpdate_realizable element length).onResults originalDomains (fun _ _ => True)
     (fun name _ arguments => match name with
       | 0 => arguments.val 1 | 1 => arguments.val 2 | 2 => arguments.val 2 (arguments.val 0))

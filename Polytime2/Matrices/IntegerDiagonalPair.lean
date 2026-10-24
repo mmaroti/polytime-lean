@@ -111,8 +111,7 @@ noncomputable def integerDiagonalPair (width : MvPolynomial Parameter ℕ) : Com
     (integerDiagonalPairCoefficients width).compute sizes arguments)
 
 theorem integerDiagonalPair_realizable (width : MvPolynomial Parameter ℕ) : (integerDiagonalPair width).Realizable :=
-  Realizable.pairOutputs _ _ _ (fun _ _ => True) _ _
-    (integerGcdLcm_realizable width) (integerDiagonalPairCoefficients_realizable width)
+  (integerGcdLcm_realizable width).prodMk (integerDiagonalPairCoefficients_realizable width)
 
 /-- The complete step certifies its returned diagonal and both determinant-one witnesses. -/
 theorem integerDiagonalPair_correct (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

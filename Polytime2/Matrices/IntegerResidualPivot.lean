@@ -108,19 +108,6 @@ theorem integerResidualPivot_nonzero (rows columns width : MvPolynomial Paramete
   apply IntegerMatrix.hermiteResidualPivot_nonzero (arguments.val false) (arguments.val true).val column
   exact (integerResidualPivot_correct rows columns width sizes arguments).symm.trans found
 
-/-- Residual selection cannot repeat a pivot column already cleared in the row. -/
-theorem integerResidualPivot_not_pivot {rank : ℕ} (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerResidualPivot rows columns width).Arguments sizes //
-      (integerResidualPivot rows columns width).precondition sizes arguments})
-    (pivotColumns : Fin rank → Fin (MvPolynomial.eval sizes columns))
-    (zero : ∀ index, (arguments.val true).val (arguments.val false) (pivotColumns index) = 0)
-    (column : Fin (MvPolynomial.eval sizes columns))
-    (found : (integerResidualPivot rows columns width).compute sizes arguments = some column) :
-    column ∉ Set.range pivotColumns := by
-  exact IntegerMatrix.hermiteResidualPivot_not_pivot (arguments.val false) (arguments.val true).val pivotColumns zero column
-    ((integerResidualPivot_correct rows columns width sizes arguments).symm.trans found)
-
 /-- Decide whether the selected residual row is zero using its optional pivot search. -/
 noncomputable def integerResidualRowIsZero (rows columns width : MvPolynomial Parameter ℕ) :
     Computation Parameter Bool :=

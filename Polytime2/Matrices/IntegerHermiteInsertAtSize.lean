@@ -124,8 +124,8 @@ theorem integerHermiteInsertAtSize_realizable (rows columns width : MvPolynomial
     (by intro sizes arguments; exact arguments.property.choose_spec)
   intro name
   fin_cases name
-  · exact prepared.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  · exact prepared.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  · exact prepared.fst
+  · exact prepared.snd
   · exact ((integerMatrixRenamedView_realizable rows columns width names).withArguments
       (inputs rows columns width names) (MultiTape.oneTape 1) (by intros; rfl)).withPrecondition
       (allowed rows columns width names rankName) (by intros; trivial)
@@ -250,25 +250,6 @@ theorem integerHermiteInsertAtSize_correct_host (rows columns width : MvPolynomi
   · intro firstRow secondRow firstColumn secondColumn rowValues columnValues
     exact congrArg₂ (arguments.val 2).val (Fin.ext rowValues) (Fin.ext columnValues)
 
-/-- The named-rank call retains the actual presentation and unimodular left basis. -/
-theorem integerHermiteInsertAtSize_preserves (rows columns width : MvPolynomial HostParameter ℕ)
-    (names : HostParameter → Parameter) (rankName : Parameter) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteInsertAtSize rows columns width names rankName).Arguments sizes //
-      (integerHermiteInsertAtSize rows columns width names rankName).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes (MvPolynomial.rename names rows)))
-      (Fin (MvPolynomial.eval sizes (MvPolynomial.rename names columns))) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes (MvPolynomial.rename names columns)))
-      (Fin (MvPolynomial.eval sizes (MvPolynomial.rename names columns))) ℤ)
-    (equation : (integerMatricesRenameValues rows rows width names sizes (arguments.val 2)).val * original * right =
-      (integerMatricesRenameValues rows columns width names sizes (arguments.val 1)).val)
-    (unit : IsUnit (integerMatricesRenameValues rows rows width names sizes (arguments.val 2)).val.det) :
-    let result := (integerHermiteInsertAtSize rows columns width names rankName).compute sizes arguments
-    result.1.2.val * original * right = result.1.1.val ∧ IsUnit result.1.2.val.det :=
-  integerHermiteInsertRow_preserves (MvPolynomial.rename names rows) (MvPolynomial.rename names columns)
-    (MvPolynomial.rename names width) (MvPolynomial.X rankName) sizes
-    ⟨(fun name => preparedValues rows columns width names rankName name sizes
-      ⟨arguments.val, arguments.property.choose⟩), arguments.property.choose_spec⟩ original right equation unit
-
 /-- Insertion output capacity derived from original width and row count. -/
 noncomputable def hermiteInsertOutputWidth (width rows : MvPolynomial HostParameter ℕ) :=
   2 * hermiteIncomingWorkspace width rows + 1
@@ -312,30 +293,15 @@ theorem integerHermiteInsertAtSizeBounded_realizable (rows columns width : MvPol
   let matrix := integerMatrices r c targetWidth
   let basis := integerMatrices r r targetWidth
   have actual := integerHermiteInsertAtSize_realizable rows columns width names rankName
-  have pair := actual.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldMatrix := pair.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have oldBasis := pair.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have pivot := actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have matrixReady := oldMatrix.followedBy (integerMatrixResize_realizable r c sourceWidth targetWidth) rfl (by
+  have pair := actual.fst
+  have matrixReady := pair.fst.followedBy (integerMatrixResize_realizable r c sourceWidth targetWidth) rfl (by
     intro sizes arguments valid
     exact ((computation.compute sizes ⟨arguments, valid⟩).1.1).property)
-  have basisReady := oldBasis.followedBy (integerMatrixResize_realizable r r sourceWidth targetWidth) rfl (by
+  have basisReady := pair.snd.followedBy (integerMatrixResize_realizable r r sourceWidth targetWidth) rfl (by
     intro sizes arguments valid
     exact ((computation.compute sizes ⟨arguments, valid⟩).1.2).property)
-  have matrices := Realizable.pairOutputs computation.inputDomains matrix basis computation.precondition
-    _ _ matrixReady basisReady
-  have result := Realizable.pairOutputs computation.inputDomains (matrix.prod basis) (arraySearchResult c)
-    computation.precondition _ _ matrices pivot
+  have result := (matrixReady.prodMk basisReady).prodMk actual.snd
   exact result.withSpecification computation.precondition computation.compute (by intros; assumption) (by intros; rfl)
-
-/-- Rank-independent output resizing preserves both matrices and the optional pivot. -/
-theorem integerHermiteInsertAtSizeBounded_values (rows columns width : MvPolynomial HostParameter ℕ)
-    (names : HostParameter → Parameter) (rankName : Parameter) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteInsertAtSizeBounded rows columns width names rankName).Arguments sizes //
-      (integerHermiteInsertAtSizeBounded rows columns width names rankName).precondition sizes arguments}) :
-    let result := (integerHermiteInsertAtSizeBounded rows columns width names rankName).compute sizes arguments
-    let original := (integerHermiteInsertAtSize rows columns width names rankName).compute sizes arguments
-    ((result.1.1.val, result.1.2.val), result.2) = ((original.1.1.val, original.1.2.val), original.2) := rfl
 
 /-- The bounded insertion callee returns the original host result codec. -/
 noncomputable def integerHermiteInsertAtSizeOriginal (rows columns width : MvPolynomial HostParameter ℕ)

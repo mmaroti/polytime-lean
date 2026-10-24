@@ -48,15 +48,10 @@ theorem matrixTranspose_realizable (element : EncodedDomain.{0, 0} Parameter)
   let step := matrixTabulateStep context element columns rows operation
   have selected := (Realizable.Internal.arrayLookupWithIndex_realizable
     (element.arrayOfLength columns) (arrayPosition rows) (fun _ index => index.val)
-    (arrayPosition_value rows) rows).onResults step.inputDomains (fun _ _ => True)
-    (fun choice _ arguments => match choice with
-      | false => arguments.val (.inr true)
-      | true => arguments.val (.inl ()))
-    (by intro sizes arguments; exact (arguments.val (.inr true)).isLt) (by
-      intro choice
-      cases choice
-      · exact Realizable.argument step.inputDomains (.inr true) (fun _ _ => True)
-      · exact Realizable.argument step.inputDomains (.inl ()) (fun _ _ => True))
+    (arrayPosition_value rows) rows).onArguments step.inputDomains (fun _ _ => True)
+      (fun choice => match choice with
+      | false => (.inr true)
+      | true => (.inl ())) (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr true)).isLt)
   have entry : step.Realizable := (Realizable.Internal.arrayLookupWithIndex_realizable element
     (arrayPosition columns) (fun _ index => index.val) (arrayPosition_value columns) columns).onResults
     step.inputDomains (fun _ _ => True)

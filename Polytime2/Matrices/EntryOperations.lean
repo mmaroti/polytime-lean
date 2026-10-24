@@ -98,12 +98,8 @@ private theorem replaceMatrixRow_realizable (scalar : EncodedDomain Empty) :
 
 theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry scalar).Realizable := by
   let computation := matrixEntry scalar
-  have row := (matrixRow_realizable scalar).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
-    (by intros; trivial) (by
-      intro choice; cases choice
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
+  have row := (matrixRow_realizable scalar).onArguments computation.inputDomains computation.precondition
+    (fun choice => match choice with | false => 0 | true => 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   exact (arrayLookupAtParameter_realizable scalar.constant.withInternalSize (coordinateDomain 1)
     1 (fun _ value => value) (coordinate_value 1)).onResults computation.inputDomains computation.precondition
     (fun choice _ arguments => match choice with | false => arguments.val 1 | true => arguments.val 2 (arguments.val 0))
@@ -114,12 +110,8 @@ theorem matrixEntry_realizable (scalar : EncodedDomain Empty) : (matrixEntry sca
 
 theorem matrixReplace_realizable (scalar : EncodedDomain Empty) : (matrixReplace scalar).Realizable := by
   let computation := matrixReplace scalar
-  have row := (matrixRow_realizable scalar).onResults computation.inputDomains computation.precondition
-    (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
-    (by intros; trivial) (by
-      intro choice; cases choice
-      · exact Realizable.argument computation.inputDomains 0 computation.precondition
-      · exact Realizable.argument computation.inputDomains 2 computation.precondition)
+  have row := (matrixRow_realizable scalar).onArguments computation.inputDomains computation.precondition
+    (fun choice => match choice with | false => 0 | true => 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
   have replaced := (arrayUpdateAtParameter_realizable scalar.constant.withInternalSize (coordinateDomain 1)
     1 (fun _ value => value) (coordinate_value 1)).onResults computation.inputDomains computation.precondition
     (fun name _ arguments => match name with

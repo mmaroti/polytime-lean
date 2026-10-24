@@ -55,10 +55,7 @@ private theorem nested_realizable (rows firstColumns secondColumns width : MvPol
       (left : first.Carrier sizes) (right : second.Carrier sizes) :=
     (arrayAppend (binaryIntegers width) firstColumns secondColumns).compute sizes ⟨fun _ => (left, right), trivial⟩
   let step := arrayZipWithStep (Empty.elim : Empty → EncodedDomain Parameter) first second target operation
-  have paired := Realizable.pairOutputs step.inputDomains first second step.precondition
-    (fun _ arguments => arguments.val (.inr false)) (fun _ arguments => arguments.val (.inr true))
-    (Realizable.argument step.inputDomains (.inr false) step.precondition)
-    (Realizable.argument step.inputDomains (.inr true) step.precondition)
+  have paired := (Realizable.argument step.inputDomains (.inr false) step.precondition).prodMk (Realizable.argument step.inputDomains (.inr true) step.precondition)
   have scalar : step.Realizable := paired.followedBy (arrayAppend_realizable (binaryIntegers width) firstColumns secondColumns)
     rfl (by intros; trivial)
   apply (arrayZipWith_realizable (Empty.elim : Empty → EncodedDomain Parameter) first second target rows operation scalar).onResults _ _ _ (by intros; trivial)

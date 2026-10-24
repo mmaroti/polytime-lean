@@ -57,9 +57,7 @@ theorem integerTotalDivision_realizable (width : MvPolynomial Parameter ℕ) :
   have tested := (integerIsZero_realizable width).withArguments inputs (MultiTape.oneTape true) (by intros; rfl)
   apply Realizable.ofCases (computation := computation) zero tested
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ zero sizes arguments = true
-    have pair := Realizable.pairOutputs inputs (binaryIntegers width) (binaryIntegers width) allowed
-      (fun _ arguments => arguments.val true) (fun _ arguments => arguments.val false)
-      (Realizable.argument inputs true allowed) (Realizable.argument inputs false allowed)
+    have pair := (Realizable.argument inputs true allowed).prodMk (Realizable.argument inputs false allowed)
     apply pair.withSpecification allowed _ (by intros; trivial)
     intro sizes arguments valid
     have isZero : (arguments true).val = 0 := of_decide_eq_true valid.2
@@ -81,7 +79,7 @@ noncomputable def integerTotalQuotient (width : MvPolynomial Parameter ℕ) : Co
 /-- Quotient projection specializes the shared total division. -/
 theorem integerTotalQuotient_realizable (width : MvPolynomial Parameter ℕ) :
     (integerTotalQuotient width).Realizable :=
-  (integerTotalDivision_realizable width).followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
+  (integerTotalDivision_realizable width).fst
 
 /-- The quotient projection has the ordinary total integer-division meaning. -/
 theorem integerTotalQuotient_correct (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -96,6 +94,6 @@ noncomputable def integerTotalRemainder (width : MvPolynomial Parameter ℕ) : C
 /-- Remainder projection specializes the same certified total division. -/
 theorem integerTotalRemainder_realizable (width : MvPolynomial Parameter ℕ) :
     (integerTotalRemainder width).Realizable :=
-  (integerTotalDivision_realizable width).followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+  (integerTotalDivision_realizable width).snd
 
 end Polytime2.Computation

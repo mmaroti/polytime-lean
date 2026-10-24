@@ -25,16 +25,6 @@ namespace Polytime2.Computation.Realizable
 
 variable {Parameter InputName : Type} [Fintype Parameter] [Fintype InputName]
 
-/-- Select one immutable argument under any mathematical precondition. -/
-theorem argument (inputs : InputName → EncodedDomain Parameter) (name : InputName)
-    (allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop) :
-    (Computation.mk inputs (inputs name) allowed (fun _ arguments => arguments.val name)).Realizable := by
-  have selected := (copy_realizable (inputs name)).withArguments inputs
-    ⟨(fun _ : Unit => name), by intro first second equal; cases first; cases second; rfl⟩
-    (by intro singleton; cases singleton; rfl)
-  exact selected.withSpecification allowed (fun _ arguments => arguments.val name)
-    (by intros; trivial) (by intros; rfl)
-
 /-- Certify one mathematical computation by a runtime case split. Only the
 selected branch needs its guard hypothesis; the common precondition is retained. -/
 theorem ofCases {computation : Computation Parameter InputName}

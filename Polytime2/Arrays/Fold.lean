@@ -34,20 +34,45 @@ namespace Polytime2.Computation
 
 variable {Parameter Context : Type} [Fintype Parameter] [Fintype Context]
 
-/-- The update receives immutable context, the accumulator, and one element. -/
-noncomputable def arrayFoldStep (context : Context → EncodedDomain Parameter)
+/-- A partial update receives its mathematical admissibility proof. The input
+domains and output codec are the same as for `arrayFoldStep`. -/
+noncomputable def arrayFoldPartialStep (context : Context → EncodedDomain Parameter)
     (element accumulator : EncodedDomain Parameter)
     (allowed : ∀ sizes, (∀ name, (context name).Carrier sizes) → accumulator.Carrier sizes → element.Carrier sizes → Prop)
-    (update : ∀ sizes, (∀ name, (context name).Carrier sizes) → accumulator.Carrier sizes → element.Carrier sizes → accumulator.Carrier sizes) :
+    (step : ∀ sizes values state token, allowed sizes values state token → accumulator.Carrier sizes) :
     Computation Parameter (Context ⊕ Bool) where
   inputDomains := Sum.elim context (fun name => if name then element else accumulator)
   outputDomain := accumulator
   precondition sizes arguments := allowed sizes (fun name => arguments (.inl name))
     (arguments (.inr false)) (arguments (.inr true))
-  compute sizes arguments := update sizes (fun name => arguments.val (.inl name))
-    (arguments.val (.inr false)) (arguments.val (.inr true))
+  compute sizes arguments := step sizes (fun name => arguments.val (.inl name))
+    (arguments.val (.inr false)) (arguments.val (.inr true)) arguments.property
+
+/-- The update receives immutable context, the accumulator, and one element. -/
+noncomputable def arrayFoldStep (context : Context → EncodedDomain Parameter)
+    (element accumulator : EncodedDomain Parameter)
+    (allowed : ∀ sizes, (∀ name, (context name).Carrier sizes) → accumulator.Carrier sizes → element.Carrier sizes → Prop)
+    (update : ∀ sizes, (∀ name, (context name).Carrier sizes) → accumulator.Carrier sizes → element.Carrier sizes → accumulator.Carrier sizes) :
+    Computation Parameter (Context ⊕ Bool) :=
+  arrayFoldPartialStep context element accumulator allowed (fun sizes values state token _valid =>
+    update sizes values state token)
 
 namespace ArrayFold
+
+/-- Extend a partial mathematical update by retaining the current state outside
+its domain. The fold invariant, rather than a runtime test, supplies `allowed`.
+For every state and element satisfying `allowed`, the result is exactly `step`.
+-/
+noncomputable def extend {State Element : Type} (allowed : State → Element → Prop)
+    (step : ∀ state element, allowed state element → State) (state : State) (element : Element) : State := by
+  classical
+  exact if valid : allowed state element then step state element valid else state
+
+@[simp] theorem extend_of_allowed {State Element : Type} {allowed : State → Element → Prop}
+    {step : ∀ state element, allowed state element → State} {state : State} {element : Element}
+    (valid : allowed state element) : extend allowed step state element = step state element valid := by
+  classical
+  exact dite_eq_left valid
 
 /-- The accumulator after a prefix of a mathematical array. -/
 def prefixValue {Element Accumulator : Type} {length : ℕ}
@@ -72,9 +97,9 @@ theorem prefix_invariant {Element Accumulator : Type} {length : ℕ}
     (update : Accumulator → Element → Accumulator) (array : Fin length → Element) (initial : Accumulator)
     (invariant : ℕ → Accumulator → Prop) (starts : invariant 0 initial)
     (preserves : ∀ index : Fin length, ∀ value, invariant index.val value →
-      invariant (index.val + 1) (update value (array index))) :
-    ∀ count, count ≤ length → invariant count (prefixValue update array initial count) := by
-  intro count bounded
+      invariant (index.val + 1) (update value (array index)))
+    (count : ℕ := length) (bounded : count ≤ length := by omega) :
+    invariant count (prefixValue update array initial count) := by
   induction count with
   | zero => simpa using starts
   | succ count hypothesis =>
@@ -94,6 +119,19 @@ theorem prefix_constant {Element Accumulator : Type} {length : ℕ}
       Function.iterate_succ_apply']
 
 end ArrayFold
+
+/-- A certified partial update realizes its total extension on admissible
+steps. No decision procedure for the logical precondition is required. -/
+theorem arrayFoldStep_of_partial_realizable
+    (context : Context → EncodedDomain Parameter) (element accumulator : EncodedDomain Parameter)
+    (allowed : ∀ sizes, (∀ name, (context name).Carrier sizes) → accumulator.Carrier sizes → element.Carrier sizes → Prop)
+    (step : ∀ sizes values state token, allowed sizes values state token → accumulator.Carrier sizes)
+    (ready : (arrayFoldPartialStep context element accumulator allowed step).Realizable) :
+    (arrayFoldStep context element accumulator allowed
+      (fun sizes values => ArrayFold.extend (allowed sizes values) (step sizes values))).Realizable := by
+  apply ready.withSpecification _ _ (by intros; assumption)
+  intro sizes arguments valid
+  exact (ArrayFold.extend_of_allowed valid).symm
 
 /-- Initial accumulator and immutable array are separate inputs, after context. -/
 noncomputable def arrayFold (context : Context → EncodedDomain Parameter)

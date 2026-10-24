@@ -89,9 +89,8 @@ theorem integerBezoutRowsWithLeft_realizable (rows columns width : MvPolynomial 
   have prepared := ((Realizable.Internal.BezoutRows.coefficients_realizable rows columns width).withArguments
     computation.inputDomains originalSelection (by intro name; fin_cases name <;> rfl)).withPrecondition allowed
       (by intros; trivial)
-  have stage := Realizable.pairOutputs _ _ _ (trackingApplication rows columns width false).precondition
-    (trackingApplication rows columns width false).compute (trackingApplication rows columns width true).compute
-    (trackingApplication_realizable rows columns width false) (trackingApplication_realizable rows columns width true)
+  have stage := (trackingApplication_realizable rows columns width false).prodMk
+    (trackingApplication_realizable rows columns width true)
   have complete := prepared.letThen stage (fun _ => rfl) rfl (by intros; assumption)
   exact complete.withSpecification allowed computation.compute (by intros; assumption) (by intros; rfl)
 
@@ -117,32 +116,6 @@ theorem integerBezoutRowsWithLeft_compute (rows columns width : MvPolynomial Par
         ((Realizable.Internal.BezoutCoefficients.computation width).compute sizes ⟨coefficientArguments, trivial⟩ 3).val] _ = _
     erw [Realizable.Internal.BezoutCoefficients.compute_matrix]
     rfl
-
-set_option backward.isDefEq.respectTransparency false in
-/-- Preserve the accumulated transformation equation and unimodularity together. -/
-theorem integerBezoutRowsWithLeft_preserves (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerBezoutRowsWithLeft rows columns width).Arguments sizes //
-      (integerBezoutRowsWithLeft rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 4).val * original * right = (arguments.val 3).val)
-    (leftUnit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerBezoutRowsWithLeft rows columns width).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  have computed := integerBezoutRowsWithLeft_compute rows columns width sizes arguments
-  have currentEqual := congrArg Prod.fst computed
-  have leftEqual := congrArg Prod.snd computed
-  dsimp only at currentEqual leftEqual
-  constructor
-  · erw [leftEqual, currentEqual]
-    exact IntegerMatrix.bezoutRowsWithLeft_equation
-      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-      _ _ _ _ _ _ _ equation
-  · erw [leftEqual]
-    exact IntegerMatrix.bezoutRowsWithLeft_unimodular
-      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-      _ _ arguments.property _ _ _ leftUnit
 
 private noncomputable def columnTrackingInputs (rows columns width : MvPolynomial Parameter ℕ) :
     Fin 5 → EncodedDomain Parameter := fun name => match name with
@@ -212,31 +185,5 @@ theorem integerBezoutColumnsWithRight_compute (rows columns width : MvPolynomial
     | 4 => ⟨(arguments.val 4).val.transpose, fun column row => (arguments.val 4).property row column⟩
   have computed := integerBezoutRowsWithLeft_compute columns rows width sizes ⟨transposed, arguments.property⟩
   exact congrArg (fun pair => (pair.1.transpose, pair.2.transpose)) computed
-
-set_option backward.isDefEq.respectTransparency false in
-/-- Preserve the full transformation equation and unimodularity of the right basis. -/
-theorem integerBezoutColumnsWithRight_preserves (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerBezoutColumnsWithRight rows columns width).Arguments sizes //
-      (integerBezoutColumnsWithRight rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (left : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes rows)) ℤ)
-    (equation : left * original * (arguments.val 4).val = (arguments.val 3).val)
-    (rightUnit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerBezoutColumnsWithRight rows columns width).compute sizes arguments
-    left * original * result.2.val = result.1.val ∧ IsUnit result.2.val.det := by
-  have computed := integerBezoutColumnsWithRight_compute rows columns width sizes arguments
-  have currentEqual := congrArg Prod.fst computed
-  have rightEqual := congrArg Prod.snd computed
-  dsimp only at currentEqual rightEqual
-  constructor
-  · erw [rightEqual, currentEqual]
-    exact IntegerMatrix.bezoutColumnsWithRight_equation
-      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-      _ _ _ _ _ _ _ equation
-  · erw [rightEqual]
-    exact IntegerMatrix.bezoutColumnsWithRight_unimodular
-      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-      _ _ arguments.property _ _ _ rightUnit
 
 end Polytime2.Computation

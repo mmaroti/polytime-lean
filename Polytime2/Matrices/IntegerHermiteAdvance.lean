@@ -58,15 +58,11 @@ theorem integerHermiteInsertSelection_realizable (rows columns width : MvPolynom
     | 1 => integerMatrices rows columns width
     | 2 => integerMatrices rows rows width
   have old := (recordProjection_realizable 3 fields 0).withPrecondition computation.precondition (by intros; trivial)
-  have pivot := (integerHermiteInsertHost_realizable rows columns width).followedBy
-    (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have paired := Realizable.pairOutputs computation.inputDomains (fields 0) (arraySearchResult columns)
-    computation.precondition _ _ old pivot
   apply (hermitePivotSelectionUpdate_realizable rows columns).onResults computation.inputDomains computation.precondition
     (fun _ sizes arguments => (arguments.val () 0, (computation.compute sizes arguments).2)) (update_valid rows columns width)
   intro name
   cases name
-  exact paired
+  exact (old.prodMk ((integerHermiteInsertHost_realizable rows columns width).snd))
 
 /-- A dependent insertion retains exactly the old rank and embeddings. -/
 theorem integerHermiteInsertSelection_none (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -114,11 +110,7 @@ noncomputable def integerHermiteAdvance (rows columns width : MvPolynomial Param
 /-- Insertion and metadata specialization are combined through ordinary output pairing. -/
 theorem integerHermiteAdvance_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (integerHermiteAdvance rows columns width).Realizable := by
-  have matrices := (integerHermiteInsertHost_realizable rows columns width).followedBy
-    (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  exact Realizable.pairOutputs (integerHermiteAdvance rows columns width).inputDomains _ _
-    (integerHermiteAdvance rows columns width).precondition _ _ matrices
-    (integerHermiteInsertSelection_realizable rows columns width)
+  exact ((integerHermiteInsertHost_realizable rows columns width).fst).prodMk (integerHermiteInsertSelection_realizable rows columns width)
 
 /-- Updating embeddings retains the same actual presentation and unimodular basis. -/
 theorem integerHermiteAdvance_preserves (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

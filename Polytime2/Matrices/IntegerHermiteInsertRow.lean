@@ -78,17 +78,14 @@ theorem integerHermiteInsertRow_realizable (rows columns width pivots : MvPolyno
   have source := ((arrayLast_realizable (boundedIndex rows) pivots).withArguments incoming.inputDomains
     (MultiTape.oneTape 0) (by intros; rfl)).withPrecondition incoming.precondition (by intros; trivial)
   have oldRows := (((arrayUnsnoc_realizable (boundedIndex rows) pivots).withArguments incoming.inputDomains
-    (MultiTape.oneTape 0) (by intros; rfl)).withPrecondition incoming.precondition (by intros; trivial)).followedBy
-    (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have matrix := cleared.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have basis := cleared.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
+    (MultiTape.oneTape 0) (by intros; rfl)).withPrecondition incoming.precondition (by intros; trivial)).fst
   apply (integerHermiteResidualFinish_realizable rows columns (hermiteIncomingWorkspace width pivots) pivots).onResults
     incoming.inputDomains incoming.precondition (finishingArguments rows columns width pivots) (finishing_valid rows columns width pivots)
   intro name
   fin_cases name
   · exact source
-  · exact matrix
-  · exact basis
+  · exact cleared.fst
+  · exact cleared.snd
   · exact oldRows
 
 /-- The complete runtime insertion agrees with the shared mathematical insertion in both rank outcomes. -/

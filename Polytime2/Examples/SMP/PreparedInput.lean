@@ -92,9 +92,7 @@ theorem preparedInput_realizable (coordinates generators : MvPolynomial Paramete
         ⟨(fun _ => (arguments.val () sort).1), ⟨arguments.property.1 sort, arguments.property.2⟩⟩)).Realizable := by
     let column := (typedColumn generators (entry sort)).outputDomain
     let source := boundedArray (bitVectors (coordinates + 1)) coordinates
-    have first := (packedSortView_realizable coordinates generators sort).followedBy
-      (pairProjection_realizable ((boundedArray column coordinates).renameParameters Sum.inl)
-        (source.renameParameters Sum.inl) false) rfl (by intros; trivial)
+    have first := (packedSortView_realizable coordinates generators sort).fst
     apply (readExactColumns_realizable coordinates generators sort).onResults
     intro name
     cases name
@@ -166,12 +164,7 @@ theorem preparedPayload_realizable (coordinates generators : MvPolynomial Parame
   have setsReady := (dependencySets_realizable (L := L) (Carrier := Carrier) coordinates generators).withSpecification
     computation.precondition (fun current arguments => (computation.compute current arguments).2)
     (by intro current arguments valid; exact valid.2) (by intros; rfl)
-  have paired := Realizable.pairOutputs computation.inputDomains
-    (preparedInput (L := L) (Carrier := Carrier) coordinates generators).outputDomain
-    (dependencySets (L := L) (Carrier := Carrier) coordinates generators).outputDomain computation.precondition
-    (fun current arguments => (computation.compute current arguments).1)
-    (fun current arguments => (computation.compute current arguments).2) inputReady setsReady
-  apply paired.reinterpretOutput computation.outputDomain (fun _ value => value)
+  apply (inputReady.prodMk setsReady).reinterpretOutput computation.outputDomain (fun _ value => value)
   · intro current
     simp [computation, preparedPayload, Multisorted.preparedDomain, preparedInput,
       dependencySets, Computation.reindexDomains, width, MvPolynomial.eval_rename]

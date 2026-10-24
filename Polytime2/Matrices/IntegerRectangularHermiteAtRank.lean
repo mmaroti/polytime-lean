@@ -108,21 +108,17 @@ theorem integerRectangularHermiteAtRank_realizable (rows columns rank width : Mv
   let basisWidth := hermiteAlternatingRunBasisWidth rank (hermiteAlternatingEntryWidth rank width) (hermiteAlternatingBudget rank width) + 1
   let target := rectangularHermiteOutputWidth rows width
   have actual := raw_realizable rows columns rank width
-  have matrix := actual.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have bases := actual.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have left := bases.followedBy (pairProjection_realizable _ _ false) rfl (by intros; trivial)
-  have right := bases.followedBy (pairProjection_realizable _ _ true) rfl (by intros; trivial)
-  have matrixReady := matrix.followedBy (integerMatrixResize_realizable rows columns entryWidth target) rfl (by
+  have bases := actual.snd
+  have matrixReady := actual.fst.followedBy (integerMatrixResize_realizable rows columns entryWidth target) rfl (by
     intro sizes arguments valid
     exact (outputFits rows columns rank width sizes ⟨arguments, valid⟩).1)
-  have leftReady := left.followedBy (integerMatrixResize_realizable rows rows basisWidth target) rfl (by
+  have leftReady := bases.fst.followedBy (integerMatrixResize_realizable rows rows basisWidth target) rfl (by
     intro sizes arguments valid
     exact (outputFits rows columns rank width sizes ⟨arguments, valid⟩).2.1)
-  have rightReady := right.followedBy (integerMatrixResize_realizable columns columns basisWidth target) rfl (by
+  have rightReady := bases.snd.followedBy (integerMatrixResize_realizable columns columns basisWidth target) rfl (by
     intro sizes arguments valid
     exact (outputFits rows columns rank width sizes ⟨arguments, valid⟩).2.2)
-  have paired := Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ leftReady rightReady
-  exact Realizable.pairOutputs computation.inputDomains _ _ computation.precondition _ _ matrixReady paired
+  exact matrixReady.prodMk (leftReady.prodMk rightReady)
 
 /-- Host-width preparation preserves the exact mathematical rectangular reduction. -/
 theorem integerRectangularHermiteAtRank_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -136,19 +132,5 @@ theorem integerRectangularHermiteAtRank_correct (rows columns rank width : MvPol
   integerRectangularHermite_correct rows columns rank width sizes
     ⟨fun _ => (active rows columns rank width).compute sizes arguments,
       ⟨arguments.property.choose, arguments.property.choose_spec⟩⟩
-
-/-- For a supported rectangular input, both full bases retain its presentation. -/
-theorem integerRectangularHermiteAtRank_preserves (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRectangularHermiteAtRank rows columns rank width).Arguments sizes //
-      (integerRectangularHermiteAtRank rows columns rank width).precondition sizes arguments})
-    (zeroRows : ∀ row, MvPolynomial.eval sizes rank ≤ row.val → (arguments.val ()).val row = 0)
-    (zeroColumns : ∀ column, MvPolynomial.eval sizes rank ≤ column.val → (arguments.val ()).val.transpose column = 0) :
-    let result := (integerRectangularHermiteAtRank rows columns rank width).compute sizes arguments
-    result.2.1.val * (arguments.val ()).val * result.2.2.val = result.1.val ∧
-      IsUnit result.2.1.val.det ∧ IsUnit result.2.2.val.det := by
-  have preserved := IntegerMatrix.rectangularHermiteRun_of_supported arguments.property.choose.1 arguments.property.choose.2
-    (MvPolynomial.eval sizes width) (arguments.val ()).val zeroRows zeroColumns
-  rw [← integerRectangularHermiteAtRank_correct rows columns rank width sizes arguments] at preserved
-  exact preserved
 
 end Polytime2.Computation

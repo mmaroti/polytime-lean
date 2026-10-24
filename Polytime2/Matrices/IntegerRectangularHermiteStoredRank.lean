@@ -16,7 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Matrices.IntegerRectangularHermiteAtSize
-import Polytime2.Computation.ComputedCall
+import Polytime2.Computation.ComputedHost
 
 /-! # Rectangular Hermite reduction at the decoded active rank
 
@@ -59,29 +59,19 @@ private theorem callee_realizable (rows columns width : MvPolynomial Parameter �
   intro singleton
   cases singleton
   exact ((renamedPairView_realizable (boundedUnary columns) (integerMatrices rows columns width)
-    (Sum.inl : Parameter → Parameter ⊕ Unit)).followedBy
-      (pairProjection_realizable ((boundedUnary columns).renameParameters Sum.inl)
-        ((integerMatrices rows columns width).renameParameters Sum.inl) true) rfl (by intros; trivial)).withPrecondition _ (by intros; trivial)
+    (Sum.inl : Parameter → Parameter ⊕ Unit)).snd).withPrecondition _ (by intros; trivial)
+
+private def counts (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (value : (input rows columns width).Carrier sizes) : (computedSizeDomain (bounds columns)).Carrier sizes :=
+  fun _ => value.1
 
 private noncomputable def frame (rows columns width : MvPolynomial Parameter ℕ) :=
-  (extendedSizeFrame (bounds columns) (input rows columns width)).onResults
-    (fun _ : Unit => input rows columns width) (fun _ _ => True)
-    (fun choice _ arguments => match choice with
-      | false => fun _ => (arguments.val ()).1 | true => arguments.val ()) (by intros; trivial)
+  computedHostFrame (bounds columns) (input rows columns width) (counts rows columns width)
 
-private theorem frame_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (frame rows columns width).Realizable := by
-  let context : Unit → EncodedDomain Parameter := fun _ => input rows columns width
-  have rank := pairProjection_realizable (boundedUnary columns) (integerMatrices rows columns width) false
-  apply (extendedSizeFrame_realizable (bounds columns) (input rows columns width)).onResults
-    context (fun _ _ => True) _ (by intros; trivial)
-  intro choice
-  cases choice
-  · apply Realizable.namedRecordOutputs
-    intro name
-    cases name
-    exact rank
-  · exact Realizable.argument context () (fun _ _ => True)
+private theorem readers_realizable (rows columns width : MvPolynomial Parameter ℕ) (name : Unit) :
+    (unaryMap (input rows columns width) (boundedUnary (bounds columns name)) (fun _ _ => True)
+      (fun sizes value => counts rows columns width sizes value.val name)).Realizable :=
+  pairProjection_realizable (boundedUnary columns) (integerMatrices rows columns width) false
 
 private def allowed (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : Unit → (input rows columns width).Carrier sizes) : Prop :=
@@ -91,12 +81,12 @@ private def allowed (rows columns width : MvPolynomial Parameter ℕ) (sizes : P
       ∀ index, 0 < (arguments ()).2.val (Fin.castLE within.1 index) (Fin.castLE within.2 index)
 
 private noncomputable def call (rows columns width : MvPolynomial Parameter ℕ) :=
-  (callee rows columns width).atComputedUnarySizes (extendedSizeBounds (bounds columns))
+  (callee rows columns width).atComputedHostSizes (bounds columns)
+    (input rows columns width) (payload rows columns width) (counts rows columns width) rfl rfl
 
 private theorem permitted (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : Unit → (input rows columns width).Carrier sizes) (valid : allowed rows columns width sizes arguments) :
-    (call rows columns width).precondition sizes
-      (fun _ => (frame rows columns width).compute sizes ⟨arguments, trivial⟩) := by
+    (call rows columns width).precondition sizes arguments := by
   obtain ⟨within, lower, positive⟩ := valid
   let framed := (frame rows columns width).compute sizes ⟨arguments, trivial⟩
   let actual := computedSizeAssignment (extendedSizeBounds (bounds columns)) sizes framed.1
@@ -104,54 +94,16 @@ private theorem permitted (rows columns width : MvPolynomial Parameter ℕ) (siz
   exact integerRectangularHermiteAtSize_permitted rows columns width Sum.inl (.inr ()) actual
     (fun _ => framed.2.2) within.1 within.2 lower positive
 
-/-- Decode the active rank and reduce, retaining the internal computed-size header. -/
-noncomputable def integerRectangularHermiteStoredRank (rows columns width : MvPolynomial Parameter ℕ) :=
-  (call rows columns width).onResults (frame rows columns width).inputDomains (allowed rows columns width)
-    (fun _ sizes arguments => (frame rows columns width).compute sizes ⟨arguments.val, trivial⟩)
-    (fun sizes arguments => permitted rows columns width sizes arguments.val arguments.property)
+/-- Reduce at the decoded rank and return the three full host matrices. -/
+noncomputable def integerRectangularHermiteHost (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  (call rows columns width).withPrecondition (allowed rows columns width) (permitted rows columns width)
 
-/-- Rank reading, size preparation, and the complete stored-rank call are realized. -/
-theorem integerRectangularHermiteStoredRank_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerRectangularHermiteStoredRank rows columns width).Realizable := by
-  apply ((callee_realizable rows columns width).atComputedUnarySizes (extendedSizeBounds (bounds columns))).onResults
-    (frame rows columns width).inputDomains (allowed rows columns width) _
-    (fun sizes arguments => permitted rows columns width sizes arguments.val arguments.property)
-  intro singleton
-  cases singleton
-  exact (frame_realizable rows columns width).withPrecondition _ (by intros; trivial)
-
-/-- Reduce at the decoded rank and return only the three full host matrices. -/
-noncomputable def integerRectangularHermiteHost (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
-  inputDomains := (integerRectangularHermiteStoredRank rows columns width).inputDomains
-  outputDomain := payload rows columns width
-  precondition := allowed rows columns width
-  compute sizes arguments := ((integerRectangularHermiteStoredRank rows columns width).compute sizes arguments).2
-
-/-- The canonical host-frame view removes the internal size header without changing payload bits. -/
+/-- Count reading, invocation, and removal of the internal header are shared. -/
 theorem integerRectangularHermiteHost_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerRectangularHermiteHost rows columns width).Realizable := by
-  let output := payload rows columns width
-  let index := computedSizeDomain (extendedSizeBounds (bounds columns))
-  let computation := integerRectangularHermiteStoredRank rows columns width
-  have viewed := (integerRectangularHermiteStoredRank_realizable rows columns width).withEncodedOutput
-    (index.prod output) (fun sizes arguments => let result := computation.compute sizes arguments; (result.1, result.2)) (by
-      intro sizes
-      change MvPolynomial.eval sizes (index.widthPolynomial + output.widthPolynomial) =
-        MvPolynomial.eval sizes (index.widthPolynomial + SizeSubstitution.polynomial (extendedSizeBounds (bounds columns))
-          (output.renameParameters (Sum.inl : Parameter → Parameter ⊕ Unit)).widthPolynomial)
-      rw [extendedSize_payloadWidth]) (by
-      intro sizes arguments
-      apply congrArg CallingConvention.tape
-      let counts : (computedSizeDomain (bounds columns)).Carrier sizes := fun _ => (arguments.val ()).1
-      exact (extendedSizeFrame_encode_bits (bounds columns) output sizes counts (computation.compute sizes arguments).2).symm)
-  exact viewed.followedBy (pairProjection_realizable index output true) rfl (by intros; trivial)
-
-/-- The size passed to the callee is exactly the rank supplied with the matrix. -/
-theorem integerRectangularHermiteStoredRank_count (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRectangularHermiteStoredRank rows columns width).Arguments sizes //
-      (integerRectangularHermiteStoredRank rows columns width).precondition sizes arguments}) :
-    (((integerRectangularHermiteStoredRank rows columns width).compute sizes arguments).1 (.inr ())).val =
-      (arguments.val ()).1.val := rfl
+    (integerRectangularHermiteHost rows columns width).Realizable :=
+  ((callee_realizable rows columns width).atComputedHostSizes (bounds columns)
+    (input rows columns width) (payload rows columns width) (counts rows columns width) rfl rfl
+    (readers_realizable rows columns width)).withPrecondition _ (permitted rows columns width)
 
 /-- Only mathematical rank bounds and the positive lower active block are required. -/
 theorem integerRectangularHermiteHost_permitted (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -172,6 +124,7 @@ theorem integerRectangularHermiteHost_correct (rows columns width : MvPolynomial
     (result.1.val, result.2.1.val, result.2.2.val) =
       IntegerMatrix.rectangularHermiteRun within.1 within.2 (MvPolynomial.eval sizes width)
         ((arguments.val ()).2.val.submatrix (Fin.castLE within.1) (Fin.castLE within.2)) := by
+  simp only [integerRectangularHermiteHost, call, Computation.withPrecondition, atComputedHostSizes_compute]
   let framed := (frame rows columns width).compute sizes ⟨arguments.val, trivial⟩
   let actual := computedSizeAssignment (extendedSizeBounds (bounds columns)) sizes framed.1
   have valid : (integerRectangularHermiteAtSize rows columns width Sum.inl (.inr ())).precondition actual

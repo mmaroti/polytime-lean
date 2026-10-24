@@ -71,21 +71,11 @@ theorem integerPositivePivotWithLeft_realizable (rows columns width : MvPolynomi
   have guard := entry.followedBy (integerNegative_realizable width) rfl (by intros; trivial)
   apply Realizable.ofCases condition guard
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = true
-    have matrix := (integerRowNegate_realizable rows columns width).onResults computation.inputDomains allowed
-      (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 2)
-      (by intros; trivial) (by
-        intro choice
-        cases choice
-        · exact Realizable.argument computation.inputDomains 0 allowed
-        · exact Realizable.argument computation.inputDomains 2 allowed)
-    have basis := (integerRowNegate_realizable rows rows width).onResults computation.inputDomains allowed
-      (fun choice _ arguments => match choice with | false => arguments.val 0 | true => arguments.val 3)
-      (by intros; trivial) (by
-        intro choice
-        cases choice
-        · exact Realizable.argument computation.inputDomains 0 allowed
-        · exact Realizable.argument computation.inputDomains 3 allowed)
-    have paired := Realizable.pairOutputs computation.inputDomains _ _ allowed _ _ matrix basis
+    have matrix := (integerRowNegate_realizable rows columns width).onArguments computation.inputDomains allowed
+      (fun choice => match choice with | false => 0 | true => 2) (by intro choice; cases choice <;> rfl) (by intros; trivial)
+    have basis := (integerRowNegate_realizable rows rows width).onArguments computation.inputDomains allowed
+      (fun choice => match choice with | false => 0 | true => 3) (by intro choice; cases choice <;> rfl) (by intros; trivial)
+    have paired := matrix.prodMk basis
     apply paired.withSpecification allowed (fun sizes arguments => computation.compute sizes ⟨arguments.val, arguments.property.1⟩) (by intros; assumption)
     intro sizes arguments valid
     have negative : (arguments 2).val (arguments 0) (arguments 1) < 0 := of_decide_eq_true valid.2
@@ -93,8 +83,7 @@ theorem integerPositivePivotWithLeft_realizable (rows columns width : MvPolynomi
       simp only [computation, integerPositivePivotWithLeft, IntegerMatrix.positivePivotWithLeft, ite_eq_left negative,
         integerRowNegate]
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ condition sizes arguments = false
-    have copied := Realizable.pairOutputs computation.inputDomains _ _ allowed _ _
-      (Realizable.argument computation.inputDomains 2 allowed) (Realizable.argument computation.inputDomains 3 allowed)
+    have copied := (Realizable.argument computation.inputDomains 2 allowed).prodMk (Realizable.argument computation.inputDomains 3 allowed)
     apply copied.withSpecification allowed (fun sizes arguments => computation.compute sizes ⟨arguments.val, arguments.property.1⟩) (by intros; assumption)
     intro sizes arguments valid
     have nonnegative : ¬ (arguments 2).val (arguments 0) (arguments 1) < 0 := of_decide_eq_false valid.2
@@ -109,18 +98,5 @@ theorem integerPositivePivotWithLeft_entry (rows columns width : MvPolynomial Pa
     let result := (integerPositivePivotWithLeft rows columns width).compute sizes arguments
     result.1.val (arguments.val 0) (arguments.val 1) = |(arguments.val 2).val (arguments.val 0) (arguments.val 1)| :=
   IntegerMatrix.positivePivotWithLeft_entry _ _ _ _
-
-/-- The actual returned basis retains the original presentation and unimodularity. -/
-theorem integerPositivePivotWithLeft_preserves (rows columns width : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerPositivePivotWithLeft rows columns width).Arguments sizes //
-      (integerPositivePivotWithLeft rows columns width).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 3).val * original * right = (arguments.val 2).val)
-    (unit : IsUnit (arguments.val 3).val.det) :
-    let result := (integerPositivePivotWithLeft rows columns width).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det :=
-  IntegerMatrix.positivePivotWithLeft_preserves _ _ _ _ _ _ equation unit
 
 end Polytime2.Computation

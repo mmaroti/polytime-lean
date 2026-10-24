@@ -99,9 +99,7 @@ private theorem selectedTokens_realizable (rows columns width length : MvPolynom
   let operation (_sizes : Parameter → ℕ) (_context : ∀ name : Empty, (Empty.elim name : EncodedDomain Parameter).Carrier _sizes)
       (flag : booleans.Carrier _sizes) (row : (boundedIndex rows).Carrier _sizes) := (flag, row)
   let step := arrayZipWithStep (Context := Empty) Empty.elim booleans (boundedIndex rows) (booleans.prod (boundedIndex rows)) operation
-  have stepReady : step.Realizable := Realizable.pairOutputs step.inputDomains _ _ step.precondition _ _
-    (Realizable.argument step.inputDomains (.inr false) step.precondition)
-    (Realizable.argument step.inputDomains (.inr true) step.precondition)
+  have stepReady : step.Realizable := (Realizable.argument step.inputDomains (.inr false) step.precondition).prodMk (Realizable.argument step.inputDomains (.inr true) step.precondition)
   have flags := ((arrayPrefixFlags_realizable length).withArguments host (MultiTape.oneTape 6) (by intros; rfl)).withPrecondition
     valid (by intros; trivial)
   have zipped := (arrayZipWith_realizable (Context := Empty) Empty.elim booleans (boundedIndex rows)
@@ -184,22 +182,6 @@ theorem integerHermiteRowStagePrefix_correct (rows columns width length : MvPoly
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 2)
       ((List.ofFn (arguments.val 5)).take (arguments.val 6).val) (arguments.val 3).val (arguments.val 4).val := rfl
-
-/-- Prefix selection retains the actual presentation and unimodular left basis. -/
-theorem integerHermiteRowStagePrefix_preserves (rows columns width length : MvPolynomial Parameter ℕ)
-    (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStagePrefix rows columns width length).Arguments sizes //
-      (integerHermiteRowStagePrefix rows columns width length).precondition sizes arguments})
-    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
-    (equation : (arguments.val 4).val * original * right = (arguments.val 3).val)
-    (unit : IsUnit (arguments.val 4).val.det) :
-    let result := (integerHermiteRowStagePrefix rows columns width length).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
-  exact IntegerMatrix.hermiteRowStage_preserves (Row := Fin (MvPolynomial.eval sizes rows))
-    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
-    arguments.property.1 (arguments.val 2) ((List.ofFn (arguments.val 5)).take (arguments.val 6).val)
-    arguments.property.2.2.2.1 (arguments.val 3).val original (arguments.val 4).val right equation unit
 
 end Polytime2.Computation
 
