@@ -52,6 +52,13 @@ variable {Parameter : Type parameterLevel} [Fintype Parameter]
 @[simp] noncomputable abbrev width (domain : EncodedDomain Parameter) (assignment : Parameter → ℕ) : ℕ :=
   MvPolynomial.eval assignment domain.widthPolynomial
 
+/-- Canonical encoding distinguishes mathematical elements. -/
+theorem encode_injective (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (sizes : Parameter → ℕ) : Function.Injective (domain.encode sizes) := by
+  intro first second equal
+  exact Option.some.inj ((domain.decode_encode sizes first).symm.trans
+    ((congrArg (domain.decode sizes) equal).trans (domain.decode_encode sizes second)))
+
 /-- Construct a domain from a codec whose width equals the chosen polynomial.
 The equality only transports vector types; it is not stored in the domain. -/
 noncomputable abbrev ofCodec (Carrier : (Parameter → ℕ) → Type carrierLevel)

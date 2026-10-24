@@ -18,7 +18,9 @@ specifications; polynomial-time realization is a separate obligation.
 | Ordinary mathematical sums | [Computation/Sums.lean][sums] |
 | An index with a dependent payload | [Dependent.lean](Dependent.lean) |
 | A count with an exact-length array | [BoundedArray.lean][bounded] |
+| Bounded cyclic/free coordinates and their modulus | [Cyclic.lean][cyclic] |
 
+[cyclic]: Cyclic.lean
 [base]: EncodedDomain.lean
 [binary]: BinaryEncoding.lean
 [integers]: Integers.lean

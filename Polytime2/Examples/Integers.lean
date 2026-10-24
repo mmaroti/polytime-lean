@@ -21,6 +21,7 @@ import Polytime2.Arithmetic.SignedGcd
 import Polytime2.Arithmetic.SignedDivision
 import Polytime2.Arithmetic.SignedBitLength
 import Polytime2.Arithmetic.SignedExtendedGcd
+import Polytime2.Arithmetic.NormalizedBezout
 import Polytime2.TM0.Computation
 
 /-! # Signed codec boundaries and certified sign/magnitude extraction -/
@@ -355,5 +356,33 @@ example :
     (Polytime2.ExtendedGcd.result (0) (0)).2.2) = (0, 0, 0)
   norm_num [Polytime2.ExtendedGcd.result, Polytime2.ExtendedGcd.initial,
     Polytime2.ExtendedGcd.run, Polytime2.Gcd.condition]
+
+
+example : (integerNormalizedExtendedGcd (MvPolynomial.X ())).TM0Realizable :=
+  (integerNormalizedExtendedGcd_realizable _).tm0
+
+example :
+    let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
+      ⟨(fun flag => if flag then (by exact ⟨8, by norm_num⟩) else (by exact ⟨13, by norm_num⟩)), trivial⟩
+    (result.1.val, result.2.1.val, result.2.2.val) = (1, 5, -8) := by
+  decide +kernel
+
+example :
+    let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 5)
+      ⟨(fun flag => if flag then (by exact ⟨-18, by norm_num⟩) else (by exact ⟨30, by norm_num⟩)), trivial⟩
+    (result.1.val, result.2.1.val, result.2.2.val) = (6, 2, 3) := by
+  decide +kernel
+
+example :
+    let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 0)
+      ⟨(fun _ => (by exact ⟨0, by norm_num⟩)), trivial⟩
+    (result.1.val, result.2.1.val, result.2.2.val) = (0, 1, 0) := by
+  decide +kernel
+
+example :
+    let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
+      ⟨(fun flag => if flag then (by exact ⟨0, by norm_num⟩) else (by exact ⟨-15, by norm_num⟩)), trivial⟩
+    (result.1.val, result.2.1.val, result.2.2.val) = (15, -1, 0) := by
+  decide +kernel
 
 end Polytime2.Examples.Integers

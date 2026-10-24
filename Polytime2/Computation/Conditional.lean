@@ -35,6 +35,45 @@ theorem argument (inputs : InputName → EncodedDomain Parameter) (name : InputN
   exact selected.withSpecification allowed (fun _ arguments => arguments.val name)
     (by intros; trivial) (by intros; rfl)
 
+/-- Certify one mathematical computation by a runtime case split. Only the
+selected branch needs its guard hypothesis; the common precondition is retained. -/
+theorem ofCases {computation : Computation Parameter InputName}
+    (condition : ∀ sizes, computation.Arguments sizes → Bool)
+    (guardReady : (Computation.mk computation.inputDomains EncodedDomain.booleans computation.precondition
+      (fun sizes arguments => condition sizes arguments.val)).Realizable)
+    (whenTrue : (computation.withPrecondition
+      (fun sizes arguments => computation.precondition sizes arguments ∧ condition sizes arguments = true)
+      (fun _ _ valid => valid.1)).Realizable)
+    (whenFalse : (computation.withPrecondition
+      (fun sizes arguments => computation.precondition sizes arguments ∧ condition sizes arguments = false)
+      (fun _ _ valid => valid.1)).Realizable) : computation.Realizable := by
+  let first := computation.withPrecondition
+    (fun sizes arguments => computation.precondition sizes arguments ∧ condition sizes arguments = true)
+    (fun _ _ valid => valid.1)
+  let second := computation.withPrecondition
+    (fun sizes arguments => computation.precondition sizes arguments ∧ condition sizes arguments = false)
+    (fun _ _ valid => valid.1)
+  let choice := first.choose second (fun _ => rfl) rfl
+  let values (name : InputName ⊕ Unit) sizes
+      (arguments : {arguments : computation.Arguments sizes // computation.precondition sizes arguments}) :
+      (choice.inputDomains name).Carrier sizes := match name with
+    | .inl original => arguments.val original
+    | .inr () => condition sizes arguments.val
+  have valid sizes arguments : choice.precondition sizes (fun name => values name sizes arguments) := by
+    cases selected : condition sizes arguments.val <;>
+      simpa [choice, first, second, Computation.choose, Computation.withPrecondition, values, selected]
+        using And.intro arguments.property selected
+  have complete := (whenTrue.choose whenFalse (fun _ => rfl) rfl).onResults computation.inputDomains
+    computation.precondition values valid (by
+      intro name
+      cases name with
+      | inl original => exact argument computation.inputDomains original computation.precondition
+      | inr singleton => cases singleton; exact guardReady)
+  apply complete.withSpecification computation.precondition computation.compute (by intros; assumption)
+  intro sizes arguments accepted
+  dsimp only [Computation.onResults, Computation.choose, Computation.withPrecondition, values]
+  split <;> rfl
+
 /-- A certified Boolean selects between two certified results on the same
 context. The enclosing precondition permits either branch. -/
 theorem conditional (inputs : InputName → EncodedDomain Parameter) (output : EncodedDomain Parameter)

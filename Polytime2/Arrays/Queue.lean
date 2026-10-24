@@ -83,6 +83,13 @@ noncomputable def successorValues {Element : Type} (length : MvPolynomial Parame
     Fin (MvPolynomial.eval sizes length + 1) → Element :=
   fun index => values (Fin.cast (by simp) index)
 
+/-- Normalizing a successor dimension preserves the array's mathematical list. -/
+theorem ofFn_successorValues {Element : Type} (length : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) (values : Fin (MvPolynomial.eval sizes (length + 1)) → Element) :
+    List.ofFn (successorValues length sizes values) = List.ofFn values := by
+  exact (List.ofFn_congr (show MvPolynomial.eval sizes (length + 1) =
+    MvPolynomial.eval sizes length + 1 by simp) values).symm
+
 /-- Drop the first element of a nonempty array. The remaining length may be zero. -/
 noncomputable def arrayTail (element : EncodedDomain Parameter)
     (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -160,6 +167,14 @@ noncomputable def snocValues {Element : Type} (length : MvPolynomial Parameter �
     (value : Element) : Fin (MvPolynomial.eval sizes (length + 1)) → Element :=
   fun index => Fin.snoc (α := fun _ => Element) values value (Fin.cast (by simp) index)
 
+/-- Appending one value preserves the ordinary array order. -/
+theorem ofFn_snocValues {Element : Type} (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (values : Fin (MvPolynomial.eval sizes length) → Element) (value : Element) :
+    List.ofFn (snocValues length sizes values value) = List.ofFn values ++ [value] := by
+  rw [List.ofFn_congr (show MvPolynomial.eval sizes (length + 1) =
+    MvPolynomial.eval sizes length + 1 by simp), List.ofFn_succ']
+  simp [snocValues, List.concat_eq_append]
+
 /-- Appending blocks and constructing the corresponding record have equal bits. -/
 theorem arraySnoc_encode_bits (element : EncodedDomain Parameter)
     (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -167,11 +182,11 @@ theorem arraySnoc_encode_bits (element : EncodedDomain Parameter)
     EncodedDomain.ArrayEncoding.bits ((element.arrayOfLength (length + 1)).encode sizes
       (snocValues length sizes values value)) =
       EncodedDomain.ArrayEncoding.bits (((element.arrayOfLength length).prod element).encode sizes (values, value)) := by
+  rw [EncodedDomain.bits_prod_encode]
   simp only [EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.ArrayEncoding.bits_encode]
-  rw [List.ofFn_congr (show MvPolynomial.eval sizes (length + 1) =
-    MvPolynomial.eval sizes length + 1 by simp)]
-  rw [List.ofFn_succ']
-  simp [snocValues, List.concat_eq_append, EncodedDomain.ArrayEncoding.bits_append,
-    EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.ArrayEncoding.bits_encode]
+  have ordered := congrArg (fun entries : List (element.Carrier sizes) =>
+    (entries.map (fun entry => EncodedDomain.ArrayEncoding.bits (element.encode sizes entry))).flatten)
+    (ofFn_snocValues length sizes values value)
+  simpa only [List.map_ofFn, List.map_append, List.flatten_append, List.map_singleton, List.flatten_singleton, Function.comp_def] using ordered
 
 end Polytime2.Computation

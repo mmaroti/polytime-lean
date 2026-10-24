@@ -23,7 +23,8 @@ substantive query and prove its interpretation for the original instance.
 
 Choose the consumer contract first. If it needs integer feasibility or
 finite-abelian coordinates, identify the corresponding
-[Smith normal form](smith-normal-form.md) dependency and the certified
+[Smith normal form](../Matrices/IntegerSmithReduction.lean) interface and the
+certified
 coordinate conversion; abstract existence of coordinates is insufficient.
 
 ## Acceptance

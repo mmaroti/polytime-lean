@@ -20,21 +20,38 @@ import Polytime2.Computation.ComputedSizes
 
 /-! # Certified source-coordinate arrays for shared stable packing -/
 
+namespace Polytime2.EncodedDomain
+
+variable {Parameter : Type} [Fintype Parameter]
+
+/-- Mathematical positions with the canonical word width used by prefix counts.
+The extra bit is derived from the array length, not a caller capacity. -/
+noncomputable def arrayPosition (length : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  boundedIndexOfWidth (fun sizes => MvPolynomial.eval sizes length) (length + 1)
+    (by intro sizes; simp only [map_add, map_one]; exact
+      (Nat.le_succ _).trans Nat.lt_two_pow_self.le)
+
+/-- The derived position codec stores the ordinary numeric coordinate. -/
+theorem arrayPosition_value (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (index : (arrayPosition length).Carrier sizes) :
+    Binary.value (ArrayEncoding.bits ((arrayPosition length).encode sizes index)) = index.val :=
+  boundedIndexOfWidth_value _ _ _ sizes index
+
+end Polytime2.EncodedDomain
+
 namespace Polytime2.Computation
 
 variable {Parameter : Type} [Fintype Parameter]
 
-/-- Original positions, encoded with enough bits for every source coordinate.
-Packing this array records the inverse of the shared source-to-dense table. -/
-noncomputable def arrayIndices (length : MvPolynomial Parameter ℕ) : Computation Parameter Empty where
+/-- Construct an all-true Boolean array at the mathematical length. -/
+noncomputable def arrayTrue (length : MvPolynomial Parameter ℕ) : Computation Parameter Empty where
   inputDomains := Empty.elim
-  outputDomain := (EncodedDomain.bitVectors (length + 1)).arrayOfLength length
+  outputDomain := EncodedDomain.booleans.arrayOfLength length
   precondition _ _ := True
-  compute sizes _ := fun index => BitVec.ofNat (MvPolynomial.eval sizes (length + 1)) index.val
+  compute _ _ := fun _ => true
 
-theorem arrayIndices_realizable (length : MvPolynomial Parameter ℕ) :
-    (arrayIndices length).Realizable := by
-  have flags := (polynomialUnarySize_realizable length).withEncodedOutput
+theorem arrayTrue_realizable (length : MvPolynomial Parameter ℕ) : (arrayTrue length).Realizable := by
+  exact (polynomialUnarySize_realizable length).withEncodedOutput
     (EncodedDomain.booleans.arrayOfLength length) (fun _ _ => fun _ => true) (by
       intro sizes
       simp [polynomialUnarySize, EncodedDomain.boundedUnary, EncodedDomain.arrayOfLength, EncodedDomain.booleans,
@@ -46,6 +63,18 @@ theorem arrayIndices_realizable (length : MvPolynomial Parameter ℕ) :
           EncodedDomain.ArrayEncoding.bits (BoundedUnary.encode _ (Fin.last _))
       rw [FirstFalse.boolean_bits, BoundedUnary.encode_bits]
       simp [BoundedUnary.bits, polynomialUnarySize, EncodedDomain.boundedUnary])
+
+/-- Original positions, encoded with enough bits for every source coordinate.
+Packing this array records the inverse of the shared source-to-dense table. -/
+noncomputable def arrayIndices (length : MvPolynomial Parameter ℕ) : Computation Parameter Empty where
+  inputDomains := Empty.elim
+  outputDomain := (EncodedDomain.bitVectors (length + 1)).arrayOfLength length
+  precondition _ _ := True
+  compute sizes _ := fun index => BitVec.ofNat (MvPolynomial.eval sizes (length + 1)) index.val
+
+theorem arrayIndices_realizable (length : MvPolynomial Parameter ℕ) :
+    (arrayIndices length).Realizable := by
+  have flags := arrayTrue_realizable length
   have counted := flags.followedBy (prefixCounts_realizable length) rfl (by intros; trivial)
   exact counted.withSpecification (fun _ _ => True) (arrayIndices length).compute (by intros; trivial) (by
     intro sizes arguments valid
@@ -54,5 +83,59 @@ theorem arrayIndices_realizable (length : MvPolynomial Parameter ℕ) :
       BitVec.ofNat _ index.val
     congr 1
     simp)
+
+/-- Enumerate the ordinary coordinates of an array, including an empty array. -/
+noncomputable def arrayPositions (length : MvPolynomial Parameter ℕ) : Computation Parameter Empty where
+  inputDomains := Empty.elim
+  outputDomain := (EncodedDomain.arrayPosition length).arrayOfLength length
+  precondition _ _ := True
+  compute _ _ := id
+
+theorem arrayPositions_realizable (length : MvPolynomial Parameter ℕ) :
+    (arrayPositions length).Realizable := by
+  have capacity (sizes : Parameter → ℕ) (index : Fin (MvPolynomial.eval sizes length)) :
+      index.val < 2 ^ MvPolynomial.eval sizes (length + 1) := by
+    simp only [map_add, map_one]
+    exact index.isLt.trans_le ((Nat.le_succ _).trans Nat.lt_two_pow_self.le)
+  have refined := (arrayIndices_realizable length).refineOutput
+    (fun sizes values => ∀ index, (values index).toNat < MvPolynomial.eval sizes length) (by
+      intro sizes arguments index
+      change (BitVec.ofNat (MvPolynomial.eval sizes (length + 1)) index.val).toNat < _
+      simpa only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (capacity sizes index)] using index.isLt)
+  have converted := refined.reinterpretOutput ((EncodedDomain.arrayPosition length).arrayOfLength length)
+    (fun _ values index => ⟨(values.val index).toNat, values.property index⟩)
+    (by intros; rfl) (by
+      intro sizes values
+      change {values : Fin (MvPolynomial.eval sizes length) →
+        BitVec (MvPolynomial.eval sizes (length + 1)) //
+          ∀ index, (values index).toNat < MvPolynomial.eval sizes length} at values
+      change EncodedDomain.ArrayEncoding.bits
+          (((EncodedDomain.arrayPosition length).arrayOfLength length).encode sizes
+            (fun index => ⟨(values.val index).toNat, values.property index⟩)) =
+        EncodedDomain.ArrayEncoding.bits
+          (((EncodedDomain.bitVectors (length + 1)).arrayOfLength length).encode sizes values.val)
+      erw [EncodedDomain.arrayOfLength_encode_bits, EncodedDomain.arrayOfLength_encode_bits]
+      change EncodedDomain.ArrayEncoding.bits
+          (EncodedDomain.ArrayEncoding.encode
+            (fun index : Fin (MvPolynomial.eval sizes length) =>
+              BitVec.ofNatLT index.val (capacity sizes index))
+            (MvPolynomial.eval sizes length)
+            (fun index => ⟨(values.val index).toNat, values.property index⟩)) =
+        EncodedDomain.ArrayEncoding.bits
+          (EncodedDomain.ArrayEncoding.encode id (MvPolynomial.eval sizes length) values.val)
+      rw [EncodedDomain.ArrayEncoding.bits_encode, EncodedDomain.ArrayEncoding.bits_encode]
+      apply congrArg List.flatten
+      apply congrArg List.ofFn
+      funext index
+      change EncodedDomain.ArrayEncoding.bits (BitVec.ofNatLT (values.val index).toNat _) =
+        EncodedDomain.ArrayEncoding.bits (values.val index)
+      rw [BitVec.ofNatLT_toNat])
+  exact converted.withSpecification (fun _ _ => True) (arrayPositions length).compute
+    (by intros; trivial) (by
+      intro sizes arguments valid
+      funext index
+      apply Fin.ext
+      change (BitVec.ofNat (MvPolynomial.eval sizes (length + 1)) index.val).toNat = index.val
+      simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (capacity sizes index)])
 
 end Polytime2.Computation

@@ -1,0 +1,157 @@
+/-
+Copyright (c) 2026 Miklos Maroti <mmaroti@math.u-szeged.hu>
+SPDX-License-Identifier: Apache-2.0
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-/
+
+import Polytime2.Matrices.HermiteColumnController
+import Polytime2.Matrices.HermiteProtectedMath
+
+/-! # Certified integer column reduction with internal storage preparation
+
+Given a bounded rectangular integer matrix, a bounded accumulated left basis,
+and a positive pivot at a selected source row and column, clear that column
+outside the source. Derive the polynomial workspace from the input width and
+row count and prepare both matrices internally. No rank or invertibility
+condition is imposed on the working matrix.
+-/
+
+set_option backward.isDefEq.respectTransparency false
+
+namespace Polytime2.Computation
+
+open EncodedDomain Realizable.Internal
+
+variable {Parameter : Type} [Fintype Parameter]
+
+private noncomputable def inputs (rows columns width : MvPolynomial Parameter ℕ) : Fin 4 → EncodedDomain Parameter
+  | 0 => boundedIndex rows | 1 => boundedIndex columns
+  | 2 => integerMatrices rows columns width | 3 => integerMatrices rows rows width
+
+private def allowed (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : ∀ name, (inputs rows columns width name).Carrier sizes) :=
+  0 < (arguments 2).val (arguments 0) (arguments 1)
+
+private noncomputable def prepared (rows columns width : MvPolynomial Parameter ℕ) :=
+  (integerMatrixWiden rows columns width (rows * (2 * width + 2)) (hermiteColumnWorkspace rows width) rfl,
+   integerMatrixWiden rows rows width (rows * (2 * width + 2)) (hermiteColumnWorkspace rows width) rfl)
+
+private noncomputable def preparedValues (rows columns width : MvPolynomial Parameter ℕ) (name : Bool ⊕ Unit)
+    (sizes : Parameter → ℕ) (arguments : {arguments : ∀ name, (inputs rows columns width name).Carrier sizes //
+      allowed rows columns width sizes arguments}) :
+    ((hermiteColumnController rows columns width).inputDomains name).Carrier sizes :=
+  match name with
+  | .inl false => arguments.val 0
+  | .inl true => arguments.val 1
+  | .inr () => ((prepared rows columns width).1.compute sizes ⟨(fun _ => arguments.val 2), trivial⟩,
+      (prepared rows columns width).2.compute sizes ⟨(fun _ => arguments.val 3), trivial⟩)
+
+private theorem prepared_valid (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : ∀ name, (inputs rows columns width name).Carrier sizes // allowed rows columns width sizes arguments}) :
+    (hermiteColumnController rows columns width).precondition sizes (fun name => preparedValues rows columns width name sizes arguments) := by
+  exact ⟨arguments.property, (arguments.val 2).property, (arguments.val 3).property⟩
+
+/-- Clear a positive-pivot column and return the actual matrix and left basis. -/
+noncomputable def integerHermiteColumn (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 4) :=
+  (hermiteColumnController rows columns width).onResults (inputs rows columns width) (allowed rows columns width)
+    (preparedValues rows columns width) (prepared_valid rows columns width)
+
+theorem integerHermiteColumn_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerHermiteColumn rows columns width).Realizable := by
+  apply (hermiteColumnController_realizable rows columns width).onResults (inputs rows columns width)
+    (allowed rows columns width) (preparedValues rows columns width) (prepared_valid rows columns width)
+  intro name
+  rcases name with choice | singleton
+  · cases choice
+    · exact Realizable.argument (inputs rows columns width) 0 (allowed rows columns width)
+    · exact Realizable.argument (inputs rows columns width) 1 (allowed rows columns width)
+  · cases singleton
+    have first := ((integerMatrixWiden_realizable rows columns width (rows * (2 * width + 2))
+      (hermiteColumnWorkspace rows width) rfl).withArguments (inputs rows columns width)
+      (MultiTape.oneTape 2) (by intros; rfl)).withPrecondition (allowed rows columns width) (by intros; trivial)
+    have second := ((integerMatrixWiden_realizable rows rows width (rows * (2 * width + 2))
+      (hermiteColumnWorkspace rows width) rfl).withArguments (inputs rows columns width)
+      (MultiTape.oneTape 3) (by intros; rfl)).withPrecondition (allowed rows columns width) (by intros; trivial)
+    exact Realizable.pairOutputs (inputs rows columns width) _ _ (allowed rows columns width) _ _ first second
+
+/-- The prepared runtime traversal is precisely the mathematical column prefix. -/
+theorem integerHermiteColumn_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteColumn rows columns width).Arguments sizes //
+      (integerHermiteColumn rows columns width).precondition sizes arguments}) :
+    let result := (integerHermiteColumn rows columns width).compute sizes arguments
+    (result.1.val, result.2.val) = IntegerMatrix.hermiteColumnPrefix
+      (rows := MvPolynomial.eval sizes rows) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (MvPolynomial.eval sizes rows) (arguments.val 2).val (arguments.val 3).val := by
+  exact hermiteColumnController_correct rows columns width sizes
+    ⟨(fun name => preparedValues rows columns width name sizes arguments), prepared_valid rows columns width sizes arguments⟩
+
+/-- The selected column has a positive pivot and zero entries everywhere else. -/
+theorem integerHermiteColumn_entries (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteColumn rows columns width).Arguments sizes //
+      (integerHermiteColumn rows columns width).precondition sizes arguments}) :
+    let result := (integerHermiteColumn rows columns width).compute sizes arguments
+    0 < result.1.val (arguments.val 0) (arguments.val 1) ∧
+      ∀ row, row ≠ arguments.val 0 → result.1.val row (arguments.val 1) = 0 := by
+  have pure := IntegerMatrix.hermiteColumnPrefix_entries (rows := MvPolynomial.eval sizes rows)
+    (Column := Fin (MvPolynomial.eval sizes columns)) (arguments.val 0) (arguments.val 1)
+    (MvPolynomial.eval sizes rows) (arguments.val 2).val (arguments.val 3).val arguments.property
+  have transfer := congrArg (fun matrices => 0 < matrices.1 (arguments.val 0) (arguments.val 1) ∧
+    ∀ row, row ≠ arguments.val 0 → matrices.1 row (arguments.val 1) = 0)
+    (integerHermiteColumn_correct rows columns width sizes arguments)
+  exact transfer.mpr ⟨pure.1, fun row different => pure.2 row row.isLt different⟩
+
+/-- The accumulated basis still describes the working matrix and remains unimodular. -/
+theorem integerHermiteColumn_preserves (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteColumn rows columns width).Arguments sizes //
+      (integerHermiteColumn rows columns width).precondition sizes arguments})
+    (original : Matrix (Fin (MvPolynomial.eval sizes rows)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
+    (right : Matrix (Fin (MvPolynomial.eval sizes columns)) (Fin (MvPolynomial.eval sizes columns)) ℤ)
+    (equation : (arguments.val 3).val * original * right = (arguments.val 2).val)
+    (unit : IsUnit (arguments.val 3).val.det) :
+    let result := (integerHermiteColumn rows columns width).compute sizes arguments
+    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
+  have pure := IntegerMatrix.hermiteColumnSweep_preserves
+    (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+    (arguments.val 0) (arguments.val 1) (IntegerMatrix.hermiteColumnTargets (arguments.val 0) (MvPolynomial.eval sizes rows))
+    (IntegerMatrix.hermiteColumnTargets_excluded (arguments.val 0) (MvPolynomial.eval sizes rows))
+    (arguments.val 2).val original (arguments.val 3).val right equation unit
+  have transfer := congrArg (fun matrices => matrices.2 * original * right = matrices.1 ∧ IsUnit matrices.2.det)
+    (integerHermiteColumn_correct rows columns width sizes arguments)
+  exact transfer.mpr pure
+
+/-- Completed separated blocks and their left-basis rows survive the realized traversal. -/
+theorem integerHermiteColumn_protected (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteColumn rows columns width).Arguments sizes //
+      (integerHermiteColumn rows columns width).precondition sizes arguments})
+    (protectedRows : Set (Fin (MvPolynomial.eval sizes rows)))
+    (protectedColumns : Set (Fin (MvPolynomial.eval sizes columns)))
+    (sourceOutside : arguments.val 0 ∉ protectedRows)
+    (selectedZeros : ∀ row ∈ protectedRows, (arguments.val 2).val row (arguments.val 1) = 0)
+    (earlierZeros : ∀ row ∉ protectedRows, ∀ column ∈ protectedColumns, (arguments.val 2).val row column = 0) :
+    let result := (integerHermiteColumn rows columns width).compute sizes arguments
+    (∀ row ∈ protectedRows, result.1.val row = (arguments.val 2).val row ∧
+      result.2.val row = (arguments.val 3).val row) ∧
+    (∀ column ∈ protectedColumns, ∀ row, result.1.val row column = (arguments.val 2).val row column) := by
+  have pure := IntegerMatrix.hermiteColumnSweep_protected
+    (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+    protectedRows protectedColumns (arguments.val 0) (arguments.val 1)
+    (IntegerMatrix.hermiteColumnTargets (arguments.val 0) (MvPolynomial.eval sizes rows))
+    (arguments.val 2).val (arguments.val 3).val sourceOutside selectedZeros earlierZeros
+  have transfer := congrArg (fun matrices =>
+    (∀ row ∈ protectedRows, matrices.1 row = (arguments.val 2).val row ∧ matrices.2 row = (arguments.val 3).val row) ∧
+    (∀ column ∈ protectedColumns, ∀ row, matrices.1 row column = (arguments.val 2).val row column))
+    (integerHermiteColumn_correct rows columns width sizes arguments)
+  exact transfer.mpr pure
+
+end Polytime2.Computation

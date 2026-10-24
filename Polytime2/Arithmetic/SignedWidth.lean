@@ -53,6 +53,38 @@ theorem integerWiden_realizable (width extra : MvPolynomial Parameter ℕ) :
     simpa only [map_add, Nat.add_sub_cancel_left, List.append_assoc] using
       congrArg (fun payload => ArrayEncoding.bits (booleans.encode sizes (SignedEncoding.negative value.val)) ++ payload) widened
 
+
+/-- Widen into an algebraically equal polynomial width without changing meaning. -/
+noncomputable def integerWidenTo (width extra targetWidth : MvPolynomial Parameter ℕ)
+    (sameWidth : targetWidth = width + extra) : Computation Parameter Unit :=
+  encodingMap (binaryIntegers width) (binaryIntegers targetWidth) (fun sizes value =>
+    ⟨value.val, by
+      rw [sameWidth]
+      exact value.property.trans_le (pow_le_pow_right₀ (by decide) (by simp only [map_add]; omega))⟩)
+
+theorem integerWidenTo_realizable (width extra targetWidth : MvPolynomial Parameter ℕ)
+    (sameWidth : targetWidth = width + extra) :
+    (integerWidenTo width extra targetWidth sameWidth).Realizable :=
+  (integerWiden_realizable width extra).reinterpretOutput (binaryIntegers targetWidth)
+    (fun _ value => ⟨value.val, by simpa only [sameWidth] using value.property⟩)
+    (by intro sizes; change (binaryIntegers targetWidth).width sizes = (binaryIntegers (width + extra)).width sizes
+        rw [sameWidth])
+    (fun sizes value => binaryIntegers_encode_congr _ _ sameWidth sizes _ _ rfl)
+
+/-- Evaluate a fixed Boolean integer operation in a derived wider word. -/
+noncomputable def integerBooleanOperationWiden {Argument : Type} [Fintype Argument]
+    (extraWidth : MvPolynomial Parameter ℕ)
+    (operation : (Argument → Bool) → {value : ℤ // value.natAbs < 2}) : Computation Parameter Argument :=
+  (integerBooleanOperation operation).followedBy
+    (integerWidenTo 1 extraWidth (extraWidth + 1) (by ring)) rfl (by intros; trivial)
+
+theorem integerBooleanOperationWiden_realizable {Argument : Type} [Fintype Argument]
+    (extraWidth : MvPolynomial Parameter ℕ)
+    (operation : (Argument → Bool) → {value : ℤ // value.natAbs < 2}) :
+    (integerBooleanOperationWiden extraWidth operation).Realizable :=
+  (integerBooleanOperation_realizable operation).followedBy
+    (integerWidenTo_realizable 1 extraWidth (extraWidth + 1) (by ring)) rfl (by intros; trivial)
+
 noncomputable def integerNarrowAtWidths (sourceWidth width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   unaryMap (binaryIntegers sourceWidth) (binaryIntegers width)
     (fun sizes value => value.val.natAbs < 2 ^ MvPolynomial.eval sizes width)

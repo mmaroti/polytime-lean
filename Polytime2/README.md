@@ -45,12 +45,22 @@ development because theorem statements may still need to be adapted.
 
 ## Proposed next tasks
 
-1. [Smith normal form](tasks/smith-normal-form.md): build integer-matrix
-   operations and a certified algorithm using existing signed arithmetic.
-2. [A prepared-SMP consumer](tasks/prepared-smp-consumer.md): connect a concrete
+1. [A prepared-SMP consumer](tasks/prepared-smp-consumer.md): connect a concrete
    certified solver to the preparation interface, preserving explicit rejection.
-3. [Algorithm notation](tasks/algorithm-notation.md): pilot notation on existing
+2. [Algorithm notation](tasks/algorithm-notation.md): pilot notation on existing
    composition proofs and retain their mathematical interfaces.
+3. [Bellman–Ford and difference constraints](tasks/bellman-ford.md): build graph
+   foundations and return feasible assignments or negative-cycle certificates.
+4. [Maximum bipartite matching](tasks/bipartite-matching.md): return a matching
+   and a vertex cover certifying optimality.
+5. [Constructive 2-SAT](tasks/2-sat.md): return an assignment or an explicit
+   unsatisfiability witness.
+6. [Edmonds–Karp maximum flow](tasks/maximum-flow.md): certify integral flows
+   and minimum cuts with polynomial bit costs.
+7. [3-SAT to CLIQUE](tasks/3-sat-to-clique.md): certify a polynomial reduction
+   and both witness conversions.
+8. [Exact rational linear programming](tasks/linear-programming.md): a
+   longer-term solver project requiring a full precision and bit-cost analysis.
 
 These are proposals, not completed features. Each task records its prerequisites
 and acceptance criteria; remove completed entries and update the relevant guide.

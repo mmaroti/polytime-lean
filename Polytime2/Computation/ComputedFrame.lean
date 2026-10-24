@@ -46,7 +46,8 @@ def extendedSizeValues (bounds : PayloadParameter → MvPolynomial HostParameter
     | .inl parameter => ⟨sizes parameter, by simp [extendedSizeBounds]⟩
     | .inr parameter => values parameter
 
-private theorem extendedSize_capacity
+/-- A host payload retains its exact width when adjoining computed size names. -/
+theorem extendedSize_payloadWidth
     (bounds : PayloadParameter → MvPolynomial HostParameter ℕ)
     (payload : EncodedDomain HostParameter) :
     SizeSubstitution.polynomial (extendedSizeBounds bounds)
@@ -66,6 +67,43 @@ noncomputable def extendedSizeFrame
   precondition _ _ := True
   compute sizes arguments :=
     ⟨extendedSizeValues bounds sizes (arguments.val false), arguments.val true⟩
+
+/-- A frame with the original host sizes has the same bits as its index and
+ordinary host payload, with no additional padding. -/
+theorem extendedSizeFrame_encode_bits
+    (bounds : PayloadParameter → MvPolynomial HostParameter ℕ) (payload : EncodedDomain HostParameter)
+    (sizes : HostParameter → ℕ) (values : (computedSizeDomain bounds).Carrier sizes)
+    (payloadValue : payload.Carrier sizes) :
+    EncodedDomain.ArrayEncoding.bits ((atComputedSizeDomain (extendedSizeBounds bounds)
+      (payload.renameParameters (Sum.inl : HostParameter → HostParameter ⊕ PayloadParameter))).encode sizes
+        ⟨extendedSizeValues bounds sizes values, payloadValue⟩) =
+      EncodedDomain.ArrayEncoding.bits (((computedSizeDomain (extendedSizeBounds bounds)).prod payload).encode sizes
+        (extendedSizeValues bounds sizes values, payloadValue)) := by
+  let names := HostParameter ⊕ PayloadParameter
+  let fullBounds := extendedSizeBounds bounds
+  let index := computedSizeDomain fullBounds
+  let value := extendedSizeValues bounds sizes values
+  let renamed := payload.renameParameters (Sum.inl : HostParameter → names)
+  let assignment := computedSizeAssignment fullBounds sizes value
+  let capacity := SizeSubstitution.polynomial fullBounds renamed.widthPolynomial
+  change EncodedDomain.ArrayEncoding.bits
+    ((index.prod (EncodedDomain.bitVectors capacity)).encode sizes
+      (value, (renamed.encode assignment payloadValue).setWidth (MvPolynomial.eval sizes capacity))) =
+    EncodedDomain.ArrayEncoding.bits ((index.prod payload).encode sizes (value, payloadValue))
+  rw [EncodedDomain.bits_prod_encode, EncodedDomain.bits_prod_encode,
+    EncodedDomain.bits_setWidth _ (computedSizeWidth_bound fullBounds renamed sizes value),
+    EncodedDomain.renameParameters_bits]
+  have capacityEq : capacity = payload.widthPolynomial := extendedSize_payloadWidth bounds payload
+  have widthEq : renamed.width assignment = payload.width sizes := by
+    rw [EncodedDomain.renameParameters_width]
+    rfl
+  rw [capacityEq, widthEq]
+  have evaluatedCapacity : MvPolynomial.eval sizes
+      (SizeSubstitution.polynomial fullBounds renamed.widthPolynomial) = payload.width sizes :=
+    congrArg (MvPolynomial.eval sizes) capacityEq
+  rw [evaluatedCapacity, Nat.sub_self]
+  simp only [List.replicate_zero, List.append_nil]
+  rfl
 
 theorem extendedSizeFrame_realizable
     (bounds : PayloadParameter → MvPolynomial HostParameter ℕ)
@@ -104,31 +142,11 @@ theorem extendedSizeFrame_realizable
     change MvPolynomial.eval sizes (index.widthPolynomial +
       SizeSubstitution.polynomial fullBounds
         (payload.renameParameters (Sum.inl : HostParameter → names)).widthPolynomial) = _
-    rw [extendedSize_capacity]
+    rw [extendedSize_payloadWidth]
   · intro sizes arguments
-    let value := result sizes arguments
-    let renamed := payload.renameParameters (Sum.inl : HostParameter → names)
-    let assignment := computedSizeAssignment fullBounds sizes value
-    let capacity := SizeSubstitution.polynomial fullBounds renamed.widthPolynomial
     apply congrArg CallingConvention.tape
-    change EncodedDomain.ArrayEncoding.bits
-      ((index.prod (EncodedDomain.bitVectors capacity)).encode sizes
-        (value, (renamed.encode assignment (arguments.val true)).setWidth (MvPolynomial.eval sizes capacity))) =
-      EncodedDomain.ArrayEncoding.bits ((index.prod payload).encode sizes (value, arguments.val true))
-    rw [EncodedDomain.bits_prod_encode, EncodedDomain.bits_prod_encode,
-      EncodedDomain.bits_setWidth _ (computedSizeWidth_bound fullBounds renamed sizes value),
-      EncodedDomain.renameParameters_bits]
-    have capacityEq : capacity = payload.widthPolynomial := extendedSize_capacity bounds payload
-    have widthEq : renamed.width assignment = payload.width sizes := by
-      rw [EncodedDomain.renameParameters_width]
-      rfl
-    rw [capacityEq, widthEq]
-    have evaluatedCapacity : MvPolynomial.eval sizes
-        (SizeSubstitution.polynomial fullBounds renamed.widthPolynomial) = payload.width sizes :=
-      congrArg (MvPolynomial.eval sizes) capacityEq
-    rw [evaluatedCapacity, Nat.sub_self]
-    simp only [List.replicate_zero, List.append_nil]
-    rfl
+    exact extendedSizeFrame_encode_bits bounds payload sizes (arguments.val false) (arguments.val true)
+
 
 /-- Select a record field while retaining the caller's original sizes in a
 larger computed-size parameter family. -/
@@ -170,5 +188,24 @@ theorem renamedPairView_realizable (first second : EncodedDomain HostParameter)
       EncodedDomain.bits_prod_encode, EncodedDomain.renameParameters_bits,
       EncodedDomain.renameParameters_bits]
 
+
+/-- View a host coordinate at its renamed polynomial dimension. -/
+noncomputable def renamedIndexView (length : MvPolynomial HostParameter ℕ)
+    (names : HostParameter → Parameter) : Computation Parameter Unit :=
+  encodingMap ((EncodedDomain.boundedIndex length).renameParameters names)
+    (EncodedDomain.boundedIndex (MvPolynomial.rename names length))
+    (fun sizes index => Fin.cast (MvPolynomial.eval_rename names sizes length).symm index)
+
+/-- Renaming a coordinate preserves its natural value and exact binary width. -/
+theorem renamedIndexView_realizable (length : MvPolynomial HostParameter ℕ)
+    (names : HostParameter → Parameter) : (renamedIndexView length names).Realizable := by
+  apply encodingMap_realizable
+  · intro sizes
+    simp [EncodedDomain.width, EncodedDomain.boundedIndex, EncodedDomain.boundedIndexOfWidth]
+  · intro sizes index
+    rw [EncodedDomain.renameParameters_bits]
+    simp only [EncodedDomain.boundedIndex, EncodedDomain.boundedIndexOfWidth,
+      BitVec.ofNatLT_eq_ofNat, Fin.val_cast, EncodedDomain.ArrayEncoding.bits]
+    simp only [BitVec.getLsbD_ofNat, Fin.val_cast, MvPolynomial.eval_rename]
 
 end Polytime2.Computation

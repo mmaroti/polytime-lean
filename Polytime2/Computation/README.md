@@ -22,12 +22,14 @@ add it to the foundation rather than unpacking a realization in a caller.
 | Collect results in a product or record | [Records.lean](Records.lean) |
 | Pass an argument family on one record tape | [RecordArguments.lean][args] |
 | Branch on a Boolean or mathematical sum | [Branch.lean][branch], [sums] |
+| Certify a computation under complementary guards | [Conditional.lean][cases] |
 | Restrict or replace a specification | [realization][real] |
 
 [seq]: Composition.lean
 [args]: RecordArguments.lean
 [select]: Arguments.lean
 [branch]: Branch.lean
+[cases]: Conditional.lean
 [sums]: Sums.lean
 [real]: Realizable.lean
 
@@ -36,6 +38,11 @@ Use `letThen` when a continuation needs one computed value more than once.
 context; it does not promise to evaluate common subexpressions only once.
 `withPrecondition` strengthens admissibility, and `withSpecification` exposes a
 mathematically equal answer without changing its domain.
+
+[Equality.lean](Equality.lean) compares elements of any canonical encoded domain
+by mathematical equality, reusing the certified bit comparison.
+[Swap.lean](Swap.lean) exchanges two mathematical values using these tests and
+conditional selection.
 
 ## Change mathematical representations
 

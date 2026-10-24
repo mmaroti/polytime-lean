@@ -495,4 +495,49 @@ theorem matrix_encode (element : EncodedDomain.{parameterLevel, carrierLevel} Pa
         (MatrixEncoding.flattenPolynomial (Carrier := element.Carrier assignment)
           rows columns assignment value) := rfl
 
+/-- Flattened and nested rectangular matrix codecs have identical row-major
+canonical bits, including size-dependent element widths and empty dimensions. -/
+theorem matrix_nested_encode_bits (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (rows columns : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (value : Fin (MvPolynomial.eval sizes rows) →
+      Fin (MvPolynomial.eval sizes columns) → element.Carrier sizes) :
+    ArrayEncoding.bits ((matrix element rows columns).encode sizes value) =
+      ArrayEncoding.bits (((element.arrayOfLength columns).arrayOfLength rows).encode sizes value) := by
+  have flat := arrayOfLength_encode_bits element (rows * columns) sizes
+    (MatrixEncoding.flattenPolynomial rows columns sizes value)
+  have castBits := ArrayEncoding.bits_encode_cast (element.encode sizes)
+    (map_mul (MvPolynomial.eval sizes) rows columns) (MatrixEncoding.flattenEquiv value)
+  have nested := (arrayOfLength_encode_bits (element.arrayOfLength columns) rows sizes value).trans
+    (ArrayEncoding.bits_encode_congr ((element.arrayOfLength columns).encode sizes)
+      (ArrayEncoding.encode (element.encode sizes) (MvPolynomial.eval sizes columns))
+      (fun row => arrayOfLength_encode_bits element columns sizes row)
+      (MvPolynomial.eval sizes rows) value)
+  exact flat.trans (castBits.trans
+    ((MatrixEncoding.bits_encode_nested (element.encode sizes) value).symm.trans nested.symm))
+
+/-- Pointwise agreement of canonical element bits preserves the whole matrix encoding. -/
+theorem matrix_encode_bits_congr (source target : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (rows columns : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (first : (matrix source rows columns).Carrier sizes) (second : (matrix target rows columns).Carrier sizes)
+    (sameBits : ∀ row column, ArrayEncoding.bits (source.encode sizes (first row column)) =
+      ArrayEncoding.bits (target.encode sizes (second row column))) :
+    ArrayEncoding.bits ((matrix source rows columns).encode sizes first) =
+      ArrayEncoding.bits ((matrix target rows columns).encode sizes second) := by
+  have words (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+      (length : MvPolynomial Parameter ℕ) (values : (element.arrayOfLength length).Carrier sizes) :
+      ArrayEncoding.bits ((element.arrayOfLength length).encode sizes values) =
+        (List.ofFn (fun index => ArrayEncoding.bits (element.encode sizes (values index)))).flatten :=
+    (arrayOfLength_encode_bits element length sizes values).trans (ArrayEncoding.bits_encode _ _ _)
+  have rowBits : ∀ row, ArrayEncoding.bits ((source.arrayOfLength columns).encode sizes (first row)) =
+      ArrayEncoding.bits ((target.arrayOfLength columns).encode sizes (second row)) := by
+    intro row
+    exact (words source columns (first row)).trans
+      ((congrArg List.flatten (congrArg List.ofFn (funext (sameBits row)))).trans
+        (words target columns (second row)).symm)
+  have wholeBits := (words (source.arrayOfLength columns) rows first).trans
+    ((congrArg List.flatten (congrArg List.ofFn (funext rowBits))).trans
+      (words (target.arrayOfLength columns) rows second).symm)
+  exact (matrix_nested_encode_bits source rows columns sizes first).trans
+    (wholeBits.trans (matrix_nested_encode_bits target rows columns sizes second).symm)
+
 end Polytime2.EncodedDomain
