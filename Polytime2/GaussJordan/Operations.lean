@@ -125,15 +125,26 @@ private theorem gaussJordanWithCapacity_realizable (enumeration : Scalar ≃ Fin
 /-- Finite-field elimination has just two public sizes, rows and columns.
 Counter capacity is constructed privately; every rectangular matrix is admissible. -/
 noncomputable def gaussJordan (enumeration : Scalar ≃ Fin cardinality) : Computation (Fin 2) Unit :=
-  ((gaussJordanWithCapacity enumeration).withInternalSize).withPrecondition
-    (fun _ _ => True) (fun sizes _ _ => Realizable.Internal.internalCapacity_fits sizes)
+  specification (fun _ => (matrixDomain (FieldRow.scalarDomain enumeration)).withInternalSize)
+    (matrixDomain (FieldRow.scalarDomain enumeration)).withInternalSize (fun _ _ => True)
+    (fun _ arguments => GaussJordan.eliminate (Scalar := Scalar) (arguments.val ()))
 
 /-- One finite algorithm works for every pair of dimensions. Its private size
 header, scratch tapes, controllers, and polynomial bound remain existential. -/
 theorem gaussJordan_realizable (enumeration : Scalar ≃ Fin cardinality) :
-    (gaussJordan enumeration).Realizable :=
-  ((gaussJordanWithCapacity_realizable enumeration).withInternalSize).withPrecondition
-    (fun _ _ => True) (fun sizes _ _ => Realizable.Internal.internalCapacity_fits sizes)
+    (gaussJordan enumeration).Realizable := by
+  apply (((gaussJordanWithCapacity_realizable enumeration).withInternalSize).withPrecondition
+    (fun _ _ => True) (fun sizes _ _ => Realizable.Internal.internalCapacity_fits sizes)).specification
+  intro sizes arguments valid
+  rfl
+
+/-- Evaluate elimination through its mathematical algorithm, without exposing
+counter preparation or the finite-machine implementation. -/
+theorem gaussJordan_compute (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 2 → ℕ)
+    (arguments : (gaussJordan enumeration).Arguments sizes) :
+    (gaussJordan enumeration).compute sizes ⟨arguments, trivial⟩ =
+      GaussJordan.eliminate (Scalar := Scalar) (arguments ()) :=
+  specification_compute _ _ _ _ _ _
 
 /-- Elimination preserves the row space and returns reduced row-echelon form. -/
 theorem gaussJordan_correct (enumeration : Scalar ≃ Fin cardinality) (sizes : Fin 2 → ℕ)
@@ -143,6 +154,8 @@ theorem gaussJordan_correct (enumeration : Scalar ≃ Fin cardinality) (sizes : 
       ((gaussJordan enumeration).compute sizes ⟨arguments, valid⟩) ∧
       Matrix.IsReducedRowEchelon (R := Scalar)
         ((gaussJordan enumeration).compute sizes ⟨arguments, valid⟩ : Matrix (Fin (sizes 0)) (Fin (sizes 1)) Scalar) :=
-  ⟨GaussJordan.rowEquivalent (Scalar := Scalar) _, GaussJordan.reducedRowEchelon (Scalar := Scalar) _⟩
+by
+  rw [gaussJordan_compute]
+  exact ⟨GaussJordan.rowEquivalent (Scalar := Scalar) _, GaussJordan.reducedRowEchelon (Scalar := Scalar) _⟩
 
 end Polytime2.Computation

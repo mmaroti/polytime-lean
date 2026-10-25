@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Matrices.IntegerAugmentedMatrix
 import Polytime2.Matrices.IntegerSystemSolve
+import Polytime2.Computation.Specification
 
 /-! # Membership in products of cyclic groups
 
@@ -88,7 +89,7 @@ private theorem augmented_feasible_iff (rows generators generatorWidth modulusWi
       (fun row => (arguments 2 row).val)).symm
 
 /-- Decide cyclic span membership while retaining every generator and modulus column. -/
-noncomputable def integerCyclicMembership
+private noncomputable def membershipImplementation
     (rows generators generatorWidth modulusWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) :=
   (integerSystemFeasible rows (generators + rows) (integerAugmentedWidth generatorWidth modulusWidth) targetWidth).onResults
     (inputs rows generators generatorWidth modulusWidth targetWidth) (fun _ _ => True)
@@ -97,9 +98,9 @@ noncomputable def integerCyclicMembership
       | true => arguments.val 2) (by intros; trivial)
 
 /-- Augmentation and certified integer-system feasibility compose polynomially. -/
-theorem integerCyclicMembership_realizable
+private theorem membershipImplementation_realizable
     (rows generators generatorWidth modulusWidth targetWidth : MvPolynomial Parameter ℕ) :
-    (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).Realizable := by
+    (membershipImplementation rows generators generatorWidth modulusWidth targetWidth).Realizable := by
   apply (integerSystemFeasible_realizable rows (generators + rows)
     (integerAugmentedWidth generatorWidth modulusWidth) targetWidth).onResults
     (inputs rows generators generatorWidth modulusWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
@@ -110,10 +111,10 @@ theorem integerCyclicMembership_realizable
 
 set_option maxHeartbeats 4000000 in
 /-- The Boolean result is exactly existence of integer coefficients in the cyclic coordinates. -/
-theorem integerCyclicMembership_correct
+private theorem membershipImplementation_correct
     (rows generators generatorWidth modulusWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).Arguments sizes) :
-    (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+    (arguments : (membershipImplementation rows generators generatorWidth modulusWidth targetWidth).Arguments sizes) :
+    (membershipImplementation rows generators generatorWidth modulusWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
       ∃ coefficients : Fin (MvPolynomial.eval sizes generators) → ℤ, ∀ row,
         (∑ generator, (coefficients generator : ZMod (arguments 1 row).val) *
           ((arguments 0).val row generator : ZMod (arguments 1 row).val)) =
@@ -122,13 +123,39 @@ theorem integerCyclicMembership_correct
   have decided := integerSystemFeasible_correct rows (generators + rows)
     (integerAugmentedWidth generatorWidth modulusWidth) targetWidth sizes
     (fun choice => match choice with | false => matrix | true => arguments 2)
-  have callEqual : (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).compute sizes
+  have callEqual : (membershipImplementation rows generators generatorWidth modulusWidth targetWidth).compute sizes
       ⟨arguments, trivial⟩ =
       (integerSystemFeasible rows (generators + rows) (integerAugmentedWidth generatorWidth modulusWidth) targetWidth).compute sizes
         ⟨(fun choice => match choice with | false => matrix | true => arguments 2), trivial⟩ := by
     rfl
   have decision := (congrArg (fun flag : Bool => flag = true) callEqual).to_iff.trans decided
   exact decision.trans (augmented_feasible_iff rows generators generatorWidth modulusWidth targetWidth sizes arguments)
+
+/-- Decide cyclic span membership as an ordinary existence predicate. -/
+noncomputable def integerCyclicMembership
+    (rows generators generatorWidth modulusWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) :=
+  decision (inputs rows generators generatorWidth modulusWidth targetWidth) (fun _ _ => True)
+    (fun sizes arguments => ∃ coefficients : Fin (MvPolynomial.eval sizes generators) → ℤ, ∀ row,
+      (∑ generator, (coefficients generator : ZMod (arguments 1 row).val) *
+        ((arguments 0).val row generator : ZMod (arguments 1 row).val)) =
+          ((arguments 2 row).val : ZMod (arguments 1 row).val))
+
+theorem integerCyclicMembership_realizable
+    (rows generators generatorWidth modulusWidth targetWidth : MvPolynomial Parameter ℕ) :
+    (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).Realizable :=
+  (membershipImplementation_realizable rows generators generatorWidth modulusWidth targetWidth).decision _
+    (fun sizes arguments _valid => membershipImplementation_correct rows generators generatorWidth modulusWidth targetWidth sizes arguments)
+
+/-- The result is true exactly when integer coefficients represent the cyclic target. -/
+theorem integerCyclicMembership_correct
+    (rows generators generatorWidth modulusWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).Arguments sizes) :
+    (integerCyclicMembership rows generators generatorWidth modulusWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+      ∃ coefficients : Fin (MvPolynomial.eval sizes generators) → ℤ, ∀ row,
+        (∑ generator, (coefficients generator : ZMod (arguments 1 row).val) *
+          ((arguments 0).val row generator : ZMod (arguments 1 row).val)) =
+            ((arguments 2 row).val : ZMod (arguments 1 row).val) :=
+  decision_correct _ _ _ sizes ⟨arguments, trivial⟩
 
 /-- Capacity of both generator and modulus coefficients, derived from the cyclic input. -/
 noncomputable def integerCyclicWitnessWidth

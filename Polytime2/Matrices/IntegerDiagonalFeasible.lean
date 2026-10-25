@@ -35,7 +35,7 @@ open EncodedDomain
 variable {Parameter : Type} [Fintype Parameter]
 
 /-- Test the complete diagonal feasibility criterion without exposing runtime rank. -/
-noncomputable def integerDiagonalFeasible
+private noncomputable def implementation
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (integerArrayDivides rows matrixWidth targetWidth).onResults
     (fun choice => if choice then (binaryIntegers targetWidth).arrayOfLength rows
@@ -47,15 +47,38 @@ noncomputable def integerDiagonalFeasible
       | true => arguments.val true) (by intros; trivial)
 
 /-- Diagonal reads and the total pointwise divisibility test are certified. -/
-theorem integerDiagonalFeasible_realizable
+private theorem implementation_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
-    (integerDiagonalFeasible rows columns matrixWidth targetWidth).Realizable := by
+    (implementation rows columns matrixWidth targetWidth).Realizable := by
   apply (integerArrayDivides_realizable rows matrixWidth targetWidth).onResults _ _ _ (by intros; trivial)
   intro choice
   cases choice
   · exact (integerMatrixRowDiagonal_realizable rows columns matrixWidth).withArguments _
       (MultiTape.oneTape false) (by intros; rfl)
   · exact Realizable.argument _ true _
+
+private theorem implementation_correct
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (implementation rows columns matrixWidth targetWidth).Arguments sizes) :
+    (implementation rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+      ∀ row, IntegerMatrix.rowDiagonal (arguments false).val row ∣ (arguments true row).val :=
+  integerArrayDivides_correct rows matrixWidth targetWidth sizes
+    (fun choice => match choice with
+      | false => (integerMatrixRowDiagonal rows columns matrixWidth).compute sizes ⟨fun _ => arguments false, trivial⟩
+      | true => arguments true)
+
+/-- Decide divisibility by each zero-extended mathematical diagonal entry. -/
+noncomputable def integerDiagonalFeasible
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  decision (fun choice => if choice then (binaryIntegers targetWidth).arrayOfLength rows
+    else integerMatrices rows columns matrixWidth) (fun _ _ => True)
+    (fun _ arguments => ∀ row, IntegerMatrix.rowDiagonal (arguments false).val row ∣ (arguments true row).val)
+
+theorem integerDiagonalFeasible_realizable
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
+    (integerDiagonalFeasible rows columns matrixWidth targetWidth).Realizable :=
+  (implementation_realizable rows columns matrixWidth targetWidth).decision _
+    (fun sizes arguments _valid => implementation_correct rows columns matrixWidth targetWidth sizes arguments)
 
 /-- On a Smith diagonal the returned Boolean decides existence of an integer solution. -/
 theorem integerDiagonalFeasible_correct
@@ -64,10 +87,12 @@ theorem integerDiagonalFeasible_correct
     (rank : ℕ) (smith : IntegerMatrix.IsSmithDiagonal (arguments false).val rank) :
     (integerDiagonalFeasible rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
       ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val := by
-  have tested := integerArrayDivides_correct rows matrixWidth targetWidth sizes
-    (fun choice => match choice with
-      | false => (integerMatrixRowDiagonal rows columns matrixWidth).compute sizes ⟨fun _ => arguments false, trivial⟩
-      | true => arguments true)
+  have tested := decision_correct
+    (fun choice : Bool => if choice then (binaryIntegers targetWidth).arrayOfLength rows
+      else integerMatrices rows columns matrixWidth)
+    (fun _ _ => True)
+    (fun _ arguments => ∀ row, IntegerMatrix.rowDiagonal (arguments false).val row ∣ (arguments true row).val)
+    sizes ⟨arguments, trivial⟩
   exact tested.trans ((IntegerMatrix.diagonalFeasible_iff_rowDiagonal (arguments false).val rank smith
     (fun row => (arguments true row).val)).symm.trans
       (IntegerMatrix.diagonalFeasible_iff (arguments false).val rank smith (fun row => (arguments true row).val)))

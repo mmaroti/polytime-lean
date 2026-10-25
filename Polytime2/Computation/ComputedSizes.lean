@@ -65,6 +65,14 @@ noncomputable def atComputedSizeDomain (bounds : NewParameter → MvPolynomial P
     payload (SizeSubstitution.polynomial bounds payload.widthPolynomial)
     (computedSizeWidth_bound bounds payload)
 
+/-- Observe the actual mathematical size assignment together with its payload,
+forgetting the bounded count representation and private padding. -/
+def atComputedSizeValue (bounds : NewParameter → MvPolynomial Parameter ℕ)
+    (payload : EncodedDomain NewParameter) (sizes : Parameter → ℕ)
+    (value : (atComputedSizeDomain bounds payload).Carrier sizes) :
+    (assignment : NewParameter → ℕ) × payload.Carrier assignment :=
+  ⟨computedSizeAssignment bounds sizes value.1, value.2⟩
+
 /-- Extract one actual size as proper unary data before preparing its raw
 header. -/
 noncomputable def readComputedSize (bounds : NewParameter → MvPolynomial Parameter ℕ)

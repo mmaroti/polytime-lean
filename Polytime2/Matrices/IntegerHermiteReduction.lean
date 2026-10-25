@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerCompactHermiteInitial
 import Polytime2.Matrices.IntegerRectangularHermiteStoredRank
 
@@ -69,31 +70,30 @@ private theorem reduce_realizable (rows columns width : MvPolynomial Parameter �
   exact (actual.fst.prodMk ((actual.snd).fst))
 
 /-- Arbitrary signed rectangular reduction with decoded rank and both accumulated bases. -/
-noncomputable def integerHermiteReduction (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
-  inputDomains := (integerCompactHermiteInitial rows columns width).inputDomains
-  outputDomain := (boundedUnary columns).prod
+noncomputable def integerHermiteReduction (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specification (fun _ : Unit => integerMatrices rows columns width)
+    ((boundedUnary columns).prod
     ((integerMatrices rows columns (resultWidth rows columns width)).prod
       ((integerMatrices rows rows (rows + resultWidth rows columns width + leftWidth rows width)).prod
-        (integerMatrices columns columns (columns + rightWidth rows columns width + resultWidth rows columns width))))
-  precondition _ _ := True
-  compute sizes arguments :=
-    let first := (integerCompactHermiteInitial rows columns width).compute sizes arguments
-    let second := (reduce rows columns width).compute sizes arguments
-    let bases := (integerBasisCompose rows columns (leftWidth rows width) (rightWidth rows columns width)
-      (resultWidth rows columns width) (resultWidth rows columns width)).compute sizes
-      ⟨(fun name => match name with | 0 => first.2.2.1 | 1 => first.2.2.2 | 2 => second.2.1 | 3 => second.2.2), trivial⟩
-    (first.1, second.1, bases)
+        (integerMatrices columns columns (columns + rightWidth rows columns width + resultWidth rows columns width))))) (fun _ _ => True)
+    (fun sizes arguments =>
+      let first := (integerCompactHermiteInitial rows columns width).compute sizes arguments
+      let second := (reduce rows columns width).compute sizes arguments
+      let bases := (integerBasisCompose rows columns (leftWidth rows width) (rightWidth rows columns width)
+        (resultWidth rows columns width) (resultWidth rows columns width)).compute sizes
+        ⟨(fun name => match name with | 0 => first.2.2.1 | 1 => first.2.2.2 | 2 => second.2.1 | 3 => second.2.2), trivial⟩
+      (first.1, second.1, bases))
 
 /-- Initial stabilization, decoded-rank reduction, and both accumulated products are realized. -/
 theorem integerHermiteReduction_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (integerHermiteReduction rows columns width).Realizable := by
-  let computation := integerHermiteReduction rows columns width
   have first := integerCompactHermiteInitial_realizable rows columns width
   have second := reduce_realizable rows columns width
   have oldBases := (first.snd).snd
   have newBases := second.snd
   have bases := (integerBasisCompose_realizable rows columns (leftWidth rows width) (rightWidth rows columns width)
-    (resultWidth rows columns width) (resultWidth rows columns width)).onResults computation.inputDomains computation.precondition
+    (resultWidth rows columns width) (resultWidth rows columns width)).onResults
+    (fun _ : Unit => integerMatrices rows columns width) (fun _ _ => True)
     (fun name sizes arguments =>
       let first := (integerCompactHermiteInitial rows columns width).compute sizes arguments
       let second := (reduce rows columns width).compute sizes arguments
@@ -105,7 +105,9 @@ theorem integerHermiteReduction_realizable (rows columns width : MvPolynomial Pa
       · exact oldBases.snd
       · exact newBases.fst
       · exact newBases.snd)
-  exact first.fst.prodMk (second.fst.prodMk bases)
+  apply (first.fst.prodMk (second.fst.prodMk bases)).specification
+  intro sizes arguments valid
+  rfl
 
 private theorem supportedPresentation (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (first : ((integerRectangularHermiteHost rows columns width).inputDomains ()).Carrier sizes)
@@ -152,6 +154,7 @@ theorem integerHermiteReduction_preserves (rows columns width : MvPolynomial Par
     let result := (integerHermiteReduction rows columns width).compute sizes arguments
     result.2.2.1.val * (arguments.val ()).val * result.2.2.2.val = result.2.1.val ∧
       IsUnit result.2.2.1.val.det ∧ IsUnit result.2.2.2.val.det := by
+  simp only [integerHermiteReduction, specification_compute]
   have first := integerCompactHermiteInitial_specification rows columns width sizes arguments
   have second := reduce_preserves rows columns width sizes arguments
   dsimp only at first second
@@ -179,6 +182,7 @@ theorem integerHermiteReduction_dimensions (rows columns width : MvPolynomial Pa
       (integerHermiteReduction rows columns width).precondition sizes arguments}) :
     let result := (integerHermiteReduction rows columns width).compute sizes arguments
     result.1.val ≤ MvPolynomial.eval sizes rows ∧ result.1.val ≤ MvPolynomial.eval sizes columns := by
+  simp only [integerHermiteReduction, specification_compute]
   have initial := integerCompactHermiteInitial_specification rows columns width sizes arguments
   exact ⟨initial.2.2.2.1.2.1, initial.2.2.2.1.1⟩
 
@@ -186,8 +190,9 @@ theorem integerHermiteReduction_dimensions (rows columns width : MvPolynomial Pa
 theorem integerHermiteReduction_rank (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : {arguments : (integerHermiteReduction rows columns width).Arguments sizes //
       (integerHermiteReduction rows columns width).precondition sizes arguments}) :
-    ((integerHermiteReduction rows columns width).compute sizes arguments).1.val = (arguments.val ()).val.rank :=
-  integerCompactHermiteInitial_rank rows columns width sizes arguments
+    ((integerHermiteReduction rows columns width).compute sizes arguments).1.val = (arguments.val ()).val.rank := by
+  simp only [integerHermiteReduction, specification_compute]
+  exact integerCompactHermiteInitial_rank rows columns width sizes arguments
 
 private theorem diagonalAtState (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (first : (integerCompactHermiteInitial rows columns width).outputDomain.Carrier sizes)
@@ -220,8 +225,10 @@ theorem integerHermiteReduction_diagonal (rows columns width : MvPolynomial Para
       (integerHermiteReduction rows columns width).precondition sizes arguments}) :
     let result := (integerHermiteReduction rows columns width).compute sizes arguments
     ∃ diagonal : Fin result.1.val → ℕ, (∀ index, 0 < diagonal index) ∧
-      result.2.1.val = IntegerMatrix.rectangularDiagonal (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns) diagonal :=
-  diagonalAtState rows columns width sizes ((integerCompactHermiteInitial rows columns width).compute sizes arguments)
+      result.2.1.val = IntegerMatrix.rectangularDiagonal (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns) diagonal := by
+  unfold integerHermiteReduction
+  rw [specification_compute]
+  exact diagonalAtState rows columns width sizes ((integerCompactHermiteInitial rows columns width).compute sizes arguments)
     (permitted rows columns width sizes arguments)
 
 end Polytime2.Computation

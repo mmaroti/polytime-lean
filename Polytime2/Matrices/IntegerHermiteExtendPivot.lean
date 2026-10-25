@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerPositivePivot
 import Polytime2.Matrices.RemainderSweepController
 
@@ -94,14 +95,14 @@ private theorem prepared_valid (rows columns width length : MvPolynomial Paramet
       (arguments.val 2).property (arguments.val 3).property).2
 
 /-- Normalize a nonzero new pivot and reduce all supplied old rows against it. -/
-noncomputable def integerHermiteExtendPivot (rows columns width length : MvPolynomial Parameter ℕ) :
+private noncomputable def implementation (rows columns width length : MvPolynomial Parameter ℕ) :
     Computation Parameter (Fin 5) :=
   (remainderSweepController rows columns width length).onResults (inputs rows columns width length)
     (allowed rows columns width length) (preparedValues rows columns width length) (prepared_valid rows columns width length)
 
 /-- Sign normalization and old-row reduction use existing certified components. -/
-theorem integerHermiteExtendPivot_realizable (rows columns width length : MvPolynomial Parameter ℕ) :
-    (integerHermiteExtendPivot rows columns width length).Realizable := by
+private theorem implementation_realizable (rows columns width length : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width length).Realizable := by
   let host := inputs rows columns width length
   let valid := allowed rows columns width length
   have signReady := ((integerPositivePivotWithLeft_realizable rows columns width).withArguments host
@@ -122,6 +123,44 @@ theorem integerHermiteExtendPivot_realizable (rows columns width length : MvPoly
     · exact Realizable.argument host 4 valid
 
 /-- The returned matrices are the exact sign-normalized mathematical remainder sweep. -/
+private theorem implementation_correct (rows columns width length : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns width length).Arguments sizes //
+      (implementation rows columns width length).precondition sizes arguments}) :
+    let result := (implementation rows columns width length).compute sizes arguments
+    let normalized := IntegerMatrix.positivePivotWithLeft
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (arguments.val 2).val (arguments.val 3).val
+    (result.1.val, result.2.val) = IntegerMatrix.rowRemainderSweep
+      (Row := Fin (MvPolynomial.eval sizes rows)) (arguments.val 0) (arguments.val 1)
+      (List.ofFn (arguments.val 4)) normalized.1 normalized.2 :=
+  remainderSweepController_correct rows columns width length sizes
+    ⟨(fun name => preparedValues rows columns width length name sizes arguments), prepared_valid rows columns width length sizes arguments⟩
+
+/-- The mathematical stage and its actual basis, at the derived workspace.
+Only the mathematical row-selection and pivot conditions are required. -/
+noncomputable def integerHermiteExtendPivot (rows columns width length : MvPolynomial Parameter ℕ) :
+    Computation Parameter (Fin 5) :=
+  specificationBy (inputs rows columns width length) (hermiteColumnState rows columns (2 * width + 1))
+    (allowed rows columns width length) (fun _ result => (result.1.val, result.2.val))
+    (fun sizes arguments =>
+      let normalized := IntegerMatrix.positivePivotWithLeft
+        (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+        (arguments.val 0) (arguments.val 1) (arguments.val 2).val (arguments.val 3).val
+      IntegerMatrix.rowRemainderSweep (Row := Fin (MvPolynomial.eval sizes rows))
+        (arguments.val 0) (arguments.val 1) (List.ofFn (arguments.val 4)) normalized.1 normalized.2)
+    (fun sizes arguments => ⟨(implementation rows columns width length).compute sizes arguments,
+      implementation_correct rows columns width length sizes arguments⟩)
+
+theorem integerHermiteExtendPivot_realizable (rows columns width length : MvPolynomial Parameter ℕ) :
+    (integerHermiteExtendPivot rows columns width length).Realizable := by
+  apply (implementation_realizable rows columns width length).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap Subtype.val_injective
+  · intro sizes arguments valid
+    exact implementation_correct rows columns width length sizes ⟨arguments, valid⟩
+
+/-- Observe the mathematical stage without unfolding its bounded construction. -/
 theorem integerHermiteExtendPivot_correct (rows columns width length : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
     (arguments : {arguments : (integerHermiteExtendPivot rows columns width length).Arguments sizes //
@@ -132,9 +171,9 @@ theorem integerHermiteExtendPivot_correct (rows columns width length : MvPolynom
       (arguments.val 0) (arguments.val 1) (arguments.val 2).val (arguments.val 3).val
     (result.1.val, result.2.val) = IntegerMatrix.rowRemainderSweep
       (Row := Fin (MvPolynomial.eval sizes rows)) (arguments.val 0) (arguments.val 1)
-      (List.ofFn (arguments.val 4)) normalized.1 normalized.2 :=
-  remainderSweepController_correct rows columns width length sizes
-    ⟨(fun name => preparedValues rows columns width length name sizes arguments), prepared_valid rows columns width length sizes arguments⟩
+      (List.ofFn (arguments.val 4)) normalized.1 normalized.2 := by
+  exact specificationBy_correct _ (integerHermiteExtendPivot rows columns width length).outputDomain _
+    (fun _ result => (result.1.val, result.2.val)) _ _ sizes arguments
 
 /-- An embedded old-row selection gives exactly the shared mathematical pivot-extension operation. -/
 theorem integerHermiteExtendPivot_embedding (rows columns width length : MvPolynomial Parameter ℕ)

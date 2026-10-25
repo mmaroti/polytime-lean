@@ -22,6 +22,7 @@ import Polytime2.Arrays.Tabulate
 import Polytime2.Arrays.BoundedPositions
 import Polytime2.Arrays.FindFalse
 import Polytime2.Arrays.SearchGuard
+import Polytime2.Computation.Specification
 
 /-! # Certified residual-pivot search
 
@@ -109,23 +110,42 @@ theorem integerResidualPivot_nonzero (rows columns width : MvPolynomial Paramete
   exact (integerResidualPivot_correct rows columns width sizes arguments).symm.trans found
 
 /-- Decide whether the selected residual row is zero using its optional pivot search. -/
-noncomputable def integerResidualRowIsZero (rows columns width : MvPolynomial Parameter ℕ) :
+private noncomputable def implementation (rows columns width : MvPolynomial Parameter ℕ) :
     Computation Parameter Bool :=
   (integerResidualPivot rows columns width).followedBy (arraySearchIsNone columns) rfl (by intros; trivial)
 
 /-- The zero-row guard composes residual search with the shared optional-result discriminator. -/
-theorem integerResidualRowIsZero_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerResidualRowIsZero rows columns width).Realizable :=
+private theorem implementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width).Realizable :=
   (integerResidualPivot_realizable rows columns width).followedBy (arraySearchIsNone_realizable columns) rfl (by intros; trivial)
 
 /-- The guard accepts precisely when every mathematical entry in the selected row is zero. -/
+private theorem implementation_correct (rows columns width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns width).Arguments sizes //
+      (implementation rows columns width).precondition sizes arguments}) :
+    (implementation rows columns width).compute sizes arguments = true ↔
+      (arguments.val true).val (arguments.val false) = 0 :=
+  (arraySearchIsNone_correct columns sizes ((integerResidualPivot rows columns width).compute sizes arguments)).trans
+    (integerResidualPivot_none rows columns width sizes arguments)
+
+/-- Decide whether the ordinary selected row is zero. -/
+noncomputable def integerResidualRowIsZero (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  decision (context rows columns width)
+    (fun _ _ => True) (fun _ arguments => (arguments true).val (arguments false) = 0)
+
+theorem integerResidualRowIsZero_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerResidualRowIsZero rows columns width).Realizable :=
+  (implementation_realizable rows columns width).decision _
+    (fun sizes arguments valid => implementation_correct rows columns width sizes ⟨arguments, valid⟩)
+
+/-- The public guard accepts precisely the zero row. -/
 theorem integerResidualRowIsZero_correct (rows columns width : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
     (arguments : {arguments : (integerResidualRowIsZero rows columns width).Arguments sizes //
       (integerResidualRowIsZero rows columns width).precondition sizes arguments}) :
     (integerResidualRowIsZero rows columns width).compute sizes arguments = true ↔
       (arguments.val true).val (arguments.val false) = 0 :=
-  (arraySearchIsNone_correct columns sizes ((integerResidualPivot rows columns width).compute sizes arguments)).trans
-    (integerResidualPivot_none rows columns width sizes arguments)
+  decision_correct _ _ _ sizes arguments
 
 end Polytime2.Computation

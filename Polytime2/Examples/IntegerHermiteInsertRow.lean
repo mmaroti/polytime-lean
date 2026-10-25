@@ -320,6 +320,7 @@ example {Parameter : Type} [Fintype Parameter] (rows columns width : MvPolynomia
 
 example : (((integerHermiteAdvance (1 : MvPolynomial Empty ℕ) 1 2).compute Empty.elim
     ⟨storedArguments, storedValid⟩).2).1 = 1 := by
+  rw [integerHermiteAdvance_compute]
   change ((integerHermiteInsertSelection 1 1 2).compute Empty.elim ⟨storedArguments, storedValid⟩).1 = 1
   cases found : ((integerHermiteInsertHost (1 : MvPolynomial Empty ℕ) 1 2).compute Empty.elim
       ⟨storedArguments, storedValid⟩).2 with

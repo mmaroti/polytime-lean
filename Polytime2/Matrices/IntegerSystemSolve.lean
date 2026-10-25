@@ -32,6 +32,7 @@ set_option backward.isDefEq.respectTransparency false
 namespace Polytime2.Computation
 
 open EncodedDomain
+open scoped Classical
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -51,18 +52,17 @@ private noncomputable def prepared (rows columns matrixWidth targetWidth : MvPol
     | true => (integerSystemWitness rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩
 
 /-- Return an actual integer solution, or the mathematical no-solution outcome. -/
-noncomputable def integerSystemSolve
+private noncomputable def implementation
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (optionalWhen (solutionDomain rows columns matrixWidth targetWidth)).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True)
     (fun choice sizes arguments => prepared rows columns matrixWidth targetWidth sizes arguments.val choice)
     (by intros; trivial)
 
-set_option maxHeartbeats 4000000 in
 /-- Feasibility, witness recovery, and the generic optional constructor compose. -/
-theorem integerSystemSolve_realizable
+private theorem implementation_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
-    (integerSystemSolve rows columns matrixWidth targetWidth).Realizable := by
+    (implementation rows columns matrixWidth targetWidth).Realizable := by
   apply (optionalWhen_realizable (solutionDomain rows columns matrixWidth targetWidth)).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
   intro choice
@@ -76,33 +76,66 @@ theorem integerSystemSolve_realizable
       (by intros; trivial) (by intros; rfl)
     exact ready
 
-set_option maxHeartbeats 4000000 in
-/-- Every returned vector solves the original system. -/
+/-- Return the chosen bounded witness precisely when an ordinary integer
+solution exists. The public answer contains no optional-constructor pipeline. -/
+noncomputable def integerSystemSolve
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool := by
+  classical
+  exact specification (inputs rows columns matrixWidth targetWidth)
+    (optional (solutionDomain rows columns matrixWidth targetWidth)) (fun _ _ => True)
+    (fun sizes arguments =>
+      if ∃ values, (arguments.val false).val.mulVec values = fun row => (arguments.val true row).val then
+        some ((integerSystemWitness rows columns matrixWidth targetWidth).compute sizes arguments)
+      else none)
+
+/-- The composed implementation certifies the mathematical optional answer. -/
+theorem integerSystemSolve_realizable
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
+    (integerSystemSolve rows columns matrixWidth targetWidth).Realizable := by
+  classical
+  apply (implementation_realizable rows columns matrixWidth targetWidth).specification
+  intro sizes arguments valid
+  dsimp only [optionalWhen, prepared]
+  by_cases feasible : ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val
+  · have tested := (integerSystemFeasible_correct rows columns matrixWidth targetWidth sizes arguments).mpr feasible
+    simp only [tested, feasible, ite_true]
+  · have tested : (integerSystemFeasible rows columns matrixWidth targetWidth).compute sizes ⟨arguments, valid⟩ = false := by
+      apply Bool.eq_false_iff.mpr
+      exact fun accepted => feasible ((integerSystemFeasible_correct rows columns matrixWidth targetWidth sizes arguments).mp accepted)
+    simp only [tested, feasible, ite_false, Bool.false_eq_true]
+
+/-- Evaluate only the public mathematical choice, leaving its implementation hidden. -/
+theorem integerSystemSolve_compute
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerSystemSolve rows columns matrixWidth targetWidth).Arguments sizes) :
+    (integerSystemSolve rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ =
+      if ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val then
+        some ((integerSystemWitness rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩)
+      else none := by
+  classical
+  exact specification_compute _ _ _ _ _ _
+
+/-- Every returned vector solves the original integer system. -/
 theorem integerSystemSolve_some_correct
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : (integerSystemSolve rows columns matrixWidth targetWidth).Arguments sizes)
     (values : ((binaryIntegers (integerSystemWitnessWidth rows columns matrixWidth targetWidth)).arrayOfLength columns).Carrier sizes)
     (returned : (integerSystemSolve rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = some values) :
     (arguments false).val.mulVec (fun column => (values column).val) = fun row => (arguments true row).val := by
-  have specified := (optionalWhen_some_iff (solutionDomain rows columns matrixWidth targetWidth) sizes
-    (prepared rows columns matrixWidth targetWidth sizes arguments) values).mp returned
-  dsimp only [prepared] at specified
-  have feasible := (integerSystemFeasible_correct rows columns matrixWidth targetWidth sizes arguments).mp specified.1
-  have solution := integerSystemWitness_correct rows columns matrixWidth targetWidth sizes arguments feasible
-  have same := congrArg (fun candidate : (solutionDomain rows columns matrixWidth targetWidth).Carrier sizes =>
-    (arguments false).val.mulVec (fun column => (candidate column).val)) specified.2
-  exact same.symm.trans solution
+  classical
+  rw [integerSystemSolve_compute] at returned
+  split_ifs at returned with feasible
+  · cases Option.some.inj returned
+    exact integerSystemWitness_correct rows columns matrixWidth targetWidth sizes arguments feasible
 
-set_option maxHeartbeats 4000000 in
-/-- The absent result is equivalent to nonexistence of any integer solution. -/
+/-- No result is returned exactly when the mathematical system is infeasible. -/
 theorem integerSystemSolve_none_iff
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : (integerSystemSolve rows columns matrixWidth targetWidth).Arguments sizes) :
     (integerSystemSolve rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = none ↔
       ¬ ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val := by
-  have rejected := optionalWhen_none_iff (solutionDomain rows columns matrixWidth targetWidth) sizes
-    (prepared rows columns matrixWidth targetWidth sizes arguments)
-  dsimp only [prepared] at rejected
-  exact rejected.trans (not_congr (integerSystemFeasible_correct rows columns matrixWidth targetWidth sizes arguments))
+  classical
+  rw [integerSystemSolve_compute]
+  split_ifs <;> simp_all
 
 end Polytime2.Computation

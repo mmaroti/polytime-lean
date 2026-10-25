@@ -72,7 +72,11 @@ private noncomputable def result :=
 example : result.1.val ⟨0, by norm_num⟩ ⟨1, by norm_num⟩ = -3 ∧
     result.1.val ⟨1, by norm_num⟩ ⟨1, by norm_num⟩ = -2 ∧
     result.1.val ⟨2, by norm_num⟩ ⟨0, by norm_num⟩ = 2 := by
-  simp only [result, integerHermiteRowStagePrefix, arguments, map_ofNat]
+  have observed := congrArg Prod.fst
+    (integerHermiteRowStagePrefix_correct (Parameter := Empty) 4 2 3 4 Empty.elim ⟨arguments 2 (by decide), valid⟩)
+  dsimp only at observed
+  rw [show result.1.val = _ from observed]
+  simp only [arguments, map_ofNat]
   decide +kernel
 
 private theorem zeroValid : (integerHermiteRowStagePrefix (Parameter := Empty) 4 2 3 4).precondition
@@ -90,6 +94,12 @@ example :
     let output := (integerHermiteRowStagePrefix (Parameter := Empty) 4 2 3 4).compute Empty.elim
       ⟨arguments 0 (by decide), zeroValid⟩
     output.1.val ⟨0, by norm_num⟩ ⟨0, by norm_num⟩ = 4 ∧
-      output.1.val ⟨3, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by decide +kernel
+      output.1.val ⟨3, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by
+  dsimp only
+  have observed := congrArg Prod.fst
+    (integerHermiteRowStagePrefix_correct (Parameter := Empty) 4 2 3 4 Empty.elim ⟨arguments 0 (by decide), zeroValid⟩)
+  dsimp only at observed
+  rw [observed]
+  decide +kernel
 
 end Polytime2.Examples.IntegerHermiteStagePrefix

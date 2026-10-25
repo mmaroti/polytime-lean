@@ -42,6 +42,7 @@ private theorem admissible : (gaussJordan enumeration).precondition sizes argume
 example : (gaussJordan enumeration).Realizable := gaussJordan_realizable enumeration
 
 example : (gaussJordan enumeration).compute sizes ⟨arguments, admissible⟩ = expected := by
+  rw [gaussJordan_compute]
   change Polytime2.GaussJordan.eliminate original = expected
   ext row column
   fin_cases row <;> fin_cases column <;>

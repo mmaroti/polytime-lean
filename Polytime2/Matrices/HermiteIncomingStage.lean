@@ -151,7 +151,9 @@ theorem hermiteIncomingStage_correct (rows columns width pivots : MvPolynomial P
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       prepared.1 prepared.2.1 prepared.2.2.1
       ((List.ofFn (arguments.val 0)).take (arguments.val 2).val)
-      (arguments.val 3).val (arguments.val 4).val := rfl
+      (arguments.val 3).val (arguments.val 4).val := by
+  exact integerHermiteRowStagePrefix_correct rows columns width (pivots + 1) sizes
+    ⟨stageArguments rows columns width pivots sizes arguments.val, arguments.property⟩
 
 /-- One runtime stage advances the mathematical incoming-prefix invariant. -/
 theorem hermiteIncomingStage_prefix (rows columns width pivots : MvPolynomial Parameter ℕ)

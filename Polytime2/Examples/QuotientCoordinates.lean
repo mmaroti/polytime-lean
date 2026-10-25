@@ -51,8 +51,9 @@ private noncomputable def freeInput : (integerCyclicCoordinate (Parameter := Emp
 
 example : (ZMod.cast ((integerCyclicCoordinate (Parameter := Empty) 0 3).compute Empty.elim
     ⟨freeInput, trivial⟩).2.val : ℤ) = -7 := by
-  change (Int.cast (-7) : ℤ) = -7
-  exact Int.cast_id
+  have observed := integerCyclicCoordinate_observe (Parameter := Empty) 0 3 Empty.elim freeInput
+  exact (congrArg (fun pair : (modulus : ℕ) × ZMod modulus => (ZMod.cast pair.2 : ℤ)) observed).trans
+    (by change (Int.cast (-7) : ℤ) = -7; exact Int.cast_id)
 
 private noncomputable def finiteInput : (integerCyclicCoordinate (Parameter := Empty) 3 4).Arguments Empty.elim
   | false => ⟨5, by norm_num⟩
@@ -60,8 +61,9 @@ private noncomputable def finiteInput : (integerCyclicCoordinate (Parameter := E
 
 example : ZMod.val ((integerCyclicCoordinate (Parameter := Empty) 3 4).compute Empty.elim
     ⟨finiteInput, trivial⟩).2.val = 3 := by
-  change (3 : ℕ) = 3
-  rfl
+  have observed := integerCyclicCoordinate_observe (Parameter := Empty) 3 4 Empty.elim finiteInput
+  exact (congrArg (fun pair : (modulus : ℕ) × ZMod modulus => pair.2.val) observed).trans
+    (by decide +kernel)
 
 example {Parameter : Type} [Fintype Parameter] (modulusWidth valueWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ) (arguments : (integerCyclicCoordinates 0 modulusWidth valueWidth).Arguments sizes) :

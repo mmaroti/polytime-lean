@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerPairTranspose
 import Polytime2.Matrices.EuclideanMath
 import Polytime2.Matrices.IntegerOperations
@@ -118,22 +119,13 @@ private theorem stage_realizable (rows columns width : MvPolynomial Parameter �
   exact first.prodMk second
 
 /-- Reduce a target entry modulo a positive pivot and update the actual left basis. -/
-noncomputable def integerRowRemainderWithLeft (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
+private noncomputable def rowImplementation (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
   (coefficient rows columns width).letThen (stage rows columns width) (fun _ => rfl) rfl (by intros; assumption)
 
-theorem integerRowRemainderWithLeft_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerRowRemainderWithLeft rows columns width).Realizable :=
+private theorem rowImplementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (rowImplementation rows columns width).Realizable :=
   (coefficient_realizable rows columns width).letThen (stage_realizable rows columns width)
     (fun _ => rfl) rfl (by intros; assumption)
-
-/-- The one prepared quotient is applied to the working matrix and its basis. -/
-theorem integerRowRemainderWithLeft_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRowRemainderWithLeft rows columns width).Arguments sizes //
-      (integerRowRemainderWithLeft rows columns width).precondition sizes arguments}) :
-    let result := (integerRowRemainderWithLeft rows columns width).compute sizes arguments
-    (result.1.val, result.2.val) = IntegerMatrix.rowRemainderWithLeft
-      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-      (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := rfl
 
 private noncomputable def columnInputs (rows columns width : MvPolynomial Parameter ℕ) : Fin 5 → EncodedDomain Parameter
   | 0 | 1 => boundedIndex columns
@@ -146,7 +138,7 @@ private def columnAllowed (rows columns width : MvPolynomial Parameter ℕ) (siz
   arguments 0 ≠ arguments 1 ∧ 0 < (arguments 3).val (arguments 2) (arguments 0)
 
 private noncomputable def columnPrepared (rows columns width : MvPolynomial Parameter ℕ) :=
-  (integerRowRemainderWithLeft columns rows width).onResults (columnInputs rows columns width) (columnAllowed rows columns width)
+  (rowImplementation columns rows width).onResults (columnInputs rows columns width) (columnAllowed rows columns width)
     (fun name sizes arguments => match name with
       | 0 => arguments.val 0
       | 1 => arguments.val 1
@@ -158,7 +150,7 @@ private noncomputable def columnPrepared (rows columns width : MvPolynomial Para
 private theorem columnPrepared_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (columnPrepared rows columns width).Realizable := by
   let computation := columnPrepared rows columns width
-  apply (integerRowRemainderWithLeft_realizable columns rows width).onResults computation.inputDomains computation.precondition
+  apply (rowImplementation_realizable columns rows width).onResults computation.inputDomains computation.precondition
     _ (by
       intro sizes arguments
       change arguments.val 0 ≠ arguments.val 1 ∧
@@ -175,20 +167,71 @@ private theorem columnPrepared_realizable (rows columns width : MvPolynomial Par
       (MultiTape.oneTape 4) (fun _ => rfl)).withPrecondition computation.precondition (by intros; trivial)
 
 /-- Reduce a column entry modulo a positive pivot and update the actual right basis. -/
-noncomputable def integerColumnRemainderWithRight (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
+private noncomputable def columnImplementation (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
   (columnPrepared rows columns width).followedBy (integerMatrixPairTranspose columns rows columns columns (2 * width + 1)) rfl (by intros; trivial)
 
-theorem integerColumnRemainderWithRight_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerColumnRemainderWithRight rows columns width).Realizable :=
+private theorem columnImplementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (columnImplementation rows columns width).Realizable :=
   (columnPrepared_realizable rows columns width).followedBy (integerMatrixPairTranspose_realizable columns rows columns columns (2 * width + 1)) rfl (by intros; trivial)
 
-/-- The column computation is precisely the transposed mathematical quotient operation. -/
+/-- The mathematical row remainder operation and its actual basis. -/
+noncomputable def integerRowRemainderWithLeft (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
+  specificationBy (inputs rows columns width)
+    ((integerMatrices rows columns (2 * width + 1)).prod
+      (integerMatrices rows rows (2 * width + 1)))
+    (allowed rows columns width) (fun _ result => (result.1.val, result.2.val))
+    (fun sizes arguments => IntegerMatrix.rowRemainderWithLeft
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val)
+    (fun sizes arguments => ⟨(rowImplementation rows columns width).compute sizes arguments, rfl⟩)
+
+theorem integerRowRemainderWithLeft_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerRowRemainderWithLeft rows columns width).Realizable := by
+  apply (rowImplementation_realizable rows columns width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap Subtype.val_injective
+  · intros
+    rfl
+
+/-- The ordinary matrix operation, independent of quotient preparation. -/
+theorem integerRowRemainderWithLeft_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerRowRemainderWithLeft rows columns width).Arguments sizes //
+      (integerRowRemainderWithLeft rows columns width).precondition sizes arguments}) :
+    let result := (integerRowRemainderWithLeft rows columns width).compute sizes arguments
+    (result.1.val, result.2.val) = IntegerMatrix.rowRemainderWithLeft
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := by
+  exact specificationBy_correct _ (integerRowRemainderWithLeft rows columns width).outputDomain _
+    (fun _ result => (result.1.val, result.2.val)) _ _ sizes arguments
+
+/-- The mathematical column remainder operation and its actual basis. -/
+noncomputable def integerColumnRemainderWithRight (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 5) :=
+  specificationBy (columnInputs rows columns width)
+    ((integerMatrices rows columns (2 * width + 1)).prod
+      (integerMatrices columns columns (2 * width + 1)))
+    (columnAllowed rows columns width) (fun _ result => (result.1.val, result.2.val))
+    (fun sizes arguments => IntegerMatrix.columnRemainderWithRight
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val)
+    (fun sizes arguments => ⟨(columnImplementation rows columns width).compute sizes arguments, rfl⟩)
+
+theorem integerColumnRemainderWithRight_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerColumnRemainderWithRight rows columns width).Realizable := by
+  apply (columnImplementation_realizable rows columns width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap Subtype.val_injective
+  · intros
+    rfl
+
+/-- The ordinary matrix operation, independent of quotient preparation. -/
 theorem integerColumnRemainderWithRight_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : {arguments : (integerColumnRemainderWithRight rows columns width).Arguments sizes //
       (integerColumnRemainderWithRight rows columns width).precondition sizes arguments}) :
     let result := (integerColumnRemainderWithRight rows columns width).compute sizes arguments
     (result.1.val, result.2.val) = IntegerMatrix.columnRemainderWithRight
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
-      (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := rfl
+      (arguments.val 0) (arguments.val 1) (arguments.val 2) (arguments.val 3).val (arguments.val 4).val := by
+  exact specificationBy_correct _ (integerColumnRemainderWithRight rows columns width).outputDomain _
+    (fun _ result => (result.1.val, result.2.val)) _ _ sizes arguments
 
 end Polytime2.Computation

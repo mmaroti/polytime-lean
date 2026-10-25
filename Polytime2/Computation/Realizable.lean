@@ -264,4 +264,22 @@ theorem Computation.Realizable.withSpecification
     exact correct sizes arguments.val arguments.property
   rwa [equal] at restricted
 
+/-- Certify a specified mathematical answer using any implementation with the
+same domains and precondition. Only this proof needs the implementation's
+evaluation equation; clients use the mathematical specification's contracts. -/
+theorem Computation.Realizable.specification
+    {inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter}
+    {output : EncodedDomain.{0, carrierLevel} Parameter}
+    {allowed : ∀ sizes, ((name : InputName) → (inputs name).Carrier sizes) → Prop}
+    {implementation : ∀ sizes, {arguments // allowed sizes arguments} → output.Carrier sizes}
+    (ready : (Computation.mk inputs output allowed implementation).Realizable)
+    (value : ∀ sizes, {arguments // allowed sizes arguments} → output.Carrier sizes)
+    (correct : ∀ sizes arguments valid,
+      implementation sizes ⟨arguments, valid⟩ = value sizes ⟨arguments, valid⟩) :
+    (Computation.specification inputs output allowed value).Realizable := by
+  apply ready.withSpecification allowed _ (by intros; assumption)
+  intro sizes arguments valid
+  exact (correct sizes arguments valid).trans
+    (Computation.specification_compute inputs output allowed value sizes ⟨arguments, valid⟩).symm
+
 end Polytime2

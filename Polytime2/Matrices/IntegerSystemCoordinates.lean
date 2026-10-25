@@ -31,7 +31,6 @@ open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
 
-set_option maxHeartbeats 16000000 in
 /-- The executable result is the mathematical Smith quotient coordinate map. -/
 theorem integerSystemQuotientCoordinates_correct
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ)
@@ -54,14 +53,20 @@ theorem integerSystemQuotientCoordinates_correct
     ⟨fun _ => arguments false, trivial⟩
   have form := integerSmithReduction_isSmithForm rows columns matrixWidth sizes
     ⟨fun _ => arguments false, trivial⟩
-  have coordinates := integerMatrixCyclicCoordinates_correct rows columns
-    (smithReductionDiagonalWidth rows columns matrixWidth)
-    (smithReductionLeftWidth rows columns matrixWidth) targetWidth sizes
-    (fun name => match name with | 0 => smith.2.1 | 1 => smith.2.2.1 | 2 => arguments true)
-    smith.1.val form.2.2.2
-  exact coordinates
+  dsimp only
+  intro row
+  have observed := congrFun
+    (integerSystemQuotientCoordinates_observe rows columns matrixWidth targetWidth sizes arguments) row
+  have first := congrArg Sigma.fst observed
+  have second := IntegerMatrix.rowDiagonal_natAbs_eq_diagonalModulus smith.2.1.val smith.1.val form.2.2.2 row
+  have value := (congrArg (fun pair : (modulus : ℕ) × ZMod modulus => pair.2 =
+    (smith.2.2.1.val.mulVec (fun row => (arguments true row).val) row : ZMod pair.1)) observed).mpr rfl
+  dsimp only at first value
+  refine ⟨first.trans second, ?_⟩
+  exact (congrArg (ZMod.ringEquivCongr (first.trans second)) value).trans
+    (ZMod.ringEquivCongr_intCast (first.trans second) _)
 
-set_option maxHeartbeats 16000000 in
+
 /-- The computed coordinates vanish exactly for targets in the integer image. -/
 theorem integerSystemQuotientCoordinates_zero_iff
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -75,10 +80,22 @@ theorem integerSystemQuotientCoordinates_zero_iff
     ⟨fun _ => arguments false, trivial⟩
   have form := integerSmithReduction_isSmithForm rows columns matrixWidth sizes
     ⟨fun _ => arguments false, trivial⟩
-  have normalized := integerMatrixCyclicCoordinates_zero_iff rows columns
-    (smithReductionDiagonalWidth rows columns matrixWidth)
-    (smithReductionLeftWidth rows columns matrixWidth) targetWidth sizes
-    (fun name => match name with | 0 => result.2.1 | 1 => result.2.2.1 | 2 => arguments true)
+  have normalized :
+      (∀ row, ((integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).compute sizes
+        ⟨arguments, trivial⟩ row).2.val = 0) ↔
+        ∀ row, IntegerMatrix.rowDiagonal result.2.1.val row ∣
+          result.2.2.1.val.mulVec (fun row => (arguments true row).val) row := by
+    apply forall_congr'
+    intro row
+    have observed := congrFun
+      (integerSystemQuotientCoordinates_observe rows columns matrixWidth targetWidth sizes arguments) row
+    have modulus := congrArg Sigma.fst observed
+    have value := (congrArg (fun pair : (modulus : ℕ) × ZMod modulus => pair.2 =
+      (result.2.2.1.val.mulVec (fun row => (arguments true row).val) row : ZMod pair.1)) observed).mpr rfl
+    dsimp only at value modulus
+    rw [value, ZMod.intCast_zmod_eq_zero_iff_dvd, modulus]
+    simp only [Int.natCast_dvd, Int.natAbs_dvd_natAbs]
+    rfl
   have diagonal := IntegerMatrix.diagonalFeasible_iff_rowDiagonal result.2.1.val result.1.val form.2.2.2
     (result.2.2.1.val.mulVec (fun row => (arguments true row).val))
   have equivalent := IntegerMatrix.smithFeasible_iff (arguments false).val result.2.1.val

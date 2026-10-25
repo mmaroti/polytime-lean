@@ -156,7 +156,7 @@ private theorem dotFold_realizable (length leftWidth rightWidth : MvPolynomial P
     exact dotUpdate_prefix length leftWidth rightWidth sizes context index value before
 
 /-- Dot product of two arrays at independent entry widths, with derived output storage. -/
-noncomputable def integerDotProduct (length leftWidth rightWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+private noncomputable def implementation (length leftWidth rightWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (dotFold length leftWidth rightWidth).onResults (dotContext length leftWidth rightWidth) (fun _ _ => True)
     (fun name _ arguments => match name with
       | .inl choice => arguments.val choice
@@ -164,8 +164,8 @@ noncomputable def integerDotProduct (length leftWidth rightWidth : MvPolynomial 
       | .inr true => id) (by intros; exact ⟨rfl, rfl⟩)
 
 /-- Canonical positions, zero initialization, and the complete fixed-width fold are realized. -/
-theorem integerDotProduct_realizable (length leftWidth rightWidth : MvPolynomial Parameter ℕ) :
-    (integerDotProduct length leftWidth rightWidth).Realizable := by
+private theorem implementation_realizable (length leftWidth rightWidth : MvPolynomial Parameter ℕ) :
+    (implementation length leftWidth rightWidth).Realizable := by
   apply (dotFold_realizable length leftWidth rightWidth).onResults
     (dotContext length leftWidth rightWidth) (fun _ _ => True) _ (by intros; exact ⟨rfl, rfl⟩)
   intro name
@@ -185,11 +185,11 @@ theorem integerDotProduct_realizable (length leftWidth rightWidth : MvPolynomial
         (fun name => nomatch name) (by intros; trivial) (fun name => nomatch name)
 
 /-- The realized fold returns the ordinary finite dot product. -/
-theorem integerDotProduct_correct (length leftWidth rightWidth : MvPolynomial Parameter ℕ)
+private theorem implementation_correct (length leftWidth rightWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerDotProduct length leftWidth rightWidth).Arguments sizes //
-      (integerDotProduct length leftWidth rightWidth).precondition sizes arguments}) :
-    ((integerDotProduct length leftWidth rightWidth).compute sizes arguments).val =
+    (arguments : {arguments : (implementation length leftWidth rightWidth).Arguments sizes //
+      (implementation length leftWidth rightWidth).precondition sizes arguments}) :
+    ((implementation length leftWidth rightWidth).compute sizes arguments).val =
       ∑ index, (arguments.val false index).val * (arguments.val true index).val := by
   let initial : (dotAccumulator length leftWidth rightWidth).Carrier sizes := ⟨0, by simp⟩
   have result := ArrayFold.prefix_invariant
@@ -206,5 +206,34 @@ theorem integerDotProduct_correct (length leftWidth rightWidth : MvPolynomial Pa
   change (ArrayFold.prefixValue (dotUpdate length leftWidth rightWidth sizes arguments.val)
     id initial (MvPolynomial.eval sizes length)).val = _
   simpa only [dotPrefix, all] using result
+
+/-- The ordinary finite integer dot product, with its exact derived bound.
+The public answer contains no positions, initial accumulator, or fold. -/
+noncomputable def integerDotProduct (length leftWidth rightWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  specification (dotContext length leftWidth rightWidth) (dotAccumulator length leftWidth rightWidth)
+    (fun _ _ => True) (fun sizes arguments =>
+      ⟨∑ index, (arguments.val false index).val * (arguments.val true index).val, by
+        simpa only [map_add] using IntegerMatrix.partial_dotProduct_bound
+          (MvPolynomial.eval sizes leftWidth) (MvPolynomial.eval sizes rightWidth)
+          (fun index => (arguments.val false index).val) (fun index => (arguments.val true index).val)
+          Finset.univ (fun index => (arguments.val false index).property)
+          (fun index => (arguments.val true index).property)⟩)
+
+/-- The private fixed-workspace fold certifies the mathematical sum. -/
+theorem integerDotProduct_realizable (length leftWidth rightWidth : MvPolynomial Parameter ℕ) :
+    (integerDotProduct length leftWidth rightWidth).Realizable := by
+  apply (implementation_realizable length leftWidth rightWidth).specification
+  intro sizes arguments valid
+  apply Subtype.ext
+  exact implementation_correct length leftWidth rightWidth sizes ⟨arguments, valid⟩
+
+/-- Evaluate the mathematical sum without exposing its traversal. -/
+theorem integerDotProduct_correct (length leftWidth rightWidth : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerDotProduct length leftWidth rightWidth).Arguments sizes //
+      (integerDotProduct length leftWidth rightWidth).precondition sizes arguments}) :
+    ((integerDotProduct length leftWidth rightWidth).compute sizes arguments).val =
+      ∑ index, (arguments.val false index).val * (arguments.val true index).val := by
+  simp only [integerDotProduct, specification_compute]
 
 end Polytime2.Computation

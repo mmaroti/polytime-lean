@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerHermiteDiagonalize
 import Polytime2.Matrices.ExtendIntegerBasis
 import Polytime2.Matrices.RectangularPresentation
@@ -107,21 +108,21 @@ private noncomputable def prepared (rows columns rank width : MvPolynomial Param
     (fun _ _ valid => valid.2)
 
 /-- Diagonalize an active square matrix and return the full rectangular matrix and bases. -/
-noncomputable def integerRectangularHermite (rows columns rank width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (rows columns rank width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (prepared rows columns rank width).followedBy (assemble rows columns rank width) rfl (fun _ _ valid => valid.1)
 
 /-- Square diagonalization, rectangular output construction, and both identity extensions are realized. -/
-theorem integerRectangularHermite_realizable (rows columns rank width : MvPolynomial Parameter ℕ) :
-    (integerRectangularHermite rows columns rank width).Realizable :=
+private theorem implementation_realizable (rows columns rank width : MvPolynomial Parameter ℕ) :
+    (implementation rows columns rank width).Realizable :=
   ((integerHermiteDiagonalize_realizable rank width).withPrecondition
     (prepared rows columns rank width).precondition (fun _ _ valid => valid.2)).followedBy
     (assemble_realizable rows columns rank width) rfl (fun _ _ valid => valid.1)
 
 /-- The realized rectangular lift is exactly the mathematical active-block construction. -/
-theorem integerRectangularHermite_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerRectangularHermite rows columns rank width).Arguments sizes //
-      (integerRectangularHermite rows columns rank width).precondition sizes arguments}) :
-    let result := (integerRectangularHermite rows columns rank width).compute sizes arguments
+private theorem implementation_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns rank width).Arguments sizes //
+      (implementation rows columns rank width).precondition sizes arguments}) :
+    let result := (implementation rows columns rank width).compute sizes arguments
     (result.1.val, result.2.1.val, result.2.2.val) =
       IntegerMatrix.rectangularHermiteRun arguments.property.1.1 arguments.property.1.2
         (MvPolynomial.eval sizes width) (arguments.val ()).val := by
@@ -150,5 +151,42 @@ theorem integerRectangularHermite_correct (rows columns rank width : MvPolynomia
         ⟨fun _ => square.2.2, arguments.property.1.2⟩
       exact extended.trans (congrArg (IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes columns) arguments.property.1.2)
         (congrArg (fun result => result.2.2) same))
+
+/-- The mathematical rectangular Hermite construction with both full bases.
+Only dimension inclusion and a positive lower-triangular input are required. -/
+noncomputable def integerRectangularHermite (rows columns rank width : MvPolynomial Parameter ℕ) :
+    Computation Parameter Unit :=
+  specificationBy (fun _ => integerMatrices rank rank width)
+    ((integerMatrices rows columns (entryWidth rank width + 1)).prod
+      ((integerMatrices rows rows (basisWidth rank width + 1)).prod
+        (integerMatrices columns columns (basisWidth rank width + 1))))
+    (fun sizes arguments =>
+      (MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes rows ∧
+        MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes columns) ∧
+      (arguments ()).val.IsLowerTriangular ∧ ∀ index, 0 < (arguments ()).val index index)
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.val))
+    (fun sizes arguments => IntegerMatrix.rectangularHermiteRun arguments.property.1.1 arguments.property.1.2
+      (MvPolynomial.eval sizes width) (arguments.val ()).val)
+    (fun sizes arguments => ⟨(implementation rows columns rank width).compute sizes arguments,
+      implementation_correct rows columns rank width sizes arguments⟩)
+
+theorem integerRectangularHermite_realizable (rows columns rank width : MvPolynomial Parameter ℕ) :
+    (integerRectangularHermite rows columns rank width).Realizable := by
+  apply (implementation_realizable rows columns rank width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap (Subtype.val_injective.prodMap Subtype.val_injective)
+  · intro sizes arguments valid
+    exact implementation_correct rows columns rank width sizes ⟨arguments, valid⟩
+
+/-- Observe the full mathematical construction without block extraction or basis wiring. -/
+theorem integerRectangularHermite_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerRectangularHermite rows columns rank width).Arguments sizes //
+      (integerRectangularHermite rows columns rank width).precondition sizes arguments}) :
+    let result := (integerRectangularHermite rows columns rank width).compute sizes arguments
+    (result.1.val, result.2.1.val, result.2.2.val) =
+      IntegerMatrix.rectangularHermiteRun arguments.property.1.1 arguments.property.1.2
+        (MvPolynomial.eval sizes width) (arguments.val ()).val := by
+  exact specificationBy_correct _ (integerRectangularHermite rows columns rank width).outputDomain _
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.val)) _ _ sizes arguments
 
 end Polytime2.Computation

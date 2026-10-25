@@ -46,6 +46,12 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 [extended]: SignedExtendedGcd.lean
 [norm]: NormalizedBezout.lean
 
+Extended gcd and normalized Bézout computations have controlled result
+boundaries. Use `integerExtendedGcd_value` and
+`integerNormalizedExtendedGcd_value` for ordinary integer triples, then their
+`_correct` theorems for the gcd and Bézout identities. Full bounded-carrier
+equations live under `Realizable.Internal` for realization proofs.
+
 ## Choose the right contract
 
 Signed arithmetic uses ordinary bounded integers with the canonical codec in

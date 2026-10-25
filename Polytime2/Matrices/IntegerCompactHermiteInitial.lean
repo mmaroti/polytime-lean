@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerCompactHermiteColumns
 import Polytime2.Matrices.IntegerBasisCompose
 import Polytime2.Matrices.HermiteStabilizationMath
@@ -158,7 +159,7 @@ private theorem initialEntryFits (rows columns width : MvPolynomial Parameter �
   simpa [IntegerMatrix.hermiteInitialWidth] using bounded.1
 
 /-- Initial stabilization at the mathematical entry width, with both accumulated bases. -/
-noncomputable def integerCompactHermiteInitial (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
+private noncomputable def implementation (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
   inputDomains := (initialRaw rows columns width).inputDomains
   outputDomain := (boundedUnary columns).prod
     ((integerMatrices rows columns (IntegerMatrix.hermiteInitialWidth rows columns width)).prod
@@ -170,9 +171,9 @@ noncomputable def integerCompactHermiteInitial (rows columns width : MvPolynomia
     (result.1, ⟨result.2.1.val, initialEntryFits rows columns width sizes arguments⟩, result.2.2)
 
 /-- Certified stabilization and resizing return the proved mathematical entry width. -/
-theorem integerCompactHermiteInitial_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerCompactHermiteInitial rows columns width).Realizable := by
-  let computation := integerCompactHermiteInitial rows columns width
+private theorem implementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width).Realizable := by
+  let computation := implementation rows columns width
   have actual := initialRaw_realizable rows columns width
   have rank := actual.fst
   have matrices := actual.snd
@@ -187,14 +188,49 @@ theorem integerCompactHermiteInitial_realizable (rows columns width : MvPolynomi
   exact rank.prodMk together
 
 /-- Returning the mathematical entry width preserves the exact initialization result. -/
+private theorem implementation_correct (rows columns width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns width).Arguments sizes //
+      (implementation rows columns width).precondition sizes arguments}) :
+    let result := (implementation rows columns width).compute sizes arguments
+    (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val) =
+      IntegerMatrix.compactHermiteInitial (arguments.val ()).val :=
+  initialRaw_correct rows columns width sizes arguments
+
+/-- The ordinary compact initial presentation, with rank and both actual bases.
+The two passes, their products, and result resizing stay behind the boundary. -/
+noncomputable def integerCompactHermiteInitial (rows columns width : MvPolynomial Parameter ℕ) :
+    Computation Parameter Unit :=
+  specificationBy (fun _ => integerMatrices rows columns width)
+    ((boundedUnary columns).prod
+      ((integerMatrices rows columns (IntegerMatrix.hermiteInitialWidth rows columns width)).prod
+        ((integerMatrices rows rows (rows + 1 + hermiteRowsWorkspace width rows)).prod
+          (integerMatrices columns columns (columns + 1 + hermiteRowsWorkspace (hermiteRowsWorkspace width rows) columns)))))
+    (fun _ _ => True)
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val))
+    (fun _ arguments => IntegerMatrix.compactHermiteInitial (arguments.val ()).val)
+    (fun sizes arguments => ⟨(implementation rows columns width).compute sizes arguments,
+      implementation_correct rows columns width sizes arguments⟩)
+
+theorem integerCompactHermiteInitial_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerCompactHermiteInitial rows columns width).Realizable := by
+  apply (implementation_realizable rows columns width).specificationBy
+  · intro sizes
+    exact Fin.val_injective.prodMap
+      (Subtype.val_injective.prodMap (Subtype.val_injective.prodMap Subtype.val_injective))
+  · intro sizes arguments valid
+    exact implementation_correct rows columns width sizes ⟨arguments, valid⟩
+
+/-- Observe the exact mathematical initial presentation without resizing or tape preparation. -/
 theorem integerCompactHermiteInitial_correct (rows columns width : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
     (arguments : {arguments : (integerCompactHermiteInitial rows columns width).Arguments sizes //
       (integerCompactHermiteInitial rows columns width).precondition sizes arguments}) :
     let result := (integerCompactHermiteInitial rows columns width).compute sizes arguments
     (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val) =
-      IntegerMatrix.compactHermiteInitial (arguments.val ()).val :=
-  initialRaw_correct rows columns width sizes arguments
+      IntegerMatrix.compactHermiteInitial (arguments.val ()).val := by
+  exact specificationBy_correct _ (integerCompactHermiteInitial rows columns width).outputDomain _
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val)) _ _ sizes arguments
 
 /-- Initialization retains the presentation, both unit determinants, and both inactive strips. -/
 theorem integerCompactHermiteInitial_specification (rows columns width : MvPolynomial Parameter ℕ)

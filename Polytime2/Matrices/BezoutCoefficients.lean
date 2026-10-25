@@ -140,7 +140,7 @@ theorem nonzeroStage_realizable (width : MvPolynomial Parameter ℕ) : (nonzeroS
   have rightEq := congrArg (fun result => result.2.2.val) valid.1
   fin_cases index <;> simp [results, quotient, nonzeroStage, Computation.withPrecondition,
     stage, computation, entry, IntegerMatrix.bezoutMatrix, gcdNonzero, divisorEq,
-    leftEq, rightEq, integerNormalizedExtendedGcd, integerQuotient, integerDivision]
+    leftEq, rightEq, Realizable.Internal.integerNormalizedExtendedGcd_compute, integerQuotient, integerDivision]
 
 def zeroAllowed (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : ∀ name, (host width name).Carrier sizes) : Prop :=

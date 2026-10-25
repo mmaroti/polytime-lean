@@ -8,6 +8,7 @@ of every theorem or implementation experiment.
 
 | Learn how to... | Example | Guide |
 | --- | --- | --- |
+| Certify a specification | [Specification.lean][spec] | [composition][cg] |
 | Define a computation | [Computation.lean][comp] | [composition][cg] |
 | Retain arguments and compose calls | [Context.lean][ctx] | [composition][cg] |
 | Use records and alternatives | [Records.lean][rec] | [encoding][eg] |
@@ -21,6 +22,7 @@ of every theorem or implementation experiment.
 | Export to a standalone machine | [TM0.lean](TM0.lean) | [TM0][tg] |
 | Prepare an SMP instance | [SMP/RingExample.lean][ring] | [SMP][sg] |
 
+[spec]: Specification.lean
 [comp]: Computation.lean
 [ctx]: Context.lean
 [rec]: Records.lean

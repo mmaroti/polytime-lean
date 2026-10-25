@@ -21,6 +21,7 @@ import Polytime2.Arrays.BoundedPositions
 import Polytime2.Arrays.AllTrue
 import Polytime2.Arrays.Transform
 import Polytime2.Computation.Equality
+import Polytime2.Computation.Specification
 
 /-! # Certified diagonality testing for integer matrices
 
@@ -97,15 +98,15 @@ private theorem nestedDiagonalFlags_realizable (dimension width : MvPolynomial P
     exact (matrix_nested_encode_bits booleans dimension dimension sizes value).symm
 
 /-- Decide the ordinary universal off-diagonal zero condition. -/
-noncomputable def integerMatrixIsDiagonal (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   ((nestedDiagonalFlags dimension width).followedBy
     (mapArray (booleans.arrayOfLength dimension) booleans dimension
       (fun sizes flags => (arrayAllTrue dimension).compute sizes ⟨fun _ => flags, trivial⟩)) rfl (by intros; trivial)).followedBy
     (arrayAllTrue dimension) rfl (by intros; trivial)
 
 /-- Entry reads, equality, zero tests, and both universal reductions are realized. -/
-theorem integerMatrixIsDiagonal_realizable (dimension width : MvPolynomial Parameter ℕ) :
-    (integerMatrixIsDiagonal dimension width).Realizable :=
+private theorem implementation_realizable (dimension width : MvPolynomial Parameter ℕ) :
+    (implementation dimension width).Realizable :=
   ((nestedDiagonalFlags_realizable dimension width).followedBy
     (mapArray_realizable (booleans.arrayOfLength dimension) booleans dimension
       (fun sizes flags => (arrayAllTrue dimension).compute sizes ⟨fun _ => flags, trivial⟩)
@@ -113,9 +114,9 @@ theorem integerMatrixIsDiagonal_realizable (dimension width : MvPolynomial Param
     (arrayAllTrue_realizable dimension) rfl (by intros; trivial)
 
 /-- The stopping test is true exactly for diagonal matrices, including dimension zero. -/
-theorem integerMatrixIsDiagonal_correct (dimension width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+private theorem implementation_correct (dimension width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (matrix : (integerMatrices dimension dimension width).Carrier sizes) :
-    (integerMatrixIsDiagonal dimension width).compute sizes ⟨fun _ => matrix, trivial⟩ = true ↔
+    (implementation dimension width).compute sizes ⟨fun _ => matrix, trivial⟩ = true ↔
       ∀ row column, row ≠ column → matrix.val row column = 0 := by
   classical
   change (arrayAllTrue dimension).compute sizes ⟨fun _ => fun row =>
@@ -134,5 +135,22 @@ theorem integerMatrixIsDiagonal_correct (dimension width : MvPolynomial Paramete
     by_cases same : row = column
     · exact Or.inl same
     · exact Or.inr (diagonal row column same)
+
+/-- Decide ordinary mathematical diagonality, including dimension zero. -/
+noncomputable def integerMatrixIsDiagonal (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  decision (fun _ => integerMatrices dimension dimension width) (fun _ _ => True)
+    (fun _ arguments => ∀ row column, row ≠ column → (arguments ()).val row column = 0)
+
+theorem integerMatrixIsDiagonal_realizable (dimension width : MvPolynomial Parameter ℕ) :
+    (integerMatrixIsDiagonal dimension width).Realizable :=
+  (implementation_realizable dimension width).decision _
+    (fun sizes arguments _valid => implementation_correct dimension width sizes (arguments ()))
+
+/-- The result is true exactly for diagonal matrices. -/
+theorem integerMatrixIsDiagonal_correct (dimension width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (matrix : (integerMatrices dimension dimension width).Carrier sizes) :
+    (integerMatrixIsDiagonal dimension width).compute sizes ⟨fun _ => matrix, trivial⟩ = true ↔
+      ∀ row column, row ≠ column → matrix.val row column = 0 :=
+  decision_correct _ _ _ sizes ⟨fun _ => matrix, trivial⟩
 
 end Polytime2.Computation

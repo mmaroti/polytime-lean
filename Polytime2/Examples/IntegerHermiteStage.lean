@@ -84,13 +84,21 @@ private noncomputable def result :=
 example : result.1.val ⟨0, by norm_num⟩ ⟨1, by norm_num⟩ = -3 ∧
     result.1.val ⟨1, by norm_num⟩ ⟨1, by norm_num⟩ = -2 ∧
     result.1.val ⟨3, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by
-  simp only [result, integerHermiteRowStage, arguments, tokens, map_ofNat]
+  have observed := congrArg Prod.fst
+    (integerHermiteRowStage_correct (Parameter := Empty) 4 2 3 2 Empty.elim ⟨arguments 2 tokens, valid⟩)
+  dsimp only at observed
+  rw [show result.1.val = _ from observed]
+  simp only [arguments, tokens, map_ofNat]
   decide +kernel
 
 example : result.2.val ⟨0, by norm_num⟩ ⟨3, by norm_num⟩ = -2 ∧
     result.2.val ⟨1, by norm_num⟩ ⟨3, by norm_num⟩ = -1 ∧
     result.2.val ⟨3, by norm_num⟩ ⟨2, by norm_num⟩ = -1 := by
-  simp only [result, integerHermiteRowStage, arguments, tokens, map_ofNat]
+  have observed := congrArg Prod.snd
+    (integerHermiteRowStage_correct (Parameter := Empty) 4 2 3 2 Empty.elim ⟨arguments 2 tokens, valid⟩)
+  dsimp only at observed
+  rw [show result.2.val = _ from observed]
+  simp only [arguments, tokens, map_ofNat]
   decide +kernel
 
 private noncomputable def emptyTokens :
@@ -109,6 +117,11 @@ private theorem emptyValid : (integerHermiteRowStage (Parameter := Empty) 4 2 3 
   · simp [arguments]
 
 example : ((integerHermiteRowStage (Parameter := Empty) 4 2 3 0).compute Empty.elim
-    ⟨arguments 0 emptyTokens, emptyValid⟩).1.val ⟨3, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by decide +kernel
+    ⟨arguments 0 emptyTokens, emptyValid⟩).1.val ⟨3, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by
+  have observed := congrArg Prod.fst
+    (integerHermiteRowStage_correct (Parameter := Empty) 4 2 3 0 Empty.elim ⟨arguments 0 emptyTokens, emptyValid⟩)
+  dsimp only at observed
+  rw [observed]
+  decide +kernel
 
 end Polytime2.Examples.IntegerHermiteStage

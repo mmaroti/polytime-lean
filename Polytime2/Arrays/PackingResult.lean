@@ -56,6 +56,17 @@ noncomputable def arrayPack (element : EncodedDomain Parameter) (length : MvPoly
   compute _ arguments := ⟨⟨count (arguments.val false), Nat.lt_succ_of_le (count_le (arguments.val false))⟩,
     pack (arguments.val false) (arguments.val true)⟩
 
+/-- The exact retained count and values form one mathematical dependent result.
+Use this equation explicitly when the payload's type depends on the count. -/
+theorem arrayPack_compute (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (arrayPack element length).Arguments sizes //
+      (arrayPack element length).precondition sizes arguments}) :
+    (arrayPack element length).compute sizes arguments =
+      ⟨⟨count (arguments.val false), Nat.lt_succ_of_le (count_le (arguments.val false))⟩,
+        pack (arguments.val false) (arguments.val true)⟩ := by
+  rfl
+
 theorem arrayPack_realizable (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) :
     (arrayPack element length).Realizable := by
   let computation := arrayPack element length

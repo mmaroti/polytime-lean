@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Arrays.FoldContract
 import Mathlib.Data.List.FinRange
 import Mathlib.Data.Finset.Card
@@ -89,7 +90,7 @@ theorem countFlag_fold {width : ℕ} (flags : List Bool) (initial : BitVec width
       Nat.add_comm, Nat.add_left_comm]
 
 /-- The count width is one more than the array length; its seed is private. -/
-noncomputable def countFlags (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
+private noncomputable def implementation (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
   inputDomains _ := EncodedDomain.booleans.arrayOfLength length
   outputDomain := EncodedDomain.bitVectors (length + 1)
   precondition _ _ := True
@@ -97,9 +98,9 @@ noncomputable def countFlags (length : MvPolynomial Parameter ℕ) : Computation
     addFlag
     (arguments.val ()) (BitVec.ofNat (MvPolynomial.eval sizes (length + 1)) 0) (MvPolynomial.eval sizes length)
 
-theorem countFlags_realizable (length : MvPolynomial Parameter ℕ) : (countFlags length).Realizable := by
+private theorem implementation_realizable (length : MvPolynomial Parameter ℕ) : (implementation length).Realizable := by
   let accumulator := EncodedDomain.bitVectors (length + 1)
-  let computation := countFlags length
+  let computation := implementation length
   have step := (countFlagStep_realizable (length + 1)).withArguments
     (arrayFoldStep Empty.elim EncodedDomain.booleans accumulator (fun _ _ _ _ => True)
       (fun _ _ current flag => addFlag current flag)).inputDomains
@@ -129,9 +130,9 @@ theorem count_flags_card {length : ℕ} (flags : Fin length → Bool) :
   simp [Function.comp_def]
 
 /-- The private capacity prevents overflow: the result is the exact count. -/
-theorem countFlags_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+private theorem implementation_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (flags : Fin (MvPolynomial.eval sizes length) → Bool) :
-    ((countFlags length).compute sizes ⟨(fun _ => flags), trivial⟩).toNat = (List.ofFn flags).count true := by
+    ((implementation length).compute sizes ⟨(fun _ => flags), trivial⟩).toNat = (List.ofFn flags).count true := by
   change (ArrayFold.prefixValue addFlag flags _ _).toNat = _
   unfold ArrayFold.prefixValue
   rw [List.take_of_length_le (by simp), countFlag_fold]
@@ -142,5 +143,27 @@ theorem countFlags_correct (length : MvPolynomial Parameter ℕ) (sizes : Parame
   simp only [List.length_ofFn] at bounded
   simpa only [map_add, map_one] using lt_of_le_of_lt bounded (by omega :
     MvPolynomial.eval sizes length < 2 ^ (MvPolynomial.eval sizes length + 1))
+/-- Specify the cardinality of the true positions mathematically.
+The finite-memory traversal and counter implementation stay private. -/
+noncomputable def countFlags (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => EncodedDomain.booleans.arrayOfLength length)
+    (EncodedDomain.bitVectors (length + 1)) (fun _ _ => True) (fun _ => BitVec.toNat)
+    (fun sizes arguments => Nat.card {index : Fin (MvPolynomial.eval sizes length) // arguments.val () index = true})
+    (fun sizes arguments => ⟨(implementation length).compute sizes arguments,
+      (implementation_correct length sizes (arguments.val ())).trans (count_flags_card (arguments.val ()))⟩)
+
+theorem countFlags_realizable (length : MvPolynomial Parameter ℕ) : (countFlags length).Realizable := by
+  apply (implementation_realizable length).specificationBy
+  · intro sizes first second same
+    exact BitVec.eq_of_toNat_eq same
+  · intro sizes arguments valid
+    exact (implementation_correct length sizes (arguments ())).trans (count_flags_card (arguments ()))
+
+/-- Evaluate the mathematical observation without unfolding the traversal. -/
+theorem countFlags_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (flags : Fin (MvPolynomial.eval sizes length) → Bool) :
+    ((countFlags length).compute sizes ⟨(fun _ => flags), trivial⟩).toNat = (List.ofFn flags).count true := by
+  rw [count_flags_card]
+  simp only [countFlags, specificationBy_correct]
 
 end Polytime2.Computation

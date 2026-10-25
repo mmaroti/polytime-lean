@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Arithmetic.SignedExtendedGcdMath
 import Polytime2.Arithmetic.SignedMultiplySubtract
 import Polytime2.Arithmetic.SignedDivision
@@ -396,19 +397,38 @@ variable {Parameter : Type} [Fintype Parameter]
 
 /-- Extended gcd returns the nonnegative gcd and bounded Bézout coefficients.
 Every operand pair is admissible, including `(0,0)`. -/
-noncomputable def integerExtendedGcd (width : MvPolynomial Parameter ℕ) : Computation Parameter Bool where
-  inputDomains _ := binaryIntegers width
-  outputDomain := (binaryIntegers width).prod
+noncomputable def integerExtendedGcd (width : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  specification (fun _ => binaryIntegers width) ((binaryIntegers width).prod
     ((binaryIntegers (1 + (2 * width + 1) * (width + 1))).prod
-      (binaryIntegers (1 + (2 * width + 1) * (width + 1))))
-  precondition _ _ := True
-  compute sizes arguments :=
+      (binaryIntegers (1 + (2 * width + 1) * (width + 1))))) (fun _ _ => True)
+    (fun sizes arguments =>
+      let result := ExtendedGcd.result (arguments.val false).val (arguments.val true).val
+      let bound := ExtendedGcd.result_bounds (MvPolynomial.eval sizes width)
+        (arguments.val false).val (arguments.val true).val (arguments.val false).property (arguments.val true).property
+      (⟨(result.1 : ℤ), by simpa only [Int.natAbs_natCast] using bound.1⟩,
+        ⟨result.2.1, by simpa [ExtendedGcd.coefficientWidth, Nat.add_comm] using bound.2.1⟩,
+        ⟨result.2.2, by simpa [ExtendedGcd.coefficientWidth, Nat.add_comm] using bound.2.2⟩))
+
+/-- Realization-level equation for the bounded gcd and coefficient carrier.
+Application proofs use the ordinary integer observation instead. -/
+theorem Realizable.Internal.integerExtendedGcd_compute (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerExtendedGcd width).Arguments sizes // (integerExtendedGcd width).precondition sizes arguments}) :
+    (integerExtendedGcd width).compute sizes arguments =
     let result := ExtendedGcd.result (arguments.val false).val (arguments.val true).val
     let bound := ExtendedGcd.result_bounds (MvPolynomial.eval sizes width)
       (arguments.val false).val (arguments.val true).val (arguments.val false).property (arguments.val true).property
     (⟨(result.1 : ℤ), by simpa only [Int.natAbs_natCast] using bound.1⟩,
       ⟨result.2.1, by simpa [ExtendedGcd.coefficientWidth, Nat.add_comm] using bound.2.1⟩,
-      ⟨result.2.2, by simpa [ExtendedGcd.coefficientWidth, Nat.add_comm] using bound.2.2⟩)
+      ⟨result.2.2, by simpa [ExtendedGcd.coefficientWidth, Nat.add_comm] using bound.2.2⟩) := by
+  exact specification_compute _ (integerExtendedGcd width).outputDomain _ _ sizes arguments
+
+/-- The ordinary integer triple, independently of its magnitude bounds. -/
+theorem integerExtendedGcd_value (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerExtendedGcd width).Arguments sizes) :
+    let result := (integerExtendedGcd width).compute sizes ⟨arguments, trivial⟩
+    let value := ExtendedGcd.result (arguments false).val (arguments true).val
+    (result.1.val, result.2.1.val, result.2.2.val) = ((value.1 : ℤ), value.2.1, value.2.2) := by
+  rw [Realizable.Internal.integerExtendedGcd_compute]
 
 theorem integerExtendedGcd_correct (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : (integerExtendedGcd width).Arguments sizes) :
@@ -416,7 +436,11 @@ theorem integerExtendedGcd_correct (width : MvPolynomial Parameter ℕ) (sizes :
     0 ≤ result.1.val ∧ result.1.val = (Int.gcd (arguments false).val (arguments true).val : ℤ) ∧
       result.2.1.val * (arguments false).val + result.2.2.val * (arguments true).val = result.1.val := by
   have correct := ExtendedGcd.result_correct (arguments false).val (arguments true).val
-  exact ⟨Int.natCast_nonneg _, congrArg (fun number : ℕ => (number : ℤ)) correct.1, correct.2⟩
+  exact (congrArg (fun result : ℤ × ℤ × ℤ =>
+    0 ≤ result.1 ∧ result.1 = (Int.gcd (arguments false).val (arguments true).val : ℤ) ∧
+      result.2.1 * (arguments false).val + result.2.2 * (arguments true).val = result.1)
+    (integerExtendedGcd_value width sizes arguments)).mpr
+    ⟨Int.natCast_nonneg _, congrArg (fun number : ℕ => (number : ℤ)) correct.1, correct.2⟩
 
 theorem integerExtendedGcd_realizable (width : MvPolynomial Parameter ℕ) :
     (integerExtendedGcd width).Realizable := by
@@ -427,7 +451,9 @@ theorem integerExtendedGcd_realizable (width : MvPolynomial Parameter ℕ) :
   have complete := loop.followedBy (Realizable.Internal.IntegerExtendedGcd.extract_realizable width) rfl (by
     intro sizes arguments valid
     apply Realizable.Internal.IntegerExtendedGcd.answer_admissible)
-  exact complete.withSpecification (fun _ _ => True) (integerExtendedGcd width).compute
-    (by intros; trivial) (by intros; rfl)
+  apply complete.specification
+  intro sizes arguments valid
+  rfl
+
 
 end Polytime2.Computation

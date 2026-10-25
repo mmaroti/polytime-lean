@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.HermiteIncomingController
 import Polytime2.Matrices.IntegerOperations
 
@@ -77,14 +78,14 @@ private theorem prepared_valid (rows columns width pivots : MvPolynomial Paramet
     (arguments.val 2).property (arguments.val 3).property
 
 /-- Clear an incoming row against a positive upper pivot block, deriving all extra storage internally. -/
-noncomputable def integerHermiteIncoming (rows columns width pivots : MvPolynomial Parameter ℕ) :
+private noncomputable def implementation (rows columns width pivots : MvPolynomial Parameter ℕ) :
     Computation Parameter (Fin 4) :=
   (hermiteIncomingController rows columns width pivots).onResults (inputs rows columns width pivots)
     (allowed rows columns width pivots) (preparedValues rows columns width pivots) (prepared_valid rows columns width pivots)
 
 /-- Input widening and the entire incoming traversal are realized by composition. -/
-theorem integerHermiteIncoming_realizable (rows columns width pivots : MvPolynomial Parameter ℕ) :
-    (integerHermiteIncoming rows columns width pivots).Realizable := by
+private theorem implementation_realizable (rows columns width pivots : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width pivots).Realizable := by
   apply (hermiteIncomingController_realizable rows columns width pivots).onResults (inputs rows columns width pivots)
     (allowed rows columns width pivots) (preparedValues rows columns width pivots) (prepared_valid rows columns width pivots)
   intro name
@@ -102,11 +103,11 @@ theorem integerHermiteIncoming_realizable (rows columns width pivots : MvPolynom
     exact first.prodMk second
 
 /-- The original-width interface returns precisely the mathematical incoming traversal. -/
-theorem integerHermiteIncoming_correct (rows columns width pivots : MvPolynomial Parameter ℕ)
+private theorem implementation_correct (rows columns width pivots : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteIncoming rows columns width pivots).Arguments sizes //
-      (integerHermiteIncoming rows columns width pivots).precondition sizes arguments}) :
-    let result := (integerHermiteIncoming rows columns width pivots).compute sizes arguments
+    (arguments : {arguments : (implementation rows columns width pivots).Arguments sizes //
+      (implementation rows columns width pivots).precondition sizes arguments}) :
+    let result := (implementation rows columns width pivots).compute sizes arguments
     (result.1.val, result.2.val) = IntegerMatrix.hermiteIncomingPrefix
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       ⟨successorValues pivots sizes (arguments.val 0), arguments.property.1⟩ (arguments.val 1)
@@ -115,6 +116,42 @@ theorem integerHermiteIncoming_correct (rows columns width pivots : MvPolynomial
     ⟨(fun name => preparedValues rows columns width pivots name sizes arguments), prepared_valid rows columns width pivots sizes arguments⟩
     ⟨successorValues pivots sizes (arguments.val 0), arguments.property.1⟩
     ⟨arguments.val 1, arguments.property.2.1⟩ rfl rfl
+
+/-- The mathematical traversal and its actual accumulated bases. Workspace
+preparation and controller wiring stay behind the computation boundary. -/
+noncomputable def integerHermiteIncoming (rows columns width pivots : MvPolynomial Parameter ℕ) :
+    Computation Parameter (Fin 4) :=
+  specificationBy (inputs rows columns width pivots)
+    ((integerMatrices rows columns (hermiteIncomingWorkspace width pivots)).prod
+      (integerMatrices rows rows (hermiteIncomingWorkspace width pivots))) (allowed rows columns width pivots)
+    (fun _ result => (result.1.val, result.2.val))
+    (fun sizes arguments => IntegerMatrix.hermiteIncomingPrefix
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      ⟨successorValues pivots sizes (arguments.val 0), arguments.property.1⟩ (arguments.val 1)
+      (MvPolynomial.eval sizes pivots) (arguments.val 2).val (arguments.val 3).val)
+    (fun sizes arguments => ⟨(implementation rows columns width pivots).compute sizes arguments,
+      implementation_correct rows columns width pivots sizes arguments⟩)
+
+theorem integerHermiteIncoming_realizable (rows columns width pivots : MvPolynomial Parameter ℕ) :
+    (integerHermiteIncoming rows columns width pivots).Realizable := by
+  apply (implementation_realizable rows columns width pivots).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap Subtype.val_injective
+  · intro sizes arguments valid
+    exact implementation_correct rows columns width pivots sizes ⟨arguments, valid⟩
+
+/-- Observe the ordinary mathematical answer without expanding the controller. -/
+theorem integerHermiteIncoming_correct (rows columns width pivots : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteIncoming rows columns width pivots).Arguments sizes //
+      (integerHermiteIncoming rows columns width pivots).precondition sizes arguments}) :
+    let result := (integerHermiteIncoming rows columns width pivots).compute sizes arguments
+    (result.1.val, result.2.val) = IntegerMatrix.hermiteIncomingPrefix
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      ⟨successorValues pivots sizes (arguments.val 0), arguments.property.1⟩ (arguments.val 1)
+      (MvPolynomial.eval sizes pivots) (arguments.val 2).val (arguments.val 3).val := by
+  exact specificationBy_correct _ (integerHermiteIncoming rows columns width pivots).outputDomain _
+    (fun _ result => (result.1.val, result.2.val)) _ _ sizes arguments
 
 /-- Every old pivot is positive and its incoming entry is zero after the traversal. -/
 theorem integerHermiteIncoming_entries (rows columns width pivots : MvPolynomial Parameter ℕ)
@@ -150,9 +187,14 @@ theorem integerHermiteIncoming_preserves (rows columns width pivots : MvPolynomi
     (equation : (arguments.val 3).val * original * right = (arguments.val 2).val)
     (unit : IsUnit (arguments.val 3).val.det) :
     let result := (integerHermiteIncoming rows columns width pivots).compute sizes arguments
-    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det :=
-  hermiteIncomingController_preserves rows columns width pivots sizes
-    ⟨(fun name => preparedValues rows columns width pivots name sizes arguments), prepared_valid rows columns width pivots sizes arguments⟩
-    original right equation unit
+    result.2.val * original * right = result.1.val ∧ IsUnit result.2.val.det := by
+  have actual := integerHermiteIncoming_correct rows columns width pivots sizes arguments
+  have mathematical := IntegerMatrix.hermiteIncomingPrefix_preserves
+    (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+    ⟨successorValues pivots sizes (arguments.val 0), arguments.property.1⟩ (arguments.val 1)
+    (MvPolynomial.eval sizes pivots) (arguments.val 2).val original (arguments.val 3).val right equation unit
+  exact (congrArg (fun matrices =>
+    matrices.2 * original * right = matrices.1 ∧ IsUnit matrices.2.det) actual).mpr mathematical
+
 
 end Polytime2.Computation

@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerCompactStoredRank
 import Polytime2.Matrices.HermiteRowsController
 import Polytime2.Matrices.CompactHermiteMath
@@ -90,21 +91,21 @@ private theorem finishSweep_realizable (rows columns width : MvPolynomial Parame
   exact rank.prodMk compacted
 
 /-- Complete compact row normalization with input-derived workspace and both bases. -/
-noncomputable def integerCompactHermiteRows (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (integerHermiteRows rows columns width).followedBy (finishSweep rows columns width) rfl (by intros; trivial)
 
 /-- The whole compact row pass, including rank decoding and basis permutation, is realized. -/
-theorem integerCompactHermiteRows_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerCompactHermiteRows rows columns width).Realizable :=
+private theorem implementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width).Realizable :=
   (integerHermiteRows_realizable rows columns width).followedBy (finishSweep_realizable rows columns width)
     rfl (by intros; trivial)
 
 /-- The complete realized pass equals mathematical compact row normalization. -/
-theorem integerCompactHermiteRows_correct (rows columns width : MvPolynomial Parameter ℕ)
+private theorem implementation_correct (rows columns width : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerCompactHermiteRows rows columns width).Arguments sizes //
-      (integerCompactHermiteRows rows columns width).precondition sizes arguments}) :
-    let result := (integerCompactHermiteRows rows columns width).compute sizes arguments
+    (arguments : {arguments : (implementation rows columns width).Arguments sizes //
+      (implementation rows columns width).precondition sizes arguments}) :
+    let result := (implementation rows columns width).compute sizes arguments
     (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val) =
       IntegerMatrix.compactHermiteRows (arguments.val ()).val := by
   let swept := (integerHermiteRows rows columns width).compute sizes arguments
@@ -117,5 +118,38 @@ theorem integerCompactHermiteRows_correct (rows columns width : MvPolynomial Par
   apply Prod.ext
   · rfl
   · exact compacted
+
+/-- The mathematical compact rows normalization, with its rank and both bases.
+Only the existence proof refers to the implementation. -/
+noncomputable def integerCompactHermiteRows (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => integerMatrices rows columns width)
+    ((boundedUnary rows).prod
+      ((integerMatrices rows columns (hermiteRowsWorkspace width rows)).prod
+        ((integerMatrices rows rows (hermiteRowsWorkspace width rows)).prod
+          (integerMatrices columns columns (1))))) (fun _ _ => True)
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val))
+    (fun _ arguments => IntegerMatrix.compactHermiteRows (arguments.val ()).val)
+    (fun sizes arguments => ⟨(implementation rows columns width).compute sizes arguments,
+      implementation_correct rows columns width sizes arguments⟩)
+
+theorem integerCompactHermiteRows_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerCompactHermiteRows rows columns width).Realizable := by
+  apply (implementation_realizable rows columns width).specificationBy
+  · intro sizes
+    exact Fin.val_injective.prodMap
+      (Subtype.val_injective.prodMap (Subtype.val_injective.prodMap Subtype.val_injective))
+  · intro sizes arguments valid
+    exact implementation_correct rows columns width sizes ⟨arguments, valid⟩
+
+/-- Observe the ordinary mathematical result without unfolding the sweep. -/
+theorem integerCompactHermiteRows_correct (rows columns width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerCompactHermiteRows rows columns width).Arguments sizes //
+      (integerCompactHermiteRows rows columns width).precondition sizes arguments}) :
+    let result := (integerCompactHermiteRows rows columns width).compute sizes arguments
+    (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val) =
+      IntegerMatrix.compactHermiteRows (arguments.val ()).val := by
+  exact specificationBy_correct _ (integerCompactHermiteRows rows columns width).outputDomain _
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.1.val, result.2.2.2.val)) _ _ sizes arguments
 
 end Polytime2.Computation

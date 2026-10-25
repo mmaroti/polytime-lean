@@ -18,6 +18,7 @@ limitations under the License.
 import Polytime2.Arithmetic.SignedDivision
 import Polytime2.Arithmetic.SignedWidth
 import Polytime2.Computation.Conditional
+import Polytime2.Computation.Specification
 
 /-! # A total certified integer divisibility test
 
@@ -77,7 +78,7 @@ theorem integerDivides_realizable (width : MvPolynomial Parameter ℕ) : (intege
     exact Int.dvd_iff_emod_eq_zero.symm
 
 /-- Test divisibility for independently bounded signed integers. -/
-noncomputable def integerDividesAtWidths (divisorWidth valueWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+private noncomputable def implementation (divisorWidth valueWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (integerDivides (divisorWidth + valueWidth)).onResults
     (fun choice => if choice then EncodedDomain.binaryIntegers valueWidth else EncodedDomain.binaryIntegers divisorWidth)
     (fun _ _ => True)
@@ -88,8 +89,8 @@ noncomputable def integerDividesAtWidths (divisorWidth valueWidth : MvPolynomial
           ⟨fun _ => arguments.val true, trivial⟩) (by intros; trivial)
 
 /-- Widening both operands preserves their mathematical values and reuses divisibility. -/
-theorem integerDividesAtWidths_realizable (divisorWidth valueWidth : MvPolynomial Parameter ℕ) :
-    (integerDividesAtWidths divisorWidth valueWidth).Realizable := by
+private theorem implementation_realizable (divisorWidth valueWidth : MvPolynomial Parameter ℕ) :
+    (implementation divisorWidth valueWidth).Realizable := by
   apply (integerDivides_realizable (divisorWidth + valueWidth)).onResults _ _ _ (by intros; trivial)
   intro choice
   cases choice
@@ -99,5 +100,29 @@ theorem integerDividesAtWidths_realizable (divisorWidth valueWidth : MvPolynomia
   · exact (Realizable.Internal.integerWidenTo_realizable valueWidth divisorWidth (divisorWidth + valueWidth) (by ring)).withArguments
       (fun choice => if choice then EncodedDomain.binaryIntegers valueWidth else EncodedDomain.binaryIntegers divisorWidth)
       (MultiTape.oneTape true) (by intros; rfl)
+
+private theorem implementation_correct (divisorWidth valueWidth : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) (arguments : (implementation divisorWidth valueWidth).Arguments sizes) :
+    (implementation divisorWidth valueWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+      (arguments false).val ∣ (arguments true).val := by
+  change decide ((arguments false).val ∣ (arguments true).val) = true ↔ _
+  exact decide_eq_true_iff
+
+/-- Decide divisibility of independently bounded mathematical integers. -/
+noncomputable def integerDividesAtWidths (divisorWidth valueWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  decision (fun choice => if choice then EncodedDomain.binaryIntegers valueWidth else EncodedDomain.binaryIntegers divisorWidth)
+    (fun _ _ => True) (fun _ arguments => (arguments false).val ∣ (arguments true).val)
+
+theorem integerDividesAtWidths_realizable (divisorWidth valueWidth : MvPolynomial Parameter ℕ) :
+    (integerDividesAtWidths divisorWidth valueWidth).Realizable :=
+  (implementation_realizable divisorWidth valueWidth).decision _
+    (fun sizes arguments _valid => implementation_correct divisorWidth valueWidth sizes arguments)
+
+/-- Width preparation is absent from the public divisibility contract. -/
+theorem integerDividesAtWidths_correct (divisorWidth valueWidth : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) (arguments : (integerDividesAtWidths divisorWidth valueWidth).Arguments sizes) :
+    (integerDividesAtWidths divisorWidth valueWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+      (arguments false).val ∣ (arguments true).val :=
+  decision_correct _ _ _ sizes ⟨arguments, trivial⟩
 
 end Polytime2.Computation

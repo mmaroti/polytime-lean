@@ -18,6 +18,7 @@ limitations under the License.
 import Polytime2.Machine.Basic
 import Polytime2.Computation.Basic
 import Polytime2.Computation.Realizable
+import Polytime2.Computation.Specification
 import Polytime2.Computation.Records
 import Polytime2.Computation.Variants
 import Polytime2.Examples.Records
@@ -98,6 +99,7 @@ import Polytime2.GaussJordan.Operations
 import Polytime2.Examples.GaussJordan
 import Polytime2.Examples.TM0
 import Polytime2.Examples.Computation
+import Polytime2.Examples.Specification
 import Polytime2.Encoding.EncodedDomain
 import Polytime2.Encoding.PolynomialEvaluator
 import Polytime2.Examples.PolynomialEvaluator

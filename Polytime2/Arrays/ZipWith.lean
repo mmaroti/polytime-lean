@@ -82,4 +82,28 @@ theorem arrayZipWith_realizable (context : Context → EncodedDomain.{0, 0} Para
       | inr choice => cases choice; exact entry false; exact entry true)
   exact arrayTabulate_realizable computation.inputDomains target length tabulateOperation tabulateReady
 
+/-- Lift a certified total binary computation pointwise. Argument preparation
+is proved here rather than by unfolding the scalar answer at each caller. -/
+theorem Realizable.zipWith
+    {inputs : Bool → EncodedDomain Parameter} {output : EncodedDomain Parameter}
+    {value : ∀ sizes, {arguments : ∀ name, (inputs name).Carrier sizes // True} → output.Carrier sizes}
+    (ready : (Computation.mk inputs output (fun _ _ => True) value).Realizable)
+    (length : MvPolynomial Parameter ℕ) :
+    (arrayZipWith (Empty.elim : Empty → EncodedDomain Parameter) (inputs false) (inputs true) output length
+      (fun sizes _ first second => value sizes
+        ⟨(fun choice => match choice with | false => first | true => second), trivial⟩)).Realizable := by
+  apply arrayZipWith_realizable
+  let step := arrayZipWithStep (Empty.elim : Empty → EncodedDomain Parameter)
+    (inputs false) (inputs true) output
+    (fun sizes _ first second => value sizes
+      ⟨(fun choice => match choice with | false => first | true => second), trivial⟩)
+  apply ready.onResults step.inputDomains step.precondition
+    (fun choice _ arguments => match choice with
+      | false => arguments.val (.inr false)
+      | true => arguments.val (.inr true)) (by intros; trivial)
+  intro choice
+  cases choice
+  · exact Realizable.argument step.inputDomains (.inr false) step.precondition
+  · exact Realizable.argument step.inputDomains (.inr true) step.precondition
+
 end Polytime2.Computation

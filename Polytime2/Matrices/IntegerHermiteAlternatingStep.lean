@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerIsDiagonal
 import Polytime2.Matrices.HermiteRowsController
 import Polytime2.Matrices.HermiteAlternatingBounds
@@ -145,20 +146,20 @@ private theorem finish_realizable (dimension width : MvPolynomial Parameter ℕ)
   split_ifs <;> rfl
 
 /-- One conditional row/column pair, retaining both actual bases. -/
-noncomputable def integerHermiteAlternatingStepRaw (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (integerHermiteRows dimension dimension width).followedBy (finish dimension width) rfl (by intros; trivial)
 
 /-- Both sweeps, the early stopping test, and full result construction are realized. -/
-theorem integerHermiteAlternatingStepRaw_realizable (dimension width : MvPolynomial Parameter ℕ) :
-    (integerHermiteAlternatingStepRaw dimension width).Realizable :=
+private theorem implementation_realizable (dimension width : MvPolynomial Parameter ℕ) :
+    (implementation dimension width).Realizable :=
   (integerHermiteRows_realizable dimension dimension width).followedBy (finish_realizable dimension width) rfl (by intros; trivial)
 
 /-- The conditional runtime pair is exactly the mathematical alternating step. -/
-theorem integerHermiteAlternatingStepRaw_correct (dimension width : MvPolynomial Parameter ℕ)
+private theorem implementation_correct (dimension width : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteAlternatingStepRaw dimension width).Arguments sizes //
-      (integerHermiteAlternatingStepRaw dimension width).precondition sizes arguments}) :
-    let result := (integerHermiteAlternatingStepRaw dimension width).compute sizes arguments
+    (arguments : {arguments : (implementation dimension width).Arguments sizes //
+      (implementation dimension width).precondition sizes arguments}) :
+    let result := (implementation dimension width).compute sizes arguments
     (result.1.val, result.2.1.val, result.2.2.val) =
       IntegerMatrix.hermiteAlternatingStep (arguments.val ()).val := by
   classical
@@ -188,5 +189,33 @@ theorem integerHermiteAlternatingStepRaw_correct (dimension width : MvPolynomial
     dsimp only at secondCorrect
     rw [← secondCorrect]
     rfl
+
+/-- The ordinary mathematical result, with traversal and codec preparation
+kept behind the computation boundary. -/
+noncomputable def integerHermiteAlternatingStepRaw (dimension width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => integerMatrices dimension dimension width) (resultDomain dimension width)
+    (fun _ _ => True) (fun _ result => (result.1.val, result.2.1.val, result.2.2.val))
+    (fun sizes arguments => IntegerMatrix.hermiteAlternatingStep (arguments.val ()).val)
+    (fun sizes arguments => ⟨(implementation dimension width).compute sizes arguments,
+      implementation_correct dimension width sizes arguments⟩)
+
+theorem integerHermiteAlternatingStepRaw_realizable (dimension width : MvPolynomial Parameter ℕ) :
+    (integerHermiteAlternatingStepRaw dimension width).Realizable := by
+  apply (implementation_realizable dimension width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap (Subtype.val_injective.prodMap Subtype.val_injective)
+  · intro sizes arguments valid
+    exact implementation_correct dimension width sizes ⟨arguments, valid⟩
+
+/-- Observe the mathematical result without unfolding its finite traversal. -/
+theorem integerHermiteAlternatingStepRaw_correct (dimension width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteAlternatingStepRaw dimension width).Arguments sizes //
+      (integerHermiteAlternatingStepRaw dimension width).precondition sizes arguments}) :
+    let result := (integerHermiteAlternatingStepRaw dimension width).compute sizes arguments
+    (result.1.val, result.2.1.val, result.2.2.val) =
+      IntegerMatrix.hermiteAlternatingStep (arguments.val ()).val := by
+  exact specificationBy_correct _ (integerHermiteAlternatingStepRaw dimension width).outputDomain _
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.val)) _ _ sizes arguments
 
 end Polytime2.Computation

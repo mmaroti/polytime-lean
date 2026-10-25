@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerHermiteStage
 import Polytime2.Arrays.PrefixFlags
 import Polytime2.Arrays.ZipWith
@@ -51,7 +52,7 @@ private def allowed (rows columns width length : MvPolynomial Parameter ℕ) (si
     arguments 1 ∉ (List.ofFn (arguments 5)).take (arguments 6).val
 
 /-- Normalize only the selected prefix, with no admissibility requirement on the inactive suffix. -/
-noncomputable def integerHermiteRowStagePrefix (rows columns width length : MvPolynomial Parameter ℕ) :
+private noncomputable def implementation (rows columns width length : MvPolynomial Parameter ℕ) :
     Computation Parameter (Fin 7) where
   inputDomains := inputs rows columns width length
   outputDomain := hermiteColumnState rows columns (hermiteStageWorkspace width)
@@ -86,8 +87,8 @@ private theorem elimination_realizable (rows columns width length : MvPolynomial
     (allowed rows columns width length) (fun _ _ valid => ⟨valid.1, valid.2.1⟩)
 
 private noncomputable def selectedTokens (rows columns width length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStagePrefix rows columns width length).Arguments sizes //
-      (integerHermiteRowStagePrefix rows columns width length).precondition sizes arguments}) :
+    (arguments : {arguments : (implementation rows columns width length).Arguments sizes //
+      (implementation rows columns width length).precondition sizes arguments}) :
     ((booleans.prod (boundedIndex rows)).arrayOfLength length).Carrier sizes :=
   fun index => (decide (index.val < (arguments.val 6).val), arguments.val 5 index)
 
@@ -119,8 +120,8 @@ private theorem selectedTokens_realizable (rows columns width length : MvPolynom
 
 private noncomputable def controllerArguments (rows columns width length : MvPolynomial Parameter ℕ)
     (name : Fin 3 ⊕ Bool) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStagePrefix rows columns width length).Arguments sizes //
-      (integerHermiteRowStagePrefix rows columns width length).precondition sizes arguments}) :
+    (arguments : {arguments : (implementation rows columns width length).Arguments sizes //
+      (implementation rows columns width length).precondition sizes arguments}) :
     ((hermiteStagePrefixController rows columns width length).inputDomains name).Carrier sizes :=
   match name with
   | .inl 0 => arguments.val 0
@@ -130,15 +131,15 @@ private noncomputable def controllerArguments (rows columns width length : MvPol
   | .inr true => selectedTokens rows columns width length sizes arguments
 
 private theorem countBound (rows columns width length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : (integerHermiteRowStagePrefix rows columns width length).Arguments sizes) :
+    (arguments : (implementation rows columns width length).Arguments sizes) :
     (arguments 6).val ≤ MvPolynomial.eval sizes length := by
   have bounded := (arguments 6).isLt
   simp only [map_add, map_one] at bounded
   omega
 
 private theorem controller_permitted (rows columns width length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRowStagePrefix rows columns width length).Arguments sizes //
-      (integerHermiteRowStagePrefix rows columns width length).precondition sizes arguments}) :
+    (arguments : {arguments : (implementation rows columns width length).Arguments sizes //
+      (implementation rows columns width length).precondition sizes arguments}) :
     (hermiteStagePrefixController rows columns width length).precondition sizes
       (fun name => controllerArguments rows columns width length name sizes arguments) := by
   refine ⟨(arguments.val 6).val, ?_, (arguments.val 3).val, (arguments.val 4).val, ?_⟩
@@ -147,9 +148,9 @@ private theorem controller_permitted (rows columns width length : MvPolynomial P
   · exact ⟨arguments.property.1, arguments.property.2.1, (arguments.val 3).property, (arguments.val 4).property, rfl⟩
 
 /-- All comparisons, token preparation, skipped states, and stage updates are certified by composition. -/
-theorem integerHermiteRowStagePrefix_realizable (rows columns width length : MvPolynomial Parameter ℕ) :
-    (integerHermiteRowStagePrefix rows columns width length).Realizable := by
-  let computation := integerHermiteRowStagePrefix rows columns width length
+private theorem implementation_realizable (rows columns width length : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width length).Realizable := by
+  let computation := implementation rows columns width length
   have complete := (hermiteStagePrefixController_realizable rows columns width length).onResults
     computation.inputDomains computation.precondition (controllerArguments rows columns width length)
     (controller_permitted rows columns width length) (by
@@ -173,6 +174,37 @@ theorem integerHermiteRowStagePrefix_realizable (rows columns width length : MvP
   exact Prod.ext (Subtype.ext (congrArg Prod.fst raw)) (Subtype.ext (congrArg Prod.snd raw))
 
 /-- The returned matrices equal the mathematical stage on precisely the selected prefix. -/
+private theorem implementation_correct (rows columns width length : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns width length).Arguments sizes //
+      (implementation rows columns width length).precondition sizes arguments}) :
+    let result := (implementation rows columns width length).compute sizes arguments
+    (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStage
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (arguments.val 2)
+      ((List.ofFn (arguments.val 5)).take (arguments.val 6).val) (arguments.val 3).val (arguments.val 4).val := rfl
+/-- The mathematical stage and its actual basis, at the derived workspace.
+Only the mathematical row-selection and pivot conditions are required. -/
+noncomputable def integerHermiteRowStagePrefix (rows columns width length : MvPolynomial Parameter ℕ) :
+    Computation Parameter (Fin 7) :=
+  specificationBy (inputs rows columns width length) (hermiteColumnState rows columns (hermiteStageWorkspace width))
+    (allowed rows columns width length) (fun _ result => (result.1.val, result.2.val))
+    (fun sizes arguments => IntegerMatrix.hermiteRowStage
+      (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
+      (arguments.val 0) (arguments.val 1) (arguments.val 2) ((List.ofFn (arguments.val 5)).take (arguments.val 6).val)
+      (arguments.val 3).val (arguments.val 4).val)
+    (fun sizes arguments => ⟨(implementation rows columns width length).compute sizes arguments,
+      implementation_correct rows columns width length sizes arguments⟩)
+
+theorem integerHermiteRowStagePrefix_realizable (rows columns width length : MvPolynomial Parameter ℕ) :
+    (integerHermiteRowStagePrefix rows columns width length).Realizable := by
+  apply (implementation_realizable rows columns width length).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap Subtype.val_injective
+  · intro sizes arguments valid
+    exact implementation_correct rows columns width length sizes ⟨arguments, valid⟩
+
+/-- Observe the mathematical stage without unfolding its bounded construction. -/
 theorem integerHermiteRowStagePrefix_correct (rows columns width length : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ)
     (arguments : {arguments : (integerHermiteRowStagePrefix rows columns width length).Arguments sizes //
@@ -181,7 +213,10 @@ theorem integerHermiteRowStagePrefix_correct (rows columns width length : MvPoly
     (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStage
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 2)
-      ((List.ofFn (arguments.val 5)).take (arguments.val 6).val) (arguments.val 3).val (arguments.val 4).val := rfl
+      ((List.ofFn (arguments.val 5)).take (arguments.val 6).val) (arguments.val 3).val (arguments.val 4).val := by
+  exact specificationBy_correct _ (integerHermiteRowStagePrefix rows columns width length).outputDomain _
+    (fun _ result => (result.1.val, result.2.val)) _ _ sizes arguments
+
 
 end Polytime2.Computation
 

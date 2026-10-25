@@ -20,6 +20,7 @@ import Polytime2.Matrices.IntegerDiagonalFeasible
 import Polytime2.Matrices.IntegerDiagonalSolution
 import Polytime2.Matrices.IntegerMulVec
 import Polytime2.Matrices.IntegerQuotientCoordinates
+import Polytime2.Computation.Specification
 
 /-! # Integer linear-system feasibility
 
@@ -54,7 +55,6 @@ private theorem smith_realizable (rows columns matrixWidth targetWidth : MvPolyn
   cases singleton
   exact Realizable.argument _ false _
 
-set_option maxHeartbeats 4000000 in
 private theorem smith_isSmithForm (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ) (arguments : (smith rows columns matrixWidth targetWidth).Arguments sizes) :
     let result := (smith rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩
@@ -81,7 +81,7 @@ private theorem transformed_realizable (rows columns matrixWidth targetWidth : M
   · exact Realizable.argument _ true _
 
 /-- Decide whether an arbitrary rectangular integer system has an integer solution. -/
-noncomputable def integerSystemFeasible
+private noncomputable def feasibleImplementation
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (integerDiagonalFeasible rows columns (smithReductionDiagonalWidth rows columns matrixWidth)
     (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth)).onResults
@@ -92,9 +92,9 @@ noncomputable def integerSystemFeasible
     (by intros; trivial)
 
 /-- Smith reduction, target transport, and diagonal divisibility compose polynomially. -/
-theorem integerSystemFeasible_realizable
+private theorem feasibleImplementation_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
-    (integerSystemFeasible rows columns matrixWidth targetWidth).Realizable := by
+    (feasibleImplementation rows columns matrixWidth targetWidth).Realizable := by
   apply (integerDiagonalFeasible_realizable rows columns (smithReductionDiagonalWidth rows columns matrixWidth)
     (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth)).onResults
     (inputs rows columns matrixWidth targetWidth) (fun _ _ => True) _ (by intros; trivial)
@@ -103,12 +103,11 @@ theorem integerSystemFeasible_realizable
   · exact (((smith_realizable rows columns matrixWidth targetWidth).snd).fst)
   · exact transformed_realizable rows columns matrixWidth targetWidth
 
-set_option maxHeartbeats 4000000 in
 /-- The returned Boolean has the ordinary existential integer-system specification. -/
-theorem integerSystemFeasible_correct
+private theorem feasibleImplementation_correct
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : (integerSystemFeasible rows columns matrixWidth targetWidth).Arguments sizes) :
-    (integerSystemFeasible rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+    (arguments : (feasibleImplementation rows columns matrixWidth targetWidth).Arguments sizes) :
+    (feasibleImplementation rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
       ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val := by
   let result := (smith rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩
   have form := smith_isSmithForm rows columns matrixWidth targetWidth sizes arguments
@@ -122,6 +121,27 @@ theorem integerSystemFeasible_correct
   have equivalent := IntegerMatrix.feasible_iff_transformed (arguments false).val result.2.1.val
     result.2.2.1.val result.2.2.2.val form.1 form.2.1 form.2.2.1 (fun row => (arguments true row).val)
   exact tested.trans equivalent.symm
+
+/-- Decide the ordinary mathematical integer-image predicate. -/
+noncomputable def integerSystemFeasible
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  decision (inputs rows columns matrixWidth targetWidth) (fun _ _ => True)
+    (fun _ arguments => ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val)
+
+/-- The Smith-based implementation certifies the mathematical decision. -/
+theorem integerSystemFeasible_realizable
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
+    (integerSystemFeasible rows columns matrixWidth targetWidth).Realizable :=
+  (feasibleImplementation_realizable rows columns matrixWidth targetWidth).decision _
+    (fun sizes arguments _valid => feasibleImplementation_correct rows columns matrixWidth targetWidth sizes arguments)
+
+/-- The result is true exactly for targets in the ordinary integer image. -/
+theorem integerSystemFeasible_correct
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerSystemFeasible rows columns matrixWidth targetWidth).Arguments sizes) :
+    (integerSystemFeasible rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ = true ↔
+      ∃ values, (arguments false).val.mulVec values = fun row => (arguments true row).val :=
+  decision_correct _ _ _ sizes ⟨arguments, trivial⟩
 
 private noncomputable def coordinates (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :=
   (integerDiagonalSolution rows columns (smithReductionDiagonalWidth rows columns matrixWidth)
@@ -148,7 +168,7 @@ noncomputable def integerSystemWitnessWidth (rows columns matrixWidth targetWidt
       (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth))
 
 /-- Recover an original-coordinate candidate, which solves the system whenever it is feasible. -/
-noncomputable def integerSystemWitness
+private noncomputable def witnessImplementation
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (integerMatrixMulVec columns columns (smithReductionRightWidth rows columns matrixWidth)
     (smithReductionDiagonalWidth rows columns matrixWidth +
@@ -159,9 +179,9 @@ noncomputable def integerSystemWitness
       | true => (coordinates rows columns matrixWidth targetWidth).compute sizes arguments) (by intros; trivial)
 
 /-- Coordinate division and multiplication by the actual right basis are realized. -/
-theorem integerSystemWitness_realizable
+private theorem witnessImplementation_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
-    (integerSystemWitness rows columns matrixWidth targetWidth).Realizable := by
+    (witnessImplementation rows columns matrixWidth targetWidth).Realizable := by
   apply (integerMatrixMulVec_realizable columns columns (smithReductionRightWidth rows columns matrixWidth)
     (smithReductionDiagonalWidth rows columns matrixWidth +
       (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth))).onResults
@@ -171,7 +191,42 @@ theorem integerSystemWitness_realizable
   · exact ((((smith_realizable rows columns matrixWidth targetWidth).snd).snd).snd)
   · exact coordinates_realizable rows columns matrixWidth targetWidth
 
-set_option maxHeartbeats 4000000 in
+/-- The deterministic witness is the right Smith basis applied to the ordinary
+coordinate quotients. Feasibility is needed only for its solution contract. -/
+noncomputable def integerSystemWitness
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  specificationBy (inputs rows columns matrixWidth targetWidth)
+    ((binaryIntegers (integerSystemWitnessWidth rows columns matrixWidth targetWidth)).arrayOfLength columns)
+    (fun _ _ => True) (fun _ result column => (result column).val)
+    (fun sizes arguments =>
+      let result := (integerSmithReduction rows columns matrixWidth).compute sizes
+        ⟨fun _ => arguments.val false, trivial⟩
+      result.2.2.2.val.mulVec (IntegerMatrix.diagonalQuotientSolution result.2.1.val
+        (result.2.2.1.val.mulVec (fun row => (arguments.val true row).val))))
+    (fun sizes arguments => ⟨(witnessImplementation rows columns matrixWidth targetWidth).compute sizes arguments, rfl⟩)
+
+theorem integerSystemWitness_realizable
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
+    (integerSystemWitness rows columns matrixWidth targetWidth).Realizable := by
+  apply (witnessImplementation_realizable rows columns matrixWidth targetWidth).specificationBy
+  · intro sizes
+    exact Function.Injective.piMap (fun _ => Subtype.val_injective)
+  · intros
+    rfl
+
+/-- Observe the integer witness without exposing coordinate preparation or widths. -/
+theorem integerSystemWitness_value
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerSystemWitness rows columns matrixWidth targetWidth).Arguments sizes) :
+    let result := (integerSmithReduction rows columns matrixWidth).compute sizes
+      ⟨fun _ => arguments false, trivial⟩
+    (fun column => ((integerSystemWitness rows columns matrixWidth targetWidth).compute sizes
+      ⟨arguments, trivial⟩ column).val) =
+      result.2.2.2.val.mulVec (IntegerMatrix.diagonalQuotientSolution result.2.1.val
+        (result.2.2.1.val.mulVec (fun row => (arguments true row).val))) := by
+  exact specificationBy_correct _ (integerSystemWitness rows columns matrixWidth targetWidth).outputDomain _
+    (fun _ result column => (result column).val) _ _ sizes ⟨arguments, trivial⟩
+
 /-- A feasible system is solved by the computed original-coordinate witness. -/
 theorem integerSystemWitness_correct
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -187,11 +242,12 @@ theorem integerSystemWitness_correct
   have solution := IntegerMatrix.smithSolution_correct (arguments false).val result.2.1.val
     result.2.2.1.val result.2.2.2.val result.1.val form (fun row => (arguments true row).val) diagonalFeasible
   rw [← IntegerMatrix.diagonalQuotientSolution_eq result.2.1.val result.1.val form.2.2.2] at solution
+  rw [integerSystemWitness_value]
   exact solution
 
 
 /-- Return the actual torsion and free coordinates of an integer target. -/
-noncomputable def integerSystemQuotientCoordinates
+private noncomputable def quotientImplementation
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
   (integerMatrixCyclicCoordinates rows columns
     (smithReductionDiagonalWidth rows columns matrixWidth)
@@ -205,11 +261,10 @@ noncomputable def integerSystemQuotientCoordinates
       | 1 => result.2.2.1
       | 2 => arguments.val true) (by intros; trivial)
 
-set_option maxHeartbeats 4000000 in
 /-- Smith reduction and normalization of the transformed target compose. -/
-theorem integerSystemQuotientCoordinates_realizable
+private theorem quotientImplementation_realizable
     (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
-    (integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).Realizable := by
+    (quotientImplementation rows columns matrixWidth targetWidth).Realizable := by
   have payload := (smith_realizable rows columns matrixWidth targetWidth).snd
   apply (integerMatrixCyclicCoordinates_realizable rows columns
     (smithReductionDiagonalWidth rows columns matrixWidth)
@@ -221,5 +276,64 @@ theorem integerSystemQuotientCoordinates_realizable
   · exact payload.snd.fst
   · exact Realizable.argument _ true _
 
+private theorem quotientImplementation_observe
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (quotientImplementation rows columns matrixWidth targetWidth).Arguments sizes) :
+    let smith := (integerSmithReduction rows columns matrixWidth).compute sizes
+      ⟨fun _ => arguments false, trivial⟩
+    (fun row =>
+      let result := (quotientImplementation rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ row
+      (⟨result.1.val, result.2.val⟩ : (modulus : ℕ) × ZMod modulus)) =
+      (fun row =>
+        let modulus := (IntegerMatrix.rowDiagonal smith.2.1.val row).natAbs
+        ⟨modulus, (smith.2.2.1.val.mulVec (fun row => (arguments true row).val) row : ZMod modulus)⟩) := by
+  let smith := (integerSmithReduction rows columns matrixWidth).compute sizes
+    ⟨fun _ => arguments false, trivial⟩
+  exact integerMatrixCyclicCoordinates_observe rows columns
+    (smithReductionDiagonalWidth rows columns matrixWidth)
+    (smithReductionLeftWidth rows columns matrixWidth) targetWidth sizes
+    (fun name => match name with | 0 => smith.2.1 | 1 => smith.2.2.1 | 2 => arguments true)
+
+/-- The ordinary quotient coordinates for the deterministic Smith presentation.
+Only the modulus and its actual group element enter the mathematical contract. -/
+noncomputable def integerSystemQuotientCoordinates
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  specificationBy (inputs rows columns matrixWidth targetWidth)
+    ((boundedCyclic (smithReductionDiagonalWidth rows columns matrixWidth)
+      (smithReductionDiagonalWidth rows columns matrixWidth +
+        (rows + smithReductionLeftWidth rows columns matrixWidth + targetWidth))).arrayOfLength rows)
+    (fun _ _ => True)
+    (fun _ result row => (⟨(result row).1.val, (result row).2.val⟩ : (modulus : ℕ) × ZMod modulus))
+    (fun sizes arguments row =>
+      let smith := (integerSmithReduction rows columns matrixWidth).compute sizes
+        ⟨fun _ => arguments.val false, trivial⟩
+      let modulus := (IntegerMatrix.rowDiagonal smith.2.1.val row).natAbs
+      ⟨modulus, (smith.2.2.1.val.mulVec (fun row => (arguments.val true row).val) row : ZMod modulus)⟩)
+    (fun sizes arguments => ⟨(quotientImplementation rows columns matrixWidth targetWidth).compute sizes arguments,
+      quotientImplementation_observe rows columns matrixWidth targetWidth sizes arguments.val⟩)
+
+theorem integerSystemQuotientCoordinates_realizable
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) :
+    (integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).Realizable := by
+  apply (quotientImplementation_realizable rows columns matrixWidth targetWidth).specificationBy
+  · intro sizes
+    exact Function.Injective.piMap (fun _ => Fin.val_injective.sigma_map (fun _ => Subtype.val_injective))
+  · intro sizes arguments valid
+    exact quotientImplementation_observe rows columns matrixWidth targetWidth sizes arguments
+
+/-- Observe the whole mathematical quotient map without unpacking its preparation. -/
+theorem integerSystemQuotientCoordinates_observe
+    (rows columns matrixWidth targetWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).Arguments sizes) :
+    let smith := (integerSmithReduction rows columns matrixWidth).compute sizes
+      ⟨fun _ => arguments false, trivial⟩
+    (fun row =>
+      let result := (integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).compute sizes ⟨arguments, trivial⟩ row
+      (⟨result.1.val, result.2.val⟩ : (modulus : ℕ) × ZMod modulus)) =
+      (fun row =>
+        let modulus := (IntegerMatrix.rowDiagonal smith.2.1.val row).natAbs
+        ⟨modulus, (smith.2.2.1.val.mulVec (fun row => (arguments true row).val) row : ZMod modulus)⟩) := by
+  exact specificationBy_correct _ (integerSystemQuotientCoordinates rows columns matrixWidth targetWidth).outputDomain _
+    (fun _ result row => (⟨(result row).1.val, (result row).2.val⟩ : (modulus : ℕ) × ZMod modulus)) _ _ sizes ⟨arguments, trivial⟩
 
 end Polytime2.Computation

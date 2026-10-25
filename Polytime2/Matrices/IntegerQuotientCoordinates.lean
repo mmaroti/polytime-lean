@@ -91,7 +91,7 @@ private theorem transported_realizable (rows columns diagonalWidth basisWidth va
   · exact Realizable.argument _ (2 : Fin 3) _
 
 /-- Apply a supplied left matrix and reduce to the actual diagonal cyclic/free coordinates. -/
-noncomputable def integerMatrixCyclicCoordinates
+private noncomputable def implementation
     (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) :=
   (integerCyclicCoordinates rows diagonalWidth (rows + basisWidth + valueWidth)).onResults
     (inputs rows columns diagonalWidth basisWidth valueWidth) (fun _ _ => True)
@@ -100,9 +100,9 @@ noncomputable def integerMatrixCyclicCoordinates
       | true => (transported rows columns diagonalWidth basisWidth valueWidth).compute sizes arguments) (by intros; trivial)
 
 /-- Matrix-vector multiplication, diagonal reads, and coordinate normalization compose. -/
-theorem integerMatrixCyclicCoordinates_realizable
+private theorem implementation_realizable
     (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) :
-    (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).Realizable := by
+    (implementation rows columns diagonalWidth basisWidth valueWidth).Realizable := by
   apply (integerCyclicCoordinates_realizable rows diagonalWidth (rows + basisWidth + valueWidth)).onResults
     (inputs rows columns diagonalWidth basisWidth valueWidth) (fun _ _ => True) _ (by intros; trivial)
   intro choice
@@ -111,12 +111,90 @@ theorem integerMatrixCyclicCoordinates_realizable
   · exact transported_realizable rows columns diagonalWidth basisWidth valueWidth
 
 /-- Every reported modulus is exactly the supplied diagonal magnitude. -/
+private theorem implementation_modulus
+    (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (implementation rows columns diagonalWidth basisWidth valueWidth).Arguments sizes)
+    (row : Fin (MvPolynomial.eval sizes rows)) :
+    ((implementation rows columns diagonalWidth basisWidth valueWidth).compute sizes
+      ⟨arguments, trivial⟩ row).1.val = (IntegerMatrix.rowDiagonal (arguments 0).val row).natAbs := by
+  exact congrArg Fin.val (integerCyclicCoordinates_modulus rows diagonalWidth
+    (rows + basisWidth + valueWidth) sizes
+    (fun choice => match choice with
+      | false => (moduli rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩
+      | true => (transported rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩) row)
+
+/-- Every actual coordinate is the image of the transformed target entry. -/
+private theorem implementation_value
+    (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (implementation rows columns diagonalWidth basisWidth valueWidth).Arguments sizes)
+    (row : Fin (MvPolynomial.eval sizes rows)) :
+    let result := (implementation rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩ row
+    result.2.val = ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod result.1.val) :=
+  integerCyclicCoordinates_correct rows diagonalWidth (rows + basisWidth + valueWidth) sizes
+    (fun choice => match choice with
+      | false => (moduli rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩
+      | true => (transported rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩) row
+
+private theorem implementation_observe
+    (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (implementation rows columns diagonalWidth basisWidth valueWidth).Arguments sizes) :
+    (fun row =>
+      let result := (implementation rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩ row
+      (⟨result.1.val, result.2.val⟩ : (modulus : ℕ) × ZMod modulus)) =
+      (fun row =>
+        let modulus := (IntegerMatrix.rowDiagonal (arguments 0).val row).natAbs
+        ⟨modulus, ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod modulus)⟩) := by
+  funext row
+  exact (congrArg (Sigma.mk _) (implementation_value rows columns diagonalWidth basisWidth valueWidth sizes arguments row)).trans
+    (congrArg (fun modulus : ℕ => (⟨modulus,
+      ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod modulus)⟩ : (modulus : ℕ) × ZMod modulus))
+      (implementation_modulus rows columns diagonalWidth basisWidth valueWidth sizes arguments row))
+
+/-- The actual cyclic/free coordinate map for the supplied diagonal and left
+matrix. The mathematical observation forgets all storage bounds. -/
+noncomputable def integerMatrixCyclicCoordinates
+    (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 3) :=
+  specificationBy (inputs rows columns diagonalWidth basisWidth valueWidth)
+    ((boundedCyclic diagonalWidth (diagonalWidth + (rows + basisWidth + valueWidth))).arrayOfLength rows)
+    (fun _ _ => True)
+    (fun _ result row => (⟨(result row).1.val, (result row).2.val⟩ : (modulus : ℕ) × ZMod modulus))
+    (fun _ arguments row =>
+      let modulus := (IntegerMatrix.rowDiagonal (arguments.val 0).val row).natAbs
+      ⟨modulus, ((arguments.val 1).val.mulVec (fun row => (arguments.val 2 row).val) row : ZMod modulus)⟩)
+    (fun sizes arguments => ⟨(implementation rows columns diagonalWidth basisWidth valueWidth).compute sizes arguments,
+      implementation_observe rows columns diagonalWidth basisWidth valueWidth sizes arguments.val⟩)
+
+theorem integerMatrixCyclicCoordinates_realizable
+    (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) :
+    (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).Realizable := by
+  apply (implementation_realizable rows columns diagonalWidth basisWidth valueWidth).specificationBy
+  · intro sizes
+    exact Function.Injective.piMap (fun _ => Fin.val_injective.sigma_map (fun _ => Subtype.val_injective))
+  · intro sizes arguments valid
+    exact implementation_observe rows columns diagonalWidth basisWidth valueWidth sizes arguments
+
+/-- All moduli and group elements agree with the ordinary mathematical map. -/
+theorem integerMatrixCyclicCoordinates_observe
+    (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).Arguments sizes) :
+    (fun row =>
+      let result := (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩ row
+      (⟨result.1.val, result.2.val⟩ : (modulus : ℕ) × ZMod modulus)) =
+      (fun row =>
+        let modulus := (IntegerMatrix.rowDiagonal (arguments 0).val row).natAbs
+        ⟨modulus, ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod modulus)⟩) := by
+  exact specificationBy_correct _ (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).outputDomain _
+    (fun _ result row => (⟨(result row).1.val, (result row).2.val⟩ : (modulus : ℕ) × ZMod modulus)) _ _ sizes ⟨arguments, trivial⟩
+
+/-- Every reported modulus is exactly the supplied diagonal magnitude. -/
 theorem integerMatrixCyclicCoordinates_modulus
     (rows columns diagonalWidth basisWidth valueWidth : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).Arguments sizes)
     (row : Fin (MvPolynomial.eval sizes rows)) :
     ((integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).compute sizes
-      ⟨arguments, trivial⟩ row).1.val = (IntegerMatrix.rowDiagonal (arguments 0).val row).natAbs := rfl
+      ⟨arguments, trivial⟩ row).1.val = (IntegerMatrix.rowDiagonal (arguments 0).val row).natAbs :=
+  congrArg Sigma.fst (congrFun
+    (integerMatrixCyclicCoordinates_observe rows columns diagonalWidth basisWidth valueWidth sizes arguments) row)
 
 /-- Every actual coordinate is the image of the transformed target entry. -/
 theorem integerMatrixCyclicCoordinates_value
@@ -124,11 +202,11 @@ theorem integerMatrixCyclicCoordinates_value
     (arguments : (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).Arguments sizes)
     (row : Fin (MvPolynomial.eval sizes rows)) :
     let result := (integerMatrixCyclicCoordinates rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩ row
-    result.2.val = ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod result.1.val) :=
-  integerCyclicCoordinates_correct rows diagonalWidth (rows + basisWidth + valueWidth) sizes
-    (fun choice => match choice with
-      | false => (moduli rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩
-      | true => (transported rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩) row
+    result.2.val = ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod result.1.val) := by
+  have observed := congrFun
+    (integerMatrixCyclicCoordinates_observe rows columns diagonalWidth basisWidth valueWidth sizes arguments) row
+  exact (congrArg (fun pair : (modulus : ℕ) × ZMod modulus => pair.2 =
+    ((arguments 1).val.mulVec (fun row => (arguments 2 row).val) row : ZMod pair.1)) observed).mpr rfl
 
 /-- Vanishing is precisely divisibility by the zero-extended diagonal. -/
 theorem integerMatrixCyclicCoordinates_zero_iff
@@ -138,15 +216,12 @@ theorem integerMatrixCyclicCoordinates_zero_iff
       ⟨arguments, trivial⟩ row).2.val = 0) ↔
       ∀ row, IntegerMatrix.rowDiagonal (arguments 0).val row ∣
         (arguments 1).val.mulVec (fun row => (arguments 2 row).val) row := by
-  have zero := integerCyclicCoordinates_zero_iff rows diagonalWidth (rows + basisWidth + valueWidth) sizes
-    (fun choice => match choice with
-      | false => (moduli rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩
-      | true => (transported rows columns diagonalWidth basisWidth valueWidth).compute sizes ⟨arguments, trivial⟩)
-  change (∀ row, _) ↔ _
-  apply zero.trans
-  change (∀ row, ((IntegerMatrix.rowDiagonal (arguments 0).val row).natAbs : ℤ) ∣
-    (arguments 1).val.mulVec (fun row => (arguments 2 row).val) row) ↔ _
+  apply forall_congr'
+  intro row
+  rw [integerMatrixCyclicCoordinates_value]
+  rw [ZMod.intCast_zmod_eq_zero_iff_dvd, integerMatrixCyclicCoordinates_modulus]
   simp only [Int.natCast_dvd, Int.natAbs_dvd_natAbs]
+
 
 /-- A supplied Smith diagonal gives exactly the mathematical torsion/free coordinate map. -/
 theorem integerMatrixCyclicCoordinates_correct

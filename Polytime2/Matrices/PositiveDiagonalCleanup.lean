@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.DiagonalCleanupController
 import Polytime2.Matrices.Identity
 import Polytime2.Matrices.IntegerOperations
@@ -142,18 +143,59 @@ private theorem initialState_valid (length width : MvPolynomial Parameter ℕ) (
     by_cases same : row = column <;> simp [Matrix.one_apply, same]
 
 /-- Normalize a positive natural diagonal and return its actual unimodular bases. -/
-noncomputable def positiveDiagonalCleanup (length width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (length width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (initialState length width).followedBy
     (diagonalCleanupController length (positiveDiagonalProductWidth length width) (positiveDiagonalBudget length width) 1) rfl
     (fun sizes arguments valid => initialState_valid length width sizes ⟨arguments, valid⟩)
 
-theorem positiveDiagonalCleanup_realizable (length width : MvPolynomial Parameter ℕ) :
-    (positiveDiagonalCleanup length width).Realizable :=
+private theorem implementation_realizable (length width : MvPolynomial Parameter ℕ) :
+    (implementation length width).Realizable :=
   (initialState_realizable length width).followedBy
     (diagonalCleanupController_realizable length (positiveDiagonalProductWidth length width) (positiveDiagonalBudget length width) 1) rfl
     (fun sizes arguments valid => initialState_valid length width sizes ⟨arguments, valid⟩)
 
 /-- The public computation runs exactly the polynomially bounded mathematical cleanup. -/
+private theorem implementation_correct (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation length width).Arguments sizes //
+      (implementation length width).precondition sizes arguments}) :
+    let result := (implementation length width).compute sizes arguments
+    ((fun index => (result.1 index).val), (result.2.1.val, result.2.2.val)) =
+      IntegerMatrix.diagonalCleanupWithBases (MvPolynomial.eval sizes width * MvPolynomial.eval sizes length *
+        MvPolynomial.eval sizes length + 1) (fun index => (arguments.val () index).val) 1 1 := by
+  have computed := diagonalCleanupController_correct length (positiveDiagonalProductWidth length width) (positiveDiagonalBudget length width) 1 sizes
+    ⟨(fun _ => (initialState length width).compute sizes arguments), initialState_valid length width sizes arguments⟩
+  change ((fun index => (((implementation length width).compute sizes arguments).1 index).val), _) = _ at computed
+  rw [initialState_entries] at computed
+  change ((fun index => (((implementation length width).compute sizes arguments).1 index).val),
+    (((implementation length width).compute sizes arguments).2.1.val,
+     ((implementation length width).compute sizes arguments).2.2.val)) =
+    IntegerMatrix.diagonalCleanupWithBases (MvPolynomial.eval sizes (positiveDiagonalBudget length width))
+      (fun index => (arguments.val () index).val) 1 1 at computed
+  simpa only [positiveDiagonalBudget, map_add, map_mul, map_one] using computed
+
+/-- Mathematical positive-diagonal normalization at the input-derived budget.
+Canonical storage and basis bounds remain inside the certification. -/
+noncomputable def positiveDiagonalCleanup (length width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => (binaryNaturalsOfWidth width).arrayOfLength length)
+    (diagonalCleanupState length (positiveDiagonalProductWidth length width) (positiveDiagonalBasisWidth length width))
+    (fun _ arguments => ∀ index, 0 < (arguments () index).val)
+    (fun _ result => ((fun index => (result.1 index).val), (result.2.1.val, result.2.2.val)))
+    (fun sizes arguments => IntegerMatrix.diagonalCleanupWithBases
+      (MvPolynomial.eval sizes width * MvPolynomial.eval sizes length * MvPolynomial.eval sizes length + 1)
+      (fun index => (arguments.val () index).val) 1 1)
+    (fun sizes arguments => ⟨(implementation length width).compute sizes arguments,
+      implementation_correct length width sizes arguments⟩)
+
+theorem positiveDiagonalCleanup_realizable (length width : MvPolynomial Parameter ℕ) :
+    (positiveDiagonalCleanup length width).Realizable := by
+  apply (implementation_realizable length width).specificationBy
+  · intro sizes
+    exact (Function.Injective.piMap (fun _ => Fin.val_injective)).prodMap
+      (Subtype.val_injective.prodMap Subtype.val_injective)
+  · intro sizes arguments valid
+    exact implementation_correct length width sizes ⟨arguments, valid⟩
+
+/-- The mathematical answer, without widening, initialization, or controller wiring. -/
 theorem positiveDiagonalCleanup_correct (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : {arguments : (positiveDiagonalCleanup length width).Arguments sizes //
       (positiveDiagonalCleanup length width).precondition sizes arguments}) :
@@ -161,16 +203,8 @@ theorem positiveDiagonalCleanup_correct (length width : MvPolynomial Parameter �
     ((fun index => (result.1 index).val), (result.2.1.val, result.2.2.val)) =
       IntegerMatrix.diagonalCleanupWithBases (MvPolynomial.eval sizes width * MvPolynomial.eval sizes length *
         MvPolynomial.eval sizes length + 1) (fun index => (arguments.val () index).val) 1 1 := by
-  have computed := diagonalCleanupController_correct length (positiveDiagonalProductWidth length width) (positiveDiagonalBudget length width) 1 sizes
-    ⟨(fun _ => (initialState length width).compute sizes arguments), initialState_valid length width sizes arguments⟩
-  change ((fun index => (((positiveDiagonalCleanup length width).compute sizes arguments).1 index).val), _) = _ at computed
-  rw [initialState_entries] at computed
-  change ((fun index => (((positiveDiagonalCleanup length width).compute sizes arguments).1 index).val),
-    (((positiveDiagonalCleanup length width).compute sizes arguments).2.1.val,
-     ((positiveDiagonalCleanup length width).compute sizes arguments).2.2.val)) =
-    IntegerMatrix.diagonalCleanupWithBases (MvPolynomial.eval sizes (positiveDiagonalBudget length width))
-      (fun index => (arguments.val () index).val) 1 1 at computed
-  simpa only [positiveDiagonalBudget, map_add, map_mul, map_one] using computed
+  exact specificationBy_correct _ (positiveDiagonalCleanup length width).outputDomain _
+    (fun _ result => ((fun index => (result.1 index).val), (result.2.1.val, result.2.2.val))) _ _ sizes arguments
 
 /-- The returned active diagonal and both bases satisfy the complete square Smith contract. -/
 theorem positiveDiagonalCleanup_isSmithForm (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.HermiteRowsStep
 import Polytime2.Arrays.FoldContract
 import Polytime2.Arrays.BoundedPositions
@@ -218,7 +219,7 @@ private theorem initial_realizable (rows columns width : MvPolynomial Parameter 
 
 /-- Complete integer row normalization with actual basis and pivot embeddings.
 The original matrix bound is the only input requirement; all storage is derived. -/
-noncomputable def integerHermiteRows (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def sweepImplementation (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (hermiteRowsController rows columns width).onResults (fun _ => integerMatrices rows columns width) (fun _ _ => True)
     (fun name sizes arguments => match name with
       | .inl _ => arguments.val ()
@@ -226,8 +227,8 @@ noncomputable def integerHermiteRows (rows columns width : MvPolynomial Paramete
     (by intros; rfl)
 
 /-- Initial widening, identity, empty metadata, row enumeration, and the complete fold are realized. -/
-theorem integerHermiteRows_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerHermiteRows rows columns width).Realizable := by
+private theorem sweepImplementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (sweepImplementation rows columns width).Realizable := by
   apply (hermiteRowsController_realizable rows columns width).onResults
     (fun _ : Unit => integerMatrices rows columns width) (fun _ _ => True)
     (fun name sizes arguments => match name with
@@ -240,16 +241,44 @@ theorem integerHermiteRows_realizable (rows columns width : MvPolynomial Paramet
   · exact initial_realizable rows columns width
 
 /-- The public runtime sweep equals the complete mathematical row traversal. -/
-theorem integerHermiteRows_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRows rows columns width).Arguments sizes //
-      (integerHermiteRows rows columns width).precondition sizes arguments}) :
-    let result := (integerHermiteRows rows columns width).compute sizes arguments
+private theorem sweepImplementation_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (sweepImplementation rows columns width).Arguments sizes //
+      (sweepImplementation rows columns width).precondition sizes arguments}) :
+    let result := (sweepImplementation rows columns width).compute sizes arguments
     (((result.1.1.val, result.1.2.val), result.2) : IntegerMatrix.HermiteRowState
       (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns)) = IntegerMatrix.hermiteRowsSweep (arguments.val ()).val :=
   hermiteRowsController_correct rows columns width sizes
     ⟨(fun name => match name with
       | .inl _ => arguments.val ()
       | .inr _ => (initial rows columns width).compute sizes arguments), by rfl⟩
+
+/-- The complete mathematical row traversal, with its actual basis and pivots. -/
+noncomputable def integerHermiteRows (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => integerMatrices rows columns width)
+    (((integerMatrices rows columns (hermiteRowsWorkspace width rows)).prod
+      (integerMatrices rows rows (hermiteRowsWorkspace width rows))).prod (hermitePivotSelection rows columns))
+    (fun _ _ => True) (fun _ result => ((result.1.1.val, result.1.2.val), result.2))
+    (fun _ arguments => IntegerMatrix.hermiteRowsSweep (arguments.val ()).val)
+    (fun sizes arguments => ⟨(sweepImplementation rows columns width).compute sizes arguments,
+      sweepImplementation_correct rows columns width sizes arguments⟩)
+
+theorem integerHermiteRows_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerHermiteRows rows columns width).Realizable := by
+  apply (sweepImplementation_realizable rows columns width).specificationBy
+  · intro sizes
+    exact (Subtype.val_injective.prodMap Subtype.val_injective).prodMap Function.injective_id
+  · intro sizes arguments valid
+    exact sweepImplementation_correct rows columns width sizes ⟨arguments, valid⟩
+
+/-- Observe the complete mathematical traversal without expanding the controller. -/
+theorem integerHermiteRows_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteRows rows columns width).Arguments sizes //
+      (integerHermiteRows rows columns width).precondition sizes arguments}) :
+    let result := (integerHermiteRows rows columns width).compute sizes arguments
+    (((result.1.1.val, result.1.2.val), result.2) : IntegerMatrix.HermiteRowState
+      (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns)) = IntegerMatrix.hermiteRowsSweep (arguments.val ()).val := by
+  exact specificationBy_correct _ (integerHermiteRows rows columns width).outputDomain _
+    (fun _ result => ((result.1.1.val, result.1.2.val), result.2)) _ _ sizes arguments
 
 /-- Full sweep correctness includes actual presentation, unimodularity, and normalized active pivots. -/
 theorem integerHermiteRows_specification (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

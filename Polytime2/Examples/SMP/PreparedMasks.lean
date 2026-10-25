@@ -19,6 +19,7 @@ import Polytime2.Examples.SMP.PreparedFrame
 import Polytime2.Examples.SMP.PreparedDependencies
 import Polytime2.Arrays.ProductMap
 import Polytime2.Arithmetic.BitComparison
+import Polytime2.Computation.Specification
 
 /-! # Certified dependency masks from packed source coordinates -/
 
@@ -36,7 +37,7 @@ abbrev WorkParameter := Parameter ⊕ Multisorted.Parameter (Nat.card (SICatalog
 
 /-- Compare source labels and apply the specialization's fixed dependency-sort
 lookup. There is no runtime algebra or catalogue search. -/
-noncomputable def labelComparison (coordinates : MvPolynomial Parameter ℕ)
+private noncomputable def comparisonImplementation (coordinates : MvPolynomial Parameter ℕ)
     (parent child : SortIndex (L := L) (Carrier := Carrier)) :
     Computation (WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)) Bool :=
   (bitsEqualAtNames (coordinates + 1)
@@ -45,10 +46,46 @@ noncomputable def labelComparison (coordinates : MvPolynomial Parameter ℕ)
         @decide (entry child ∈ dependencySorts (entry parent)) (Classical.propDecidable _) && flags ()))
       rfl (by intros; trivial)
 
+private theorem comparisonImplementation_realizable (coordinates : MvPolynomial Parameter ℕ)
+    (parent child : SortIndex (L := L) (Carrier := Carrier)) :
+    (comparisonImplementation coordinates parent child).Realizable :=
+  (bitsEqualAtNames_realizable _ _).followedBy (booleanOperation_realizable _) rfl (by intros; trivial)
+
+private theorem comparisonImplementation_correct (coordinates : MvPolynomial Parameter ℕ)
+    (parent child : SortIndex (L := L) (Carrier := Carrier))
+    (current : WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter) → ℕ)
+    (arguments : Bool → BitVec (MvPolynomial.eval
+      (fun name : Parameter => current (Sum.inl name)) (coordinates + 1))) :
+    (comparisonImplementation coordinates parent child).compute current ⟨arguments, trivial⟩ = true ↔
+      entry child ∈ dependencySorts (entry parent) ∧ arguments false = arguments true := by
+  classical
+  simp only [comparisonImplementation, followedBy, booleanOperation, bitsEqualAtNames,
+    EncodedDomain.renameParameters, EncodedDomain.bitVectors]
+  exact Bool.and_eq_true_iff.trans (and_congr decide_eq_true_iff decide_eq_true_iff)
+
+/-- Mathematical label equality and the specialization's fixed sort relation. -/
+noncomputable def labelComparison (coordinates : MvPolynomial Parameter ℕ)
+    (parent child : SortIndex (L := L) (Carrier := Carrier)) :
+    Computation (WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)) Bool :=
+  decision (fun _ => (EncodedDomain.bitVectors (coordinates + 1)).renameParameters
+    (Sum.inl : Parameter → WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter)))
+    (fun _ _ => True)
+    (fun _ arguments => entry child ∈ dependencySorts (entry parent) ∧ arguments false = arguments true)
+
 theorem labelComparison_realizable (coordinates : MvPolynomial Parameter ℕ)
     (parent child : SortIndex (L := L) (Carrier := Carrier)) :
     (labelComparison coordinates parent child).Realizable :=
-  (bitsEqualAtNames_realizable _ _).followedBy (booleanOperation_realizable _) rfl (by intros; trivial)
+  (comparisonImplementation_realizable coordinates parent child).decision _
+    (fun current arguments _valid => comparisonImplementation_correct coordinates parent child current arguments)
+
+/-- The dependency predicate is available without unfolding bit comparisons. -/
+theorem labelComparison_correct (coordinates : MvPolynomial Parameter ℕ)
+    (parent child : SortIndex (L := L) (Carrier := Carrier))
+    (current : WorkParameter (L := L) (Carrier := Carrier) (Parameter := Parameter) → ℕ)
+    (arguments : (labelComparison coordinates parent child).Arguments current) :
+    (labelComparison coordinates parent child).compute current ⟨arguments, trivial⟩ = true ↔
+      entry child ∈ dependencySorts (entry parent) ∧ arguments false = arguments true :=
+  decision_correct _ _ _ current ⟨arguments, trivial⟩
 
 /-- The rectangular dependency block for one fixed pair of sorts. Counts are
 read from the shared frame; only the actual source-label arrays are compared. -/
@@ -80,7 +117,11 @@ theorem dependencyMatrix_realizable (coordinates generators : MvPolynomial Param
   have step := (labelComparison_realizable coordinates parent child).withSpecification (fun _ _ => True)
     (fun current arguments => comparison.compute current
       ⟨(fun choice => if choice then arguments.val true else arguments.val false), trivial⟩)
-    (by intros; trivial) (by intros; rfl)
+    (by intros; trivial) (by
+      intro current arguments _valid
+      apply comparison.compute_congr
+      intro choice
+      cases choice <;> rfl)
   apply (arrayProductMap_realizable labels EncodedDomain.booleans (.inr (.inl parent)) (.inr (.inl child))
     (fun current first second => comparison.compute current
       ⟨(fun choice => if choice then second else first), trivial⟩) step).onResults
@@ -115,19 +156,26 @@ theorem dependencyMatrix_correct (coordinates generators : MvPolynomial Paramete
     ⟨(fun _ => converted), trivial⟩).2 parentPosition
   let second := ((packSources coordinates generators (entry child)).compute hostSizes
     ⟨(fun _ => converted), trivial⟩).2 childPosition
+  let frame := (packedFrame (L := L) (Carrier := Carrier) coordinates generators).compute hostSizes
+    ⟨fun _ => converted, trivial⟩
+  let current := computedSizeAssignment
+    (extendedSizeBounds (sizeBounds (L := L) (Carrier := Carrier) coordinates generators)) hostSizes frame.1
   have firstCorrect := packSources_correct coordinates generators hostSizes arguments parent parentPosition
   have secondCorrect := packSources_correct coordinates generators hostSizes arguments child childPosition
   rw [dependencies_lookup]
   apply Bool.eq_iff_iff.mpr
-  change (@decide (entry child ∈ dependencySorts (entry parent)) (Classical.propDecidable _) &&
-      decide (first = second)) = true ↔ _
-  simp only [Bool.and_eq_true, decide_eq_true_eq, ← BitVec.toNat_inj, Fin.ext_iff]
+  change (labelComparison coordinates parent child).compute current
+    ⟨(fun choice => if choice then second else first), trivial⟩ = true ↔ _
+  rw [labelComparison_correct]
+  simp only [Bool.false_eq_true, ↓reduceIte, Fin.ext_iff]
+  rw [← BitVec.toNat_inj (x := first) (y := second)]
+  simp only [decide_eq_true_eq]
   rw [show first.toNat = _ from firstCorrect, show second.toNat = _ from secondCorrect]
   constructor
   · rintro ⟨member, equal⟩
-    exact ⟨equal.symm, member⟩
+    exact ⟨Fin.ext equal.symm, member⟩
   · rintro ⟨equal, member⟩
-    exact ⟨member, equal.symm⟩
+    exact ⟨member, congrArg Fin.val equal.symm⟩
 
 /-- Assemble every rectangular block into the one public dependency-mask
 domain. All original source labels remain private conversion data. -/

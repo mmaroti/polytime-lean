@@ -11,6 +11,56 @@ A realization hides the finite machine, scratch, and polynomial witnesses.
 Application proofs must use certified mathematical rules. If a rule is missing,
 add it to the foundation rather than unpacking a realization in a caller.
 
+## Separate computation from its mathematical specification
+
+Use `Computation.specification` in [Basic.lean](Basic.lean) to state the
+mathematical answer independently of the implementation. Its result does not
+unfold during ordinary conversion; use `specification_compute` explicitly when
+an equation is needed. Keep the implementation private and certify the public
+answer with `ready.specification`.
+
+[Specification.lean](Specification.lean) provides two common variants:
+
+- `decision` specifies a Boolean by a mathematical predicate;
+  `ready.decision` certifies it from an equivalence with that predicate.
+- `specificationBy` specifies a bounded answer through a mathematical
+  observation. Supply existence in the exact output domain, then use
+  `ready.specificationBy` with an injective observation to reuse the original
+  realization without reconstructing bounds in application proofs.
+
+For a scalar observation, `simp only [operation, specificationBy_correct]`
+often proves the public contract directly. For structured observations, use
+`specificationBy_correct _ operation.outputDomain _ observer _ _`,
+then supply sizes and arguments. Lean infers the value and fit proof.
+For large certificates, give argument producers their mathematical input
+domains and precondition explicitly, and pass a named answer function to
+`ready.specification`. [Smith reduction](../Matrices/IntegerSmithReduction.lean)
+uses this to avoid inference through the enclosing computation.
+
+Export a named mathematical contract for callers. Avoid adding the general
+computation equations to the global simplifier. See
+[integer feasibility](../Matrices/IntegerSystemFeasible.lean) for a predicate
+and [Hermite columns](../Matrices/IntegerHermiteColumn.lean) for an observation
+that forgets matrix bounds.
+[Cyclic coordinates](../Arithmetic/CyclicCoordinate.lean) use a dependent pair
+of a natural modulus and its actual `ZMod` element; the observation forgets
+both bounds without exposing canonical representatives. These rules preserve
+the chosen canonical codecs and exact widths; they introduce no new machine
+implementation. For numeric examples, rewrite a mathematical observation
+contract before evaluating the answer; `specificationBy` uses choice to supply
+the bounded carrier, so evaluate its mathematical answer through the contract.
+
+Use controlled specifications for recursive and multi-stage application
+algorithms. Generic composition and traversal rules, elementary mathematical
+operations, and structural constructors can remain transparent. Thin adapters
+reuse the contracts and result boundary of their protected callees.
+
+For dependent structural results, keep the mathematical index available.
+[Array packing](../Arrays/PackingResult.lean) already returns the mathematical
+count and retained values; `arrayPack_compute` gives their whole-pair equation.
+Its transparent count supports dependent indexing without opening a machine or
+traversal implementation.
+
 ## Choose a composition rule
 
 | Intent | Rule and source |
@@ -88,7 +138,9 @@ For sizes computed from input data, start with
 [ComputedSizes.lean](ComputedSizes.lean) and
 [ComputedCall.lean](ComputedCall.lean).
 `atComputedUnarySizes` prepares a singleton argument record internally and
-retains the actual sizes with the result. Callers prove the consumer's
+retains the actual sizes with the result. `atComputedSizeValue` observes the
+ordinary dependent pair of the actual assignment and its payload, forgetting
+bounded count storage. Callers prove the consumer's
 precondition at those sizes. Working capacities and padding remain private.
 
 For counts read from an unchanged host input, use

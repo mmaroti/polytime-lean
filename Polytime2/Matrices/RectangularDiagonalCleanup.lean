@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.PositiveDiagonalCleanup
 import Polytime2.Matrices.RectangularPresentation
 import Polytime2.Matrices.ExtendIntegerBasis
@@ -73,21 +74,21 @@ private noncomputable def prepared (rows columns rank width : MvPolynomial Param
     (fun _ _ valid => valid.1)
 
 /-- Return full-sized Smith diagonal and unimodular bases for an active rectangular diagonal. -/
-noncomputable def rectangularPositiveDiagonalCleanup (rows columns rank width : MvPolynomial Parameter ℕ) :
+private noncomputable def implementation (rows columns rank width : MvPolynomial Parameter ℕ) :
     Computation Parameter Unit :=
   (prepared rows columns rank width).followedBy (assemble rows columns rank width) rfl (fun _ _ valid => valid.2)
 
-theorem rectangularPositiveDiagonalCleanup_realizable (rows columns rank width : MvPolynomial Parameter ℕ) :
-    (rectangularPositiveDiagonalCleanup rows columns rank width).Realizable :=
+private theorem implementation_realizable (rows columns rank width : MvPolynomial Parameter ℕ) :
+    (implementation rows columns rank width).Realizable :=
   ((positiveDiagonalCleanup_realizable rank width).withPrecondition
     (prepared rows columns rank width).precondition (fun _ _ valid => valid.1)).followedBy
     (assemble_realizable rows columns rank width) rfl (fun _ _ valid => valid.2)
 
 /-- The complete output equals the mathematical rectangular cleanup, including both bases. -/
-theorem rectangularPositiveDiagonalCleanup_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (rectangularPositiveDiagonalCleanup rows columns rank width).Arguments sizes //
-      (rectangularPositiveDiagonalCleanup rows columns rank width).precondition sizes arguments}) :
-    let result := (rectangularPositiveDiagonalCleanup rows columns rank width).compute sizes arguments
+private theorem implementation_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns rank width).Arguments sizes //
+      (implementation rows columns rank width).precondition sizes arguments}) :
+    let result := (implementation rows columns rank width).compute sizes arguments
     (result.1.val, (result.2.1.val, result.2.2.val)) =
       IntegerMatrix.rectangularDiagonalCleanup (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns)
         arguments.property.2.1 arguments.property.2.2 (MvPolynomial.eval sizes width)
@@ -100,6 +101,45 @@ theorem rectangularPositiveDiagonalCleanup_correct (rows columns rank width : Mv
       (IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes rows) arguments.property.2.1 state.2.1,
        IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes columns) arguments.property.2.2 state.2.2))) cleaned
   exact assembled.trans extended
+
+/-- The mathematical rectangular cleanup and its full identity-extended bases.
+Only positivity and inclusion of the active dimensions are required. -/
+noncomputable def rectangularPositiveDiagonalCleanup (rows columns rank width : MvPolynomial Parameter ℕ) :
+    Computation Parameter Unit :=
+  specificationBy (fun _ => (binaryNaturalsOfWidth width).arrayOfLength rank)
+    ((integerMatrices rows columns ((positiveDiagonalProductWidth rank width + 1) + 1)).prod
+      ((integerMatrices rows rows (positiveDiagonalBasisWidth rank width + 1)).prod
+        (integerMatrices columns columns (positiveDiagonalBasisWidth rank width + 1))))
+    (fun sizes arguments => (∀ index, 0 < (arguments () index).val) ∧
+      MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes rows ∧
+      MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes columns)
+    (fun _ result => (result.1.val, (result.2.1.val, result.2.2.val)))
+    (fun sizes arguments => IntegerMatrix.rectangularDiagonalCleanup
+      (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns)
+      arguments.property.2.1 arguments.property.2.2 (MvPolynomial.eval sizes width)
+      (fun index => (arguments.val () index).val))
+    (fun sizes arguments => ⟨(implementation rows columns rank width).compute sizes arguments,
+      implementation_correct rows columns rank width sizes arguments⟩)
+
+theorem rectangularPositiveDiagonalCleanup_realizable (rows columns rank width : MvPolynomial Parameter ℕ) :
+    (rectangularPositiveDiagonalCleanup rows columns rank width).Realizable := by
+  apply (implementation_realizable rows columns rank width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap (Subtype.val_injective.prodMap Subtype.val_injective)
+  · intro sizes arguments valid
+    exact implementation_correct rows columns rank width sizes ⟨arguments, valid⟩
+
+/-- Observe the mathematical answer without initialization or basis-extension wiring. -/
+theorem rectangularPositiveDiagonalCleanup_correct (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (rectangularPositiveDiagonalCleanup rows columns rank width).Arguments sizes //
+      (rectangularPositiveDiagonalCleanup rows columns rank width).precondition sizes arguments}) :
+    let result := (rectangularPositiveDiagonalCleanup rows columns rank width).compute sizes arguments
+    (result.1.val, (result.2.1.val, result.2.2.val)) =
+      IntegerMatrix.rectangularDiagonalCleanup (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns)
+        arguments.property.2.1 arguments.property.2.2 (MvPolynomial.eval sizes width)
+        (fun index => (arguments.val () index).val) := by
+  exact specificationBy_correct _ (rectangularPositiveDiagonalCleanup rows columns rank width).outputDomain _
+    (fun _ result => (result.1.val, (result.2.1.val, result.2.2.val))) _ _ sizes arguments
 
 /-- The realized rectangular output satisfies the full Smith contract at the supplied rank. -/
 theorem rectangularPositiveDiagonalCleanup_isSmithForm (rows columns rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

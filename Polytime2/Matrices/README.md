@@ -12,6 +12,10 @@ the exact `_correct` or `_compute` theorem and the corresponding mathematical
 `IntegerMatrix` theorem. For example, combine
 `integerBezoutRowsWithLeft_compute` with `bezoutRowsWithLeft_equation` from
 [BezoutTrackingMath.lean](BezoutTrackingMath.lean).
+Hermite sweeps, compact normalization, and Euclidean remainder reduction expose
+mathematical observations behind controlled computation boundaries. The
+[specification rules](../Computation/README.md)
+certify these contracts without rebuilding bounds or machine witnesses.
 
 ## Choose an interface
 

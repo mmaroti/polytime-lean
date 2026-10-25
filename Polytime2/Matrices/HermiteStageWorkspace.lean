@@ -40,6 +40,18 @@ private def withinAllowed (rows columns workspace : MvPolynomial Parameter ℕ) 
     (∀ row column, (result.1 row column).natAbs < 2 ^ MvPolynomial.eval sizes workspace) ∧
     (∀ row column, (result.2 row column).natAbs < 2 ^ MvPolynomial.eval sizes workspace)
 
+private theorem withinPermitted (rows columns workspace : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : (integerHermiteRowStageUpdate rows columns workspace).Arguments sizes)
+    (valid : withinAllowed rows columns workspace sizes arguments) :
+    (integerMatrixPairNarrow rows columns rows rows (2 * (2 * (2 * workspace + 1) + 1) + 1)
+      (2 * (2 * (2 * workspace + 1) + 1) + 1) workspace).precondition sizes
+      (fun _ => (integerHermiteRowStageUpdate rows columns workspace).compute sizes ⟨arguments, valid.1⟩) := by
+  have actual := integerHermiteRowStageUpdate_correct rows columns workspace sizes ⟨arguments, valid.1⟩
+  exact (congrArg (fun pair =>
+    (∀ row column, (pair.1 row column).natAbs < 2 ^ MvPolynomial.eval sizes workspace) ∧
+    (∀ row column, (pair.2 row column).natAbs < 2 ^ MvPolynomial.eval sizes workspace)) actual).mpr valid.2
+
 /-- Execute a stage update and return both matrices to the enclosing controller's workspace. -/
 noncomputable def integerHermiteRowStageUpdateWithin (rows columns workspace : MvPolynomial Parameter ℕ) :
     Computation Parameter (Fin 6) :=
@@ -47,7 +59,7 @@ noncomputable def integerHermiteRowStageUpdateWithin (rows columns workspace : M
     (withinAllowed rows columns workspace) (fun _ _ valid => valid.1)).followedBy
     (integerMatrixPairNarrow rows columns rows rows (2 * (2 * (2 * workspace + 1) + 1) + 1)
       (2 * (2 * (2 * workspace + 1) + 1) + 1) workspace) rfl
-    (fun _ _ valid => valid.2)
+    (withinPermitted rows columns workspace)
 
 /-- The controller's fit invariant justifies narrowing without a machine-side check. -/
 theorem integerHermiteRowStageUpdateWithin_realizable (rows columns workspace : MvPolynomial Parameter ℕ) :
@@ -58,7 +70,7 @@ theorem integerHermiteRowStageUpdateWithin_realizable (rows columns workspace : 
       (2 * (2 * (2 * workspace + 1) + 1) + 1) workspace
       (by intro sizes; simp only [map_add, map_mul, map_ofNat, map_one]; omega)
       (by intro sizes; simp only [map_add, map_mul, map_ofNat, map_one]; omega)) rfl
-    (fun _ _ valid => valid.2)
+    (withinPermitted rows columns workspace)
 
 /-- The fixed-workspace result retains the exact mathematical singleton stage. -/
 theorem integerHermiteRowStageUpdateWithin_correct (rows columns workspace : MvPolynomial Parameter ℕ)
@@ -69,6 +81,8 @@ theorem integerHermiteRowStageUpdateWithin_correct (rows columns workspace : MvP
     (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStage
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 3) [arguments.val 2]
-      (arguments.val 4).val (arguments.val 5).val := rfl
+      (arguments.val 4).val (arguments.val 5).val := by
+  exact integerHermiteRowStageUpdate_correct rows columns workspace sizes
+    ⟨arguments.val, arguments.property.1⟩
 
 end Polytime2.Computation.Realizable.Internal

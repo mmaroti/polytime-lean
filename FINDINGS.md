@@ -29,7 +29,7 @@ findings 1–3 retain their measured savings of 1,387 lines in total.
 | 6 | 30–80 | Fixed-workspace narrowing wrappers |
 | 7 | 20–70 | Row/column dualization through transposition |
 | 8 | 0–30 | Width formulas shared across scalar domains |
-| 9 | 0–20 | Stable computation/specification boundaries |
+| 9 | −1,751 (actual) | Stable computation/specification boundaries |
 
 ## 1. Computed-size and host-domain transport
 
@@ -177,27 +177,62 @@ finding may improve maintenance without producing a net reduction.
 
 ## 9. Stable computation/specification boundaries
 
-[IntegerSystemCoordinates.lean][coordinates] needs a 16-million-heartbeat
-budget for short composition proofs. Conversion cost was a major development
-pain, with smaller direct line savings. The many `withSpecification` calls
-are not themselves evidence of redundancy: they often expose the intended
-mathematical function.
+At review time, [IntegerSystemCoordinates.lean][coordinates] needed a
+16-million-heartbeat budget for short composition proofs. Conversion through
+large computation definitions made certification slow and fragile.
 
-Stable observer/evaluation lemmas and controlled unfolding boundaries should
-make correctness transport more predictable. This deserves attention for
-development speed, but its line savings overlap with earlier findings and
-should be counted conservatively.
+Implemented controlled result boundaries, mathematical decision predicates,
+and injective observations for bounded outputs in
+[Specification.lean](Polytime2/Computation/Specification.lean). The
+[computation guide](Polytime2/Computation/README.md) explains certification,
+explicit evaluation, and dependent observations. Domains and admissibility
+remain reducible; clients use mathematical contracts for results.
 
-Finding 1 already introduced a reduction boundary for computed host results.
-The coordinate proofs remain short, and additional observer lemmas may add
-lines. The revised range therefore allows for no net reduction; assess this work
-primarily by proof-checking cost and reliability.
+The review covered all 457 nonprivate definitions returning `Computation` in
+236 modules, including internal helpers and examples. Boundaries now cover the
+substantial recursive and composed application algorithms across arithmetic,
+arrays, Hermite and Smith normalization, integer systems, Gauss–Jordan, and SMP
+preparation. Elementary mathematical operations, generic rules, foundational
+controllers, structural constructors, and teaching examples retain their
+mathematical definitions. Thin adapters reuse protected callees' contracts.
+Packing retains its mathematical count for dependent indexing and exports a
+whole-pair equation for its exact count and payload. SMP observes sizes and
+payload together; extended-gcd observations expose ordinary integer triples.
+
+Single sequential `lake env lean -Dprofiler=true -Dprofiler.threshold=20`
+measurements before and after the migrations give these wall times. They are
+development observations rather than repeated benchmark estimates.
+
+| Module | Before | After |
+| --- | ---: | ---: |
+| `IntegerSystemCoordinates` | 8.74 s | 2.55 s |
+| `IntegerSystemFeasible` | 4.77 s | 3.41 s |
+| `IntegerSystemSolve` | 28.14 s | 2.03 s |
+| `IntegerSmithReduction` | 10.14 s | 2.43 s |
+| SMP `PreparedConversion` | 4.30 s | 3.65 s |
+
+Coordinate proofs now check without their 16-million-heartbeat overrides;
+feasibility, witness, and solver proofs also shed their old overrides. Smith
+certification uses explicit mathematical producer headers and a named answer
+function, reducing profiled tactic time from 8.15 s to 0.34 s.
+
+The full build passes for all 587 source modules, including the separately
+built `BinaryFiniteTable`. An audit of 75 certification and correctness
+statements reports only `propext`, `Classical.choice`, and `Quot.sound`. The
+[specification example](Polytime2/Examples/Specification.lean) verifies that
+ordinary conversion stops at the boundary and explicit evaluation succeeds.
+No linters were added.
+
+Including new infrastructure, migrated callers, contracts, and examples, this
+adds 2,171 Lean lines and removes 420: **1,751 net lines added**. This item
+improves certification ergonomics and checking cost while retaining canonical
+encodings and exact polynomial widths.
 
 ## Recommended sequence
 
-Findings 1–4 are implemented. The remaining findings await a separate decision.
+Findings 1–4 and 9 are implemented. Findings 5–8 await a separate decision.
 Validate their estimates with concrete migrations before setting a combined
-reduction target; findings 8–9 need not reduce lines to be useful.
+reduction target; finding 8 need not reduce lines to be useful.
 
 For each consolidation, count new infrastructure together with migrated
 callers, retain the required contracts and examples, and report the verified

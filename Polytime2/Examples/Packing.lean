@@ -51,12 +51,16 @@ example : (arrayPack (bitVectors (0 : MvPolynomial Unit ℕ)) (MvPolynomial.X ()
 example (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (values : (element.arrayOfLength length).Carrier sizes) :
     ((arrayPack element length).compute sizes
-      ⟨(fun | false => fun _ => false | true => values), trivial⟩).1.val = 0 := count_all_false
+      ⟨(fun | false => fun _ => false | true => values), trivial⟩).1.val = 0 := by
+  rw [arrayPack_compute]
+  exact count_all_false
 
 example (element : EncodedDomain Parameter) (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (values : (element.arrayOfLength length).Carrier sizes) :
     ((arrayPack element length).compute sizes
-      ⟨(fun | false => fun _ => true | true => values), trivial⟩).1.val = MvPolynomial.eval sizes length := count_all_true
+      ⟨(fun | false => fun _ => true | true => values), trivial⟩).1.val = MvPolynomial.eval sizes length := by
+  rw [arrayPack_compute]
+  exact count_all_true
 
 example : count ![true, false, true, false] = 2 := by decide
 

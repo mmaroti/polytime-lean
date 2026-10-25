@@ -42,6 +42,41 @@ abbrev Arguments (computation : Computation.{carrierLevel} Parameter InputName)
     (sizes : Parameter → ℕ) :=
   (name : InputName) → (computation.inputDomains name).Carrier sizes
 
+@[irreducible] private def specificationValue
+    (inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter)
+    (output : EncodedDomain.{0, carrierLevel} Parameter)
+    (allowed : ∀ sizes, ((name : InputName) → (inputs name).Carrier sizes) → Prop)
+    (value : ∀ sizes, {arguments // allowed sizes arguments} → output.Carrier sizes)
+    (sizes : Parameter → ℕ) (arguments : {arguments // allowed sizes arguments}) :
+    output.Carrier sizes := value sizes arguments
+
+/-- Declare the mathematical inputs, output, admissibility, and answer before
+certifying an implementation. Domains and preconditions reduce normally; the
+answer unfolds only through `specification_compute` or a derived contract.
+The boundary adds no condition, runtime operation, or encoding change. -/
+def specification (inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter)
+    (output : EncodedDomain.{0, carrierLevel} Parameter)
+    (allowed : ∀ sizes, ((name : InputName) → (inputs name).Carrier sizes) → Prop)
+    (value : ∀ sizes, {arguments // allowed sizes arguments} → output.Carrier sizes) :
+    Computation Parameter InputName where
+  inputDomains := inputs
+  outputDomain := output
+  precondition := allowed
+  compute sizes arguments := specificationValue inputs output allowed value sizes
+    ⟨arguments.val, arguments.property⟩
+
+/-- Deliberately expose a specified mathematical answer. This equation is not
+a global simp rule: callers choose their mathematical evaluation boundary. -/
+theorem specification_compute
+    (inputs : InputName → EncodedDomain.{0, carrierLevel} Parameter)
+    (output : EncodedDomain.{0, carrierLevel} Parameter)
+    (allowed : ∀ sizes, ((name : InputName) → (inputs name).Carrier sizes) → Prop)
+    (value : ∀ sizes, {arguments // allowed sizes arguments} → output.Carrier sizes)
+    (sizes : Parameter → ℕ) (arguments : {arguments // allowed sizes arguments}) :
+    (specification inputs output allowed value).compute sizes arguments = value sizes arguments := by
+  unfold specification specificationValue
+  rfl
+
 /-- A unary mathematical map, total on its admissible inputs. -/
 def unaryMap (inputDomain outputDomain : EncodedDomain.{0, carrierLevel} Parameter)
     (precondition : ∀ sizes, inputDomain.Carrier sizes → Prop)

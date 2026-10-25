@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.HermiteAlternatingController
 
 /-! # Polynomial-budget integer Hermite diagonalization
@@ -62,7 +63,7 @@ private theorem initial_realizable (dimension width budget : MvPolynomial Parame
   exact matrix.prodMk (basis.prodMk basis)
 
 /-- Run a prescribed mathematical pair budget, preparing every fixed workspace internally. -/
-noncomputable def integerHermiteAlternatingRun (dimension width budget : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (dimension width budget : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (hermiteAlternatingController dimension (hermiteAlternatingEntryWidth dimension width) budget).onResults
     (initial dimension width budget).inputDomains (initial dimension width budget).precondition
     (fun name sizes arguments => match name with
@@ -75,9 +76,9 @@ noncomputable def integerHermiteAlternatingRun (dimension width budget : MvPolyn
         hermiteAlternatingEntryWidth_det_bound dimension width sizes (arguments.val ()), rfl⟩)
 
 /-- Initialization, budget enumeration, and the entire fixed-workspace fold are certified. -/
-theorem integerHermiteAlternatingRun_realizable (dimension width budget : MvPolynomial Parameter ℕ) :
-    (integerHermiteAlternatingRun dimension width budget).Realizable := by
-  let computation := integerHermiteAlternatingRun dimension width budget
+private theorem implementation_realizable (dimension width budget : MvPolynomial Parameter ℕ) :
+    (implementation dimension width budget).Realizable := by
+  let computation := implementation dimension width budget
   apply (hermiteAlternatingController_realizable dimension (hermiteAlternatingEntryWidth dimension width) budget).onResults
     computation.inputDomains computation.precondition _ _
   intro name
@@ -89,10 +90,10 @@ theorem integerHermiteAlternatingRun_realizable (dimension width budget : MvPoly
         (fun name => nomatch name) (by intros; trivial) (fun name => nomatch name)
 
 /-- The public bounded runtime returns exactly the mathematical run and both accumulated bases. -/
-theorem integerHermiteAlternatingRun_correct (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteAlternatingRun dimension width budget).Arguments sizes //
-      (integerHermiteAlternatingRun dimension width budget).precondition sizes arguments}) :
-    let result := (integerHermiteAlternatingRun dimension width budget).compute sizes arguments
+private theorem implementation_correct (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation dimension width budget).Arguments sizes //
+      (implementation dimension width budget).precondition sizes arguments}) :
+    let result := (implementation dimension width budget).compute sizes arguments
     (result.1.val, result.2.1.val, result.2.2.val) =
       IntegerMatrix.hermiteAlternatingRun (MvPolynomial.eval sizes budget) (arguments.val ()).val :=
   hermiteAlternatingController_correct dimension (hermiteAlternatingEntryWidth dimension width) budget sizes
@@ -102,6 +103,35 @@ theorem integerHermiteAlternatingRun_correct (dimension width budget : MvPolynom
       | .inr true => id),
       ⟨arguments.property.1, arguments.property.2,
         hermiteAlternatingEntryWidth_det_bound dimension width sizes (arguments.val ()), rfl⟩⟩
+
+/-- The mathematical traversal and its actual accumulated bases. Workspace
+preparation and controller wiring stay behind the computation boundary. -/
+noncomputable def integerHermiteAlternatingRun (dimension width budget : MvPolynomial Parameter ℕ) :
+    Computation Parameter (Unit) :=
+  specificationBy (fun _ => integerMatrices dimension dimension width)
+    (hermiteAlternatingState dimension (hermiteAlternatingEntryWidth dimension width) budget) (fun _ arguments => (arguments ()).val.IsLowerTriangular ∧ ∀ index, 0 < (arguments ()).val index index)
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.val))
+    (fun sizes arguments => IntegerMatrix.hermiteAlternatingRun (MvPolynomial.eval sizes budget) (arguments.val ()).val)
+    (fun sizes arguments => ⟨(implementation dimension width budget).compute sizes arguments,
+      implementation_correct dimension width budget sizes arguments⟩)
+
+theorem integerHermiteAlternatingRun_realizable (dimension width budget : MvPolynomial Parameter ℕ) :
+    (integerHermiteAlternatingRun dimension width budget).Realizable := by
+  apply (implementation_realizable dimension width budget).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap (Subtype.val_injective.prodMap Subtype.val_injective)
+  · intro sizes arguments valid
+    exact implementation_correct dimension width budget sizes ⟨arguments, valid⟩
+
+/-- Observe the ordinary mathematical answer without expanding the controller. -/
+theorem integerHermiteAlternatingRun_correct (dimension width budget : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteAlternatingRun dimension width budget).Arguments sizes //
+      (integerHermiteAlternatingRun dimension width budget).precondition sizes arguments}) :
+    let result := (integerHermiteAlternatingRun dimension width budget).compute sizes arguments
+    (result.1.val, result.2.1.val, result.2.2.val) =
+      IntegerMatrix.hermiteAlternatingRun (MvPolynomial.eval sizes budget) (arguments.val ()).val := by
+  exact specificationBy_correct _ (integerHermiteAlternatingRun dimension width budget).outputDomain _
+    (fun _ result => (result.1.val, result.2.1.val, result.2.2.val)) _ _ sizes arguments
 
 /-- A polynomial pair budget derived from the mathematical dimension and entry width. -/
 noncomputable def hermiteAlternatingBudget (dimension width : MvPolynomial Parameter ℕ) :=

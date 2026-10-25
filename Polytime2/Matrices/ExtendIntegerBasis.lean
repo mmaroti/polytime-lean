@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.RectangularDiagonalMath
 import Polytime2.Matrices.IntegerOperations
 import Polytime2.Matrices.Tabulate
@@ -151,14 +152,14 @@ private theorem basisEntry_realizable (dimension rank width : MvPolynomial Param
     · simp [identityValue, equal, step, matrixTabulateStep, basisEntry, outside]
 
 /-- Extend a bounded active square basis by identity on the remaining coordinates. -/
-noncomputable def extendIntegerBasis (dimension rank width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (dimension rank width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   ((matrixTabulate (fun _ : Unit => integerMatrices rank rank width) (binaryIntegers (width + 1)) dimension dimension
     (basisEntry dimension rank width)).reinterpretOutput (integerMatrices dimension dimension (width + 1))
       (fun sizes => (IntegerMatrix.entryBoundEquiv (2 ^ MvPolynomial.eval sizes (width + 1))).symm)).withPrecondition
     (fun sizes _ => MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes dimension) (by intros; trivial)
 
-theorem extendIntegerBasis_realizable (dimension rank width : MvPolynomial Parameter ℕ) :
-    (extendIntegerBasis dimension rank width).Realizable :=
+private theorem implementation_realizable (dimension rank width : MvPolynomial Parameter ℕ) :
+    (implementation dimension rank width).Realizable :=
   ((matrixTabulate_realizable (fun _ : Unit => integerMatrices rank rank width) (binaryIntegers (width + 1)) dimension dimension
     (basisEntry dimension rank width) (basisEntry_realizable dimension rank width)).reindexOutput
       (integerMatrices dimension dimension (width + 1)).Carrier
@@ -166,13 +167,39 @@ theorem extendIntegerBasis_realizable (dimension rank width : MvPolynomial Param
         (fun sizes _ => MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes dimension) (by intros; trivial)
 
 /-- The ordinary output matrix is the mathematical basis extension. -/
+private theorem implementation_correct (dimension rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation dimension rank width).Arguments sizes //
+      (implementation dimension rank width).precondition sizes arguments}) :
+    ((implementation dimension rank width).compute sizes arguments).val =
+      IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes dimension) arguments.property (arguments.val ()).val := by
+  ext row column
+  rw [IntegerMatrix.extendDiagonalBasis_apply]
+  rfl
+
+/-- The ordinary mathematical result, with traversal and codec preparation
+kept behind the computation boundary. -/
+noncomputable def extendIntegerBasis (dimension rank width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => integerMatrices rank rank width) (integerMatrices dimension dimension (width + 1))
+    (fun sizes _ => MvPolynomial.eval sizes rank ≤ MvPolynomial.eval sizes dimension) (fun _ result => result.val)
+    (fun sizes arguments => IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes dimension) arguments.property (arguments.val ()).val)
+    (fun sizes arguments => ⟨(implementation dimension rank width).compute sizes arguments,
+      implementation_correct dimension rank width sizes arguments⟩)
+
+theorem extendIntegerBasis_realizable (dimension rank width : MvPolynomial Parameter ℕ) :
+    (extendIntegerBasis dimension rank width).Realizable := by
+  apply (implementation_realizable dimension rank width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective
+  · intro sizes arguments valid
+    exact implementation_correct dimension rank width sizes ⟨arguments, valid⟩
+
+/-- Observe the mathematical result without unfolding its finite traversal. -/
 theorem extendIntegerBasis_correct (dimension rank width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : {arguments : (extendIntegerBasis dimension rank width).Arguments sizes //
       (extendIntegerBasis dimension rank width).precondition sizes arguments}) :
     ((extendIntegerBasis dimension rank width).compute sizes arguments).val =
       IntegerMatrix.extendDiagonalBasis (MvPolynomial.eval sizes dimension) arguments.property (arguments.val ()).val := by
-  ext row column
-  rw [IntegerMatrix.extendDiagonalBasis_apply]
-  rfl
+  exact specificationBy_correct _ (extendIntegerBasis dimension rank width).outputDomain _
+    (fun _ result => result.val) _ _ sizes arguments
 
 end Polytime2.Computation

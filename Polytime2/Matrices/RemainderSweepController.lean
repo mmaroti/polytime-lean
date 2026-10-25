@@ -79,11 +79,34 @@ private theorem update_realizable (rows columns workspace : MvPolynomial Paramet
       · exact Realizable.argument step.inputDomains (.inl true) step.precondition
       · exact (Realizable.argument step.inputDomains (.inr false) step.precondition).fst
       · exact (Realizable.argument step.inputDomains (.inr false) step.precondition).snd)
-  exact raw.followedBy
+  have observed (sizes : Parameter → ℕ) (arguments : step.Arguments sizes)
+      (valid : step.precondition sizes arguments) := integerRowRemainderWithLeft_correct rows columns workspace sizes
+    ⟨(fun name => updateArguments rows columns workspace sizes
+      (fun original => arguments (.inl original)) (arguments (.inr false)) (arguments (.inr true)) name),
+      ⟨valid.1, valid.2.1⟩⟩
+  have narrowed := raw.followedBy
     (integerMatrixPairNarrow_realizable rows columns rows rows (2 * workspace + 1) (2 * workspace + 1) workspace
       (by intro sizes; simp only [map_add, map_mul, map_ofNat, map_one]; omega)
       (by intro sizes; simp only [map_add, map_mul, map_ofNat, map_one]; omega)) rfl
-    (by intro sizes arguments valid; exact valid.2.2)
+    (by
+      intro sizes arguments valid
+      have actual := observed sizes arguments valid
+      have first := congrArg Prod.fst actual
+      have second := congrArg Prod.snd actual
+      dsimp only at first second
+      change (∀ row column, _) ∧ (∀ row column, _)
+      constructor
+      · intro row column
+        exact lt_of_eq_of_lt (congrArg Int.natAbs (congrFun (congrFun first row) column))
+          (valid.2.2.1 row column)
+      · intro row column
+        exact lt_of_eq_of_lt (congrArg Int.natAbs (congrFun (congrFun second row) column))
+          (valid.2.2.2 row column))
+  apply narrowed.withSpecification _ _ (by intros; assumption)
+  intro sizes arguments valid
+  apply Prod.ext <;> apply Subtype.ext
+  · exact congrArg Prod.fst (observed sizes arguments valid)
+  · exact congrArg Prod.snd (observed sizes arguments valid)
 
 private theorem update_correct (rows columns workspace : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (context : ∀ name, (hermiteColumnContext rows columns name).Carrier sizes)

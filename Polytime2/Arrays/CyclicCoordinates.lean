@@ -43,12 +43,10 @@ private noncomputable def native (length modulusWidth valueWidth : MvPolynomial 
 
 private theorem native_realizable (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
     (native length modulusWidth valueWidth).Realizable := by
-  apply arrayZipWith_realizable
-  exact (integerCyclicCoordinate_realizable modulusWidth valueWidth).withArguments _
-    ⟨Sum.inr, Sum.inr_injective⟩ (by intro choice; cases choice <;> rfl)
+  exact (integerCyclicCoordinate_realizable modulusWidth valueWidth).zipWith length
 
 /-- Transport a vector to its actual cyclic/free coordinates, with all moduli retained. -/
-noncomputable def integerCyclicCoordinates (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
+private noncomputable def implementation (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
     Computation Parameter Bool :=
   (native length modulusWidth valueWidth).onResults
     (fun choice => (if choice then binaryIntegers valueWidth else binaryNaturalsOfWidth modulusWidth).arrayOfLength length)
@@ -57,28 +55,61 @@ noncomputable def integerCyclicCoordinates (length modulusWidth valueWidth : MvP
     (by intros; trivial)
 
 /-- Certified scalar transport lifts pointwise through the shared array traversal. -/
-theorem integerCyclicCoordinates_realizable (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
-    (integerCyclicCoordinates length modulusWidth valueWidth).Realizable := by
+private theorem implementation_realizable (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
+    (implementation length modulusWidth valueWidth).Realizable := by
   apply (native_realizable length modulusWidth valueWidth).onResults _ _ _ (by intros; trivial)
   intro name
   rcases name with impossible | choice
   · exact impossible.elim
   · exact Realizable.argument _ choice _
 
+/-- The scalar mathematical quotient map applied at each position. Traversal
+and argument preparation are hidden behind the specification boundary. -/
+noncomputable def integerCyclicCoordinates (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
+    Computation Parameter Bool :=
+  specification
+    (fun choice => (if choice then binaryIntegers valueWidth else binaryNaturalsOfWidth modulusWidth).arrayOfLength length)
+    ((boundedCyclic modulusWidth (modulusWidth + valueWidth)).arrayOfLength length)
+    (fun _ _ => True)
+    (fun sizes arguments index => (integerCyclicCoordinate modulusWidth valueWidth).compute sizes
+      ⟨(fun choice => match choice with
+        | false => arguments.val false index | true => arguments.val true index), trivial⟩)
+
+theorem integerCyclicCoordinates_realizable (length modulusWidth valueWidth : MvPolynomial Parameter ℕ) :
+    (integerCyclicCoordinates length modulusWidth valueWidth).Realizable := by
+  apply (implementation_realizable length modulusWidth valueWidth).specification
+  intros
+  rfl
+
+/-- Explicitly evaluate the pointwise mathematical composition. -/
+theorem integerCyclicCoordinates_compute (length modulusWidth valueWidth : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ) (arguments : (integerCyclicCoordinates length modulusWidth valueWidth).Arguments sizes)
+    (index : Fin (MvPolynomial.eval sizes length)) :
+    (integerCyclicCoordinates length modulusWidth valueWidth).compute sizes ⟨arguments, trivial⟩ index =
+      (integerCyclicCoordinate modulusWidth valueWidth).compute sizes
+        ⟨(fun choice => match choice with
+          | false => arguments false index | true => arguments true index), trivial⟩ := by
+  simp only [integerCyclicCoordinates, specification_compute]
+
 /-- Every output retains exactly its corresponding input modulus. -/
 theorem integerCyclicCoordinates_modulus (length modulusWidth valueWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ) (arguments : (integerCyclicCoordinates length modulusWidth valueWidth).Arguments sizes)
     (index : Fin (MvPolynomial.eval sizes length)) :
     ((integerCyclicCoordinates length modulusWidth valueWidth).compute sizes ⟨arguments, trivial⟩ index).1 =
-      arguments false index := rfl
+      arguments false index := by
+  rw [integerCyclicCoordinates_compute]
+  exact integerCyclicCoordinate_modulus modulusWidth valueWidth sizes
+    (fun choice => match choice with | false => arguments false index | true => arguments true index)
 
 /-- Every coordinate is the input integer's ordinary image in the reported ZMod domain. -/
 theorem integerCyclicCoordinates_correct (length modulusWidth valueWidth : MvPolynomial Parameter ℕ)
     (sizes : Parameter → ℕ) (arguments : (integerCyclicCoordinates length modulusWidth valueWidth).Arguments sizes)
     (index : Fin (MvPolynomial.eval sizes length)) :
     let result := (integerCyclicCoordinates length modulusWidth valueWidth).compute sizes ⟨arguments, trivial⟩ index
-    result.2.val = ((arguments true index).val : ZMod result.1.val) :=
-  integerCyclicCoordinate_correct modulusWidth valueWidth sizes
+    result.2.val = ((arguments true index).val : ZMod result.1.val) := by
+  dsimp only
+  rw [integerCyclicCoordinates_compute]
+  exact integerCyclicCoordinate_correct modulusWidth valueWidth sizes
     (fun choice => match choice with | false => arguments false index | true => arguments true index)
 
 /-- The whole quotient vector vanishes exactly when every modulus divides its integer coordinate. -/
@@ -89,7 +120,7 @@ theorem integerCyclicCoordinates_zero_iff (length modulusWidth valueWidth : MvPo
   apply forall_congr'
   intro index
   rw [integerCyclicCoordinates_correct]
-  change ((arguments true index).val : ZMod (arguments false index).val) = 0 ↔ _
+  rw [integerCyclicCoordinates_modulus]
   exact ZMod.intCast_zmod_eq_zero_iff_dvd _ _
 
 end Polytime2.Computation

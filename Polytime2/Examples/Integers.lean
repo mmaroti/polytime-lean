@@ -313,6 +313,8 @@ example :
     let result := (integerExtendedGcd (MvPolynomial.X ())).compute (fun _ => 5)
       ⟨(fun flag => if flag then (by exact ⟨21, by norm_num⟩) else (by exact ⟨-30, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (3, 2, 3) := by
+  dsimp only
+  rw [integerExtendedGcd_value]
   change (((Polytime2.ExtendedGcd.result (-30) (21)).1 : ℤ),
     (Polytime2.ExtendedGcd.result (-30) (21)).2.1,
     (Polytime2.ExtendedGcd.result (-30) (21)).2.2) = (3, 2, 3)
@@ -323,6 +325,8 @@ example :
     let result := (integerExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
       ⟨(fun flag => if flag then (by exact ⟨8, by norm_num⟩) else (by exact ⟨13, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (1, -3, 5) := by
+  dsimp only
+  rw [integerExtendedGcd_value]
   change (((Polytime2.ExtendedGcd.result (13) (8)).1 : ℤ),
     (Polytime2.ExtendedGcd.result (13) (8)).2.1,
     (Polytime2.ExtendedGcd.result (13) (8)).2.2) = (1, -3, 5)
@@ -333,6 +337,8 @@ example :
     let result := (integerExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
       ⟨(fun flag => if flag then (by exact ⟨0, by norm_num⟩) else (by exact ⟨-15, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (15, -1, 0) := by
+  dsimp only
+  rw [integerExtendedGcd_value]
   change (((Polytime2.ExtendedGcd.result (-15) (0)).1 : ℤ),
     (Polytime2.ExtendedGcd.result (-15) (0)).2.1,
     (Polytime2.ExtendedGcd.result (-15) (0)).2.2) = (15, -1, 0)
@@ -342,6 +348,8 @@ example :
     let result := (integerExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
       ⟨(fun flag => if flag then (by exact ⟨-15, by norm_num⟩) else (by exact ⟨0, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (15, 0, -1) := by
+  dsimp only
+  rw [integerExtendedGcd_value]
   change (((Polytime2.ExtendedGcd.result (0) (-15)).1 : ℤ),
     (Polytime2.ExtendedGcd.result (0) (-15)).2.1,
     (Polytime2.ExtendedGcd.result (0) (-15)).2.2) = (15, 0, -1)
@@ -351,6 +359,8 @@ example :
     let result := (integerExtendedGcd (MvPolynomial.X ())).compute (fun _ => 0)
       ⟨(fun _ => (by exact ⟨0, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (0, 0, 0) := by
+  dsimp only
+  rw [integerExtendedGcd_value]
   change (((Polytime2.ExtendedGcd.result (0) (0)).1 : ℤ),
     (Polytime2.ExtendedGcd.result (0) (0)).2.1,
     (Polytime2.ExtendedGcd.result (0) (0)).2.2) = (0, 0, 0)
@@ -365,24 +375,32 @@ example :
     let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
       ⟨(fun flag => if flag then (by exact ⟨8, by norm_num⟩) else (by exact ⟨13, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (1, 5, -8) := by
+  dsimp only
+  rw [integerNormalizedExtendedGcd_value]
   decide +kernel
 
 example :
     let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 5)
       ⟨(fun flag => if flag then (by exact ⟨-18, by norm_num⟩) else (by exact ⟨30, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (6, 2, 3) := by
+  dsimp only
+  rw [integerNormalizedExtendedGcd_value]
   decide +kernel
 
 example :
     let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 0)
       ⟨(fun _ => (by exact ⟨0, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (0, 1, 0) := by
+  dsimp only
+  rw [integerNormalizedExtendedGcd_value]
   decide +kernel
 
 example :
     let result := (integerNormalizedExtendedGcd (MvPolynomial.X ())).compute (fun _ => 4)
       ⟨(fun flag => if flag then (by exact ⟨0, by norm_num⟩) else (by exact ⟨-15, by norm_num⟩)), trivial⟩
     (result.1.val, result.2.1.val, result.2.2.val) = (15, -1, 0) := by
+  dsimp only
+  rw [integerNormalizedExtendedGcd_value]
   decide +kernel
 
 end Polytime2.Examples.Integers

@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Matrices.NaturalDiagonalSearch
 import Polytime2.Arrays.AllTrue
+import Polytime2.Computation.Specification
 
 /-! # Certified stopping guard for diagonal cleanup
 
@@ -34,22 +35,39 @@ open EncodedDomain
 variable {Parameter : Type} [Fintype Parameter]
 
 /-- Decide whether the natural diagonal is an adjacent divisibility chain. -/
-noncomputable def naturalDiagonalIsChain (length width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (length width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (naturalDiagonalDivisibilityFlags length width).followedBy (arrayAllTrue length) rfl (by intros; trivial)
 
-theorem naturalDiagonalIsChain_realizable (length width : MvPolynomial Parameter ℕ) :
-    (naturalDiagonalIsChain length width).Realizable :=
+private theorem implementation_realizable (length width : MvPolynomial Parameter ℕ) :
+    (implementation length width).Realizable :=
   (naturalDiagonalDivisibilityFlags_realizable length width).followedBy (arrayAllTrue_realizable length) rfl
     (by intros; trivial)
 
 /-- The guard expresses exactly the mathematical stopping condition. -/
-theorem naturalDiagonalIsChain_correct (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+private theorem implementation_correct (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (values : ((binaryNaturalsOfWidth width).arrayOfLength length).Carrier sizes) :
-    (naturalDiagonalIsChain length width).compute sizes ⟨(fun _ => values), trivial⟩ = true ↔
+    (implementation length width).compute sizes ⟨(fun _ => values), trivial⟩ = true ↔
       IntegerMatrix.diagonalDivisibilityChain (fun index => (values index).val) := by
   change (arrayAllTrue length).compute sizes
     ⟨(fun _ => (naturalDiagonalDivisibilityFlags length width).compute sizes ⟨(fun _ => values), trivial⟩), trivial⟩ = true ↔ _
   rw [arrayAllTrue_correct, naturalDiagonalDivisibilityFlags_spec]
   exact ArraySearch.adjacentFlags_all (fun first second : ℕ => first ∣ second) (fun index => (values index).val)
+
+/-- Decide the mathematical adjacent divisibility chain. -/
+noncomputable def naturalDiagonalIsChain (length width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  decision (fun _ => (binaryNaturalsOfWidth width).arrayOfLength length) (fun _ _ => True)
+    (fun _ arguments => IntegerMatrix.diagonalDivisibilityChain (fun index => (arguments () index).val))
+
+theorem naturalDiagonalIsChain_realizable (length width : MvPolynomial Parameter ℕ) :
+    (naturalDiagonalIsChain length width).Realizable :=
+  (implementation_realizable length width).decision _
+    (fun sizes arguments _valid => implementation_correct length width sizes (arguments ()))
+
+/-- The public guard is exactly the mathematical stopping condition. -/
+theorem naturalDiagonalIsChain_correct (length width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (values : ((binaryNaturalsOfWidth width).arrayOfLength length).Carrier sizes) :
+    (naturalDiagonalIsChain length width).compute sizes ⟨fun _ => values, trivial⟩ = true ↔
+      IntegerMatrix.diagonalDivisibilityChain (fun index => (values index).val) :=
+  decision_correct _ _ _ sizes ⟨fun _ => values, trivial⟩
 
 end Polytime2.Computation

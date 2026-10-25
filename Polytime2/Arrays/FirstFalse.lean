@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Arrays.Count
 
 /-! # Finding the first false flag through a finite-memory prefix scan -/
@@ -89,17 +90,39 @@ theorem leadingFlags_realizable (length : MvPolynomial Parameter ℕ) : (leading
   rw [FirstFalse.boolean_bits, FirstFalse.boolean_bits, FirstFalse.ofFn_masked, FirstFalse.scan_true]
 
 /-- The array length is the all-true sentinel, including the empty array. -/
-noncomputable def firstFalse (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+private noncomputable def implementation (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
   (leadingFlags length).followedBy (countFlags length) rfl (by intros; trivial)
 
-theorem firstFalse_realizable (length : MvPolynomial Parameter ℕ) : (firstFalse length).Realizable :=
+private theorem implementation_realizable (length : MvPolynomial Parameter ℕ) : (implementation length).Realizable :=
   (leadingFlags_realizable length).followedBy (countFlags_realizable length) rfl (by intros; trivial)
 
+private theorem implementation_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (flags : Fin (MvPolynomial.eval sizes length) → Bool) :
+    ((implementation length).compute sizes ⟨(fun _ => flags), trivial⟩).toNat = (List.ofFn flags).findIdx (! ·) := by
+  change ((countFlags length).compute sizes ⟨(fun _ => FirstFalse.masked flags), trivial⟩).toNat = _
+  rw [countFlags_correct, FirstFalse.ofFn_masked, FirstFalse.mask_count]
+
+/-- Specify the first false position, or the array length if none exists mathematically.
+The finite-memory traversal and counter implementation stay private. -/
+noncomputable def firstFalse (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specificationBy (fun _ => EncodedDomain.booleans.arrayOfLength length)
+    (EncodedDomain.bitVectors (length + 1)) (fun _ _ => True) (fun _ => BitVec.toNat)
+    (fun _sizes arguments => (List.ofFn (arguments.val ())).findIdx (! ·))
+    (fun sizes arguments => ⟨(implementation length).compute sizes arguments,
+      implementation_correct length sizes (arguments.val ())⟩)
+
+theorem firstFalse_realizable (length : MvPolynomial Parameter ℕ) : (firstFalse length).Realizable := by
+  apply (implementation_realizable length).specificationBy
+  · intro sizes first second same
+    exact BitVec.eq_of_toNat_eq same
+  · intro sizes arguments valid
+    exact implementation_correct length sizes (arguments ())
+
+/-- Evaluate the mathematical observation without unfolding the traversal. -/
 theorem firstFalse_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (flags : Fin (MvPolynomial.eval sizes length) → Bool) :
     ((firstFalse length).compute sizes ⟨(fun _ => flags), trivial⟩).toNat = (List.ofFn flags).findIdx (! ·) := by
-  change ((countFlags length).compute sizes ⟨(fun _ => FirstFalse.masked flags), trivial⟩).toNat = _
-  rw [countFlags_correct, FirstFalse.ofFn_masked, FirstFalse.mask_count]
+  simp only [firstFalse, specificationBy_correct]
 
 theorem firstFalse_bound (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (flags : Fin (MvPolynomial.eval sizes length) → Bool) :

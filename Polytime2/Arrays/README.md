@@ -48,6 +48,12 @@ value agrees with the selected index.
 
 [First-false search][find] reuses the prefix scan and count, returning
 `Option (Fin length)` without exposing the internal all-accepted sentinel.
+[Count.lean](Count.lean) specifies the cardinality of the true positions, and
+[FirstFalse.lean](FirstFalse.lean) specifies the mathematical search index.
+Their observation contracts hide the scan, counter seed, and traversal.
+For dependent packing results, `arrayPack_compute` gives the complete
+mathematical count and retained array together; the structural count remains
+available for indexing the payload.
 Its result and stopping-condition theorems cover empty arrays.
 [Position arithmetic][position arithmetic] compares ordinary coordinate values
 across dimensions or against an active-prefix size, using derived capacities.

@@ -65,13 +65,25 @@ private theorem valid :
 private noncomputable def result :=
   (integerHermiteRowStageUpdate (Parameter := Empty) 3 2 3).compute Empty.elim ⟨arguments, valid⟩
 
+private theorem result_correct :
+    (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStage
+      (Row := Fin (MvPolynomial.eval (Empty.elim : Empty → ℕ) (3 : MvPolynomial Empty ℕ)))
+      (Column := Fin (MvPolynomial.eval (Empty.elim : Empty → ℕ) (2 : MvPolynomial Empty ℕ)))
+      (arguments 0) (arguments 1) (arguments 3) [arguments 2]
+      (arguments 4).val (arguments 5).val :=
+  integerHermiteRowStageUpdate_correct (Parameter := Empty) 3 2 3 Empty.elim ⟨arguments, valid⟩
+
 example : result.1.val ⟨0, by norm_num⟩ ⟨1, by norm_num⟩ = -3 ∧
     result.1.val ⟨1, by norm_num⟩ ⟨0, by norm_num⟩ = 2 ∧
-    result.1.val ⟨2, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by decide +kernel
+    result.1.val ⟨2, by norm_num⟩ ⟨0, by norm_num⟩ = 0 := by
+  rw [show result.1.val = _ from congrArg Prod.fst result_correct]
+  decide +kernel
 
 example : result.2.val ⟨0, by norm_num⟩ ⟨2, by norm_num⟩ = -2 ∧
     result.2.val ⟨2, by norm_num⟩ ⟨1, by norm_num⟩ = -1 ∧
-    result.2.val ⟨2, by norm_num⟩ ⟨2, by norm_num⟩ = 3 := by decide +kernel
+    result.2.val ⟨2, by norm_num⟩ ⟨2, by norm_num⟩ = 3 := by
+  rw [show result.2.val = _ from congrArg Prod.snd result_correct]
+  decide +kernel
 
 example {Parameter : Type} [Fintype Parameter] (rows columns workspace : MvPolynomial Parameter ℕ) :
     (Realizable.Internal.integerHermiteRowStageUpdateWithin rows columns workspace).TM0Realizable :=

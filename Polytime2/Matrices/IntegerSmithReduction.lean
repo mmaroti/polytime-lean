@@ -78,32 +78,37 @@ private theorem reduce_realizable (rows columns width : MvPolynomial Parameter �
   cases singleton
   exact (actual.fst.prodMk ((actual.snd).fst))
 
-/-- Smith reduction of arbitrary signed rectangular input with rank and both bases. -/
-noncomputable def integerSmithReduction (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
-  inputDomains := fun _ => integerMatrices rows columns width
-  outputDomain := (boundedUnary columns).prod
+private noncomputable def smithOutputDomain (rows columns width : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  (boundedUnary columns).prod
     ((integerMatrices rows columns (smithReductionDiagonalWidth rows columns width)).prod
       ((integerMatrices rows rows (smithReductionLeftWidth rows columns width)).prod
         (integerMatrices columns columns (smithReductionRightWidth rows columns width))))
-  precondition _ _ := True
-  compute sizes arguments :=
-    let first := (integerHermiteReduction rows columns width).compute sizes arguments
-    let second := (reduce rows columns width).compute sizes arguments
-    let bases := (integerBasisCompose rows columns (leftWidth rows columns width) (rightWidth rows columns width)
-      (smithReductionDiagonalWidth rows columns width) (smithReductionDiagonalWidth rows columns width)).compute sizes
-      ⟨(fun name => match name with | 0 => first.2.2.1 | 1 => first.2.2.2 | 2 => second.2.1 | 3 => second.2.2), trivial⟩
-    (first.1, second.1, bases)
+
+private noncomputable def smithValue (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {_arguments : Unit → (integerMatrices rows columns width).Carrier sizes // True}) :
+    (smithOutputDomain rows columns width).Carrier sizes :=
+  let first := (integerHermiteReduction rows columns width).compute sizes arguments
+  let second := (reduce rows columns width).compute sizes arguments
+  let bases := (integerBasisCompose rows columns (leftWidth rows columns width) (rightWidth rows columns width)
+    (smithReductionDiagonalWidth rows columns width) (smithReductionDiagonalWidth rows columns width)).compute sizes
+    ⟨(fun name => match name with | 0 => first.2.2.1 | 1 => first.2.2.2 | 2 => second.2.1 | 3 => second.2.2), trivial⟩
+  (first.1, second.1, bases)
+
+/-- Smith reduction of arbitrary signed rectangular input with rank and both bases. -/
+noncomputable def integerSmithReduction (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specification (fun _ => integerMatrices rows columns width) (smithOutputDomain rows columns width) (fun _ _ => True)
+    (smithValue rows columns width)
 
 /-- Hermite reduction, decoded-rank cleanup, and both accumulated products are realized. -/
 theorem integerSmithReduction_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (integerSmithReduction rows columns width).Realizable := by
-  let computation := integerSmithReduction rows columns width
   have first := integerHermiteReduction_realizable rows columns width
   have second := reduce_realizable rows columns width
   have oldBases := (first.snd).snd
   have newBases := second.snd
   have bases := (integerBasisCompose_realizable rows columns (leftWidth rows columns width) (rightWidth rows columns width)
-    (smithReductionDiagonalWidth rows columns width) (smithReductionDiagonalWidth rows columns width)).onResults computation.inputDomains computation.precondition
+    (smithReductionDiagonalWidth rows columns width) (smithReductionDiagonalWidth rows columns width)).onResults
+    (fun _ : Unit => integerMatrices rows columns width) (fun _ _ => True)
     (fun name sizes arguments =>
       let first := (integerHermiteReduction rows columns width).compute sizes arguments
       let second := (reduce rows columns width).compute sizes arguments
@@ -115,7 +120,9 @@ theorem integerSmithReduction_realizable (rows columns width : MvPolynomial Para
       · exact oldBases.snd
       · exact newBases.fst
       · exact newBases.snd)
-  exact first.fst.prodMk (second.fst.prodMk bases)
+  apply (first.fst.prodMk (second.fst.prodMk bases)).specification (smithValue rows columns width)
+  intro sizes arguments valid
+  rfl
 
 set_option maxHeartbeats 4000000 in
 private theorem cleanup_form (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -148,13 +155,27 @@ theorem integerSmithReduction_isSmithForm (rows columns width : MvPolynomial Par
   have second := cleanup_form rows columns width sizes arguments
   dsimp only at first second
   have composed := second.of_equation first.1 first.2.1 first.2.2
+  simp only [integerSmithReduction, specification_compute, smithValue]
+  have bases := integerBasisCompose_correct rows columns (leftWidth rows columns width)
+    (rightWidth rows columns width) (smithReductionDiagonalWidth rows columns width)
+    (smithReductionDiagonalWidth rows columns width) sizes
+    ⟨(fun name => match name with
+      | 0 => ((integerHermiteReduction rows columns width).compute sizes arguments).2.2.1
+      | 1 => ((integerHermiteReduction rows columns width).compute sizes arguments).2.2.2
+      | 2 => ((reduce rows columns width).compute sizes arguments).2.1
+      | 3 => ((reduce rows columns width).compute sizes arguments).2.2), trivial⟩
+  have left := congrArg Prod.fst bases
+  have right := congrArg Prod.snd bases
+  dsimp only at left right
+  rw [left, right]
   exact composed
 
 set_option maxHeartbeats 800000 in
 /-- The returned rank is the rank of the original integer matrix. -/
 theorem integerSmithReduction_rank (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : {_arguments : Unit → (integerMatrices rows columns width).Carrier sizes // True}) :
-    ((integerSmithReduction rows columns width).compute sizes arguments).1.val = (arguments.val ()).val.rank :=
-  integerHermiteReduction_rank rows columns width sizes arguments
+    ((integerSmithReduction rows columns width).compute sizes arguments).1.val = (arguments.val ()).val.rank := by
+  simpa only [integerSmithReduction, specification_compute, smithValue] using
+    integerHermiteReduction_rank rows columns width sizes arguments
 
 end Polytime2.Computation

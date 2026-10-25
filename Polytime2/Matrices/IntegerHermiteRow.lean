@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Matrices.IntegerHermiteColumn
 import Polytime2.Matrices.IntegerPairTranspose
+import Polytime2.Computation.Specification
 
 /-! # Certified integer row reduction by transposition
 
@@ -70,25 +71,55 @@ private theorem prepared_realizable (rows columns width : MvPolynomial Parameter
       (MultiTape.oneTape 3) (by intros; rfl)).withPrecondition (allowed rows columns width) (by intros; trivial)
 
 /-- Clear a positive-pivot row and retain the accumulated right transformation. -/
-noncomputable def integerHermiteRow (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 4) :=
+private noncomputable def implementation (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 4) :=
   (prepared rows columns width).followedBy
     (integerMatrixPairTranspose columns rows columns columns (hermiteColumnWorkspace columns width)) rfl (by intros; trivial)
 
-theorem integerHermiteRow_realizable (rows columns width : MvPolynomial Parameter ℕ) :
-    (integerHermiteRow rows columns width).Realizable :=
+private theorem implementation_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (implementation rows columns width).Realizable :=
   (prepared_realizable rows columns width).followedBy
     (integerMatrixPairTranspose_realizable columns rows columns columns (hermiteColumnWorkspace columns width)) rfl (by intros; trivial)
 
 /-- The dual computation agrees exactly with the mathematical right-basis traversal. -/
-theorem integerHermiteRow_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (arguments : {arguments : (integerHermiteRow rows columns width).Arguments sizes //
-      (integerHermiteRow rows columns width).precondition sizes arguments}) :
-    let result := (integerHermiteRow rows columns width).compute sizes arguments
+private theorem implementation_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (implementation rows columns width).Arguments sizes //
+      (implementation rows columns width).precondition sizes arguments}) :
+    let result := (implementation rows columns width).compute sizes arguments
     (result.1.val, result.2.val) = IntegerMatrix.hermiteRowPrefix
       (Row := Fin (MvPolynomial.eval sizes rows)) (columns := MvPolynomial.eval sizes columns)
       (arguments.val 0) (arguments.val 1) (MvPolynomial.eval sizes columns) (arguments.val 2).val (arguments.val 3).val := by
   have result := integerHermiteColumn_correct columns rows width sizes
     ⟨(fun name => preparedValues rows columns width name sizes arguments), arguments.property⟩
   exact congrArg (fun matrices => (matrices.1.transpose, matrices.2.transpose)) result
+
+/-- The mathematical row prefix and its actual basis at the derived
+workspace. Its implementation appears only in the fit and realization proofs. -/
+noncomputable def integerHermiteRow (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter (Fin 4) :=
+  specificationBy (inputs rows columns width)
+    ((integerMatrices rows columns (hermiteColumnWorkspace columns width)).prod
+      (integerMatrices columns columns (hermiteColumnWorkspace columns width)))
+    (allowed rows columns width) (fun _ result => (result.1.val, result.2.val))
+    (fun sizes arguments => IntegerMatrix.hermiteRowPrefix (Row := Fin (MvPolynomial.eval sizes rows)) (columns := MvPolynomial.eval sizes columns)
+      (arguments.val 0) (arguments.val 1) (MvPolynomial.eval sizes columns) (arguments.val 2).val (arguments.val 3).val)
+    (fun sizes arguments => ⟨(implementation rows columns width).compute sizes arguments,
+      implementation_correct rows columns width sizes arguments⟩)
+
+theorem integerHermiteRow_realizable (rows columns width : MvPolynomial Parameter ℕ) :
+    (integerHermiteRow rows columns width).Realizable := by
+  apply (implementation_realizable rows columns width).specificationBy
+  · intro sizes
+    exact Subtype.val_injective.prodMap Subtype.val_injective
+  · intro sizes arguments valid
+    exact implementation_correct rows columns width sizes ⟨arguments, valid⟩
+
+/-- Observe the mathematical answer without unfolding traversal or transpose wiring. -/
+theorem integerHermiteRow_correct (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteRow rows columns width).Arguments sizes //
+      (integerHermiteRow rows columns width).precondition sizes arguments}) :
+    let result := (integerHermiteRow rows columns width).compute sizes arguments
+    (result.1.val, result.2.val) = IntegerMatrix.hermiteRowPrefix (Row := Fin (MvPolynomial.eval sizes rows)) (columns := MvPolynomial.eval sizes columns)
+      (arguments.val 0) (arguments.val 1) (MvPolynomial.eval sizes columns) (arguments.val 2).val (arguments.val 3).val := by
+  exact specificationBy_correct _ (integerHermiteRow rows columns width).outputDomain _
+    (fun _ result => (result.1.val, result.2.val)) _ _ sizes arguments
 
 end Polytime2.Computation

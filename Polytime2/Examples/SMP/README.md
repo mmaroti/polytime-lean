@@ -16,6 +16,11 @@ mathematical instance. The all-accepted search sentinel remains internal.
 membership equivalence. `prepare_tm0` includes preparation and output
 extraction.
 
+For accepted inputs, `prepareInput_observe` in
+[PreparedConversion.lean](PreparedConversion.lean) states equality of the whole
+dependent pair of exact sizes and mathematical payload. Use it instead of
+unfolding size preparation to compare payloads at dependent types.
+
 [Multisorted.lean](Multisorted.lean) defines the conversion-independent prepared
 input: generators and a target in the product of the fixed sort carriers, with
 finite dependency sets. `IsPrepared` records the catalogue and dependency
@@ -76,6 +81,5 @@ see the [prepared-consumer task](../../tasks/prepared-smp-consumer.md).
 Preparation shares one coordinate selection across targets, generators, and
 dependency labels. Reuse [array packing](../../Arrays/README.md) and
 [computed-size calls](../../Computation/README.md#sizes-and-loops) when
-extending
-this pipeline. Do not expose original working dimensions or padding in the
-prepared payload, or rebuild singleton argument records in consumers.
+extending this pipeline. Do not expose original working dimensions or padding
+in the prepared payload, or rebuild singleton argument records in consumers.

@@ -117,6 +117,9 @@ theorem integerHermiteRowStageUpdate_correct (rows columns width : MvPolynomial 
     (result.1.val, result.2.val) = IntegerMatrix.hermiteRowStage
       (Row := Fin (MvPolynomial.eval sizes rows)) (Column := Fin (MvPolynomial.eval sizes columns))
       (arguments.val 0) (arguments.val 1) (arguments.val 3) [arguments.val 2]
-      (arguments.val 4).val (arguments.val 5).val := rfl
+      (arguments.val 4).val (arguments.val 5).val := by
+  exact integerRowRemainderWithLeft_correct rows columns (intermediateWidth width) sizes
+    ⟨(fun name => prepared rows columns width name sizes arguments),
+      prepared_permitted rows columns width sizes arguments⟩
 
 end Polytime2.Computation

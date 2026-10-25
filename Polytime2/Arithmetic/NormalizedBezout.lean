@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Arithmetic.NormalizedBezoutMath
 import Polytime2.Arithmetic.SignedExtendedGcd
 import Polytime2.Computation.Conditional
@@ -259,13 +260,25 @@ variable {Parameter : Type} [Fintype Parameter]
 /-- Extended gcd with actual normalized coefficients at derived linear width.
 All signed pairs are admissible, including the zero pair, whose coefficients
 are `(1,0)`. The gcd retains the input magnitude width. -/
-noncomputable def integerNormalizedExtendedGcd (width : MvPolynomial Parameter ℕ) :
-    Computation Parameter Bool where
-  inputDomains _ := binaryIntegers width
-  outputDomain := (binaryIntegers width).prod
-    ((binaryIntegers (2 * width + 1)).prod (binaryIntegers (2 * width + 1)))
-  precondition _ _ := True
-  compute sizes arguments :=
+noncomputable def integerNormalizedExtendedGcd (width : MvPolynomial Parameter ℕ) : Computation Parameter Bool :=
+  specification (fun _ => binaryIntegers width) ((binaryIntegers width).prod
+    ((binaryIntegers (2 * width + 1)).prod (binaryIntegers (2 * width + 1)))) (fun _ _ => True)
+    (fun sizes arguments =>
+      let raw := ExtendedGcd.result (arguments.val false).val (arguments.val true).val
+      let coefficients := ExtendedGcd.normalizedCoefficients (arguments.val false).val (arguments.val true).val
+      let rawBound := ExtendedGcd.result_bounds (MvPolynomial.eval sizes width) _ _
+        (arguments.val false).property (arguments.val true).property
+      let coefficientBound := ExtendedGcd.normalizedCoefficients_bound (MvPolynomial.eval sizes width) _ _
+        (arguments.val false).property (arguments.val true).property
+      (⟨(raw.1 : ℤ), by simpa only [Int.natAbs_natCast] using rawBound.1⟩,
+        ⟨coefficients.1, by simpa only [map_add, map_one, map_mul, MvPolynomial.eval_ofNat] using coefficientBound.1⟩,
+        ⟨coefficients.2, by simpa only [map_add, map_one, map_mul, MvPolynomial.eval_ofNat] using coefficientBound.2⟩))
+
+/-- Realization-level equation for the bounded gcd and coefficient carrier.
+Application proofs use the ordinary integer observation instead. -/
+theorem Realizable.Internal.integerNormalizedExtendedGcd_compute (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerNormalizedExtendedGcd width).Arguments sizes // (integerNormalizedExtendedGcd width).precondition sizes arguments}) :
+    (integerNormalizedExtendedGcd width).compute sizes arguments =
     let raw := ExtendedGcd.result (arguments.val false).val (arguments.val true).val
     let coefficients := ExtendedGcd.normalizedCoefficients (arguments.val false).val (arguments.val true).val
     let rawBound := ExtendedGcd.result_bounds (MvPolynomial.eval sizes width) _ _
@@ -274,7 +287,8 @@ noncomputable def integerNormalizedExtendedGcd (width : MvPolynomial Parameter �
       (arguments.val false).property (arguments.val true).property
     (⟨(raw.1 : ℤ), by simpa only [Int.natAbs_natCast] using rawBound.1⟩,
       ⟨coefficients.1, by simpa only [map_add, map_one, map_mul, MvPolynomial.eval_ofNat] using coefficientBound.1⟩,
-      ⟨coefficients.2, by simpa only [map_add, map_one, map_mul, MvPolynomial.eval_ofNat] using coefficientBound.2⟩)
+      ⟨coefficients.2, by simpa only [map_add, map_one, map_mul, MvPolynomial.eval_ofNat] using coefficientBound.2⟩) := by
+  exact specification_compute _ (integerNormalizedExtendedGcd width).outputDomain _ _ sizes arguments
 
 theorem integerNormalizedExtendedGcd_realizable (width : MvPolynomial Parameter ℕ) :
     (integerNormalizedExtendedGcd width).Realizable := by
@@ -325,13 +339,26 @@ theorem integerNormalizedExtendedGcd_realizable (width : MvPolynomial Parameter 
     refine ⟨(arguments.val (.inl false)).property, (arguments.val (.inl true)).property, ?_, ?_⟩
     · exact (congrArg (fun result => result.1.val) arguments.property).trans
         (integerExtendedGcd_correct width sizes (fun name => arguments.val (.inl name))).2.1
-    · exact congrArg (fun result => result.2.1.val) arguments.property
+    · have coefficient := congrArg (fun result => result.2.1.val) arguments.property
+      simpa only [source, Realizable.Internal.integerExtendedGcd_compute] using coefficient
   have coefficients := (Realizable.Internal.NormalizedBezout.stage_realizable width).onResults
     domains allowed values compatible producers
   have packaged := (divisor.withPrecondition allowed (by intros; trivial)).prodMk coefficients
   have result := (integerExtendedGcd_realizable width).letThen packaged (fun _ => rfl) rfl (by intros; rfl)
-  exact result.withSpecification (fun _ _ => True) (integerNormalizedExtendedGcd width).compute
-    (by intros; trivial) (by intros; rfl)
+  apply result.specification
+  intro sizes arguments valid
+  simp only [source, Realizable.Internal.integerExtendedGcd_compute]
+  rfl
+
+
+/-- Observe the ordinary gcd and chosen normalized integer coefficients. -/
+theorem integerNormalizedExtendedGcd_value (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : (integerNormalizedExtendedGcd width).Arguments sizes) :
+    let result := (integerNormalizedExtendedGcd width).compute sizes ⟨arguments, trivial⟩
+    let raw := ExtendedGcd.result (arguments false).val (arguments true).val
+    let coefficients := ExtendedGcd.normalizedCoefficients (arguments false).val (arguments true).val
+    (result.1.val, result.2.1.val, result.2.2.val) = ((raw.1 : ℤ), coefficients.1, coefficients.2) := by
+  rw [Realizable.Internal.integerNormalizedExtendedGcd_compute]
 
 theorem integerNormalizedExtendedGcd_correct (width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
     (arguments : (integerNormalizedExtendedGcd width).Arguments sizes) :
@@ -339,9 +366,14 @@ theorem integerNormalizedExtendedGcd_correct (width : MvPolynomial Parameter ℕ
     result.1.val = (Int.gcd (arguments false).val (arguments true).val : ℤ) ∧
       (arguments false).val * result.2.1.val + (arguments true).val * result.2.2.val = result.1.val := by
   have gcdCorrect := (ExtendedGcd.result_correct (arguments false).val (arguments true).val).1
+  apply (congrArg (fun result : ℤ × ℤ × ℤ =>
+    result.1 = (Int.gcd (arguments false).val (arguments true).val : ℤ) ∧
+      (arguments false).val * result.2.1 + (arguments true).val * result.2.2 = result.1)
+    (integerNormalizedExtendedGcd_value width sizes arguments)).mpr
   constructor
   · exact congrArg (fun value : ℕ => (value : ℤ)) gcdCorrect
-  · simpa only [integerNormalizedExtendedGcd, gcdCorrect] using
+  · simpa only [gcdCorrect] using
       ExtendedGcd.normalizedCoefficients_correct (arguments false).val (arguments true).val
+
 
 end Polytime2.Computation

@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Computation.Specification
 import Polytime2.Matrices.IntegerHermiteStoredRank
 import Polytime2.Matrices.HermitePivotUpdate
 import Polytime2.Matrices.HermiteSweepMath
@@ -99,18 +100,31 @@ theorem integerHermiteInsertSelection_some (rows columns width : MvPolynomial Pa
     rfl
 
 /-- Return both actual matrices and updated rank/embeddings after one incoming row. -/
-noncomputable def integerHermiteAdvance (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit where
-  inputDomains := (integerHermiteInsertHost rows columns width).inputDomains
-  outputDomain := ((integerMatrices rows columns (hermiteInsertOutputWidth width rows)).prod
-    (integerMatrices rows rows (hermiteInsertOutputWidth width rows))).prod (hermitePivotSelection rows columns)
-  precondition := (integerHermiteInsertHost rows columns width).precondition
-  compute sizes arguments := (((integerHermiteInsertHost rows columns width).compute sizes arguments).1,
-    (integerHermiteInsertSelection rows columns width).compute sizes arguments)
+noncomputable def integerHermiteAdvance (rows columns width : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  specification (integerHermiteInsertHost rows columns width).inputDomains
+    (((integerMatrices rows columns (hermiteInsertOutputWidth width rows)).prod
+      (integerMatrices rows rows (hermiteInsertOutputWidth width rows))).prod (hermitePivotSelection rows columns))
+    (integerHermiteInsertHost rows columns width).precondition
+    (fun sizes arguments => (((integerHermiteInsertHost rows columns width).compute sizes arguments).1,
+      (integerHermiteInsertSelection rows columns width).compute sizes arguments))
 
 /-- Insertion and metadata specialization are combined through ordinary output pairing. -/
 theorem integerHermiteAdvance_realizable (rows columns width : MvPolynomial Parameter ℕ) :
     (integerHermiteAdvance rows columns width).Realizable := by
-  exact ((integerHermiteInsertHost_realizable rows columns width).fst).prodMk (integerHermiteInsertSelection_realizable rows columns width)
+  apply (((integerHermiteInsertHost_realizable rows columns width).fst).prodMk
+    (integerHermiteInsertSelection_realizable rows columns width)).specification
+  intros
+  rfl
+
+/-- Evaluate the mathematical pairing of insertion and its updated selection. -/
+theorem integerHermiteAdvance_compute (rows columns width : MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (arguments : {arguments : (integerHermiteAdvance rows columns width).Arguments sizes //
+      (integerHermiteAdvance rows columns width).precondition sizes arguments}) :
+    (integerHermiteAdvance rows columns width).compute sizes arguments =
+      (((integerHermiteInsertHost rows columns width).compute sizes arguments).1,
+        (integerHermiteInsertSelection rows columns width).compute sizes arguments) := by
+  exact specification_compute _ (integerHermiteAdvance rows columns width).outputDomain _ _ sizes arguments
 
 /-- Updating embeddings retains the same actual presentation and unimodular basis. -/
 theorem integerHermiteAdvance_preserves (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -121,8 +135,9 @@ theorem integerHermiteAdvance_preserves (rows columns width : MvPolynomial Param
     (equation : (arguments.val () 2).val * original * right = (arguments.val () 1).val)
     (unit : IsUnit (arguments.val () 2).val.det) :
     let result := (integerHermiteAdvance rows columns width).compute sizes arguments
-    result.1.2.val * original * right = result.1.1.val ∧ IsUnit result.1.2.val.det :=
-  integerHermiteInsertHost_preserves rows columns width sizes arguments original right equation unit
+    result.1.2.val * original * right = result.1.1.val ∧ IsUnit result.1.2.val.det := by
+  simp only [integerHermiteAdvance, specification_compute]
+  exact integerHermiteInsertHost_preserves rows columns width sizes arguments original right equation unit
 
 /-- Every mathematical outer-prefix state permits the next runtime insertion. -/
 theorem integerHermiteAdvance_permitted (rows columns width : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
@@ -152,6 +167,7 @@ theorem integerHermiteAdvance_correct (rows columns width : MvPolynomial Paramet
       (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns)) =
       (IntegerMatrix.hermiteRowAdvance original (arguments.val () 0).2
         ⟨(((arguments.val () 1).val, (arguments.val () 2).val), (arguments.val () 0).1), invariant⟩).val := by
+  simp only [integerHermiteAdvance, specification_compute]
   let before : {state : IntegerMatrix.HermiteRowState (MvPolynomial.eval sizes rows) (MvPolynomial.eval sizes columns) //
       IntegerMatrix.HermiteRowPrefix original (arguments.val () 0).2.val state} :=
     ⟨(((arguments.val () 1).val, (arguments.val () 2).val), (arguments.val () 0).1), invariant⟩
