@@ -514,6 +514,13 @@ variables. Stronger streaming and space bounds require separate certificates.
 
 ## Further application: fixed-template CSP
 
+The mathematical contract and initial predicates are in
+[CSP/Basic.lean](Polytime2/CSP/Basic.lean); see the
+[CSP guide](Polytime2/CSP/README.md) for current implementation status.
+The [Taylor hardness task](Polytime2/tasks/csp-taylor-hardness.md) targets
+NP-completeness for rigid cores without Taylor polymorphisms, separately from
+the polynomial-time solver requirements below.
+
 CSP is a decision problem for a fixed finite relational structure R over a
 fixed finite carrier A. R includes finitely many named relation symbols, their
 fixed arities, and their complete relation tables on A. These are known before

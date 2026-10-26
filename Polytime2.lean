@@ -16,6 +16,7 @@ limitations under the License.
 -/
 
 import Polytime2.Machine.Basic
+import Polytime2.CSP.Basic
 import Polytime2.Computation.Basic
 import Polytime2.Computation.Realizable
 import Polytime2.Computation.Specification

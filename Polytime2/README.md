@@ -22,6 +22,7 @@ explain how to find and combine them.
 | Implement a missing foundational operation | [Primitives][primitives] |
 | Find a worked application | [Examples][examples] |
 | Prepare or consume an SMP instance | [SMP][smp] |
+| Use relational CSP mathematical contracts | [CSP][csp] |
 
 [comp]: Computation/README.md
 [enc]: Encoding/README.md
@@ -34,6 +35,7 @@ explain how to find and combine them.
 [primitives]: Primitives/README.md
 [examples]: Examples/README.md
 [smp]: Examples/SMP/README.md
+[csp]: CSP/README.md
 
 ## Build
 
@@ -61,6 +63,8 @@ development because theorem statements may still need to be adapted.
    and both witness conversions.
 8. [Exact rational linear programming](tasks/linear-programming.md): a
    longer-term solver project requiring a full precision and bit-cost analysis.
+9. [CSP Taylor hardness](tasks/csp-taylor-hardness.md): formalize fixed-template
+   NP-completeness for rigid cores without Taylor polymorphisms.
 
 These are proposals, not completed features. Each task records its prerequisites
 and acceptance criteria; remove completed entries and update the relevant guide.
