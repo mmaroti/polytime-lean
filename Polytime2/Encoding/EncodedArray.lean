@@ -93,6 +93,27 @@ theorem decode_total (elementDecode : BitVec width → Option Carrier)
     obtain ⟨rest, restAccepted⟩ := hypothesis (split.extractLsb' width (length * width))
     exact ⟨Fin.cons first rest, by simp [decode, split, firstAccepted, restAccepted]⟩
 
+/-- Decoding concatenated blocks succeeds exactly when every scalar block
+decodes to the corresponding value. This includes empty arrays and zero widths. -/
+theorem decode_encoded_iff {Source : Type*} (encodeBlock : Source → BitVec width)
+    (element : BitVec width → Option Carrier) (length : ℕ)
+    (blocks : Fin length → Source) (values : Fin length → Carrier) :
+    decode element length (encode encodeBlock length blocks) = some values ↔
+      ∀ index, element (encodeBlock (blocks index)) = some (values index) := by
+  induction length with
+  | zero => simp [decode, Subsingleton.elim values Fin.elim0]
+  | succ length hypothesis =>
+    simp only [encode, decode, BitVec.cast_cast, BitVec.cast_eq, BitVec.extractLsb'_append_eq_left,
+      BitVec.extractLsb'_append_eq_right, Bind.bind, Option.bind_eq_some_iff,
+      Pure.pure, Option.some.injEq]
+    constructor
+    · rintro ⟨first, firstAccepted, rest, restAccepted, equality⟩
+      cases equality
+      exact Fin.cases firstAccepted (fun index => (hypothesis _ _).mp restAccepted index)
+    · intro entries
+      exact ⟨values 0, entries 0, Fin.tail values,
+        (hypothesis _ _).mpr (fun index => entries index.succ), Fin.cons_self_tail values⟩
+
 /-- The bit order used by the tape controllers. -/
 abbrev bits {width : ℕ} (value : BitVec width) : List Bool :=
   List.ofFn (fun index : Fin width => value.getLsbD index.val)
@@ -179,6 +200,23 @@ theorem bits_encode_congr {otherWidth : ℕ} (first : Carrier → BitVec width)
   simp only [bits_encode]
   exact congrArg List.flatten (congrArg List.ofFn (funext (fun index => equal (values index))))
 
+/-- Equal-length arrays with pointwise equal element words have equal complete
+words, even across different carriers and zero-width element codecs. -/
+theorem bits_encode_congr_entries {OtherCarrier : Type*} {otherWidth firstLength secondLength : ℕ}
+    (first : Carrier → BitVec width) (second : OtherCarrier → BitVec otherWidth)
+    (firstValues : Fin firstLength → Carrier) (secondValues : Fin secondLength → OtherCarrier)
+    (sameLength : firstLength = secondLength)
+    (entries : ∀ firstIndex secondIndex, firstIndex.val = secondIndex.val →
+      bits (first (firstValues firstIndex)) = bits (second (secondValues secondIndex))) :
+    bits (encode first firstLength firstValues) = bits (encode second secondLength secondValues) := by
+  rw [bits_encode, bits_encode]
+  apply congrArg List.flatten
+  apply List.ext_getElem
+  · simpa only [List.length_ofFn] using sameLength
+  · intro index firstBound secondBound
+    simp only [List.getElem_ofFn]
+    exact entries _ _ rfl
+
 /-- Casting the array length preserves its consecutive element words. -/
 theorem bits_encode_cast {firstLength secondLength : ℕ}
     (element : Carrier → BitVec width) (sameLength : firstLength = secondLength)
@@ -256,6 +294,45 @@ theorem split_encode_update (element : Carrier → BitVec width) (length : ℕ)
           List.append_assoc]
 
 end ArrayEncoding
+
+/-- Carriers, exact width polynomials, and canonical encoder bits determine a
+domain. Decoder equality follows from the two canonical round-trip laws. -/
+theorem ext_of_encode_bits
+    (first second : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (carriers : first.Carrier = second.Carrier)
+    (widths : first.widthPolynomial = second.widthPolynomial)
+    (encodings : ∀ sizes value, ArrayEncoding.bits (first.encode sizes value) =
+      ArrayEncoding.bits (second.encode sizes (cast (congrFun carriers sizes) value))) :
+    first = second := by
+  rcases first with ⟨carrier, width, encode, firstDecode, firstRoundTrip, firstCanonical⟩
+  rcases second with ⟨otherCarrier, otherWidth, otherEncode, secondDecode, secondRoundTrip, secondCanonical⟩
+  cases carriers
+  cases widths
+  have encoders : encode = otherEncode := by
+    funext sizes value
+    exact ArrayEncoding.bits_injective (encodings sizes value)
+  cases encoders
+  have decoders : firstDecode = secondDecode := by
+    funext sizes bits
+    apply Option.ext
+    intro value
+    constructor
+    · intro accepted
+      rw [← firstCanonical sizes bits value accepted]
+      exact secondRoundTrip sizes value
+    · intro accepted
+      rw [← secondCanonical sizes bits value accepted]
+      exact firstRoundTrip sizes value
+  cases decoders
+  rfl
+
+/-- Equal mathematical size assignments transport values without changing bits. -/
+theorem encode_bits_cast_sizes (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    {first second : Parameter → ℕ} (equal : first = second) (value : domain.Carrier first) :
+    ArrayEncoding.bits (domain.encode first value) =
+      ArrayEncoding.bits (domain.encode second (cast (congrArg domain.Carrier equal) value)) := by
+  cases equal
+  rfl
 
 namespace MatrixEncoding
 
@@ -358,11 +435,8 @@ theorem arrayOfLength_encode_surjective (element : EncodedDomain Parameter)
     (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :
     Function.Surjective ((element.arrayOfLength length).encode sizes) := by
   intro bits
-  have elementTotal : ∀ input, ∃ value, element.decode sizes input = some value := by
-    intro input
-    obtain ⟨value, rfl⟩ := full sizes input
-    exact ⟨value, element.decode_encode sizes value⟩
-  obtain ⟨values, accepted⟩ := ArrayEncoding.decode_total (element.decode sizes) elementTotal
+  obtain ⟨values, accepted⟩ := ArrayEncoding.decode_total (element.decode sizes)
+    ((element.encode_surjective_iff_decode_total sizes).mp (full sizes))
     (MvPolynomial.eval sizes length) (bits.cast (by simp [width, arrayOfLength]))
   refine ⟨values, (element.arrayOfLength length).encode_decode sizes bits values ?_⟩
   exact accepted
@@ -374,6 +448,14 @@ noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} 
     (fun sizes => Fin (sizes lengthParameter) → element.Carrier sizes)
     (fun sizes => Equiv.arrowCongr
       (finCongr (MvPolynomial.eval_X (f := sizes) lengthParameter).symm) (Equiv.refl _))
+
+/-- Named-length arrays preserve total use of exact-width bit patterns. -/
+theorem array_encode_surjective (element : EncodedDomain Parameter)
+    (full : ∀ sizes, Function.Surjective (element.encode sizes))
+    (parameter : Parameter) (sizes : Parameter → ℕ) :
+    Function.Surjective ((element.array parameter).encode sizes) :=
+  reindex_encode_surjective _ _ _ sizes
+    (arrayOfLength_encode_surjective element full (MvPolynomial.X parameter) sizes)
 
 @[simp] theorem arrayOfLength_widthPolynomial (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (length : MvPolynomial Parameter ℕ) :

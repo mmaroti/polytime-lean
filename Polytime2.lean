@@ -20,6 +20,9 @@ import Polytime2.CSP.Basic
 import Polytime2.CSP.Instance
 import Polytime2.CSP.ThreeSAT
 import Polytime2.Complexity.BinaryDecoder
+import Polytime2.Computation.CodecDecode
+import Polytime2.Computation.FixedArrayDecode
+import Polytime2.Complexity.StoredFieldDecode
 import Polytime2.Complexity.UnarySize
 import Polytime2.Complexity.HeaderPayload
 import Polytime2.Complexity.StoredHeaderPayload

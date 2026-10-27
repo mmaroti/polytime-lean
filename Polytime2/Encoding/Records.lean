@@ -28,7 +28,7 @@ set_option backward.isDefEq.respectTransparency false
 
 namespace Polytime2.EncodedDomain
 
-universe parameterLevel carrierLevel
+universe parameterLevel carrierLevel targetParameterLevel
 variable {Parameter : Type parameterLevel} [Fintype Parameter]
 
 /-- Every bit pattern is a value; the exact width is a fixed polynomial. -/
@@ -61,6 +61,27 @@ noncomputable abbrev prod (left right : EncodedDomain.{parameterLevel, carrierLe
       rw [left.encode_decode _ _ _ firstAccepted, right.encode_decode _ _ _ secondAccepted]
       exact BitVec.extractLsb'_append_extractLsb')
 
+/-- Consecutive product fields use every pattern when both component codecs do. -/
+theorem prod_encode_surjective
+    (left right : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (sizes : Parameter → ℕ) (leftFull : Function.Surjective (left.encode sizes))
+    (rightFull : Function.Surjective (right.encode sizes)) :
+    Function.Surjective ((left.prod right).encode sizes) := by
+  apply ((left.prod right).encode_surjective_iff_decode_total sizes).mpr
+  intro bits
+  let split : BitVec (right.width sizes + left.width sizes) :=
+    bits.cast (by simp [width, Nat.add_comm])
+  obtain ⟨first, firstAccepted⟩ := (left.encode_surjective_iff_decode_total sizes).mp leftFull
+    (split.extractLsb' 0 (left.width sizes))
+  obtain ⟨second, secondAccepted⟩ := (right.encode_surjective_iff_decode_total sizes).mp rightFull
+    (split.extractLsb' (left.width sizes) (right.width sizes))
+  exact ⟨(first, second), by
+    change (do
+      let first ← left.decode sizes (split.extractLsb' 0 (left.width sizes))
+      let second ← right.decode sizes (split.extractLsb' (left.width sizes) (right.width sizes))
+      pure (first, second)) = some (first, second)
+    simp [firstAccepted, secondAccepted, Bind.bind]⟩
+
 @[simp] theorem prod_widthPolynomial
     (left right : EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
     (left.prod right).widthPolynomial = left.widthPolynomial + right.widthPolynomial := rfl
@@ -71,6 +92,22 @@ noncomputable abbrev prod (left right : EncodedDomain.{parameterLevel, carrierLe
     ArrayEncoding.bits ((left.prod right).encode sizes value) =
       ArrayEncoding.bits (left.encode sizes value.1) ++ ArrayEncoding.bits (right.encode sizes value.2) := by
   simp only [prod, ofCodec, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
+
+/-- Encoding-preserving component conversions preserve the complete product
+word, including components with empty carriers. -/
+theorem prod_encode_bits_congr {TargetParameter : Type targetParameterLevel} [Fintype TargetParameter]
+    (left right : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (targetLeft targetRight : EncodedDomain.{targetParameterLevel, carrierLevel} TargetParameter)
+    (sizes : Parameter → ℕ) (targetSizes : TargetParameter → ℕ)
+    (value : left.Carrier sizes × right.Carrier sizes)
+    (targetValue : targetLeft.Carrier targetSizes × targetRight.Carrier targetSizes)
+    (first : ArrayEncoding.bits (left.encode sizes value.1) =
+      ArrayEncoding.bits (targetLeft.encode targetSizes targetValue.1))
+    (second : ArrayEncoding.bits (right.encode sizes value.2) =
+      ArrayEncoding.bits (targetRight.encode targetSizes targetValue.2)) :
+    ArrayEncoding.bits ((left.prod right).encode sizes value) =
+      ArrayEncoding.bits ((targetLeft.prod targetRight).encode targetSizes targetValue) := by
+  rw [bits_prod_encode, bits_prod_encode, first, second]
 
 namespace RecordEncoding
 
@@ -110,6 +147,20 @@ noncomputable def equivalence : (count : ℕ) →
         rcases value with ⟨first, rest⟩
         exact congrArg (Prod.mk first) ((equivalence count (Fin.tail fields) sizes).apply_symm_apply rest) }
 
+theorem domain_encode_surjective (count : ℕ)
+    (fields : Fin count → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (sizes : Parameter → ℕ) (full : ∀ index, Function.Surjective ((fields index).encode sizes)) :
+    Function.Surjective ((domain count fields).encode sizes) := by
+  induction count with
+  | zero =>
+    intro bits
+    refine ⟨PUnit.unit, ?_⟩
+    apply BitVec.eq_of_getLsbD_eq
+    intro index bounded
+    simp [domain] at bounded
+  | succ count hypothesis =>
+    exact prod_encode_surjective _ _ sizes (full 0)
+      (hypothesis (Fin.tail fields) (fun index => full index.succ))
 
 end RecordEncoding
 
@@ -119,6 +170,15 @@ noncomputable abbrev record (count : ℕ)
   (RecordEncoding.domain count fields).reindex
     (fun sizes => (index : Fin count) → (fields index).Carrier sizes)
     (RecordEncoding.equivalence count fields)
+
+/-- A record has no unused bit patterns when none of its fields do; the empty
+record uses the unique zero-width pattern. -/
+theorem record_encode_surjective (count : ℕ)
+    (fields : Fin count → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (sizes : Parameter → ℕ) (full : ∀ index, Function.Surjective ((fields index).encode sizes)) :
+    Function.Surjective ((record count fields).encode sizes) :=
+  reindex_encode_surjective _ _ _ sizes
+    (RecordEncoding.domain_encode_surjective count fields sizes full)
 
 @[simp] theorem record_widthPolynomial (count : ℕ)
     (fields : Fin count → EncodedDomain.{parameterLevel, carrierLevel} Parameter) :
@@ -149,6 +209,21 @@ theorem bits_record_encode (count : ℕ)
       ArrayEncoding.bits ((record count (Fin.tail fields)).encode sizes (Fin.tail values)) = _
     rw [hypothesis, List.ofFn_succ]
     rfl
+
+/-- Pointwise encoding-preserving field conversions preserve a whole record,
+including the unique word of an empty record. -/
+theorem record_encode_bits_congr {TargetParameter : Type targetParameterLevel} [Fintype TargetParameter]
+    (count : ℕ) (fields : Fin count → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (targets : Fin count → EncodedDomain.{targetParameterLevel, carrierLevel} TargetParameter)
+    (sizes : Parameter → ℕ) (targetSizes : TargetParameter → ℕ)
+    (values : ∀ index, (fields index).Carrier sizes)
+    (targetValues : ∀ index, (targets index).Carrier targetSizes)
+    (entries : ∀ index, ArrayEncoding.bits ((fields index).encode sizes (values index)) =
+      ArrayEncoding.bits ((targets index).encode targetSizes (targetValues index))) :
+    ArrayEncoding.bits ((record count fields).encode sizes values) =
+      ArrayEncoding.bits ((record count targets).encode targetSizes targetValues) := by
+  simp only [bits_record_encode]
+  exact congrArg List.flatten (congrArg List.ofFn (funext entries))
 
 /-- The exact polynomial number of bits preceding a record coordinate. -/
 noncomputable def recordOffset : (count : ℕ) →
@@ -305,6 +380,13 @@ noncomputable def namedRecord (fields : IndexName → EncodedDomain Parameter) :
     (fun sizes => ∀ name, (fields name).Carrier sizes)
     (fun sizes => (Equiv.piCongrLeft (fun name => (fields name).Carrier sizes)
       (Fintype.equivFin IndexName).symm).symm)
+
+/-- Naming record fields preserves total use of exact-width bit patterns. -/
+theorem namedRecord_encode_surjective (fields : IndexName → EncodedDomain Parameter)
+    (sizes : Parameter → ℕ) (full : ∀ name, Function.Surjective ((fields name).encode sizes)) :
+    Function.Surjective ((namedRecord fields).encode sizes) :=
+  reindex_encode_surjective _ _ _ sizes
+    (record_encode_surjective _ _ sizes (fun index => full ((Fintype.equivFin IndexName).symm index)))
 
 theorem namedRecord_unit_widthPolynomial (domain : EncodedDomain Parameter) :
     (namedRecord (fun _ : Unit => domain)).widthPolynomial = domain.widthPolynomial := by

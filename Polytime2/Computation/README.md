@@ -96,6 +96,9 @@ mathematically equal answer without changing its domain.
 consumer behind a certified Boolean guard. Prove that an accepted guard
 implies mathematical admissibility; rejection returns `none` without invoking
 the consumer or requiring a default output. The word parsers share this rule.
+`ready.guarded` in [Conditional.lean](Conditional.lean) supports a certified
+fallback in the existing output domain. Use `none` for partial optional-result
+consumers without nesting `Option`; `optionalGuard` reuses this branching rule.
 `optionalBind_realizable` composes total optional-result decoders, skipping the
 consumer when the source is absent. It also supports empty result carriers.
 `optionalElim_realizable` supports an arbitrary result codec by combining a
@@ -149,6 +152,20 @@ encoding. Its inverse preserves the bits and reuses the identity encoding map.
 This supplies no validation for partial codecs. The
 [dense-instance reader](../CSP/ReadInstance.lean) is a concrete caller.
 
+[CodecDecode.lean](CodecDecode.lean) fixes the `decodeCanonicalBits` contract
+without assuming an arbitrary codec is efficiently decodable.
+`decodeCanonicalBits_of_full` certifies full codecs;
+`decodeCanonicalBits_reindex` transports a certificate through a carrier
+equivalence. [FixedArrayDecode.lean](FixedArrayDecode.lean) certifies arrays
+over a specialization-fixed scalar codec at any polynomial length.
+`decodeFixedArray_correct`, `decodeFixedArray_roundtrip`, and
+`decodeFixedArray_some_iff` give canonical decoding, round trips, and success
+criteria. `decodeFixedNamedArray_realizable` supplies ordinary named indices.
+No default element or inhabited carrier is required. For external fields, pass
+the exact-width certificate to the [stored-field rules][stored decode].
+
+[stored decode]: ../Complexity/StoredFieldDecode.lean
+
 [BooleanBits.lean](BooleanBits.lean) transports ordinary Boolean arrays to
 exact little-endian bit vectors with unchanged canonical bits. It is used
 between the stored-field reader and the dense-instance decoder.
@@ -169,6 +186,9 @@ For a projection onto named caller sizes, use
 [ParameterRename.lean](ParameterRename.lean). `ready.renameParameters` derives
 the realization from polynomial substitution while exposing the directly
 projected mathematical carriers and the existing renamed codecs.
+Its proof uses the shared `EncodedDomain.substitute_X` equality; application
+adapters can use constructor and composition laws from the
+[encoding guide](../Encoding/README.md#widths-and-parameter-changes).
 For sizes computed from input data, start with
 [ComputedSizes.lean](ComputedSizes.lean) and
 [ComputedCall.lean](ComputedCall.lean).

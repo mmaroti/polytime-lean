@@ -91,6 +91,11 @@ See [Fold.lean](../Examples/Fold.lean) and
 [Transform.lean](../Examples/Transform.lean) for examples, including empty
 arrays and zero-width elements.
 
+[Fixed-array decoding](../Computation/FixedArrayDecode.lean) validates scalar
+codes and returns an optional array of actual values. The scalar codec is
+fixed before runtime; the array length may be any polynomial. Its canonical
+contract covers unused codes, empty carriers, empty arrays, and zero widths.
+
 ## Packing and computed sizes
 
 `boundedArrayAtLength` reads stored elements at an exact polynomial length,

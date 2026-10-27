@@ -105,6 +105,16 @@ same validation at a stored field's actual length and retains its exact count
 within the host capacity. Its correctness theorem identifies the optional
 output contents with strict binary-word decoding.
 
+[StoredFieldDecode.lean](StoredFieldDecode.lean) composes strict binary-letter
+validation, an exact target-width guard, extraction, and a supplied
+`decodeCanonicalBits` certificate. `decodeStoredWord_correct` agrees with
+`domain.decodeWord` on every stored word, including invalid letters, wrong
+lengths, and invalid scalar codes. `decodeStoredBits` supplies the Boolean-field
+stage; `readStoredBits` exposes partial exact extraction with precisely the
+stored-length equality as its precondition. Dense instances use the full-codec
+certificate; CSP witnesses use the fixed-array certificate. Capacity padding
+never contributes mathematical elements, and no inhabitance is required.
+
 Foundational alphabet transport and counted sequencing are in
 [TM0/WordComposition.lean](../TM0/WordComposition.lean). Application proofs use
 the public composition and bridge rules instead of constructing machines.

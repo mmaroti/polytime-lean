@@ -105,12 +105,15 @@ theorem integerMatrixPresentationOriginalView_realizable
       EncodedDomain.arrayOfLength, EncodedDomain.reindex, binaryIntegers,
       EncodedDomain.restrict, EncodedDomain.prod, MvPolynomial.eval_rename]
   · intro sizes value
-    have matrixBits := integerMatricesRenameEquiv_symm_bits rows columns matrixWidth names sizes value.1
-    have leftBits := integerMatricesRenameEquiv_symm_bits rows rows leftWidth names sizes value.2.1
-    have rightBits := integerMatricesRenameEquiv_symm_bits columns columns rightWidth names sizes value.2.2
-    simp only [renameParameters_bits] at matrixBits leftBits rightBits
-    simp only [renameParameters_bits, bits_prod_encode, ArrayEncoding.bits_cast, ArrayEncoding.bits_append]
-    rw [← matrixBits, ← leftBits, ← rightBits]
+    rw [renameParameters_bits]
+    apply prod_encode_bits_congr
+    · simpa only [renameParameters_bits] using
+        (integerMatricesRenameEquiv_symm_bits rows columns matrixWidth names sizes value.1).symm
+    · apply prod_encode_bits_congr
+      · simpa only [renameParameters_bits] using
+          (integerMatricesRenameEquiv_symm_bits rows rows leftWidth names sizes value.2.1).symm
+      · simpa only [renameParameters_bits] using
+          (integerMatricesRenameEquiv_symm_bits columns columns rightWidth names sizes value.2.2).symm
 
 /-- Returning a presentation to host dimensions preserves its three matrices,
 even when native width formulas are only propositionally equal to renamings. -/

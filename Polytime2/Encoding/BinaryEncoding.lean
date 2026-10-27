@@ -199,4 +199,13 @@ noncomputable def booleans : EncodedDomain Parameter := fixed finTwoEquiv.symm
   simp [booleans, fixed, ofCodec]
   decide
 
+/-- The one-bit Boolean codec has no unused code. -/
+theorem booleans_encode_surjective (sizes : Parameter → ℕ) :
+    Function.Surjective ((booleans : EncodedDomain Parameter).encode sizes) := by
+  apply (booleans.encode_surjective_iff_decode_total sizes).mpr
+  intro bits
+  have bounded : bits.toNat < 2 := by simpa using bits.isLt
+  exact ⟨finTwoEquiv ⟨bits.toNat, bounded⟩, by
+    simpa [booleans, fixed, ofCodec] using Nat.le_of_lt_succ bounded⟩
+
 end Polytime2.EncodedDomain

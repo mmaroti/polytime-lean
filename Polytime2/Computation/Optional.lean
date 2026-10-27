@@ -91,6 +91,15 @@ theorem optional_renameParameters_bits {NewParameter : Type} [Fintype NewParamet
     (fun value => (renameParameters_bits domain names sizes value).symm) value
   simpa only [Option.map_id, id_eq] using equal
 
+/-- Size renaming commutes with the complete optional codec, including padding. -/
+@[simp] theorem optional_renameParameters {NewParameter : Type} [Fintype NewParameter]
+    (domain : EncodedDomain Parameter) (names : Parameter → NewParameter) :
+    (optional domain).renameParameters names = optional (domain.renameParameters names) := by
+  refine ext_of_encode_bits ((optional domain).renameParameters names)
+    (optional (domain.renameParameters names)) rfl ?_ ?_
+  · simp [optional, reindex_widthPolynomial, variant_widthPolynomial, alternatives, Fin.sum_univ_succ]
+  · exact optional_renameParameters_bits domain names
+
 end Polytime2.EncodedDomain
 
 namespace Polytime2.Computation
@@ -109,9 +118,7 @@ theorem optionalRename_realizable {HostParameter : Type} [Fintype HostParameter]
     (source : EncodedDomain HostParameter) (names : HostParameter → Parameter) :
     (optionalRename source names).Realizable := by
   apply encodingMap_realizable
-  · intro sizes
-    have lengths := congrArg List.length (optional_renameParameters_bits source names sizes none)
-    simpa only [ArrayEncoding.bits, List.length_ofFn] using lengths.symm
+  · intros; rw [optional_renameParameters]
   · exact optional_renameParameters_bits source names
 
 /-- Return an actual optional value. -/
@@ -222,24 +229,11 @@ theorem Realizable.optionalGuard {InputName : Type} [Fintype InputName]
     (guardReady : (Computation.mk consumer.inputDomains booleans allowed
       (fun sizes arguments => guard sizes arguments.val)).Realizable) :
     (consumer.optionalGuard allowed guard permits).Realizable := by
-  let computation := consumer.optionalGuard allowed guard permits
-  apply Realizable.ofCases (computation := computation) guard guardReady
-  · let selected sizes arguments := allowed sizes arguments ∧ guard sizes arguments = true
-    have active := ready.withPrecondition selected (by
-      intro sizes arguments valid
-      exact permits sizes arguments valid.1 valid.2)
-    have packed := active.followedBy (optionalSome_realizable consumer.outputDomain) rfl (by intros; trivial)
-    apply packed.withSpecification selected _ (by intros; assumption)
-    intro sizes arguments valid
-    change some (consumer.compute sizes _) = if h : guard sizes arguments = true then some _ else none
-    rw [dite_eq_left valid.2]
-  · let rejected sizes arguments := allowed sizes arguments ∧ guard sizes arguments = false
-    have absent := (optionalNone_realizable consumer.outputDomain).onResults consumer.inputDomains rejected
-      (fun empty => empty.elim) (by intros; trivial) (fun empty => empty.elim)
-    apply absent.withSpecification rejected _ (by intros; assumption)
-    intro sizes arguments valid
-    change none = if h : guard sizes arguments = true then some _ else none
-    rw [dite_eq_right (by rw [valid.2]; decide)]
+  have lifted := ready.followedBy (optionalSome_realizable consumer.outputDomain) rfl (by intros; trivial)
+  have complete := lifted.guarded (fun _ => none) (optionalNone_realizable consumer.outputDomain)
+    allowed guard permits guardReady
+  exact complete.withSpecification allowed (consumer.optionalGuard allowed guard permits).compute
+    (by intros; assumption) (by intros; rfl)
 
 /-- Test presence without requiring a value in the optional payload domain. -/
 noncomputable def optionalIsSome (source : EncodedDomain Parameter) : Computation Parameter Unit :=

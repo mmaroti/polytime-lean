@@ -29,8 +29,15 @@ specifications; polynomial-time realization is a separate obligation.
 [bounded]: BoundedArray.lean
 
 `arrayOfLength_encode_surjective` lifts total use of bit patterns from an
-element codec to its array codec. The CSP witness decoder uses it to frame raw
-bits into blocks before validating the finite carrier codes.
+element codec to its array codec. The shared
+[fixed-array decoder](../Computation/FixedArrayDecode.lean) uses it to frame
+raw bits into blocks before validating the finite carrier codes.
+`array_encode_surjective`, `prod_encode_surjective`,
+`record_encode_surjective`, `namedRecord_encode_surjective`, and
+`reindex_encode_surjective` provide the corresponding constructor rules.
+`encode_surjective_iff_decode_total` converts encoder surjectivity to decoder
+totality and back. The [CSP instance codec](../CSP/Encoding.lean) uses these
+rules structurally, including empty records, empty arrays, and zero widths.
 
 `boundedArrayConvert_bits` lifts equal-width, encoding-preserving element
 conversions to stored arrays at equal capacities. Counts and inactive padding
@@ -61,6 +68,20 @@ unfolding encoders or repeating casts. The
 [specialization
 rules](../Computation/README.md#change-mathematical-representations)
 then transport realizability between mathematical domains.
+
+`renameParameters_id`, `renameParameters_comp`, `substitute_id`, and
+`substitute_comp` normalize successive parameter changes; `substitute_X`
+identifies variable substitution with direct renaming. Renaming also commutes
+with fixed codecs, products, records, named arrays, and optional codecs.
+For dependent values, use `renameParameters_comp_bits` or
+`encode_bits_cast_sizes` instead of rewriting their entire codec.
+
+`ArrayEncoding.bits_encode_congr_entries`, `prod_encode_bits_congr`, and
+`record_encode_bits_congr` lift pointwise conversions to complete words.
+The existing optional and bounded-array conversion rules also preserve inactive
+padding. `ext_of_encode_bits` identifies complete codecs from equal carriers,
+exact width polynomials, and canonical bits; width equality remains a separate
+obligation even for empty carriers.
 
 A possible future generalization is a width function with a certified
 polynomial-time unary evaluator. A polynomial upper bound alone does not supply

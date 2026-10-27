@@ -1,8 +1,6 @@
 import Polytime2.CSP.Instance
 import Polytime2.Encoding.Records
 import Polytime2.Encoding.BinaryEncoding
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.BitVec
 
 /-! # Canonical dense relational instances and assignments
 
@@ -65,6 +63,12 @@ theorem scopeDomain_widthPolynomial (arity : ℕ) :
   | succ arity hypothesis =>
     simp [scopeCodec, array, reindex, hypothesis, pow_succ, mul_comm]
 
+private theorem scopeCodec_encode_surjective (arity : ℕ) (sizes : Unit → ℕ) :
+    Function.Surjective ((scopeCodec arity).1.encode sizes) := by
+  induction arity generalizing sizes with
+  | zero => exact booleans_encode_surjective sizes
+  | succ arity hypothesis => exact array_encode_surjective _ hypothesis () sizes
+
 variable (L : Language.{0, 0}) [L.IsRelational]
 
 /-- A relational structure is equivalent to its Boolean scope tables. This
@@ -117,32 +121,18 @@ structure. In particular, empty relations and nullary relation bits impose no
 extra decoding conditions. -/
 theorem instanceDomain_encode_surjective (sizes : Unit → ℕ) :
     Function.Surjective ((instanceDomain L).encode sizes) := by
-  classical
-  let instancesFinite : Fintype (Instance L (sizes ())) :=
-    Fintype.ofEquiv ((symbol : RelationSymbol L) → (Fin symbol.1 → Fin (sizes ())) → Bool)
-      (instanceTablesEquiv L (sizes ())).symm
-  let _ : Fintype ((instanceDomain L).Carrier sizes) := instancesFinite
-  let _ : Fintype (Instance L (sizes ())) := instancesFinite
-  let _ : Fintype (BitVec ((instanceDomain L).width sizes)) :=
-    Fintype.ofEquiv (Fin (2 ^ (instanceDomain L).width sizes)) BitVec.equivFin.toEquiv.symm
-  apply ((Fintype.bijective_iff_injective_and_card ((instanceDomain L).encode sizes)).mpr
-    ⟨(instanceDomain L).encode_injective sizes, ?_⟩).2
-  change Fintype.card (Instance L (sizes ())) = Fintype.card (BitVec ((instanceDomain L).width sizes))
-  rw [Fintype.card_congr (instanceTablesEquiv L (sizes ()))]
-  rw [Fintype.card_congr BitVec.equivFin.toEquiv]
-  simp only [Fintype.card_pi, Fintype.card_bool, Fintype.card_fin]
-  simp only [Finset.prod_const, Finset.card_univ, Fintype.card_fun, Fintype.card_fin]
-  rw [Finset.prod_pow_eq_pow_sum]
-  congr 1
-  simp [EncodedDomain.width, instanceDomain_widthPolynomial]
+  apply reindex_encode_surjective
+  apply namedRecord_encode_surjective
+  intro symbol
+  exact reindex_encode_surjective _ _ _ sizes (scopeCodec_encode_surjective symbol.1 sizes)
 
 /-- Dense instance decoding is total at the exact width. This asserts no
 computational property of arbitrary codecs. -/
 theorem instanceDomain_decode_total (sizes : Unit → ℕ)
     (bits : BitVec ((instanceDomain L).width sizes)) :
-    ∃ input, (instanceDomain L).decode sizes bits = some input := by
-  obtain ⟨input, rfl⟩ := instanceDomain_encode_surjective L sizes bits
-  exact ⟨input, (instanceDomain L).decode_encode sizes input⟩
+    ∃ input, (instanceDomain L).decode sizes bits = some input :=
+  ((instanceDomain L).encode_surjective_iff_decode_total sizes).mp
+    (instanceDomain_encode_surjective L sizes) bits
 
 /-- Assignment values are ordinary carrier elements with the existing finite
 codec. Invalid element codes are rejected by the array decoder. -/

@@ -40,45 +40,33 @@ field decoders. Its preservation contract is independent of host capacity.
 
 `instanceDomain_encode_surjective` proves that every exact-width bit pattern
 represents a dense relational instance, including empty and nullary relations.
-[ReadInstance.lean](ReadInstance.lean) uses that fact through the shared
-`decodeFullCodec` rule. Strict binary validation and an exact-width guard
-precede this interpretation; finite assignment codes are validated separately.
+Its structural proof reuses the shared Boolean, array, record, and reindex
+surjectivity rules; `instanceDomain_decode_total` follows from the shared
+encoder-surjectivity/decoder-totality equivalence.
+[ReadInstance.lean](ReadInstance.lean) supplies `instanceFieldBits_realizable`
+through the shared full-codec decoder and specializes total Boolean-field
+reading as `decodeStoredInstance`. Its canonical contract covers every stored
+length, so truncated and overlong fields reject before extraction.
+[DecodeField.lean](DecodeField.lean) specializes the shared stored-word rule
+as `decodeInstanceWordField`. Its correctness theorem agrees with canonical
+instance-word decoding on every field, including nonbinary letters.
 
-[ReadInstance.lean](ReadInstance.lean) connects a stored Boolean field to the
-dense decoder. Its precondition is exactly equality of the stored length and
-the dense instance width. `readDenseInstanceField_decodeWord` identifies its
-result with canonical word decoding. A runtime width-test guard must precede
-this partial reader. `decodeStoredInstance_realizable` composes that
-guard and returns an optional structure for every stored Boolean field.
-`decodeStoredInstance_correct` agrees with canonical decoding on all lengths,
-so short and overlong fields reject before extraction.
-[DecodeField.lean](DecodeField.lean) connects strict binary-letter validation
-to that interface. `decodeInstanceWordField_realizable` certifies the total
-decoder at a supplied variable count, and `decodeInstanceWordField_correct`
-identifies its result with canonical word decoding for every stored field.
-
-[DecodeAssignment.lean](DecodeAssignment.lean) certifies finite assignment-code
-validation and decoding, including unused codes and empty carriers.
-`assignmentCodesValid_realizable` checks an exactly
-framed array, accepting iff every entry decodes. `decodeAssignmentCodes` uses
-that guard to return an optional array of actual values. Its realization,
-success criterion, and pointwise decoding contract are proved without an
-inhabitance assumption. `assignmentBitBlocks` certifies framing exact-width
-bits into scalar blocks. `decodeAssignmentBits_realizable` composes framing
-and guarded decoding. `decodeAssignmentBits_correct` proves equality with the
-canonical array decoder on every exact-width pattern; canonical assignments
-round-trip and unused codes reject. `readAssignmentField` reads a stored
-Boolean witness at the supplied variable count; its precondition is exactly
-the mathematical assignment width. `decodeStoredAssignment_realizable` adds
-the length guard, and `decodeStoredAssignment_wrong_length` proves rejection
-of both truncated and overlong fields. `decodeStoredAssignment_correct`
-identifies the result with canonical array-word decoding on every stored
-Boolean field. `decodeAssignmentWordField_realizable` composes strict binary
-validation with that decoder. `decodeAssignmentWordField_correct` identifies
-its result with canonical array-word decoding on every stored word.
-`decodeAssignmentWitnessField_realizable` transports that result to the named
-assignment codec used by the checker. Its correctness theorem agrees with
+[DecodeAssignment.lean](DecodeAssignment.lean) specializes
+[fixed-array decoding](../Computation/FixedArrayDecode.lean) to the template
+carrier. `decodeAssignmentBits_realizable` certifies canonical decoding without
+an inhabitance assumption. Scalar validation, bit framing, round trips, and
+success criteria belong to the shared rule; unused scalar codes reject.
+`decodeStoredAssignment` uses the same generic Boolean-field reader as dense
+instances, and `decodeStoredAssignment_wrong_length` covers both truncation
+and overlong witnesses. `decodeAssignmentWitnessField` uses the generic
+[stored-word decoder](../Complexity/StoredFieldDecode.lean) and returns the
+named assignment codec directly. Its correctness theorem agrees with
 `assignmentDomain.decodeWord` at the supplied variable count on every field.
+All three decoders preserve empty carriers, empty arrays, and zero-width codes.
+The former partial field readers are replaced by the shared `readStoredBits`
+interface; field extraction and rejection proofs are no longer duplicated in
+CSP modules.
+
 [FieldCheck.lean](FieldCheck.lean) composes the two strict field decoders with
 the checker at a supplied variable count. `fieldChecker_correct` identifies
 both rejection branches and the successful mathematical checker call.

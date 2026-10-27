@@ -105,3 +105,53 @@ theorem conditional (inputs : InputName → EncodedDomain Parameter) (output : E
       _ = _ := (ite_eq_left selected).symm
 
 end Polytime2.Computation.Realizable
+
+namespace Polytime2.Computation
+
+variable {Parameter InputName : Type} [Fintype Parameter] [Fintype InputName]
+
+/-- Run a partial consumer behind a guard, returning a supplied result on
+rejection. In particular, an optional consumer may return none directly,
+without introducing another optional layer. Both branches need certificates. -/
+noncomputable def guarded (consumer : Computation Parameter InputName)
+    (fallback : ∀ sizes, consumer.outputDomain.Carrier sizes)
+    (allowed : ∀ sizes, consumer.Arguments sizes → Prop)
+    (guard : ∀ sizes, consumer.Arguments sizes → Bool)
+    (permits : ∀ sizes arguments, allowed sizes arguments → guard sizes arguments = true →
+      consumer.precondition sizes arguments) : Computation Parameter InputName where
+  inputDomains := consumer.inputDomains
+  outputDomain := consumer.outputDomain
+  precondition := allowed
+  compute sizes arguments := if selected : guard sizes arguments.val = true then
+    consumer.compute sizes ⟨arguments.val, permits sizes arguments.val arguments.property selected⟩
+    else fallback sizes
+
+theorem Realizable.guarded {consumer : Computation Parameter InputName} (ready : consumer.Realizable)
+    (fallback : ∀ sizes, consumer.outputDomain.Carrier sizes)
+    (fallbackReady : (Computation.mk (Empty.elim : Empty → EncodedDomain Parameter)
+      consumer.outputDomain (fun _ _ => True) (fun sizes _ => fallback sizes)).Realizable)
+    (allowed : ∀ sizes, consumer.Arguments sizes → Prop)
+    (guard : ∀ sizes, consumer.Arguments sizes → Bool)
+    (permits : ∀ sizes arguments, allowed sizes arguments → guard sizes arguments = true →
+      consumer.precondition sizes arguments)
+    (guardReady : (Computation.mk consumer.inputDomains EncodedDomain.booleans allowed
+      (fun sizes arguments => guard sizes arguments.val)).Realizable) :
+    (consumer.guarded fallback allowed guard permits).Realizable := by
+  apply Realizable.ofCases (computation := consumer.guarded fallback allowed guard permits) guard guardReady
+  · let selected sizes arguments := allowed sizes arguments ∧ guard sizes arguments = true
+    have active := ready.withPrecondition selected (by
+      intro sizes arguments valid
+      exact permits sizes arguments valid.1 valid.2)
+    apply active.withSpecification selected _ (by intros; assumption)
+    intro sizes arguments valid
+    change consumer.compute sizes _ = if h : guard sizes arguments = true then _ else _
+    rw [dite_eq_left valid.2]
+  · let rejected sizes arguments := allowed sizes arguments ∧ guard sizes arguments = false
+    have absent := fallbackReady.onResults consumer.inputDomains rejected
+      (fun empty => empty.elim) (by intros; trivial) (fun empty => empty.elim)
+    apply absent.withSpecification rejected _ (by intros; assumption)
+    intro sizes arguments valid
+    change fallback sizes = if h : guard sizes arguments = true then _ else _
+    rw [dite_eq_right (by rw [valid.2]; decide)]
+
+end Polytime2.Computation

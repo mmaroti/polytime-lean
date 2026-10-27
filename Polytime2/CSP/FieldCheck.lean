@@ -20,14 +20,6 @@ open EncodedDomain Polytime2.Computation
 variable (L : FirstOrder.Language.{0, 0}) [L.IsRelational] [Fintype (RelationSymbol L)]
 variable (Carrier : Type) [Fintype Carrier] [L.Structure Carrier]
 
-private noncomputable def witnessDecoder : Computation Bool Unit :=
-  (decodeAssignmentWitnessField Carrier).followedBy
-    (optionalRename (assignmentDomain Carrier) (fun _ : Unit => true)) rfl (by intros; trivial)
-
-private theorem witnessDecoder_realizable : (witnessDecoder Carrier).Realizable :=
-  (decodeAssignmentWitnessField_realizable Carrier).followedBy
-    (optionalRename_realizable (assignmentDomain Carrier) (fun _ : Unit => true)) rfl (by intros; trivial)
-
 private noncomputable def optionalChecker : Computation Bool Bool :=
   optionalDecision (assignmentCheckerAtCount L Carrier).inputDomains
     (fun sizes arguments => (assignmentCheckerAtCount L Carrier).compute sizes ⟨arguments, trivial⟩)
@@ -44,7 +36,7 @@ private noncomputable def decodedFields (sizes : Bool → ℕ)
     (optionalChecker L Carrier).Arguments sizes :=
   fun choice => match choice with
     | false => (decodeInstanceWordField L).compute sizes ⟨(fun _ => arguments false), trivial⟩
-    | true => (witnessDecoder Carrier).compute sizes ⟨(fun _ => arguments true), trivial⟩
+    | true => (decodeAssignmentWitnessField Carrier).compute sizes ⟨(fun _ => arguments true), trivial⟩
 
 /-- Check stored instance-table and witness words at a supplied variable count.
 All field decoding failures return false. -/
@@ -60,7 +52,7 @@ theorem fieldChecker_realizable : (fieldChecker L Carrier).Realizable := by
   cases choice
   · exact (decodeInstanceWordField_realizable L).onArguments (fun _ : Bool => wordField)
       (fun _ _ => True) (fun _ => false) (by intros; rfl) (by intros; trivial)
-  · exact (witnessDecoder_realizable Carrier).onArguments (fun _ : Bool => wordField)
+  · exact (decodeAssignmentWitnessField_realizable Carrier).onArguments (fun _ : Bool => wordField)
       (fun _ _ => True) (fun _ => true) (by intros; rfl) (by intros; trivial)
 
 /-- The composed field check has exactly the mathematical decoder/checker

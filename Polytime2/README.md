@@ -67,6 +67,8 @@ development because theorem statements may still need to be adapted.
    longer-term solver project requiring a full precision and bit-cost analysis.
 9. [CSP Taylor hardness](tasks/csp-taylor-hardness.md): formalize fixed-template
    NP-completeness for rigid cores without Taylor polymorphisms.
+10. [Infrastructure next steps](tasks/NEXTSTEPS.md): finish the flexible
+    computed-size result rules identified by the CSP review.
 
 These are proposals, not completed features. Each task records its prerequisites
 and acceptance criteria; remove completed entries and update the relevant guide.

@@ -1,4 +1,5 @@
 import Polytime2.Encoding.EncodedArray
+import Polytime2.Encoding.ParameterRename
 import Polytime2.Complexity.Languages
 
 /-! # Canonical encoded fields as external words
@@ -8,6 +9,8 @@ rejects nonbinary letters, incorrect lengths, and words rejected by the domain
 codec. These functions specify word representations; their polynomial-time
 realization is a separate obligation.
 -/
+
+set_option backward.isDefEq.respectTransparency false
 
 namespace Polytime2.EncodedDomain
 
@@ -144,5 +147,15 @@ theorem decodeWord_eq_some_iff (domain : EncodedDomain Parameter) (sizes : Param
   · intro canonical
     rw [← canonical]
     exact domain.decodeWord_word sizes value
+
+/-- Size renaming preserves canonical word decoding as well as encoded bits. -/
+theorem renameParameters_decodeWord {NewParameter : Type} [Fintype NewParameter]
+    (domain : EncodedDomain Parameter) (names : Parameter → NewParameter)
+    (sizes : NewParameter → ℕ) (input : Word) :
+    (domain.renameParameters names).decodeWord sizes input = domain.decodeWord (sizes ∘ names) input := by
+  apply Option.ext
+  intro value
+  rw [decodeWord_eq_some_iff, decodeWord_eq_some_iff]
+  simp only [word, renameParameters_bits]
 
 end Polytime2.EncodedDomain

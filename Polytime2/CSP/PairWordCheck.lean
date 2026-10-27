@@ -50,27 +50,25 @@ private noncomputable def checkerCallee : Computation (Unit ⊕ Unit) Unit :=
 
 private theorem checkerCallee_realizable : (checkerCallee L Carrier).Realizable := by
   have prepared := ((pairedChecker_realizable L Carrier).renameParameters sizeNames).reinterpretInputs
-    (fun _ : Unit => wordPair.renameParameters Sum.inl) (fun _ _ value => value) (by
+    (fun _ : Unit => wordPair.renameParameters Sum.inl) (fun _ _ value => value)
+    (by
       intro name sizes
       change (wordPair.renameParameters Sum.inl).width sizes =
         ((wordPair.renameParameters (fun _ : Unit => false)).renameParameters sizeNames).width sizes
-      simp only [renameParameters_width]
-      rfl) (by
+      simp only [renameParameters_comp]; rfl)
+    (by
       intro name sizes value
-      change ArrayEncoding.bits ((wordPair.renameParameters Sum.inl).encode sizes value) =
-        ArrayEncoding.bits (((wordPair.renameParameters (fun _ : Unit => false)).renameParameters sizeNames).encode sizes value)
-      rw [renameParameters_bits, renameParameters_bits, renameParameters_bits]
-      rfl) (fun _ _ => True) (by intros; trivial)
+      exact (renameParameters_comp_bits wordPair (fun _ : Unit => false) sizeNames sizes value).symm)
+    (fun _ _ => True) (by intros; trivial)
   apply prepared.reinterpretOutput booleans (fun _ value => value)
   · intro sizes
     change (booleans : EncodedDomain (Unit ⊕ Unit)).width sizes =
       ((booleans : EncodedDomain Bool).renameParameters sizeNames).width sizes
-    simp [width, booleans, renameParameters_widthPolynomial]
+    simp only [booleans, fixed_renameParameters]
   · intro sizes value
     change ArrayEncoding.bits (booleans.encode sizes value) =
       ArrayEncoding.bits (((booleans : EncodedDomain Bool).renameParameters sizeNames).encode sizes value)
-    rw [renameParameters_bits]
-    simp only [booleans, fixed_encode_bits]
+    simp only [renameParameters_bits, booleans, fixed_encode_bits]
 
 private theorem checkerCallee_correct (sizes : (Unit ⊕ Unit) → ℕ)
     (pair : (wordPair.renameParameters Sum.inl).Carrier sizes) :

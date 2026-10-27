@@ -59,6 +59,20 @@ theorem encode_injective (domain : EncodedDomain.{parameterLevel, carrierLevel} 
   exact Option.some.inj ((domain.decode_encode sizes first).symm.trans
     ((congrArg (domain.decode sizes) equal).trans (domain.decode_encode sizes second)))
 
+/-- Every exact-width pattern is a canonical code precisely when decoding
+always returns a value. This is a mathematical property, not a runtime bound. -/
+theorem encode_surjective_iff_decode_total
+    (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) (sizes : Parameter → ℕ) :
+    Function.Surjective (domain.encode sizes) ↔
+      ∀ bits, ∃ value, domain.decode sizes bits = some value := by
+  constructor
+  · intro full bits
+    obtain ⟨value, rfl⟩ := full bits
+    exact ⟨value, domain.decode_encode sizes value⟩
+  · intro total bits
+    obtain ⟨value, accepted⟩ := total bits
+    exact ⟨value, domain.encode_decode sizes bits value accepted⟩
+
 /-- Construct a domain from a codec whose width equals the chosen polynomial.
 The equality only transports vector types; it is not stored in the domain. -/
 noncomputable abbrev ofCodec (Carrier : (Parameter → ℕ) → Type carrierLevel)
@@ -171,6 +185,15 @@ def reindex (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
       have oldAccepted : domain.decode assignment bits = some (equivalence assignment value) := by
         rw [decoding, valuesEqual]
       exact domain.encode_decode assignment bits (equivalence assignment value) oldAccepted
+
+/-- Changing the carrier through an equivalence preserves use of every bit
+pattern, without any finiteness assumption on the carrier. -/
+theorem reindex_encode_surjective (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (Carrier' : (Parameter → ℕ) → Type carrierLevel)
+    (equivalence : ∀ sizes, Carrier' sizes ≃ domain.Carrier sizes)
+    (sizes : Parameter → ℕ) (full : Function.Surjective (domain.encode sizes)) :
+    Function.Surjective ((domain.reindex Carrier' equivalence).encode sizes) :=
+  full.comp (equivalence sizes).surjective
 
 @[simp] theorem fixed_widthPolynomial {Carrier : Type carrierLevel} {cardinality : ℕ}
     (enumeration : Carrier ≃ Fin cardinality) :

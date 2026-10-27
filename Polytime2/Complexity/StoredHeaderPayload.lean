@@ -86,31 +86,24 @@ private noncomputable def parserOnSizes : Computation (Unit ⊕ Unit) Unit :=
 private theorem parserOnSizes_realizable : parserOnSizes.Realizable := by
   have prepared := (parserWithHostOutput_realizable.renameParameters parserSizeNames).reinterpretInputs
     (fun _ : Unit => (letterDomain.arrayOfLength (MvPolynomial.X ())).renameParameters actualNames)
-    (fun _ _ value => value) (by
+    (fun _ _ value => value)
+    (by
       intro name sizes
-      change ((letterDomain.arrayOfLength (MvPolynomial.X ())).renameParameters actualNames).width sizes =
-        (((letterDomain.arrayOfLength (MvPolynomial.X ())).renameParameters (fun _ : Unit => true)).renameParameters
-          parserSizeNames).width sizes
-      simp only [renameParameters_width]
-      rfl) (by
+      exact congrArg (fun domain : EncodedDomain (Unit ⊕ Unit) => domain.width sizes)
+        (renameParameters_comp (letterDomain.arrayOfLength (MvPolynomial.X ()))
+          (fun _ : Unit => true) parserSizeNames).symm)
+    (by
       intro name sizes value
-      change ArrayEncoding.bits (((letterDomain.arrayOfLength (MvPolynomial.X ())).renameParameters actualNames).encode sizes value) =
-        ArrayEncoding.bits ((((letterDomain.arrayOfLength (MvPolynomial.X ())).renameParameters
-          (fun _ : Unit => true)).renameParameters parserSizeNames).encode sizes value)
-      rw [renameParameters_bits, renameParameters_bits, renameParameters_bits]
-      rfl) (fun sizes _ => sizes (.inr ()) ≤ sizes (.inl ())) (by intros; assumption)
+      exact (renameParameters_comp_bits (letterDomain.arrayOfLength (MvPolynomial.X ()))
+        (fun _ : Unit => true) parserSizeNames sizes value).symm)
+    (fun sizes _ => sizes (.inr ()) ≤ sizes (.inl ())) (by intros; assumption)
   apply prepared.reinterpretOutput ((optional hostField).renameParameters hostNames) (fun _ value => value)
   · intro sizes
-    change ((optional hostField).renameParameters hostNames).width sizes =
-      (((optional hostField).renameParameters (fun _ : Unit => false)).renameParameters parserSizeNames).width sizes
-    simp only [renameParameters_width]
-    rfl
+    exact congrArg (fun domain : EncodedDomain (Unit ⊕ Unit) => domain.width sizes)
+      (renameParameters_comp (optional hostField) (fun _ : Unit => false) parserSizeNames).symm
   · intro sizes value
-    change ArrayEncoding.bits (((optional hostField).renameParameters hostNames).encode sizes value) =
-      ArrayEncoding.bits ((((optional hostField).renameParameters (fun _ : Unit => false)).renameParameters
-        parserSizeNames).encode sizes value)
-    rw [renameParameters_bits, renameParameters_bits, renameParameters_bits]
-    rfl
+    exact (renameParameters_comp_bits (optional hostField)
+      (fun _ : Unit => false) parserSizeNames sizes value).symm
 
 private theorem parserOnSizes_correct (sizes : (Unit ⊕ Unit) → ℕ)
     (arguments : parserOnSizes.Arguments sizes) (fits : sizes (.inr ()) ≤ sizes (.inl ())) :
