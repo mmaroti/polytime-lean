@@ -15,9 +15,10 @@ instance construction, and witness transport.
 ## Prerequisites and first milestone
 
 Review the [encoding](../Encoding/README.md), [array](../Arrays/README.md), and
-[composition](../Computation/README.md) guides. Reuse existing clause carriers
-and graph interfaces before introducing new ones. State the reduction and
-witness correspondence mathematically before choosing encodings.
+[composition](../Computation/README.md) guides. Use the shared clause carriers
+and satisfaction predicates in [SAT/ThreeSAT.lean](../SAT/ThreeSAT.lean).
+Reuse existing graph interfaces before introducing new ones. State the
+reduction and witness correspondence mathematically before choosing encodings.
 
 First certify graph construction and transport a satisfying assignment to a
 clique by selecting a true occurrence in each clause. Then recover a satisfying

@@ -36,20 +36,24 @@ erased. The choice of that track is fixed before runtime. -/
 def outputLetter (name : TapeName) (bit : Bool) : Tracks.Row (Alphabet TapeName) :=
   ((fun other => if other = name then Binary.data bit else 0), fun _ => false)
 
-def extract (name : TapeName) :
+def extractTo (name : TapeName) (outputRow : Bool → Tracks.Row (Alphabet TapeName)) :
     Machine (fun _ : Unit => Sweep.Alphabet (Tracks.Row (Alphabet TapeName))) (Fin 8) :=
-  TrackOutput.machine (fun row => row.2 name) (fun row => row.1 name) (outputLetter name)
+  TrackOutput.machine (fun row => row.2 name) (fun row => row.1 name) outputRow
 
+def extract (name : TapeName) := extractTo name (outputLetter name)
+
+omit [DecidableEq TapeName] in
 /-- A canonical fixed-width output needs no source boundary markers. Extraction
 erases the simulator frame and restores the physical head, even at width zero. -/
-theorem extract_runs (name : TapeName) (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+theorem extractTo_runs (name : TapeName) (outputRow : Bool → Tracks.Row (Alphabet TapeName))
+    (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (sizes : Parameter → ℕ) (value : domain.Carrier sizes)
     (rows : List (Tracks.Row (Alphabet TapeName)))
     (represented : Tracks.RepresentsAt name rows (encoded domain sizes value)) :
     ∃ ticks, ticks ≤ 2 * rows.length + 8 ∧
-      Steps (extract name) ticks
+      Steps (extractTo name outputRow) ticks
         (0, Sweep.tape [Sweep.leftMarker] (rows.map Sweep.row ++ [Sweep.rightMarker]))
-        (7, Sweep.tape [] (TrackOutput.word (outputLetter name)
+        (7, Sweep.tape [] (TrackOutput.word outputRow
           (List.ofFn (fun index : Fin (domain.width sizes) => (domain.encode sizes value).getLsbD index.val)))) := by
   obtain ⟨before, current, after, split, unmarked, marked, _, tapeEq⟩ := represented
   let bits := List.ofFn (fun index : Fin (domain.width sizes) =>
@@ -67,6 +71,18 @@ theorem extract_runs (name : TapeName) (domain : EncodedDomain.{parameterLevel, 
       Turing.ListBlank.tail_mk, Turing.ListBlank.cons_mk, reconstruct, List.map_cons, bits] using right
   subst rows
   exact TrackOutput.steps _ _ _ before current after bits unmarked marked payload
+
+/-- The standard binary output convention specializes generic extraction. -/
+theorem extract_runs (name : TapeName) (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (sizes : Parameter → ℕ) (value : domain.Carrier sizes)
+    (rows : List (Tracks.Row (Alphabet TapeName)))
+    (represented : Tracks.RepresentsAt name rows (encoded domain sizes value)) :
+    ∃ ticks, ticks ≤ 2 * rows.length + 8 ∧
+      Steps (extract name) ticks
+        (0, Sweep.tape [Sweep.leftMarker] (rows.map Sweep.row ++ [Sweep.rightMarker]))
+        (7, Sweep.tape [] (TrackOutput.word (outputLetter name)
+          (List.ofFn (fun index : Fin (domain.width sizes) => (domain.encode sizes value).getLsbD index.val)))) :=
+  extractTo_runs name (outputLetter name) domain sizes value rows represented
 
 -- stateLevel: the finite controller of the routine being simulated.
 -- outputNameLevel: names of declared mathematical outputs.

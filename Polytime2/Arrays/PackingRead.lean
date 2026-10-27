@@ -33,6 +33,58 @@ open EncodedDomain
 variable {HostParameter Parameter : Type}
 variable [Fintype HostParameter] [Fintype Parameter]
 
+/-- Extract the stored elements at an exact polynomial length, converting each
+element at admissible runtime sizes. Realization requires identical element
+encodings, so conversion needs no elementwise machine work. -/
+noncomputable def boundedArrayAtLength (element : EncodedDomain HostParameter)
+    (capacity : MvPolynomial HostParameter ℕ) (hostNames : HostParameter → Parameter)
+    (length : MvPolynomial Parameter ℕ) (target : EncodedDomain Parameter)
+    (allowed : (Parameter → ℕ) → Prop)
+    (convert : ∀ sizes, allowed sizes → element.Carrier (sizes ∘ hostNames) → target.Carrier sizes) :
+    Computation Parameter Unit :=
+  unaryMap ((boundedArray element capacity).renameParameters hostNames)
+    (target.arrayOfLength length)
+    (fun sizes packed => packed.1.val = MvPolynomial.eval sizes length ∧ allowed sizes)
+    (fun sizes packed position => convert sizes packed.property.2
+      (packed.val.2 (Fin.cast packed.property.1.symm position)))
+
+theorem boundedArrayAtLength_realizable (element : EncodedDomain HostParameter)
+    (capacity : MvPolynomial HostParameter ℕ) (hostNames : HostParameter → Parameter)
+    (length : MvPolynomial Parameter ℕ) (target : EncodedDomain Parameter)
+    (allowed : (Parameter → ℕ) → Prop)
+    (convert : ∀ sizes, allowed sizes → element.Carrier (sizes ∘ hostNames) → target.Carrier sizes)
+    (sameBits : ∀ sizes (valid : allowed sizes) value,
+      ArrayEncoding.bits (target.encode sizes (convert sizes valid value)) =
+        ArrayEncoding.bits (element.encode (sizes ∘ hostNames) value)) :
+    (boundedArrayAtLength element capacity hostNames length target allowed convert).Realizable := by
+  apply Realizable.Internal.fieldProjection _ _
+    (MvPolynomial.rename hostNames (boundedUnary capacity).widthPolynomial)
+  intro sizes packed
+  let original := sizes ∘ hostNames
+  let count := packed.val.1
+  let values := packed.val.2
+  have targetBits : ArrayEncoding.bits
+      ((target.arrayOfLength length).encode sizes
+        (fun position => convert sizes packed.property.2
+          (values (Fin.cast packed.property.1.symm position)))) =
+      ArrayEncoding.bits (ArrayEncoding.encode (element.encode original) count.val values) := by
+    simp only [arrayOfLength_encode_bits, ArrayEncoding.bits_encode, sameBits]
+    exact congrArg List.flatten (List.ofFn_congr packed.property.1
+      (fun position => ArrayEncoding.bits (element.encode original (values position)))).symm
+  refine ⟨ArrayEncoding.bits ((boundedUnary capacity).encode original count),
+    List.replicate (MvPolynomial.eval original (capacity * element.widthPolynomial) -
+      count.val * element.width original) false, ?_, ?_⟩
+  · rw [targetBits, renameParameters_bits]
+    change ArrayEncoding.bits (((boundedUnary capacity).prod
+      (bitVectors (capacity * element.widthPolynomial))).encode original
+        (count, (ArrayEncoding.encode (element.encode original) count.val values).setWidth _)) = _
+    rw [bits_prod_encode, bits_setWidth _ (by
+      simp only [map_mul]
+      exact Nat.mul_le_mul_right (element.width original) (Nat.le_of_lt_succ count.isLt))]
+    exact (List.append_assoc _ _ _).symm
+  · simp only [ArrayEncoding.bits, List.length_ofFn, MvPolynomial.eval_rename]
+    rfl
+
 /-- Extract the stored elements at their exact named length, converting each
 element at admissible runtime sizes. Realization requires identical element
 encodings, so conversion needs no elementwise machine work. -/
@@ -57,32 +109,27 @@ theorem boundedArrayAtSize_realizable (element : EncodedDomain HostParameter)
       ArrayEncoding.bits (target.encode sizes (convert sizes valid value)) =
         ArrayEncoding.bits (element.encode (sizes ∘ hostNames) value)) :
     (boundedArrayAtSize element capacity hostNames countName target allowed convert).Realizable := by
-  apply Realizable.Internal.fieldProjection _ _
-    (MvPolynomial.rename hostNames (boundedUnary capacity).widthPolynomial)
-  intro sizes packed
-  let original := sizes ∘ hostNames
-  let count := packed.val.1
-  let values := packed.val.2
-  have targetBits : ArrayEncoding.bits
-      ((target.array countName).encode sizes
-        (fun position => convert sizes packed.property.2
-          (values (Fin.cast packed.property.1.symm position)))) =
-      ArrayEncoding.bits (ArrayEncoding.encode (element.encode original) count.val values) := by
-    simp only [array_encode_bits, ArrayEncoding.bits_encode, sameBits]
-    exact congrArg List.flatten (List.ofFn_congr packed.property.1
-      (fun position => ArrayEncoding.bits (element.encode original (values position)))).symm
-  refine ⟨ArrayEncoding.bits ((boundedUnary capacity).encode original count),
-    List.replicate (MvPolynomial.eval original (capacity * element.widthPolynomial) -
-      count.val * element.width original) false, ?_, ?_⟩
-  · rw [targetBits, renameParameters_bits]
-    change ArrayEncoding.bits (((boundedUnary capacity).prod
-      (bitVectors (capacity * element.widthPolynomial))).encode original
-        (count, (ArrayEncoding.encode (element.encode original) count.val values).setWidth _)) = _
-    rw [bits_prod_encode, bits_setWidth _ (by
-      simp only [map_mul]
-      exact Nat.mul_le_mul_right (element.width original) (Nat.le_of_lt_succ count.isLt))]
-    exact (List.append_assoc _ _ _).symm
-  · simp only [ArrayEncoding.bits, List.length_ofFn, MvPolynomial.eval_rename]
-    rfl
+  have prepared := (boundedArrayAtLength_realizable element capacity hostNames
+    (MvPolynomial.X countName) target allowed convert sameBits).withPrecondition
+      (boundedArrayAtSize element capacity hostNames countName target allowed convert).precondition
+      (by intro sizes arguments valid; simpa only [boundedArrayAtLength, boundedArrayAtSize, unaryMap, MvPolynomial.eval_X] using valid)
+  have named := prepared.reinterpretOutput (target.array countName)
+    (fun sizes => (arrayParameterEquiv target countName sizes).symm)
+    (arrayParameter_width target countName)
+    (fun sizes value => by
+      change ArrayEncoding.bits ((target.array countName).encode sizes _) =
+        ArrayEncoding.bits ((target.arrayOfLength (MvPolynomial.X countName)).encode sizes value)
+      simpa only [Equiv.apply_symm_apply] using array_X_encode_bits target countName sizes
+        ((arrayParameterEquiv target countName sizes).symm value))
+  apply named.withSpecification
+    (boundedArrayAtSize element capacity hostNames countName target allowed convert).precondition
+    (boundedArrayAtSize element capacity hostNames countName target allowed convert).compute
+    (by intros; assumption)
+  intro sizes arguments valid
+  funext position
+  apply congrArg (convert sizes valid.2)
+  apply congrArg (arguments ()).2
+  apply Fin.ext
+  rfl
 
 end Polytime2.Computation

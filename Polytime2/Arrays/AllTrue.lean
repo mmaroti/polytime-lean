@@ -92,4 +92,30 @@ theorem arrayAllTrue_correct (length : MvPolynomial Parameter ℕ) (sizes : Para
   change (List.ofFn flags).all id = true ↔ _
   simp
 
+/-- Named-size conjunction uses ordinary coordinates in the public carrier. -/
+noncomputable def arrayAllTrueAtParameter (parameter : Parameter) : Computation Parameter Unit :=
+  (arrayAllTrue (MvPolynomial.X parameter)).reinterpretInputs
+    (fun _ => booleans.array parameter)
+    (fun _ sizes => arrayParameterEquiv booleans parameter sizes)
+    (fun _ _ => True) (by intros; trivial)
+
+theorem arrayAllTrueAtParameter_realizable (parameter : Parameter) :
+    (arrayAllTrueAtParameter parameter).Realizable := by
+  exact (arrayAllTrue_realizable (MvPolynomial.X parameter)).reinterpretInputs
+    (fun _ => booleans.array parameter)
+    (fun _ sizes => arrayParameterEquiv booleans parameter sizes)
+    (by intros; rfl) (by intro name sizes value; exact array_X_encode_bits booleans parameter sizes value)
+    (fun _ _ => True) (by intros; trivial)
+
+theorem arrayAllTrueAtParameter_correct (parameter : Parameter) (sizes : Parameter → ℕ)
+    (flags : Fin (sizes parameter) → Bool) :
+    (arrayAllTrueAtParameter parameter).compute sizes ⟨(fun _ => flags), trivial⟩ = true ↔
+      ∀ index, flags index = true := by
+  change (arrayAllTrue (MvPolynomial.X parameter)).compute sizes
+    ⟨(fun _ => arrayParameterEquiv booleans parameter sizes flags), trivial⟩ = true ↔ _
+  rw [arrayAllTrue_correct]
+  change (∀ index, flags ((finCongr (MvPolynomial.eval_X (f := sizes) parameter)) index) = true) ↔ _
+  exact ((finCongr (MvPolynomial.eval_X (f := sizes) parameter)).surjective.forall
+    (p := fun index => flags index = true)).symm
+
 end Polytime2.Computation

@@ -52,4 +52,18 @@ noncomputable def renameParameters (domain : EncodedDomain.{0, carrierLevel} Par
       ArrayEncoding.bits (domain.encode (sizes ∘ names) value) := by
   simp only [renameParameters, ofCodec, ArrayEncoding.bits_cast]
 
+/-- Renaming runtime sizes preserves totality of a full canonical codec. -/
+theorem renameParameters_encode_surjective (domain : EncodedDomain.{0, carrierLevel} Parameter)
+    (full : ∀ sizes, Function.Surjective (domain.encode sizes))
+    (names : Parameter → NewParameter) (sizes : NewParameter → ℕ) :
+    Function.Surjective ((domain.renameParameters names).encode sizes) := by
+  intro bits
+  let source := bits.cast (renameParameters_width domain names sizes)
+  obtain ⟨value, encoded⟩ := full (sizes ∘ names) source
+  refine ⟨value, ?_⟩
+  change (domain.encode (sizes ∘ names) value).cast (renameParameters_width domain names sizes).symm = bits
+  rw [encoded]
+  apply BitVec.eq_of_toNat_eq
+  rfl
+
 end Polytime2.EncodedDomain

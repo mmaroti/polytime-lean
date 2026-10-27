@@ -80,6 +80,19 @@ theorem encode_decode (elementEncode : Carrier → BitVec width)
     rw [inverse _ _ firstAccepted, hypothesis _ _ restAccepted]
     simp [BitVec.extractLsb'_append_extractLsb', BitVec.cast_cast]
 
+/-- An array decoder is total when every element block has a value. -/
+theorem decode_total (elementDecode : BitVec width → Option Carrier)
+    (total : ∀ bits, ∃ value, elementDecode bits = some value)
+    (length : ℕ) (input : BitVec (length * width)) :
+    ∃ values, decode elementDecode length input = some values := by
+  induction length with
+  | zero => exact ⟨Fin.elim0, rfl⟩
+  | succ length hypothesis =>
+    let split := input.cast (Nat.succ_mul length width)
+    obtain ⟨first, firstAccepted⟩ := total (split.extractLsb' 0 width)
+    obtain ⟨rest, restAccepted⟩ := hypothesis (split.extractLsb' width (length * width))
+    exact ⟨Fin.cons first rest, by simp [decode, split, firstAccepted, restAccepted]⟩
+
 /-- The bit order used by the tape controllers. -/
 abbrev bits {width : ℕ} (value : BitVec width) : List Bool :=
   List.ofFn (fun index : Fin width => value.getLsbD index.val)
@@ -136,6 +149,16 @@ theorem bits_append {firstWidth secondWidth : ℕ}
     · simp [inLow]
     · simp only [List.getElem_append, List.length_ofFn, List.getElem_ofFn]
       simp only [inLow, dite_false, ite_false]
+
+/-- Reconstructing an exact-length little-endian Boolean list preserves every
+bit, including the empty list. -/
+theorem bits_ofBoolListLE (values : List Bool) {width : ℕ} (sameLength : values.length = width) :
+    bits ((BitVec.ofBoolListLE values).cast sameLength) = values := by
+  apply List.ext_getElem
+  · simp only [bits, List.length_ofFn, sameLength]
+  · intro index firstBound secondBound
+    simp only [bits, List.getElem_ofFn, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE,
+      List.getD_eq_getElem?_getD, List.getElem?_eq_getElem secondBound, Option.getD_some]
 
 /-- Array encoding agrees with consecutive element blocks on the tape. -/
 theorem bits_encode (element : Carrier → BitVec width) (length : ℕ)
@@ -328,6 +351,21 @@ noncomputable def arrayOfLength (element : EncodedDomain.{parameterLevel, carrie
     (fun assignment => ArrayEncoding.decode (element.decode assignment) _)
     (fun assignment => ArrayEncoding.decode_encode _ _ (element.decode_encode assignment) _)
     (fun assignment => ArrayEncoding.encode_decode _ _ (element.encode_decode assignment) _)
+
+/-- Arrays preserve total use of exact-width bit patterns. -/
+theorem arrayOfLength_encode_surjective (element : EncodedDomain Parameter)
+    (full : ∀ sizes, Function.Surjective (element.encode sizes))
+    (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ) :
+    Function.Surjective ((element.arrayOfLength length).encode sizes) := by
+  intro bits
+  have elementTotal : ∀ input, ∃ value, element.decode sizes input = some value := by
+    intro input
+    obtain ⟨value, rfl⟩ := full sizes input
+    exact ⟨value, element.decode_encode sizes value⟩
+  obtain ⟨values, accepted⟩ := ArrayEncoding.decode_total (element.decode sizes) elementTotal
+    (MvPolynomial.eval sizes length) (bits.cast (by simp [width, arrayOfLength]))
+  refine ⟨values, (element.arrayOfLength length).encode_decode sizes bits values ?_⟩
+  exact accepted
 
 /-- Arrays of a named assigned length are the common coordinate-indexed case. -/
 noncomputable def array (element : EncodedDomain.{parameterLevel, carrierLevel} Parameter)

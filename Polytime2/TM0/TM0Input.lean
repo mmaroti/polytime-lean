@@ -17,6 +17,7 @@ limitations under the License.
 
 
 import Polytime2.TM0.Encoding
+import Polytime2.TM0.WordComposition
 
 /-! # Standard TM0 initialization for marked-track inputs
 
@@ -58,15 +59,10 @@ theorem steps (source : Turing.TM0.Machine Symbol State) (entry : State)
     (trace : (fun current => current.bind (Turing.TM0.step source))^[ticks] (some initial) = some final) :
     (fun current => current.bind (Turing.TM0.step (machine source entry)))^[ticks]
       (some (embed initial)) = some (embed final) := by
-  have commute : Function.Semiconj (Option.map embed)
-      (fun current => current.bind (Turing.TM0.step source))
-      (fun current => current.bind (Turing.TM0.step (machine source entry))) := by
-    intro current
-    cases current with
-    | none => rfl
-    | some configuration => simp
-  have lifted := commute.iterate_right ticks (some initial)
-  simpa only [trace, Option.map_some] using lifted.symm
+  apply TM0Word.trace_map embed _ trace
+  intro first second transition
+  rw [step_embed, transition]
+  rfl
 
 /-- The standard `TM0.init` input convention costs one transition to reach the
 prepared interval convention used by the simulator. -/

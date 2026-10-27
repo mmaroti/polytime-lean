@@ -1,7 +1,7 @@
 # Fixed-template CSP hardness from absence of a Taylor polymorphism
 
-Status: step 1 implemented in [CSP/Basic.lean](../CSP/Basic.lean).
-Step 2 is next.
+Status: steps 1--5 implemented; see the [CSP guide](../CSP/README.md) and
+[complexity guide](../Complexity/README.md).
 [Task index](../README.md#proposed-next-tasks).
 
 ## Statement and hypothesis correction
@@ -26,7 +26,8 @@ No polynomial-time solver for CSP(R) is asserted.
 
 ## Sources and prerequisites
 
-Use Zarathustra Brady, *Notes on CSPs and Polymorphisms*, arXiv:2210.07383,
+Use Zarathustra Brady, *Notes on CSPs and Polymorphisms*,
+[arXiv:2210.07383][paper],
 and the author's TeX sources [csp.tex][tex], [csp-notes.tex][main], and
 [csp-append.tex][appendix]. The verified public source is on GitHub; a GitLab
 version has not been identified. The source was checked at commit
@@ -46,36 +47,45 @@ Read the [computation](../Computation/README.md),
 the relational instance contract in [EXAMPLES.md](../../EXAMPLES.md), and
 coordinate the Boolean foundations with [3-SAT to CLIQUE][clique].
 
-## Remaining implementation milestones
+## Formalization milestones
 
 Each milestone has a checkable deliverable. The complexity foundations and
 algebraic representation proofs are substantial projects even though their
 interfaces can be kept small.
 
-2. **Define relational CSP using Mathlib.** Reuse `FirstOrder.Language`,
-   `IsRelational`, `Structure`, and `Hom`. Define satisfiability by
-   `Nonempty (V ->[L] R)` and prove its assignment characterization. Use
-   `Fin N` for encoded instance carriers. Keep satisfiability separate from
-   the existence of a polynomial-time decision algorithm.
+1. **State the relational theorem (mathematics; implemented).** Fix a finite
+   relational signature and a nonempty finite template R. Define preservation,
+   Taylor polymorphisms, and rigid cores. Prove the constant-homomorphism
+   observation above so the reflexive and rigid-core hypotheses cannot be
+   confused. Deliverable: the mathematical hypotheses of the final theorem.
 
-3. **Identify 3-SAT as a relational CSP.** On `Bool`, use eight ternary
-   relations, each excluding one Boolean triple. Prove equivalence with lists
-   of three-literal clauses, allowing repetitions. Cover zero clauses,
-   repeated variables, and unused variables. Reuse these definitions for
-   the other reduction tasks.
+2. **Define instances and solutions (mathematics; implemented).** Represent
+   an instance as a Mathlib structure on `Fin n`, with a solution an ordinary
+   structure homomorphism to R. Prove equivalence with assignments preserving
+   every input relation. Include empty variable sets and nullary relations.
+   Deliverable: a machine-independent satisfiability predicate.
 
-4. **Define polynomial reductions and NP.** Use languages of finite words,
-   polynomially bounded witnesses, and deterministic polynomial-time Turing
-   verifiers. Reuse Mathlib's machine semantics. Define many-one reductions,
-   NP-hardness, and NP-completeness; prove composition and establish the
-   bridge from Polytime2 realizations to the chosen complexity definitions.
-   Define malformed-input rejection and input length explicitly.
+3. **Identify the Boolean source CSP (mathematics; implemented).** Define
+   three-literal CNF satisfiability and the Boolean template with eight ternary
+   relations, each excluding one tuple. Prove the assignment and satisfaction
+   correspondences, allowing repeated variables. Deliverable: semantic
+   conversions in both directions; NP-hardness is still required in step 7.
 
-5. **Certify CSP membership in NP.** Encode assignments and certify the
-   checker that tests preservation of every enabled relation tuple. Prove
-   acceptance iff a homomorphism exists, and bound witness length and runtime
-   polynomially in the serialized instance length. Handle empty relations,
-   empty instances, and nullary constraints.
+4. **Establish complexity contracts (certification; implemented).** Define
+   word languages, polynomial-time many-one reductions, NP verifiers, and
+   NP-completeness using the repository's machine conventions. Prove reduction
+   composition and connect certified computations to these contracts. Specify
+   canonical instance words and malformed-input rejection. Deliverable: exact
+   statements that steps 5, 7, and 14 must certify.
+
+5. **Certify CSP membership in NP (implemented).** Canonical assignment
+   witnesses have linear length. The certified total verifier checks every
+   enabled relation tuple, accepting exactly homomorphisms and rejecting all
+   malformed framing and field encodings. Empty templates, empty instances,
+   empty relations, and nullary constraints require no extra hypotheses.
+   Deliverable: `language_inNP` and `wordVerifier_polynomialTime` in
+   [VerifierRealizable.lean](../CSP/VerifierRealizable.lean). The
+   [CSP guide](../CSP/README.md) links the mathematical and realization stages.
 
 6. **Prove bounded machine computation has polynomial circuits.** For an
    arbitrary fixed verifier, construct a Boolean circuit for its bounded
@@ -150,12 +160,24 @@ and conventions, retain appropriate attribution, and copy their necessary
 mathematical dependencies into the repository. Do not import another project's
 signature hierarchy, algorithm models, transducers, encodings, or cost claims.
 Do not copy unused generalizations merely because they are available.
+Imported mathematical arguments must compile locally with only Mathlib and
+this repository; the source project must not become a build dependency.
+Review each adapted theorem's hypotheses and conclusion before translating its
+proof, independently of any algorithm representation in its source.
 
 The pure mathematics ends at the finite gadget family and its satisfaction
 contracts. Its existence proof may be nonconstructive because R is fixed.
 The generic compiler supplies the polynomial-time algorithm; the algebraic
 proof must not construct machines or inspect encodings. NP membership and
 Cook-Levin are independent reusable foundations.
+
+Keep the interfaces between steps explicit: steps 8--12 produce fixed
+mathematical gadget data; step 13 proves its semantic expansion contract;
+step 14 realizes that contract using the existing algorithm framework. Steps
+1--3 and 8--13 are mathematical work. Steps 4--7 and 14 combine mathematical
+correctness with complexity certification; step 15 composes the results.
+These are small deliverables for planning, not claims that the algebraic or
+Cook-Levin proofs are individually easy.
 
 Acceptance requires a Lean codebase depending only on this repository and
 Mathlib's dependency closure, with no `sorry`, unproved complexity assumptions,
@@ -167,4 +189,5 @@ Lean lines added and removed for every completed milestone.
 [tex]: https://github.com/notzeb/all/blob/master/csp.tex
 [main]: https://github.com/notzeb/all/blob/master/csp-notes.tex
 [appendix]: https://github.com/notzeb/all/blob/master/csp-append.tex
+[paper]: https://arxiv.org/abs/2210.07383
 [clique]: 3-sat-to-clique.md

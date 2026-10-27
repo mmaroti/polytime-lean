@@ -23,6 +23,7 @@ explain how to find and combine them.
 | Find a worked application | [Examples][examples] |
 | Prepare or consume an SMP instance | [SMP][smp] |
 | Use relational CSP mathematical contracts | [CSP][csp] |
+| State polynomial reductions and NP contracts | [Complexity][complexity] |
 
 [comp]: Computation/README.md
 [enc]: Encoding/README.md
@@ -36,6 +37,7 @@ explain how to find and combine them.
 [examples]: Examples/README.md
 [smp]: Examples/SMP/README.md
 [csp]: CSP/README.md
+[complexity]: Complexity/README.md
 
 ## Build
 

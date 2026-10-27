@@ -28,6 +28,14 @@ specifications; polynomial-time realization is a separate obligation.
 [sums]: ../Computation/Sums.lean
 [bounded]: BoundedArray.lean
 
+`arrayOfLength_encode_surjective` lifts total use of bit patterns from an
+element codec to its array codec. The CSP witness decoder uses it to frame raw
+bits into blocks before validating the finite carrier codes.
+
+`boundedArrayConvert_bits` lifts equal-width, encoding-preserving element
+conversions to stored arrays at equal capacities. Counts and inactive padding
+are preserved. Stored-field and parameter-renaming adapters share this rule.
+
 Use ordinary mathematical carriers in public interfaces. Reuse an existing codec
 through `reindex` when an equivalence preserves its bits. `restrict` retains the
 encoding of each admitted value and rejects excluded words. Coordinate codecs
@@ -60,6 +68,16 @@ the operational width computation needed by generic tape algorithms. The current
 interfaces continue to require exact polynomial widths.
 
 ## Examples and boundaries
+
+[Word.lean](Word.lean) presents canonical fields as external binary letters.
+Its decoder rejects nonbinary symbols, incorrect widths, and invalid codec
+values. Both round trips are proved; polynomial-time parsing remains a
+separate realization obligation.
+
+`decodeBinaryWord` isolates strict binary-letter validation, and
+`decodeWord_eq_decodeBinaryWord` factors canonical field decoding through it.
+The [binary decoder](../Complexity/BinaryDecoder.lean) certifies this first
+stage; exact-width checks and domain-specific validation remain separate.
 
 [EncodedDomains.lean](../Examples/EncodedDomains.lean) illustrates domains;
 [Records.lean](../Examples/Records.lean) exercises records, sums, runtime

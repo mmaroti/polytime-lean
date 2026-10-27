@@ -27,18 +27,23 @@ blank tape. The exact serialization and realization predicates live in
 
 See [Examples/TM0.lean](../Examples/TM0.lean) for public export examples and
 [Examples/Integers.lean](../Examples/Integers.lean) for arithmetic certificates.
+The [complexity guide](../Complexity/README.md) explains the bridge from these
+exports to word-length polynomial bounds and total many-one reductions.
 
 ## Backend layers
 
 | Layer | Source |
 | --- | --- |
 | Delimited public input preparation | [DelimitedInput.lean][input] |
+| Arbitrary word preparation | [RawInput.lean](RawInput.lean) |
+| Word symbols as immutable input tracks | [WordBits.lean](WordBits.lean) |
 | Complete convention-level wrapper | [CallingConventionDelimited.lean][wrap] |
 | Physical binary output extraction | [CallingConventionOutput.lean][output] |
 | Source convention to simulator | [CallingConventionSimulation.lean][conv] |
 | Multi-tape simulation and polynomial bounds | [Simulation.lean][sim] |
 | Track representations and serialization | [Tracks.lean][tracks], [encoding] |
 | Direct translation of one-tape routines | [SingleTape.lean](SingleTape.lean) |
+| Word-machine transport and sequencing | [WordComposition.lean][words] |
 
 [input]: DelimitedInput.lean
 [wrap]: CallingConventionDelimited.lean
@@ -47,6 +52,7 @@ See [Examples/TM0.lean](../Examples/TM0.lean) for public export examples and
 [sim]: Simulation.lean
 [tracks]: Tracks.lean
 [encoding]: Encoding.lean
+[words]: WordComposition.lean
 
 Lower-level `CallingConvention.Realizes.tm0` retains simulator track frames;
 `tm0_output` extracts a declared output. Both start from prepared simulator

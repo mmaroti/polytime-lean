@@ -25,6 +25,7 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 | Bézout coefficients | [SignedExtendedGcd.lean][extended] |
 | Normalized Bézout coefficients | [NormalizedBezout.lean][norm] |
 | Shifts and magnitude bit length | [SignedShifts.lean][shifts], [length] |
+| Compare stored unary counts with polynomial sizes | [UnaryWidth.lean][unary] |
 
 [total]: SignedQuotient.lean
 [cyclic]: CyclicCoordinate.lean
@@ -45,6 +46,11 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 [length]: SignedBitLength.lean
 [extended]: SignedExtendedGcd.lean
 [norm]: NormalizedBezout.lean
+[unary]: UnaryWidth.lean
+
+`boundedUnaryEqualsPolynomial` compares a stored count with the requested
+mathematical size. Its shared unary capacity is derived internally by
+`boundedUnaryWidenTo`; widening preserves the count and appends canonical zeros.
 
 Extended gcd and normalized Bézout computations have controlled result
 boundaries. Use `integerExtendedGcd_value` and
@@ -89,6 +95,10 @@ unsigned division, or [Gcd.lean](../Examples/Gcd.lean) for gcd. Numeric examples
 evaluate mathematical specifications; realization theorems certify the machines.
 
 ## Implementation work
+
+[UnaryWidth.lean][unary] also provides `boundedUnaryResize` for increasing a
+count's capacity under a proved capacity comparison. The additive widening
+interface specializes this rule. Both retain the actual count.
 
 Ripple arithmetic, bit folds, and binary scans are foundational components.
 [BinaryRipple.lean](BinaryRipple.lean), [BitFold.lean](BitFold.lean), and

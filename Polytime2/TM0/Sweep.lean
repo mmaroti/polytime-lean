@@ -77,7 +77,8 @@ def machine (visit : Memory → Symbol → Memory × Symbol) :
 def tape (left right : List (Alphabet Symbol)) : Tapes (fun _ : Unit => Alphabet Symbol) :=
   fun _ => Turing.Tape.mk' (Turing.ListBlank.mk left) (Turing.ListBlank.mk right)
 
-private theorem forward (visit : Memory → Symbol → Memory × Symbol)
+/-- Scan a known payload prefix without inspecting the following cells. -/
+theorem forward (visit : Memory → Symbol → Memory × Symbol)
     (memory : Memory) (payload : List Symbol) (left right : List (Alphabet Symbol)) :
     Steps (machine visit) payload.length
       (.inl (false, memory), tape left (payload.map row ++ right))
@@ -96,7 +97,8 @@ private theorem forward (visit : Memory → Symbol → Memory × Symbol)
     simpa [run, List.map_cons, List.cons_append, List.reverse_cons, List.map_append,
       List.append_assoc] using Steps.next first remaining
 
-private theorem rewind (visit : Memory → Symbol → Memory × Symbol)
+/-- Rewind over a payload to a left marker, preserving all rows. -/
+theorem rewind (visit : Memory → Symbol → Memory × Symbol)
     (memory : Memory) (payload : List Symbol) (current : Alphabet Symbol) (notLeft : isLeft current = false)
     (left right : List (Alphabet Symbol)) :
     Steps (machine visit) (payload.length + 2)

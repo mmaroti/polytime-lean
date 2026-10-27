@@ -106,4 +106,45 @@ theorem Realizable.zipWith
   · exact Realizable.argument step.inputDomains (.inr false) step.precondition
   · exact Realizable.argument step.inputDomains (.inr true) step.precondition
 
+/-- Named-size zip retains the direct mathematical `Fin (sizes parameter)`
+carrier while reusing the polynomial-length zip implementation. -/
+noncomputable def arrayZipWithAtParameter
+    (context : Context → EncodedDomain.{0, 0} Parameter)
+    (first second target : EncodedDomain.{0, 0} Parameter) (parameter : Parameter)
+    (operation : ∀ sizes, (∀ name, (context name).Carrier sizes) →
+      first.Carrier sizes → second.Carrier sizes → target.Carrier sizes) :
+    Computation Parameter (Context ⊕ Bool) where
+  inputDomains := Sum.elim context (fun choice => (if choice then second else first).array parameter)
+  outputDomain := target.array parameter
+  precondition _ _ := True
+  compute sizes arguments index := operation sizes (fun name => arguments.val (.inl name))
+    (arguments.val (.inr false) index) (arguments.val (.inr true) index)
+
+theorem arrayZipWithAtParameter_realizable
+    (context : Context → EncodedDomain.{0, 0} Parameter)
+    (first second target : EncodedDomain.{0, 0} Parameter) (parameter : Parameter)
+    (operation : ∀ sizes, (∀ name, (context name).Carrier sizes) →
+      first.Carrier sizes → second.Carrier sizes → target.Carrier sizes)
+    (step : (arrayZipWithStep context first second target operation).Realizable) :
+    (arrayZipWithAtParameter context first second target parameter operation).Realizable := by
+  let inputMap (name : Context ⊕ Bool) sizes :
+      ((arrayZipWithAtParameter context first second target parameter operation).inputDomains name).Carrier sizes →
+        ((arrayZipWith context first second target (MvPolynomial.X parameter) operation).inputDomains name).Carrier sizes :=
+    match name with
+    | .inl _ => id
+    | .inr choice => EncodedDomain.arrayParameterEquiv (if choice then second else first) parameter sizes
+  have prepared := (arrayZipWith_realizable context first second target (MvPolynomial.X parameter)
+    operation step).reinterpretInputs
+      (arrayZipWithAtParameter context first second target parameter operation).inputDomains inputMap
+      (by rintro (name | choice) sizes <;> rfl)
+      (by
+        rintro (name | choice) sizes value
+        · rfl
+        · exact EncodedDomain.array_X_encode_bits (if choice then second else first) parameter sizes value)
+      (fun _ _ => True) (by intros; trivial)
+  exact prepared.reinterpretOutput (target.array parameter)
+    (fun sizes => (EncodedDomain.arrayParameterEquiv target parameter sizes).symm)
+    (EncodedDomain.arrayParameter_width target parameter)
+    (fun sizes value => EncodedDomain.array_X_encode_bits target parameter sizes _)
+
 end Polytime2.Computation

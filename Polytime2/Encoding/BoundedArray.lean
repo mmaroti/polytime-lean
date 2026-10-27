@@ -43,4 +43,48 @@ noncomputable def boundedArray (element : EncodedDomain Parameter)
       simp only [map_mul]
       exact Nat.mul_le_mul_right (element.width sizes) (Nat.le_of_lt_succ count.isLt))
 
+/-- Convert stored elements between equally wide codecs at equal capacities.
+The actual count is retained, including for empty element carriers. -/
+noncomputable def boundedArrayConvert {TargetParameter : Type} [Fintype TargetParameter]
+    (source : EncodedDomain Parameter) (target : EncodedDomain TargetParameter)
+    (sourceCapacity : MvPolynomial Parameter ℕ) (targetCapacity : MvPolynomial TargetParameter ℕ)
+    (sourceSizes : Parameter → ℕ) (targetSizes : TargetParameter → ℕ)
+    (sameCapacity : MvPolynomial.eval sourceSizes sourceCapacity = MvPolynomial.eval targetSizes targetCapacity)
+    (convert : source.Carrier sourceSizes → target.Carrier targetSizes)
+    (field : (boundedArray source sourceCapacity).Carrier sourceSizes) :
+    (boundedArray target targetCapacity).Carrier targetSizes :=
+  ⟨⟨field.1.val, by rw [← sameCapacity]; exact field.1.isLt⟩, fun index => convert (field.2 index)⟩
+
+/-- Encoding-preserving element conversion also preserves the complete stored
+array encoding, including count bits and inactive capacity padding. -/
+theorem boundedArrayConvert_bits {TargetParameter : Type} [Fintype TargetParameter]
+    (source : EncodedDomain Parameter) (target : EncodedDomain TargetParameter)
+    (sourceCapacity : MvPolynomial Parameter ℕ) (targetCapacity : MvPolynomial TargetParameter ℕ)
+    (sourceSizes : Parameter → ℕ) (targetSizes : TargetParameter → ℕ)
+    (sameCapacity : MvPolynomial.eval sourceSizes sourceCapacity = MvPolynomial.eval targetSizes targetCapacity)
+    (convert : source.Carrier sourceSizes → target.Carrier targetSizes)
+    (sameWidth : source.width sourceSizes = target.width targetSizes)
+    (sameBits : ∀ value, ArrayEncoding.bits (source.encode sourceSizes value) =
+      ArrayEncoding.bits (target.encode targetSizes (convert value)))
+    (field : (boundedArray source sourceCapacity).Carrier sourceSizes) :
+    ArrayEncoding.bits ((boundedArray source sourceCapacity).encode sourceSizes field) =
+      ArrayEncoding.bits ((boundedArray target targetCapacity).encode targetSizes
+        (boundedArrayConvert source target sourceCapacity targetCapacity sourceSizes targetSizes
+          sameCapacity convert field)) := by
+  change ArrayEncoding.bits (((boundedUnary sourceCapacity).prod
+      (bitVectors (sourceCapacity * source.widthPolynomial))).encode sourceSizes
+      (field.1, (ArrayEncoding.encode (source.encode sourceSizes) field.1.val field.2).setWidth _)) =
+    ArrayEncoding.bits (((boundedUnary targetCapacity).prod
+      (bitVectors (targetCapacity * target.widthPolynomial))).encode targetSizes
+      (_, (ArrayEncoding.encode (target.encode targetSizes) field.1.val
+        (fun index => convert (field.2 index))).setWidth _))
+  rw [bits_prod_encode, bits_prod_encode]
+  congr 1
+  · simp only [boundedUnary, BoundedUnary.encode_bits]
+    exact congrArg (fun capacity => BoundedUnary.bits capacity field.1.val) sameCapacity
+  · apply ArrayEncoding.bits_setWidth_congr_of_eq
+    · simp only [ArrayEncoding.bits_encode, sameBits]
+    · simp only [map_mul]
+      exact congrArg₂ (· * ·) sameCapacity sameWidth
+
 end Polytime2.EncodedDomain

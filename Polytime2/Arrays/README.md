@@ -22,6 +22,7 @@ whose element widths depend on runtime sizes. Start with
 | Test whether every Boolean entry is true | [AllTrue.lean](AllTrue.lean) |
 | Retain prefix states | [Scan.lean](Scan.lean) |
 | Select elements stably by a Boolean mask | [PackingResult.lean][pack] |
+| Extract an exact interval | [Slice.lean](Slice.lean) |
 | Share selected positions across related fields | [PackingResult.lean][pos] |
 | Call a consumer at the retained length | [PackingCall.lean][call] |
 | Read a stored packed array at its exact size | [PackingRead.lean][read] |
@@ -79,6 +80,11 @@ an explicit prefix length and bound.
 [SwapValues.lean](SwapValues.lean) exchanges two values throughout an array;
 its use in pivot-permutation tables preserves the element codec and length.
 
+Named-size `arrayZipWithAtParameter` and `arrayAllTrueAtParameter` retain
+ordinary `Fin (sizes parameter)` coordinates. The
+[CSP checker](../CSP/CheckerRealizable.lean) uses them for fixed-arity relation
+tables, including empty coordinate ranges.
+
 For a transform, certify the element operation and let the array rule handle
 traversal and result collection. No default mathematical element is needed.
 See [Fold.lean](../Examples/Fold.lean) and
@@ -87,12 +93,50 @@ arrays and zero-width elements.
 
 ## Packing and computed sizes
 
+`boundedArrayAtLength` reads stored elements at an exact polynomial length,
+after the caller proves that the stored count equals that length.
+`boundedArrayAtSize` retains the named-size interface as a specialization;
+both reuse one field-reading proof. The [instance reader][instance reader]
+uses the polynomial form for dense relational-table widths.
+
+[PackingWidth.lean](PackingWidth.lean) supplies `boundedArrayHasLength` to
+validate that equality at runtime, including when the requested length exceeds
+the host capacity. It reads the stored count and reuses unary count comparison;
+element-code validation remains separate.
+
+[Capacity.lean](Capacity.lean) supplies `boundedArrayResize` to increase a
+stored array's capacity without changing its actual count or elements. It
+reuses the existing count and payload accessors, unary resizing, and bit-vector
+resizing. This supports retaining parsed CSP payloads at the caller capacity.
+`boundedArrayRename` moves size renaming inside the codec while preserving the
+actual count and element encodings; the header-payload parser uses it before
+capacity conversion.
+
 `arrayPack` returns a retained count and an array of exactly that length.
 Capacity padding and binary counters stay private. Use shared positions when
 packing targets, generators, or dependency labels selected by the same mask.
+`arraySlice` specializes packing to a half-open interval with ordinary finite
+endpoints. Its result agrees with list `drop` followed by `take`, including
+empty and reversed intervals. The [word-pair extractor][pair fields] uses it
+for both fields.
 `boundedArrayCallFrame` prepares a consumer call from an already packed value;
 `preparePackingCall` includes packing. Avoid repeating the packing stage for
 related consumers.
+
+[FixedArrayCall.lean](FixedArrayCall.lean) prepares a computed-size frame for
+elements whose codec is fixed independently of runtime sizes. It reuses the
+stored count and element bits and omits unrelated caller size parameters.
+The [unary-size reader][unary size] uses this frame with the existing
+computed-size execution rule. `ready.callFixedArray` combines frame preparation
+and a total unary consumer call at the exact retained length.
+[FixedArrayResult.lean](FixedArrayResult.lean) repackages a computed-size
+Boolean flag and array into a flag and bounded array, preserving the actual
+count. The stored binary decoder uses it to return validated fields to the
+host capacity without exposing computed-size storage.
+
+[BooleanField.lean](BooleanField.lean) supplies `storedBooleanFieldView` to
+pass a direct stored Boolean field to a named-size reader without changing its
+count or canonical bits. Instance and assignment word decoders share this rule.
 
 See [Packing.lean](../Examples/Packing.lean) for stable positions and consumers.
 The [SMP guide](../Examples/SMP/README.md) shows several fields sharing packed
@@ -130,3 +174,6 @@ value, actual counts, empty arrays, and full-capacity rejection, with TM0
 certificates.
 
 [bounded snoc example]: ../Examples/BoundedSnoc.lean
+[pair fields]: ../Complexity/PairFields.lean
+[unary size]: ../Complexity/UnarySize.lean
+[instance reader]: ../CSP/ReadInstance.lean

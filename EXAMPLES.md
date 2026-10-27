@@ -452,6 +452,11 @@ only after its preparation and annotation obligations are discharged.
 
 ## 6. Compact-to-expanded Boolean clause encoding
 
+The shared mathematical carriers and semantics are defined in
+[SAT/ThreeSAT.lean](Polytime2/SAT/ThreeSAT.lean); see the
+[SAT guide](Polytime2/SAT/README.md). Their relational CSP interpretation is
+proved in [CSP/ThreeSAT.lean](Polytime2/CSP/ThreeSAT.lean).
+
 ### Input and mathematical meaning
 
 Size parameters are the number n of Boolean variables and the number c of
@@ -515,8 +520,12 @@ variables. Stronger streaming and space bounds require separate certificates.
 ## Further application: fixed-template CSP
 
 The mathematical contract and initial predicates are in
-[CSP/Basic.lean](Polytime2/CSP/Basic.lean); see the
+[CSP/Basic.lean](Polytime2/CSP/Basic.lean). Satisfiability and the
+finite-instance
+interface are in [CSP/Instance.lean](Polytime2/CSP/Instance.lean); see the
 [CSP guide](Polytime2/CSP/README.md) for current implementation status.
+Membership in NP is certified in
+[CSP/VerifierRealizable.lean](Polytime2/CSP/VerifierRealizable.lean).
 The [Taylor hardness task](Polytime2/tasks/csp-taylor-hardness.md) targets
 NP-completeness for rigid cores without Taylor polymorphisms, separately from
 the polynomial-time solver requirements below.

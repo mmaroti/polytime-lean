@@ -92,6 +92,27 @@ context; it does not promise to evaluate common subexpressions only once.
 `withPrecondition` strengthens admissibility, and `withSpecification` exposes a
 mathematically equal answer without changing its domain.
 
+[Optional.lean](Optional.lean) provides `ready.optionalGuard` for a partial
+consumer behind a certified Boolean guard. Prove that an accepted guard
+implies mathematical admissibility; rejection returns `none` without invoking
+the consumer or requiring a default output. The word parsers share this rule.
+`optionalBind_realizable` composes total optional-result decoders, skipping the
+consumer when the source is absent. It also supports empty result carriers.
+`optionalElim_realizable` supports an arbitrary result codec by combining a
+certified empty branch and a total consumer. Optional bind specializes this
+rule; the witness parser uses it with its substituted assignment codec.
+`EncodedDomain.optional_encode_bits_congr` lifts encoding-preserving element
+conversions to optional values, including inactive padding on rejection.
+`optionalIsSome` and `optionalGet` certify presence testing and extraction;
+the latter requires precisely presence.
+[OptionalDecision.lean][optional decision] lifts a total Boolean decision to
+optional inputs, rejecting any missing input before extracting payloads. The
+CSP field checker uses this rule.
+`optionalRename` moves size renaming inside an optional codec, preserving its
+value and bits. The witness checker and header-payload parser share this rule.
+
+[optional decision]: OptionalDecision.lean
+
 Use `ready.fst` and `ready.snd` to project certified results, and
 `firstReady.prodMk secondReady` to pair results on the same arguments and
 precondition. `firstReady.prodMap secondReady` applies unary computations to
@@ -122,6 +143,16 @@ when the target output codec is constructed by reindexing. Matching widths are
 separate obligations, including when a carrier is empty. These rules change
 mathematical meaning without requiring a new calling convention.
 
+[FullCodec.lean](FullCodec.lean) provides `decodeFullCodec` when every
+exact-width bit pattern is valid, proved by surjectivity of the canonical
+encoding. Its inverse preserves the bits and reuses the identity encoding map.
+This supplies no validation for partial codecs. The
+[dense-instance reader](../CSP/ReadInstance.lean) is a concrete caller.
+
+[BooleanBits.lean](BooleanBits.lean) transports ordinary Boolean arrays to
+exact little-endian bit vectors with unchanged canonical bits. It is used
+between the stored-field reader and the dense-instance decoder.
+
 For concrete patterns, see signed construction in
 [SignedConstruction.lean](../Arithmetic/SignedConstruction.lean), the bounded
 result in [SignedBitLength.lean](../Arithmetic/SignedBitLength.lean), and the
@@ -134,6 +165,10 @@ rejection branch in [PreparedOutcome.lean][outcome]. `withEncoding` and
 
 Use [Substitution.lean](Substitution.lean) for fixed polynomial size
 assignments.
+For a projection onto named caller sizes, use
+[ParameterRename.lean](ParameterRename.lean). `ready.renameParameters` derives
+the realization from polynomial substitution while exposing the directly
+projected mathematical carriers and the existing renamed codecs.
 For sizes computed from input data, start with
 [ComputedSizes.lean](ComputedSizes.lean) and
 [ComputedCall.lean](ComputedCall.lean).
@@ -142,6 +177,12 @@ retains the actual sizes with the result. `atComputedSizeValue` observes the
 ordinary dependent pair of the actual assignment and its payload, forgetting
 bounded count storage. Callers prove the consumer's
 precondition at those sizes. Working capacities and padding remain private.
+[RetainUnary.lean](RetainUnary.lean) supplies `retainComputedUnarySize` when a
+callee returns a unary count. It retains the already padded result at the
+caller capacity without changing its value or scanning again.
+[RetainBoolean.lean](RetainBoolean.lean) discards runtime count frames from a
+Boolean result through field projection. The complete CSP verifier uses it
+when returning from a prepared variable-count call.
 
 For counts read from an unchanged host input, use
 [ComputedHost.lean](ComputedHost.lean). `atComputedHostInput` retains a
@@ -164,6 +205,10 @@ Worked examples: [Context.lean](../Examples/Context.lean),
 [DynamicSizes.lean](../Examples/DynamicSizes.lean).
 
 ## Foundational work
+
+[ResizeBits.lean](ResizeBits.lean) certifies `BitVec.setWidth` at polynomial
+source and target widths, including zero widths. It composes zero extension
+and prefix projection; unary and stored-array capacity conversions reuse it.
 
 [Layout.lean](Layout.lean) and [Fields.lean](Fields.lean) connect primitive
 contracts to public computations. Tape placement, restoration, raw codec

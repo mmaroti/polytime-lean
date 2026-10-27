@@ -718,6 +718,27 @@ noncomputable def encoded {Parameter : Type parameterLevel} [Fintype Parameter]
     (assignment : Parameter → ℕ) (value : domain.Carrier assignment) : Turing.Tape Symbol :=
   tape (EncodedDomain.ArrayEncoding.bits (domain.encode assignment value))
 
+/-- A canonical argument tape determines its mathematical value. -/
+theorem encoded_injective {Parameter : Type parameterLevel} [Fintype Parameter]
+    (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter) (assignment : Parameter → ℕ) :
+    Function.Injective (encoded domain assignment) := by
+  intro first second equal
+  apply domain.encode_injective assignment
+  apply BitVec.eq_of_getLsbD_eq
+  intro index within
+  have symbols := congrArg (fun source : Turing.Tape Symbol => source.nth (index : ℤ)) equal
+  simp only [encoded, tape, Turing.Tape.mk₁, Turing.Tape.mk₂, Turing.Tape.mk'_nth_nat,
+    Turing.ListBlank.nth_mk] at symbols
+  have firstBound : index < (word (EncodedDomain.ArrayEncoding.bits (domain.encode assignment first))).length := by
+    simpa [word, EncodedDomain.ArrayEncoding.bits] using within
+  have secondBound : index < (word (EncodedDomain.ArrayEncoding.bits (domain.encode assignment second))).length := by
+    simpa [word, EncodedDomain.ArrayEncoding.bits] using within
+  rw [List.getI_eq_getElem _ firstBound, List.getI_eq_getElem _ secondBound] at symbols
+  simp only [word, List.getElem_map, EncodedDomain.ArrayEncoding.bits, List.getElem_ofFn] at symbols
+  cases firstBit : (domain.encode assignment first).getLsbD index <;>
+    cases secondBit : (domain.encode assignment second).getLsbD index <;>
+    simp_all [Binary.data]
+
 /-- Lifting a fixed codec to runtime sizes preserves its tape. -/
 @[simp] theorem encoded_constant {Parameter : Type parameterLevel} [Fintype Parameter]
     (domain : EncodedDomain.{0, carrierLevel} Empty) (assignment : Parameter → ℕ)
@@ -797,6 +818,16 @@ def Entry (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} P
   (∀ name (readOnlyProof : readOnly name = true), tapes name = encoded (domains name) assignment (values ⟨name, readOnlyProof⟩)) ∧
     ∀ name, readOnly name = false → ∃ contents : List Symbol,
       contents.length = (domains name).width assignment ∧ tapes name = buffer contents
+
+/-- Two canonical presentations of the same read-only tapes agree on inputs. -/
+theorem Entry.inputs_unique {domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter}
+    {readOnly : TapeName → Bool} {assignment : Parameter → ℕ}
+    {first second : Inputs domains readOnly assignment} {tapes : Tapes (Alphabet TapeName)}
+    (firstEntry : Entry domains readOnly assignment first tapes)
+    (secondEntry : Entry domains readOnly assignment second tapes) : first = second := by
+  funext name
+  apply encoded_injective (domains name.val) assignment
+  exact (firstEntry.1 name.val name.property).symm.trans (secondEntry.1 name.val name.property)
 
 -- outputNameLevel: names of public results, distinct from private writable storage.
 universe outputNameLevel

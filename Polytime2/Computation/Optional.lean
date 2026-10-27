@@ -17,6 +17,7 @@ limitations under the License.
 
 import Polytime2.Computation.Variants
 import Polytime2.Computation.Conditional
+import Polytime2.Encoding.ParameterRename
 
 /-! # Optional mathematical results
 
@@ -53,6 +54,43 @@ private noncomputable def optionalEquiv (domain : EncodedDomain.{0, 0} Parameter
 noncomputable def optional (domain : EncodedDomain.{0, 0} Parameter) : EncodedDomain Parameter :=
   (variant 2 (alternatives domain)).reindex (fun sizes => Option (domain.Carrier sizes)) (optionalEquiv domain)
 
+/-- Optional encodings preserve an element conversion with equal widths and
+identical canonical bits, including the inactive payload of none. -/
+theorem optional_encode_bits_congr {TargetParameter : Type} [Fintype TargetParameter]
+    (source : EncodedDomain Parameter) (target : EncodedDomain TargetParameter)
+    (sourceSizes : Parameter → ℕ) (targetSizes : TargetParameter → ℕ)
+    (convert : source.Carrier sourceSizes → target.Carrier targetSizes)
+    (sameWidth : source.width sourceSizes = target.width targetSizes)
+    (sameBits : ∀ value, ArrayEncoding.bits (source.encode sourceSizes value) =
+      ArrayEncoding.bits (target.encode targetSizes (convert value)))
+    (value : Option (source.Carrier sourceSizes)) :
+    ArrayEncoding.bits ((optional source).encode sourceSizes value) =
+      ArrayEncoding.bits ((optional target).encode targetSizes (value.map convert)) := by
+  change ArrayEncoding.bits ((variant 2 (alternatives source)).encode sourceSizes
+    ((optionalEquiv source sourceSizes) value)) =
+      ArrayEncoding.bits ((variant 2 (alternatives target)).encode targetSizes
+        ((optionalEquiv target targetSizes) (value.map convert)))
+  rw [bits_variant_encode, bits_variant_encode]
+  cases value with
+  | none =>
+    simp [optionalEquiv, alternatives, VariantEncoding.fields, List.ofFn_succ,
+      ArrayEncoding.bits, fixed, ofCodec, sameWidth]
+  | some value =>
+    simp [optionalEquiv, alternatives, VariantEncoding.fields, List.ofFn_succ, fixed_encode_bits, sameBits]
+    simp [ArrayEncoding.bits]
+
+/-- Renaming sizes commutes with optional encoding without changing any bits. -/
+theorem optional_renameParameters_bits {NewParameter : Type} [Fintype NewParameter]
+    (domain : EncodedDomain Parameter) (names : Parameter → NewParameter)
+    (sizes : NewParameter → ℕ) (value : Option (domain.Carrier (sizes ∘ names))) :
+    ArrayEncoding.bits (((optional domain).renameParameters names).encode sizes value) =
+      ArrayEncoding.bits ((optional (domain.renameParameters names)).encode sizes value) := by
+  rw [renameParameters_bits]
+  have equal := optional_encode_bits_congr domain (domain.renameParameters names) (sizes ∘ names) sizes id
+    (renameParameters_width domain names sizes).symm
+    (fun value => (renameParameters_bits domain names sizes value).symm) value
+  simpa only [Option.map_id, id_eq] using equal
+
 end Polytime2.EncodedDomain
 
 namespace Polytime2.Computation
@@ -60,6 +98,21 @@ namespace Polytime2.Computation
 open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
+
+/-- Move size renaming inside an optional codec without changing its value. -/
+noncomputable def optionalRename {HostParameter : Type} [Fintype HostParameter]
+    (source : EncodedDomain HostParameter) (names : HostParameter → Parameter) : Computation Parameter Unit :=
+  encodingMap ((optional source).renameParameters names) (optional (source.renameParameters names))
+    (fun _ value => value)
+
+theorem optionalRename_realizable {HostParameter : Type} [Fintype HostParameter]
+    (source : EncodedDomain HostParameter) (names : HostParameter → Parameter) :
+    (optionalRename source names).Realizable := by
+  apply encodingMap_realizable
+  · intro sizes
+    have lengths := congrArg List.length (optional_renameParameters_bits source names sizes none)
+    simpa only [ArrayEncoding.bits, List.length_ofFn] using lengths.symm
+  · exact optional_renameParameters_bits source names
 
 /-- Return an actual optional value. -/
 noncomputable def optionalSome (domain : EncodedDomain.{0, 0} Parameter) : Computation Parameter Unit :=
@@ -142,5 +195,163 @@ theorem optionalWhen_none_iff (domain : EncodedDomain.{0, 0} Parameter) (sizes :
     (optionalWhen domain).compute sizes ⟨arguments, trivial⟩ = none ↔ arguments false ≠ true := by
   change (if (show Bool from arguments false) then some (arguments true) else none) = none ↔ _
   cases flag : (show Bool from arguments false) <;> simp [flag]
+
+/-- Run a partial computation only when a certified guard permits it. Failed
+guards return none without requiring a value in the result domain. -/
+noncomputable def optionalGuard {InputName : Type} [Fintype InputName]
+    (consumer : Computation Parameter InputName)
+    (allowed : ∀ sizes, consumer.Arguments sizes → Prop)
+    (guard : ∀ sizes, consumer.Arguments sizes → Bool)
+    (permits : ∀ sizes arguments, allowed sizes arguments → guard sizes arguments = true →
+      consumer.precondition sizes arguments) : Computation Parameter InputName where
+  inputDomains := consumer.inputDomains
+  outputDomain := optional consumer.outputDomain
+  precondition := allowed
+  compute sizes arguments := if selected : guard sizes arguments.val = true then
+    some (consumer.compute sizes ⟨arguments.val, permits sizes arguments.val arguments.property selected⟩)
+    else none
+
+/-- Guarding, branching, and optional result construction are charged through
+ordinary composition. Only the selected branch invokes the consumer. -/
+theorem Realizable.optionalGuard {InputName : Type} [Fintype InputName]
+    {consumer : Computation Parameter InputName} (ready : consumer.Realizable)
+    (allowed : ∀ sizes, consumer.Arguments sizes → Prop)
+    (guard : ∀ sizes, consumer.Arguments sizes → Bool)
+    (permits : ∀ sizes arguments, allowed sizes arguments → guard sizes arguments = true →
+      consumer.precondition sizes arguments)
+    (guardReady : (Computation.mk consumer.inputDomains booleans allowed
+      (fun sizes arguments => guard sizes arguments.val)).Realizable) :
+    (consumer.optionalGuard allowed guard permits).Realizable := by
+  let computation := consumer.optionalGuard allowed guard permits
+  apply Realizable.ofCases (computation := computation) guard guardReady
+  · let selected sizes arguments := allowed sizes arguments ∧ guard sizes arguments = true
+    have active := ready.withPrecondition selected (by
+      intro sizes arguments valid
+      exact permits sizes arguments valid.1 valid.2)
+    have packed := active.followedBy (optionalSome_realizable consumer.outputDomain) rfl (by intros; trivial)
+    apply packed.withSpecification selected _ (by intros; assumption)
+    intro sizes arguments valid
+    change some (consumer.compute sizes _) = if h : guard sizes arguments = true then some _ else none
+    rw [dite_eq_left valid.2]
+  · let rejected sizes arguments := allowed sizes arguments ∧ guard sizes arguments = false
+    have absent := (optionalNone_realizable consumer.outputDomain).onResults consumer.inputDomains rejected
+      (fun empty => empty.elim) (by intros; trivial) (fun empty => empty.elim)
+    apply absent.withSpecification rejected _ (by intros; assumption)
+    intro sizes arguments valid
+    change none = if h : guard sizes arguments = true then some _ else none
+    rw [dite_eq_right (by rw [valid.2]; decide)]
+
+/-- Test presence without requiring a value in the optional payload domain. -/
+noncomputable def optionalIsSome (source : EncodedDomain Parameter) : Computation Parameter Unit :=
+  unaryMap (optional source) booleans (fun _ _ => True) (fun _ value => value.val.isSome)
+
+theorem optionalIsSome_realizable (source : EncodedDomain Parameter) :
+    (optionalIsSome source).Realizable := by
+  have ready := (variantIs_realizable 2 (EncodedDomain.alternatives source) 1).reinterpretInputs
+    (fun _ : Unit => optional source) (fun _ sizes => EncodedDomain.optionalEquiv source sizes)
+    (by intros; rfl) (by intros; rfl) (fun _ _ => True) (by intros; trivial)
+  apply ready.withSpecification (fun _ _ => True) (optionalIsSome source).compute (by intros; trivial)
+  intro sizes arguments valid
+  change decide (((EncodedDomain.optionalEquiv source sizes) (arguments ())).1 = 1) =
+    (arguments ()).isSome
+  cases arguments () <;> rfl
+
+/-- Extract an actual optional payload under exactly the presence precondition. -/
+noncomputable def optionalGet (source : EncodedDomain Parameter) : Computation Parameter Unit :=
+  unaryMap (optional source) source (fun _ value => value.isSome = true)
+    (fun _ value => value.val.get value.property)
+
+theorem optionalGet_realizable (source : EncodedDomain Parameter) :
+    (optionalGet source).Realizable := by
+  have ready := (variantProjection_realizable 2 (EncodedDomain.alternatives source) 1).reinterpretInputs
+    (fun _ : Unit => optional source) (fun _ sizes => EncodedDomain.optionalEquiv source sizes)
+    (by intros; rfl) (by intros; rfl) (fun _ arguments => (arguments ()).isSome = true) (by
+      intro sizes arguments present
+      change ((EncodedDomain.optionalEquiv source sizes) (arguments ())).1 = 1
+      cases chosen : arguments () with
+      | none => simp [chosen] at present
+      | some value => rfl)
+  apply ready.withSpecification (fun _ arguments => (arguments ()).isSome = true)
+    (optionalGet source).compute (by intros; assumption)
+  intro sizes arguments present
+  cases chosen : arguments () with
+  | none => simp [chosen] at present
+  | some value =>
+    have eta : arguments = fun _ => some value := by
+      funext name
+      cases name
+      exact chosen
+    subst arguments
+    rfl
+
+/-- Dispatch an optional value into a certified empty branch or a total
+consumer. The result may use any canonical codec. -/
+noncomputable def optionalElim (source target : EncodedDomain Parameter)
+    (empty : ∀ sizes, target.Carrier sizes)
+    (operation : ∀ sizes, source.Carrier sizes → target.Carrier sizes) : Computation Parameter Unit :=
+  unaryMap (optional source) target (fun _ _ => True)
+    (fun sizes value => value.val.elim (empty sizes) (operation sizes))
+
+theorem optionalElim_realizable (source target : EncodedDomain Parameter)
+    (empty : ∀ sizes, target.Carrier sizes)
+    (operation : ∀ sizes, source.Carrier sizes → target.Carrier sizes)
+    (emptyReady : (Computation.mk (Empty.elim : Empty → EncodedDomain Parameter) target
+      (fun _ _ => True) (fun sizes _ => empty sizes)).Realizable)
+    (ready : (unaryMap source target (fun _ _ => True)
+      (fun sizes value => operation sizes value.val)).Realizable) :
+    (optionalElim source target empty operation).Realizable := by
+  let alternatives := EncodedDomain.alternatives source
+  let action (index : Fin 2) sizes (value : {value : (alternatives index).Carrier sizes // True}) :
+      target.Carrier sizes :=
+    Fin.cases (fun _ => empty sizes)
+      (fun next => Fin.cases (fun value => operation sizes value.val)
+        (fun impossible => Fin.elim0 impossible) next) index value
+  have branches (index : Fin 2) :
+      (unaryMap (alternatives index) target (fun _ _ => True) (action index)).Realizable := by
+    fin_cases index
+    · exact emptyReady.onResults (fun _ : Unit => alternatives 0) (fun _ _ => True)
+        (fun empty => empty.elim) (by intros; trivial) (fun empty => empty.elim)
+    · exact ready
+  have casesReady := variantCases_realizable 2 alternatives target (fun _ _ _ => True) action branches
+  have converted := casesReady.reinterpretInputs (fun _ : Unit => optional source)
+    (fun _ sizes => EncodedDomain.optionalEquiv source sizes) (by intros; rfl) (by intros; rfl)
+    (fun _ _ => True) (by intros; trivial)
+  apply converted.withSpecification (fun _ _ => True) (optionalElim source target empty operation).compute (by intros; trivial)
+  intro sizes arguments valid
+  cases chosen : arguments () with
+  | none =>
+    have eta : arguments = fun _ => (none : Option (source.Carrier sizes)) := by
+      funext name
+      cases name
+      exact chosen
+    subst arguments
+    rfl
+  | some value =>
+    have eta : arguments = fun _ => some value := by
+      funext name
+      cases name
+      exact chosen
+    subst arguments
+    rfl
+
+/-- Compose total optional-result decoders, invoking the consumer only when the
+source contains an actual value. -/
+noncomputable def optionalBind (source target : EncodedDomain Parameter)
+    (operation : ∀ sizes, source.Carrier sizes → Option (target.Carrier sizes)) : Computation Parameter Unit :=
+  unaryMap (optional source) (optional target) (fun _ _ => True)
+    (fun sizes value => value.val.bind (operation sizes))
+
+theorem optionalBind_realizable (source target : EncodedDomain Parameter)
+    (operation : ∀ sizes, source.Carrier sizes → Option (target.Carrier sizes))
+    (ready : (unaryMap source (optional target) (fun _ _ => True)
+      (fun sizes value => operation sizes value.val)).Realizable) :
+    (optionalBind source target operation).Realizable := by
+  have combined := optionalElim_realizable source (optional target) (fun _ => none) operation
+    (optionalNone_realizable target) ready
+  apply combined.withSpecification (fun _ _ => True) (optionalBind source target operation).compute
+    (by intros; trivial)
+  intro sizes arguments valid
+  change (arguments ()).elim none (operation sizes) = (arguments ()).bind (operation sizes)
+  cases arguments () <;> rfl
 
 end Polytime2.Computation

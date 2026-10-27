@@ -51,23 +51,6 @@ noncomputable def inputTapes (domains : TapeName → EncodedDomain.{parameterLev
   fun name => if immutable : readOnly name = true then encoded (domains name) sizes (input ⟨name, immutable⟩)
     else buffer []
 
-private theorem encoded_injective (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
-    (sizes : Parameter → ℕ) {first second : domain.Carrier sizes}
-    (equal : encoded domain sizes first = encoded domain sizes second) : first = second := by
-  have sameBits : domain.encode sizes first = domain.encode sizes second := by
-    apply BitVec.eq_of_getLsbD_eq
-    intro index inside
-    have atIndex := congrArg (fun source : Turing.Tape Binary.Symbol => source.nth (index : ℤ)) equal
-    simp only [encoded, CallingConvention.tape, Binary.word, Turing.Tape.mk₁, Turing.Tape.mk₂,
-      Turing.Tape.mk'_nth_nat, Turing.ListBlank.nth_mk] at atIndex
-    rw [List.getI_eq_getElem _ (by simp; exact inside),
-      List.getI_eq_getElem _ (by simp; exact inside)] at atIndex
-    simp only [List.getElem_map, List.getElem_ofFn] at atIndex
-    cases left : (domain.encode sizes first).getLsbD index <;>
-      cases right : (domain.encode sizes second).getLsbD index <;> simp_all [Binary.data]
-  have decoded := congrArg (domain.decode sizes) sameBits
-  simpa only [domain.decode_encode, Option.some.injEq] using decoded
-
 omit [DecidableEq TapeName] [Fintype TapeName] in
 private theorem input_entry (domains : TapeName → EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (readOnly : TapeName → Bool) (sizes : Parameter → ℕ) (input : Inputs domains readOnly sizes) :
