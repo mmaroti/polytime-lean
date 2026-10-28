@@ -19,6 +19,15 @@ verifier receives `encodePair (input, witness)`, whose exact length includes
 the unary input-length header. `decodePair_encodePair` gives the round trip;
 the NP contract requires rejection of malformed pair encodings.
 
+[WitnessPadding.lean](WitnessPadding.lean) proves that bounded witnesses can
+be padded to a fixed length through the same pair encoding, preserving both
+accepting directions. [PaddedVerifier.lean](PaddedVerifier.lean) certifies the
+total padded verifier, including both framing checks, stable selection of the
+actual witness, and its computed-size verifier call.
+[FixedWitness.lean](FixedWitness.lean) exports `InNP.fixedWitness`: every NP
+language has a polynomial-time verifier using one exact polynomial witness
+length and rejecting malformed pair framing.
+
 [Realizable.lean](Realizable.lean) connects existing computation certificates:
 
 - `ready.polynomialTime` certifies the function between `inputWord` and
@@ -43,6 +52,13 @@ computation. [RawWords.lean](RawWords.lean) owns the intermediate Boolean-track
 entry rule; application parsers need no physical track representation.
 Use `ready.onWordDecision` when the specification already gives the answer as
 a function of `List.ofFn letters`; this rule handles the length transport.
+`ready.onWordOutput` exports any encoded result as its canonical binary word;
+its width is polynomial in input length. The Boolean rules specialize this
+bridge. `ready.onWordFormattedOutput` supports a fixed finite-memory formatter.
+[FramedOutput.lean](FramedOutput.lean) uses it for `onWordOutputWithHeader`,
+emitting a polynomial unary count, native separator, and canonical payload.
+[CSP/WordOutput.lean](../CSP/WordOutput.lean) specializes this to the existing
+instance-word format.
 
 [UnaryHeader.lean](UnaryHeader.lean) certifies the first non-count position
 using the existing finite predicate, array map, and first-false scan. Its
@@ -70,6 +86,8 @@ parsed header count. It reuses array slicing and derived-width arithmetic.
 `pairParser_realizable` certifies this total parser; `pairParser_correct`
 identifies both successful output fields and failed parses with `decodePair`.
 The fields still require their application-specific domain decoding.
+[ParsedPair.lean](ParsedPair.lean) extracts the actual fields under exactly the
+successful-decoding precondition.
 
 [HeaderParser.lean](HeaderParser.lean) parses a unary count and its complete
 remaining payload, including empty payloads. `headerParser_correct` identifies
@@ -115,6 +133,11 @@ stored-length equality as its precondition. Dense instances use the full-codec
 certificate; CSP witnesses use the fixed-array certificate. Capacity padding
 never contributes mathematical elements, and no inhabitance is required.
 
+[StoredDecision.lean](StoredDecision.lean) calls a polynomial-time word verifier
+on a stored field at its actual length and retains only the Boolean answer.
+It uses the existing fixed-array call and computed-Boolean result projection;
+host padding contributes no letters.
+
 Foundational alphabet transport and counted sequencing are in
 [TM0/WordComposition.lean](../TM0/WordComposition.lean). Application proofs use
 the public composition and bridge rules instead of constructing machines.
@@ -126,5 +149,15 @@ variable-count call, and the assignment checker before proving membership in NP.
 [Cook-Levin foundations](CookLevin/README.md) develop the bounded-machine
 circuit construction. `verifier_circuits_uniform` includes the complete
 polynomial-time constructor, canonical serialization, polynomial gate bounds,
-and correctness on every Boolean assignment. Certified Tseitin conversion
-and SAT hardness remain separate tasks.
+and correctness on every Boolean assignment.
+[VerifierDecision.lean](CookLevin/VerifierDecision.lean) supplies the reverse
+execution bridge, `wordVerifier_realizable`: a certified polynomial-time word
+verifier becomes a total high-level computation on ordinary letter arrays.
+This permits composition with computed-size field parsing using the existing
+canonical codecs.
+[FixedFormulaProgram.lean](CookLevin/FixedFormulaProgram.lean) exports
+`np_formulas_uniform`, a certified three-CNF constructor for every NP language
+with exact membership through satisfiability.
+[Reduction.lean](CookLevin/Reduction.lean) proves `np_reduces_threeSAT`, the
+total polynomial many-one reduction to the existing dense Boolean CSP language.
+`CSP.ThreeSAT.language_npComplete` combines it with CSP membership in NP.

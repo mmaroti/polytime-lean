@@ -27,6 +27,15 @@ proves the assignment and satisfiability equivalences with three-literal CNF.
 the reverse mathematical presentation. Its reconstruction theorem preserves
 every relation application. The shared clause semantics are in
 [SAT/ThreeSAT.lean](../SAT/ThreeSAT.lean).
+[ThreeSATClauses.lean](ThreeSATClauses.lean) identifies canonical clause arrays
+with these relations: each dense table entry tests occurrence of the clause
+with that pattern and scope. Forgetting finite variable bounds preserves
+satisfiability. [ThreeSATProgram.lean](ThreeSATProgram.lean) certifies the full
+dense-table compiler through equality, array membership, and tabulation. Its
+output is the existing instance codec on exactly the formula's variable set.
+[WordOutput.lean](WordOutput.lean) certifies native instance-word output.
+The [Cook-Levin reduction](../Complexity/CookLevin/Reduction.lean) exports
+`ThreeSAT.language_npComplete` for the existing strict word language.
 
 [Encoding.lean](Encoding.lean) gives dense instance codecs with exact widths
 and canonical assignment codecs. [CheckerMath.lean](CheckerMath.lean) proves
@@ -90,7 +99,7 @@ with that stored-pair check and exports the all-word runtime certificate.
 
 These are mathematical definitions and proofs. Generic polynomial reductions
 and NP definitions are in the [complexity guide](../Complexity/README.md).
-Solvers and hardness proofs remain open.
+Solvers and the Taylor-hardness proof remain open.
 The [hardness task](../tasks/csp-taylor-hardness.md) records the remaining
 steps.
 The target problems and instance representation live in

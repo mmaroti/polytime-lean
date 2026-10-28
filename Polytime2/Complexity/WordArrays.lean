@@ -4,7 +4,7 @@ import Polytime2.Arrays.Tabulate
 import Polytime2.Arrays.Operations
 import Polytime2.Primitives.FiniteOperations
 
-/-! # Total word decisions on ordinary letter arrays
+/-! # Total word execution on ordinary letter arrays
 
 Application parsers receive ordinary finite arrays of external letters. The
 three physical Boolean tracks are decoded here using a fixed finite operation
@@ -91,6 +91,38 @@ namespace Polytime2.Computation.Realizable
 
 open EncodedDomain Complexity
 
+/-- Execute on ordinary letter arrays on every raw word and format the output
+bits with fixed finite memory, without an input framing precondition. -/
+theorem onWordFormattedOutput {Memory : Type} [Fintype Memory] (outputDomain : EncodedDomain Unit)
+    (operation : (size : ℕ) → (Fin size → Letter) → outputDomain.Carrier (fun _ => size))
+    (format : Memory → Bool → Memory × Letter) (initialMemory : Memory)
+    (ready : (Computation.mk (fun _ : Unit => letterDomain.array ()) outputDomain
+      (fun _ _ => True) (fun sizes arguments => operation (sizes ()) (arguments.val ()))).Realizable) :
+    PolynomialTime id id (fun word =>
+      formatBits format initialMemory (ArrayEncoding.bits (outputDomain.encode (fun _ => word.length)
+        (operation word.length (fun index => word[index]))))) := by
+  have composed := Complexity.lettersFromBits_realizable.followedBy ready rfl (by intros; trivial)
+  have raw := onRawWordFormattedOutput outputDomain
+    (fun size arrays => operation size (fun index => Complexity.decodeBits (fun bit => arrays bit index)))
+    format initialMemory composed
+  convert raw using 1
+  funext word
+  congr 4
+  funext index
+  exact (Complexity.decodeBits_letterBits word[index]).symm
+
+/-- Canonical binary output specializes the finite-memory formatter. -/
+theorem onWordOutput (outputDomain : EncodedDomain Unit)
+    (operation : (size : ℕ) → (Fin size → Letter) → outputDomain.Carrier (fun _ => size))
+    (ready : (Computation.mk (fun _ : Unit => letterDomain.array ()) outputDomain
+      (fun _ _ => True) (fun sizes arguments => operation (sizes ()) (arguments.val ()))).Realizable) :
+    PolynomialTime id id (fun word =>
+      (ArrayEncoding.bits (outputDomain.encode (fun _ => word.length)
+        (operation word.length (fun index => word[index])))).map Sum.inl) := by
+  have formatted := onWordFormattedOutput outputDomain operation
+    (fun _ : Unit => fun bit => ((), Sum.inl bit)) () ready
+  simpa only [formatBits_binary] using formatted
+
 /-- A certified total decision on ordinary arrays of external letters yields a
 polynomial-time decision on every word, with no input framing precondition. -/
 theorem onWordArrays
@@ -99,15 +131,8 @@ theorem onWordArrays
       (fun _ _ => True) (fun sizes arguments => operation (sizes ()) (arguments.val ()))).Realizable) :
     PolynomialTime id encodeBool
       (fun word => operation word.length (fun index => word[index])) := by
-  have composed := Complexity.lettersFromBits_realizable.followedBy ready rfl (by intros; trivial)
-  have raw := onRawWords
-    (fun size arrays => operation size (fun index => Complexity.decodeBits (fun bit => arrays bit index)))
-    composed
-  convert raw using 1
-  funext word
-  congr 1
-  funext index
-  exact (Complexity.decodeBits_letterBits word[index]).symm
+  have raw := onWordOutput booleans operation ready
+  simpa only [WordBits.boolean_bits, List.map_singleton, PolynomialTime, encodeBool, id_eq] using raw
 
 /-- Export a total word decision specified on the ordinary list of letters.
 The polynomial-array and named-array codecs are transported here once, so

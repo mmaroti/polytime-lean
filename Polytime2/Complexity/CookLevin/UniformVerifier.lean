@@ -23,11 +23,11 @@ variable [Fintype Symbol] [Fintype State]
 noncomputable def verifierSizePolynomials (timeBound : Polynomial ℕ) : Bool → MvPolynomial Unit ℕ :=
   fun isLength => if isLength then MvPolynomial.X () else timeBound.toMvPolynomial ()
 
-private theorem verifierSizes_time (timeBound : Polynomial ℕ) (sizes : Unit → ℕ) :
+theorem verifierSizes_time (timeBound : Polynomial ℕ) (sizes : Unit → ℕ) :
     SizeSubstitution.assignment (verifierSizePolynomials timeBound) sizes false = timeBound.eval (sizes ()) := by
   simp [SizeSubstitution.assignment, verifierSizePolynomials, MvPolynomial.eval_toMvPolynomial]
 
-private theorem verifierSizes_length (timeBound : Polynomial ℕ) (sizes : Unit → ℕ) :
+theorem verifierSizes_length (timeBound : Polynomial ℕ) (sizes : Unit → ℕ) :
     SizeSubstitution.assignment (verifierSizePolynomials timeBound) sizes true = sizes () := by
   simp [SizeSubstitution.assignment, verifierSizePolynomials]
 

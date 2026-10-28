@@ -2,9 +2,9 @@
 
 [Complexity guide](../README.md) · [Hardness task][task]
 
-This implements step 6 of the CSP hardness task: bounded simulation,
-polynomial gate bounds, and certified uniform circuit construction with
-canonical word-level input and output. SAT hardness is step 7.
+This implements steps 6 and 7 of the CSP hardness task: bounded simulation,
+certified uniform circuit construction, and the complete polynomial word
+reduction proving NP-completeness of relational three-SAT.
 
 [VerifierCircuit.lean](VerifierCircuit.lean) exports `verifier_circuits`:
 every certified polynomial-time word verifier has a polynomial-size circuit
@@ -142,8 +142,41 @@ The exponential truth-table factor depends only on the fixed cell alphabet,
 never on configuration width. Circuit-size bounds count gates; by themselves
 they do not certify construction or serialization time.
 
-Step 7 supplies the certified Tseitin conversion and NP-hardness composition.
-The constructor theorem alone does not establish SAT hardness.
+[Tseitin.lean](Tseitin.lean) composes the checked circuit constructor with
+certified Tseitin conversion. [PrefixFormula.lean](PrefixFormula.lean) proves
+that fixing the instance prefix leaves exactly an existential witness of the
+requested length. [InstancePrefix.lean](InstancePrefix.lean) certifies the
+framing and one-hot bit construction, including empty inputs.
+[FixedFormulaProgram.lean](FixedFormulaProgram.lean) assembles these stages with
+instance length as the sole size parameter. `np_formulas_uniform` supplies a
+certified constructor for every NP language, with satisfiability exactly
+membership of the original word. `fixedFormulaProgram_polynomialTime` includes
+serialized clause output.
+[FixedInstanceProgram.lean](FixedInstanceProgram.lean) composes it with the
+certified dense three-SAT compiler. `fixedInstanceProgram_satisfiable` preserves
+the formula's satisfiability, and `fixedInstanceProgram_polynomialTime` includes
+the dense binary output. [Reduction.lean](Reduction.lean) adds native instance
+word framing and exports `np_reduces_threeSAT`. The total translation covers
+every raw word and targets the existing strict CSP language.
+`CSP.ThreeSAT.language_npComplete` combines hardness with its NP verifier.
+
+[NetworkEvaluation.lean](../../Circuit/NetworkEvaluation.lean) certifies circuit
+evaluation on ordinary finite Boolean wire arrays. It tabulates actual gate
+destinations, folds the existing gate lookup/update operations, and proves
+agreement with `Circuit.run`. This is the evaluator needed to call a verifier
+inside the high-level witness normalizer.
+[EvaluateCircuit.lean](../../Circuit/EvaluateCircuit.lean) takes exactly a
+circuit and its input assignment, preparing generated-wire storage internally.
+[VerifierDecision.lean](VerifierDecision.lean) exports
+`wordVerifier_realizable`:
+every polynomial-time word verifier can be called as a total computation on
+ordinary letter arrays with exactly the same answer. It composes the existing
+constructor, one-hot letter encoding, and circuit evaluator, and derives the
+time allowance from the verifier certificate.
+[FixedWitness.lean](../FixedWitness.lean) uses this bridge to certify exact
+polynomial witness lengths used by the complete reduction.
 
 [task]: ../../tasks/csp-taylor-hardness.md
 [relocation]: ../../Circuit/TemplateRelocation.lean
+
+[fixed-inputs]: ../../SAT/FixedInputsProgram.lean

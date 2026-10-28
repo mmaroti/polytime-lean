@@ -109,6 +109,32 @@ theorem encodePair_injective : Function.Injective encodePair := by
   simp [encodePair]
   omega
 
+/-- Every successfully decoded pair has exactly the existing canonical framing. -/
+theorem decodePair_canonical {word : Word} {pair : Word × Word}
+    (parsed : decodePair word = some pair) : word = encodePair pair := by
+  cases header : readPairHeader word with
+  | none => simp [decodePair, header] at parsed
+  | some fields =>
+    rcases fields with ⟨count, payload⟩
+    simp only [decodePair, header] at parsed
+    change (if count ≤ payload.length then some (payload.take count, payload.drop count) else none) = some pair at parsed
+    split at parsed
+    next fits =>
+      have pairEqual := Option.some.inj parsed
+      calc
+        word = List.replicate count (.inr 1) ++ .inr 0 :: payload := readPairHeader_canonical header
+        _ = encodePair (payload.take count, payload.drop count) := by
+          simp only [encodePair, List.length_take, Nat.min_eq_left fits]
+          simp only [List.append_assoc, List.cons_append, List.nil_append, List.take_append_drop]
+        _ = encodePair pair := congrArg encodePair pairEqual
+    next outside => simp at parsed
+
+/-- Successful pair decoding accounts for the complete encoded input length. -/
+theorem decodePair_length {word : Word} {pair : Word × Word}
+    (parsed : decodePair word = some pair) :
+    2 * pair.1.length + pair.2.length + 1 = word.length := by
+  rw [decodePair_canonical parsed, encodePair_length]
+
 /-- A word represents a yes-instance only when decoding succeeds and the
 decoded mathematical value satisfies the problem predicate. -/
 def decodedLanguage {Value : Type*} (decode : Word → Option Value) (predicate : Value → Prop) :

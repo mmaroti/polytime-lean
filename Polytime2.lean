@@ -19,7 +19,14 @@ import Polytime2.Machine.Basic
 import Polytime2.CSP.Basic
 import Polytime2.CSP.Instance
 import Polytime2.CSP.ThreeSAT
-import Polytime2.Complexity.CookLevin.UniformVerifier
+import Polytime2.CSP.ThreeSATClauses
+import Polytime2.SAT.FixedInputsProgram
+import Polytime2.Complexity.FixedWitness
+import Polytime2.Circuit.EvaluateCircuit
+import Polytime2.Complexity.CookLevin.VerifierDecision
+import Polytime2.Complexity.CookLevin.FixedFormulaProgram
+import Polytime2.Complexity.CookLevin.FixedInstanceProgram
+import Polytime2.Complexity.CookLevin.Reduction
 import Polytime2.Complexity.BinaryDecoder
 import Polytime2.Computation.CodecDecode
 import Polytime2.Computation.FixedArrayDecode

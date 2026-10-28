@@ -36,11 +36,15 @@ private theorem checkedWordCircuit_output (machine : TM0.Machine Symbol State) (
   simp only [checkedWordOutput, map_add, map_mul, map_ofNat, wordGuardGateCount_eval]
   omega
 
+/-- Exact number of simulation, input-preparation, and guard gates. -/
+noncomputable def checkedWordGateCount (Symbol State : Type) [Fintype Symbol] [Fintype State] : MvPolynomial Bool ℕ :=
+  (2 + wordCoreGateCount Symbol State) +
+    (((wordGuardGateCount + 1) + (wordGuardGateCount + wordGuardGateCount)) + 4)
+
 /-- Canonical complete gate-array and actual output-coordinate codec. -/
 noncomputable def checkedWordCircuitDomain (Symbol State : Type) [Fintype Symbol] [Fintype State] : EncodedDomain Bool :=
   ((gateDomain (checkedGuardWires (wordCircuitWires Symbol State))).arrayOfLength
-    ((2 + wordCoreGateCount Symbol State) +
-      (((wordGuardGateCount + 1) + (wordGuardGateCount + wordGuardGateCount)) + 4))).prod
+    (checkedWordGateCount Symbol State)).prod
     (arrayPosition (checkedGuardWires (wordCircuitWires Symbol State)))
 
 /-- Observe the checked circuit as an ordinary mathematical network. -/
@@ -121,5 +125,21 @@ theorem checkedWordProgram_polynomialTime (machine : TM0.Machine Symbol State) (
     PolynomialTime (checkedWordProgram machine entry letters).inputWord (checkedWordProgram machine entry letters).outputWord
       (checkedWordProgram machine entry letters).result :=
   (checkedWordProgram_realizable machine entry letters).polynomialTime
+
+/-- Exact number of external one-hot word-input bits. -/
+noncomputable def verifierInputBits : MvPolynomial Bool ℕ :=
+  MvPolynomial.X true * MvPolynomial.C (Fintype.card Letter)
+
+omit [Inhabited Symbol] [Inhabited State] in
+theorem checkedWord_wireCount :
+    verifierInputBits + checkedWordGateCount Symbol State = checkedGuardWires (wordCircuitWires Symbol State) := by
+  simp only [verifierInputBits, checkedWordGateCount, checkedGuardWires, wordCircuitWires, wordPreparedWires]
+  ring
+
+omit [Inhabited Symbol] [Inhabited State] in
+/-- The checked constructor and ordinary evaluator share one circuit codec. -/
+theorem checkedWordCircuitDomain_equal :
+    Circuit.networkDomain verifierInputBits (checkedWordGateCount Symbol State) = checkedWordCircuitDomain Symbol State := by
+  simp only [Circuit.networkDomain, checkedWordCircuitDomain, checkedWord_wireCount]
 
 end Polytime2.Complexity.CookLevin

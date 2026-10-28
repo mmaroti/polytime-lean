@@ -265,4 +265,28 @@ theorem wireOfPosition_realizable (length wires : MvPolynomial Parameter ℕ)
     (by intro sizes arguments _; exact (arguments ()).isLt.trans_le (bounded sizes))
     (by intros; rfl)
 
+/-- Coordinate of a gate after the input wires and earlier gates. -/
+noncomputable def gateOutputWire (inputs count : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  unaryMap (arrayPosition count) (arrayPosition (inputs + count)) (fun _ _ => True)
+    (fun sizes position => ⟨MvPolynomial.eval sizes inputs + position.val.val, by
+      have bounded : position.val.val < MvPolynomial.eval sizes count := position.val.isLt
+      simp only [map_add]
+      omega⟩)
+
+theorem gateOutputWire_realizable (inputs count : MvPolynomial Parameter ℕ) : (gateOutputWire inputs count).Realizable := by
+  have widened := wireOfPosition_realizable count (inputs + count) (by intro sizes; simp only [map_add]; omega)
+  have added := widened.followedBy (wireAffine_realizable (inputs + count) inputs 1) rfl (by
+    intro sizes arguments accepted
+    change MvPolynomial.eval sizes inputs + 1 *
+      ((wireOfPosition count (inputs + count) (by intro assignment; simp only [map_add]; omega)).compute sizes
+        ⟨arguments, accepted⟩).val < _
+    rw [wireOfPosition_value]
+    have bounded : (arguments ()).val < MvPolynomial.eval sizes count := (arguments ()).isLt
+    simp only [one_mul, map_add]
+    omega)
+  apply added.withSpecification (fun _ _ => True) (gateOutputWire inputs count).compute (by intros; trivial)
+  intro sizes arguments accepted
+  apply Fin.ext
+  simp only [followedBy, wireAffine_value, wireOfPosition_value, one_mul, gateOutputWire, unaryMap]
+
 end Polytime2.Circuit

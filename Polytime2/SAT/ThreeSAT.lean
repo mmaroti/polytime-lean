@@ -1,6 +1,8 @@
 import Mathlib.Data.Bool.Basic
 import Mathlib.Data.Fin.Basic
 import Mathlib.Data.List.Basic
+import Mathlib.Data.List.OfFn
+import Mathlib.Logic.Function.Basic
 
 /-! # Shared mathematical semantics of three-literal CNF formulas
 
@@ -85,6 +87,38 @@ theorem Clause.satisfied_iff_ne_falsifyingPattern
 /-- Zero clauses are satisfiable, even when the variable carrier is empty. -/
 theorem Formula.satisfiable_nil : Formula.Satisfiable ([] : Formula Variable) :=
   ⟨fun _ => false, Formula.satisfied_nil _⟩
+
+/-- Injectively renaming the variables of a clause array preserves
+satisfiability, including empty arrays and empty variable carriers. -/
+theorem Formula.satisfiable_ofFn_rename {Target : Type*} {count : ℕ}
+    (rename : Variable → Target) (injective : Function.Injective rename)
+    (clauses : Fin count → Clause Variable) :
+    Formula.Satisfiable (List.ofFn (fun index position =>
+      (rename (clauses index position).1, (clauses index position).2))) ↔
+      Formula.Satisfiable (List.ofFn clauses) := by
+  constructor
+  · rintro ⟨assignment, satisfied⟩
+    refine ⟨assignment ∘ rename, ?_⟩
+    intro clause member
+    obtain ⟨index, rfl⟩ := List.mem_ofFn.mp member
+    exact satisfied _ (List.mem_ofFn.mpr ⟨index, rfl⟩)
+  · rintro ⟨assignment, satisfied⟩
+    refine ⟨Function.extend rename assignment (fun _ => false), ?_⟩
+    intro clause member
+    obtain ⟨index, rfl⟩ := List.mem_ofFn.mp member
+    obtain ⟨position, accepted⟩ :=
+      satisfied _ (List.mem_ofFn.mpr ⟨index, rfl⟩)
+    refine ⟨position, ?_⟩
+    change Function.extend rename assignment (fun _ => false)
+      (rename (clauses index position).1) ≠ (clauses index position).2
+    rw [injective.extend_apply]
+    exact accepted
+
+/-- Satisfaction of concatenated formulas is satisfaction of both conjuncts. -/
+@[simp] theorem Formula.satisfied_append (values : Variable → Bool) (first second : Formula Variable) :
+    Formula.Satisfied values (first ++ second) ↔ Formula.Satisfied values first ∧ Formula.Satisfied values second := by
+  simp [Formula.Satisfied, or_imp, forall_and]
+
 
 /-- Changing values of variables absent from all clause occurrences preserves
 satisfaction. No distinctness assumption is made on occurrences. -/

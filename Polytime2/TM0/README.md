@@ -59,6 +59,12 @@ Lower-level `CallingConvention.Realizes.tm0` retains simulator track frames;
 storage. `tm0_delimited` adds ordinary input preparation. Application proofs
 should use the computation-level export rather than prepare tracks themselves.
 
+`TrackOutput.Stateful` formats bits with finite controller memory during the
+existing extraction pass. Binary extraction specializes it with unit memory;
+both share the same linear bound, frame erasure, and head restoration proof.
+The [word export rules](../Complexity/WordArrays.lean) keep that controller and
+the simulator representation out of application proofs.
+
 Sweeps, selected head-marker moves, interval extension, and action dispatch
 are certified separately in their source modules. Their markers, padding, and
 workspace sizes are backend implementation details. Exact transition costs and

@@ -91,6 +91,10 @@ Use `letThen` when a continuation needs one computed value more than once.
 context; it does not promise to evaluate common subexpressions only once.
 `withPrecondition` strengthens admissibility, and `withSpecification` exposes a
 mathematically equal answer without changing its domain.
+`sumIsLeft`, `sumLeft`, and `sumRight` in [Sums.lean][sums] certify the
+ordinary alternative test and guarded payload extraction. Compose them with
+`onArguments` and `ofCases` when branches share additional immutable inputs;
+no numeric variant tags are needed in application proofs.
 
 [Optional.lean](Optional.lean) provides `ready.optionalGuard` for a partial
 consumer behind a certified Boolean guard. Prove that an accepted guard

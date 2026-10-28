@@ -40,20 +40,29 @@ def extractTo (name : TapeName) (outputRow : Bool → Tracks.Row (Alphabet TapeN
     Machine (fun _ : Unit => Sweep.Alphabet (Tracks.Row (Alphabet TapeName))) (Fin 8) :=
   TrackOutput.machine (fun row => row.2 name) (fun row => row.1 name) outputRow
 
+/-- Extract while formatting each bit with fixed finite controller memory. -/
+def extractStatefulTo {Memory : Type} (name : TapeName)
+    (outputRow : Memory → Bool → Memory × Tracks.Row (Alphabet TapeName)) :
+    Machine (fun _ : Unit => Sweep.Alphabet (Tracks.Row (Alphabet TapeName))) (Fin 8 × Memory) :=
+  TrackOutput.Stateful.machine (fun row => row.2 name) (fun row => row.1 name) outputRow
+
 def extract (name : TapeName) := extractTo name (outputLetter name)
 
 omit [DecidableEq TapeName] in
 /-- A canonical fixed-width output needs no source boundary markers. Extraction
 erases the simulator frame and restores the physical head, even at width zero. -/
-theorem extractTo_runs (name : TapeName) (outputRow : Bool → Tracks.Row (Alphabet TapeName))
+theorem extractStatefulTo_runs {Memory : Type} (name : TapeName)
+    (outputRow : Memory → Bool → Memory × Tracks.Row (Alphabet TapeName)) (memory : Memory)
     (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
     (sizes : Parameter → ℕ) (value : domain.Carrier sizes)
     (rows : List (Tracks.Row (Alphabet TapeName)))
     (represented : Tracks.RepresentsAt name rows (encoded domain sizes value)) :
     ∃ ticks, ticks ≤ 2 * rows.length + 8 ∧
-      Steps (extractTo name outputRow) ticks
-        (0, Sweep.tape [Sweep.leftMarker] (rows.map Sweep.row ++ [Sweep.rightMarker]))
-        (7, Sweep.tape [] (TrackOutput.word outputRow
+      Steps (extractStatefulTo name outputRow) ticks
+        ((0, memory), Sweep.tape [Sweep.leftMarker] (rows.map Sweep.row ++ [Sweep.rightMarker]))
+        ((7, TrackOutput.Stateful.finalMemory outputRow memory
+          (EncodedDomain.ArrayEncoding.bits (domain.encode sizes value))),
+          Sweep.tape [] (TrackOutput.Stateful.word outputRow memory
           (List.ofFn (fun index : Fin (domain.width sizes) => (domain.encode sizes value).getLsbD index.val)))) := by
   obtain ⟨before, current, after, split, unmarked, marked, _, tapeEq⟩ := represented
   let bits := List.ofFn (fun index : Fin (domain.width sizes) =>
@@ -70,7 +79,29 @@ theorem extractTo_runs (name : TapeName) (outputRow : Bool → Tracks.Row (Alpha
     simpa only [encoded, EncodedDomain.ArrayEncoding.bits, tape, Turing.Tape.mk₁, Turing.Tape.mk₂, Turing.Tape.mk', Turing.ListBlank.head_mk,
       Turing.ListBlank.tail_mk, Turing.ListBlank.cons_mk, reconstruct, List.map_cons, bits] using right
   subst rows
-  exact TrackOutput.steps _ _ _ before current after bits unmarked marked payload
+  exact TrackOutput.Stateful.steps _ _ _ memory before current after bits unmarked marked payload
+
+omit [DecidableEq TapeName] in
+/-- Stateless output uses the same extraction proof with unit memory. -/
+theorem extractTo_runs (name : TapeName) (outputRow : Bool → Tracks.Row (Alphabet TapeName))
+    (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)
+    (sizes : Parameter → ℕ) (value : domain.Carrier sizes)
+    (rows : List (Tracks.Row (Alphabet TapeName)))
+    (represented : Tracks.RepresentsAt name rows (encoded domain sizes value)) :
+    ∃ ticks, ticks ≤ 2 * rows.length + 8 ∧
+      Steps (extractTo name outputRow) ticks
+        (0, Sweep.tape [Sweep.leftMarker] (rows.map Sweep.row ++ [Sweep.rightMarker]))
+        (7, Sweep.tape [] (TrackOutput.word outputRow
+          (EncodedDomain.ArrayEncoding.bits (domain.encode sizes value)))) := by
+  obtain ⟨ticks, bound, trace⟩ := extractStatefulTo_runs name
+    (fun _ : Unit => fun bit => ((), outputRow bit)) () domain sizes value rows represented
+  have projected := trace.rename Prod.fst (target := extractTo name outputRow)
+    (by
+      rintro ⟨phase, memory⟩ symbols ⟨next, nextMemory⟩ actions transition
+      cases memory
+      simp only [extractTo, TrackOutput.machine, extractStatefulTo] at *
+      simp only [transition, Option.map_some])
+  exact ⟨ticks, bound, by simpa only [TrackOutput.unit_word] using projected⟩
 
 /-- The standard binary output convention specializes generic extraction. -/
 theorem extract_runs (name : TapeName) (domain : EncodedDomain.{parameterLevel, carrierLevel} Parameter)

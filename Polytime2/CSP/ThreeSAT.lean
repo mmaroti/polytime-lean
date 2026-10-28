@@ -48,6 +48,10 @@ def relationSymbolsEquiv : (Σ arity, language.Relations arity) ≃ (Fin 3 → B
 instance finiteRelationSymbols : Finite (Σ arity, language.Relations arity) :=
   Finite.of_equiv (Fin 3 → Bool) relationSymbolsEquiv.symm
 
+/-- Fix the relation enumeration through the eight Boolean triples. -/
+noncomputable instance relationSymbolsFintype : Fintype (Σ arity, language.Relations arity) :=
+  Fintype.ofEquiv (Fin 3 → Bool) relationSymbolsEquiv.symm
+
 /-- The signature contains exactly eight relations in total. -/
 theorem relationSymbols_card : Nat.card (Σ arity, language.Relations arity) = 8 := by
   rw [Nat.card_congr relationSymbolsEquiv, Nat.card_fun]

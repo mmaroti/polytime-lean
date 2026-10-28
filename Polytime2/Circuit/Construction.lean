@@ -25,6 +25,10 @@ variable {Parameter : Type} [Fintype Parameter]
 noncomputable def gateDomain (wires : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
   booleans.sum ((arrayPosition wires).prod (arrayPosition wires))
 
+/-- Canonical gate array paired with its actual selected output wire. -/
+noncomputable def networkDomain (inputs count : MvPolynomial Parameter ℕ) : EncodedDomain Parameter :=
+  ((gateDomain (inputs + count)).arrayOfLength count).prod (arrayPosition (inputs + count))
+
 /-- Forget only the bounds on the mathematical wire coordinates. -/
 def gateValue {wires : ℕ} (gate : Bool ⊕ (Fin wires × Fin wires)) : Gate :=
   gate.map id (fun pair => (pair.1.val, pair.2.val))
@@ -47,6 +51,14 @@ theorem programValue_injective {count wires : ℕ} : Function.Injective (@progra
     apply gateValue_injective
     exact congrFun (List.ofFn_injective (congrArg Prod.fst equal)) index
   · exact Fin.ext (congrArg Prod.snd equal)
+
+/-- Changing only a proven wire-bound polynomial equality preserves the network. -/
+theorem programValue_transport (sizes : Parameter → ℕ) (source target count : MvPolynomial Parameter ℕ) (equal : source = target)
+    (program : (((gateDomain source).arrayOfLength count).prod (arrayPosition source)).Carrier sizes) :
+    programValue ((congrArg (fun bound => ((gateDomain bound).arrayOfLength count).prod (arrayPosition bound)) equal) ▸ program) =
+      programValue program := by
+  cases equal
+  rfl
 
 /-- Attach an established mathematical wire bound to a gate. -/
 def boundGate {wires : ℕ} (gate : Gate) (valid : gate.Valid wires) : Bool ⊕ (Fin wires × Fin wires) :=

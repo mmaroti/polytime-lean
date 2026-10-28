@@ -45,6 +45,12 @@ noncomputable def scopeDomain (arity : ℕ) : EncodedDomain Unit :=
   (scopeCodec arity).1.reindex (fun sizes => (Fin arity → Fin (sizes ())) → Bool)
     (scopeCodec arity).2
 
+/-- The unique nullary tuple occupies the ordinary Boolean bit. -/
+theorem scopeDomain_zero_bits (sizes : Unit → ℕ) (table : (Fin 0 → Fin (sizes ())) → Bool) :
+    ArrayEncoding.bits ((scopeDomain 0).encode sizes table) =
+      ArrayEncoding.bits (booleans.encode sizes (table Fin.elim0)) := by
+  rfl
+
 /-- Splitting a scope changes only its mathematical presentation. -/
 theorem scopeDomain_succ_bits (arity : ℕ) (sizes : Unit → ℕ)
     (table : (Fin (arity + 1) → Fin (sizes ())) → Bool) :

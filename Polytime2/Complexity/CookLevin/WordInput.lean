@@ -26,6 +26,23 @@ noncomputable def encodeWordBits {length : ℕ} (word : Fin length → Letter) :
   exact fun index => decide (word (finProdFinEquiv.symm index).1 =
     (Fintype.equivFin Letter).symm (finProdFinEquiv.symm index).2)
 
+/-- Equal word lengths change only the proof attached to bit coordinates. -/
+theorem encodeWordBits_cast {first second : ℕ} (same : first = second) (word : Fin first → Letter)
+    (index : Fin (second * Fintype.card Letter)) :
+    encodeWordBits (fun position : Fin second => word (position.cast same.symm)) index =
+      encodeWordBits word (index.cast (congrArg (fun length => length * Fintype.card Letter) same.symm)) := by
+  cases same
+  rfl
+
+/-- The one-hot assignment determines every external letter uniquely. -/
+theorem encodeWordBits_injective {length : ℕ} : Function.Injective (@encodeWordBits length) := by
+  intro first second equal
+  funext position
+  have tested := congrFun equal (finProdFinEquiv (position, (Fintype.equivFin Letter) (first position)))
+  have same : decide (second position = first position) = true := by
+    simpa [encodeWordBits] using tested.symm
+  exact (of_decide_eq_true same).symm
+
 /-- The initial word, blank elsewhere, with its sole head at the origin. -/
 def initialCells {length : ℕ} (entry : State) (letters : Letter → Symbol)
     (word : Fin length → Letter) (position : ℤ) : Cell Symbol State :=

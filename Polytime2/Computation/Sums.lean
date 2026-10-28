@@ -123,4 +123,78 @@ theorem sumCases_realizable (left right output : EncodedDomain.{0, 0} Parameter)
         cases value <;> rfl
       exact same (arguments ()) valid)
 
+/-- Test the alternative of an ordinary sum without exposing variant tags. -/
+noncomputable def sumIsLeft (left right : EncodedDomain.{0, 0} Parameter) : Computation Parameter Unit :=
+  unaryMap (left.sum right) booleans (fun _ _ => True) (fun _ value => value.val.isLeft)
+
+theorem sumIsLeft_realizable (left right : EncodedDomain.{0, 0} Parameter) :
+    (sumIsLeft left right).Realizable := by
+  have tested := (variantIs_realizable 2 (SumEncoding.alternatives left right) 0).reinterpretInputs
+    (fun _ => left.sum right) (fun _ sizes => SumEncoding.equivalence left right sizes)
+    (by intros; rfl) (by intros; rfl) (fun _ _ => True) (by intros; trivial)
+  apply tested.withSpecification (fun _ _ => True) _ (by intros; trivial)
+  intro sizes arguments accepted
+  cases equal : arguments () <;> simp [reinterpretInputs, variantIs, unaryMap,
+    SumEncoding.equivalence, equal]
+
+/-- Extract the left value when its mathematical alternative is known. -/
+noncomputable def sumLeft (left right : EncodedDomain.{0, 0} Parameter) : Computation Parameter Unit :=
+  unaryMap (left.sum right) left (fun _ value => value.isLeft = true)
+    (fun _ value => value.val.getLeft value.property)
+
+theorem sumLeft_realizable (left right : EncodedDomain.{0, 0} Parameter) :
+    (sumLeft left right).Realizable := by
+  let encode := SumEncoding.equivalence left right
+  have projected := (variantProjection_realizable 2 (SumEncoding.alternatives left right) 0).reinterpretInputs
+    (fun _ => left.sum right) (fun _ sizes => encode sizes)
+    (by intros; rfl) (by intros; rfl) (fun _ arguments => (arguments ()).isLeft = true) (by
+      intro sizes arguments accepted
+      change (encode sizes (arguments ())).1 = 0
+      cases equal : arguments () with
+      | inl value => simp [encode, SumEncoding.equivalence]
+      | inr value => simp [equal] at accepted)
+  apply projected.withSpecification (fun _ arguments => (arguments ()).isLeft = true)
+    (sumLeft left right).compute (by intros; assumption)
+  intro sizes arguments accepted
+  apply eq_of_heq
+  simp only [reinterpretInputs, variantProjection, unaryMap, eqRec_heq_iff]
+  change HEq (encode sizes (arguments ())).2 ((arguments ()).getLeft accepted)
+  have same (value : left.Carrier sizes ⊕ right.Carrier sizes) (selected : value.isLeft = true) :
+      HEq (encode sizes value).2 (value.getLeft selected) := by
+    cases value with
+    | inl value => rfl
+    | inr value => cases selected
+  exact same (arguments ()) accepted
+
+/-- Extract the right value when the sum is known not to be left. -/
+noncomputable def sumRight (left right : EncodedDomain.{0, 0} Parameter) : Computation Parameter Unit :=
+  unaryMap (left.sum right) right (fun _ value => value.isLeft = false)
+    (fun _ value => value.val.getRight (by
+      have selected := value.property
+      cases equal : value.val <;> simp_all))
+
+theorem sumRight_realizable (left right : EncodedDomain.{0, 0} Parameter) :
+    (sumRight left right).Realizable := by
+  let encode := SumEncoding.equivalence left right
+  have projected := (variantProjection_realizable 2 (SumEncoding.alternatives left right) 1).reinterpretInputs
+    (fun _ => left.sum right) (fun _ sizes => encode sizes)
+    (by intros; rfl) (by intros; rfl) (fun _ arguments => (arguments ()).isLeft = false) (by
+      intro sizes arguments accepted
+      change (encode sizes (arguments ())).1 = 1
+      cases equal : arguments () with
+      | inl value => simp [equal] at accepted
+      | inr value => simp [encode, SumEncoding.equivalence])
+  apply projected.withSpecification (fun _ arguments => (arguments ()).isLeft = false)
+    (sumRight left right).compute (by intros; assumption)
+  intro sizes arguments accepted
+  apply eq_of_heq
+  simp only [reinterpretInputs, variantProjection, unaryMap, sumRight, eqRec_heq_iff]
+  change HEq (encode sizes (arguments ())).2 ((arguments ()).getRight _)
+  have same (value : left.Carrier sizes ⊕ right.Carrier sizes) (selected : value.isRight = true) :
+      HEq (encode sizes value).2 (value.getRight selected) := by
+    cases value with
+    | inl value => cases selected
+    | inr value => rfl
+  exact same (arguments ()) _
+
 end Polytime2.Computation

@@ -1,8 +1,8 @@
 # Fixed-template CSP hardness from absence of a Taylor polymorphism
 
-Status: steps 1--6 implemented; see the [CSP guide](../CSP/README.md),
+Status: steps 1--7 implemented; see the [CSP guide](../CSP/README.md),
 [complexity guide](../Complexity/README.md), and [Cook-Levin guide][cook-levin].
-Step 7 is next.
+Steps 8--15 remain.
 [Task index](../README.md#proposed-next-tasks).
 
 ## Statement and hypothesis correction
@@ -70,7 +70,7 @@ interfaces can be kept small.
    three-literal CNF satisfiability and the Boolean template with eight ternary
    relations, each excluding one tuple. Prove the assignment and satisfaction
    correspondences, allowing repeated variables. Deliverable: semantic
-   conversions in both directions; NP-hardness is still required in step 7.
+   conversions in both directions; step 7 certifies NP-hardness.
 
 4. **Establish complexity contracts (certification; implemented).** Define
    word languages, polynomial-time many-one reductions, NP verifiers, and
@@ -104,11 +104,31 @@ interfaces can be kept small.
    [construction guide](../Complexity/CookLevin/README.md) links the transition,
    finite-window, initial-wiring, guard, and output-reference proofs.
 
-7. **Finish Cook-Levin through 3-SAT.** Implement and certify the Tseitin
+7. **Cook-Levin through 3-SAT (completed).** Implement and certify the Tseitin
    conversion from circuits to three-literal clauses, with both witness
    directions and polynomial output bounds. Compose with milestone 6 to
    prove every NP language reduces to 3-SAT. Do not assume 3-SAT hardness or
    replace this step with a citation. This completes the hardness foundation.
+
+   Mathematical Tseitin conversion is implemented in
+   [Tseitin.lean](../SAT/Tseitin.lean), including assignment extension and
+   restriction, an exact `3 * gates + 1` clause count, and bounds on every
+   variable reference. [TseitinProgram.lean](../SAT/TseitinProgram.lean)
+   certifies the complete canonical conversion and serialized output.
+   [FixedFormulaProgram.lean][fixed-formulas] composes the checked verifier
+   constructor, framing, one-hot instance prefix, Tseitin conversion, and fixed
+   unit clauses. It derives all internal sizes from the instance length and
+   fixed polynomials. `np_formulas_uniform` gives every NP language a certified
+   constructor whose output is satisfiable exactly for members of that language.
+   [FixedWitness.lean](../Complexity/FixedWitness.lean) supplies its exact
+   polynomial witness lengths through the certified padded verifier.
+   [ThreeSATClauses.lean](../CSP/ThreeSATClauses.lean) proves the dense-table
+   contract and satisfiability bridge for these clause arrays.
+   [ThreeSATProgram.lean](../CSP/ThreeSATProgram.lean) certifies dense-table
+   construction. [FixedInstanceProgram.lean][fixed-instances] composes it with
+   the verifier formula constructor. [Reduction.lean][reduction] certifies
+   native word framing, the all-word reduction `np_reduces_threeSAT`, and
+   `CSP.ThreeSAT.language_npComplete` for the existing strict CSP word language.
 
 8. **Define polymorphisms and their algebra.** View an n-ary polymorphism as
    a homomorphism from the relational power R^n to R. Prove closure under
@@ -204,3 +224,6 @@ Lean lines added and removed for every completed milestone.
 [clique]: 3-sat-to-clique.md
 [cook-levin]: ../Complexity/CookLevin/README.md
 [uniform-verifier]: ../Complexity/CookLevin/UniformVerifier.lean
+[fixed-formulas]: ../Complexity/CookLevin/FixedFormulaProgram.lean
+[fixed-instances]: ../Complexity/CookLevin/FixedInstanceProgram.lean
+[reduction]: ../Complexity/CookLevin/Reduction.lean

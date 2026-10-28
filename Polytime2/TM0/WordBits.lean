@@ -66,15 +66,24 @@ theorem writable_blank {Letter : Type} (code : Letter → Fin 3 → Bool)
   | cons first rest =>
     simp [tapes, row, Turing.Tape.mk₁, Turing.Tape.mk₂, Turing.Tape.mk']
 
-theorem boolean_bits (sizes : Unit → ℕ) (value : Bool) :
-    ArrayEncoding.bits ((booleans : EncodedDomain Unit).encode sizes value) = [value] := by
+theorem boolean_bits {Parameter : Type} [Fintype Parameter] (sizes : Parameter → ℕ) (value : Bool) :
+    ArrayEncoding.bits ((booleans : EncodedDomain Parameter).encode sizes value) = [value] := by
   cases value <;> simp only [booleans, fixed_encode_bits] <;> decide
+
+theorem boolean_arrayOfLength_bits {Parameter : Type} [Fintype Parameter]
+    (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (values : Fin (MvPolynomial.eval sizes length) → Bool) :
+    ArrayEncoding.bits (((booleans : EncodedDomain Parameter).arrayOfLength length).encode sizes values) =
+      List.ofFn values := by
+  rw [arrayOfLength_encode_bits, ArrayEncoding.bits_encode]
+  simp only [boolean_bits]
+  simpa only [List.flatMap_def, List.map_ofFn, Function.comp_def] using
+    List.flatMap_singleton' (List.ofFn values)
 
 theorem boolean_array_bits (sizes : Unit → ℕ) (values : Fin (sizes ()) → Bool) :
     ArrayEncoding.bits (((booleans : EncodedDomain Unit).array ()).encode sizes values) = List.ofFn values := by
-  rw [array_encode_bits, ArrayEncoding.bits_encode]
-  simp only [boolean_bits]
-  simpa only [List.flatMap_def, List.map_ofFn, Function.comp_def] using List.flatMap_singleton' (List.ofFn values)
+  rw [array_X_encode_bits, boolean_arrayOfLength_bits]
+  exact (List.ofFn_congr (MvPolynomial.eval_X (f := sizes) ()).symm values).symm
 
 def arguments {Letter : Type} (code : Letter → Fin 3 → Bool) (word : List Letter) :
     Fin 3 → Fin word.length → Bool := fun bit index => code word[index] bit
@@ -103,10 +112,10 @@ theorem size_tape {Letter : Type} (code : Letter → Fin 3 → Bool) (word : Lis
 /-- The three input arrays and length tape satisfy the ordinary calling
 convention. Writable regions may have any polynomial width, including zero. -/
 theorem entry {Letter : Type} (code : Letter → Fin 3 → Bool) (word : List Letter)
-    (scratchDomains : Scratch → EncodedDomain Unit)
-    (operation : (size : ℕ) → (Fin 3 → Fin size → Bool) → Bool) :
+    (scratchDomains : Scratch → EncodedDomain Unit) (outputDomain : EncodedDomain Unit)
+    (operation : (size : ℕ) → (Fin 3 → Fin size → Bool) → outputDomain.Carrier (fun _ => size)) :
     let computation : Computation Unit (Fin 3) :=
-      ⟨(fun _ => booleans.array ()), booleans, (fun _ _ => True), (fun sizes arguments => operation (sizes ()) arguments.val)⟩
+      ⟨(fun _ => booleans.array ()), outputDomain, (fun _ _ => True), (fun sizes arguments => operation (sizes ()) arguments.val)⟩
     let inputs : Inputs (Computation.Realizable.Internal.domains computation scratchDomains)
         (Computation.Realizable.Internal.readOnly computation) (fun _ => word.length) :=
       fun name => match name with

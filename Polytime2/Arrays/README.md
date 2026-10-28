@@ -22,6 +22,7 @@ whose element widths depend on runtime sizes. Start with
 | Extract successful search coordinates and adjacent pairs | [coordinates] |
 | Compare coordinates across dimensions or with a size | [position arithmetic] |
 | Test whether every Boolean entry is true | [AllTrue.lean](AllTrue.lean) |
+| Test whether an element occurs in an array | [Contains.lean](Contains.lean) |
 | Retain prefix states | [Scan.lean](Scan.lean) |
 | Select elements stably by a Boolean mask | [PackingResult.lean][pack] |
 | Extract an exact interval | [Slice.lean](Slice.lean) |
@@ -59,6 +60,10 @@ For dependent packing results, `arrayPack_compute` gives the complete
 mathematical count and retained array together; the structural count remains
 available for indexing the payload.
 Its result and stopping-condition theorems cover empty arrays.
+[PrefixIntervalFlags.lean](PrefixIntervalFlags.lean) selects a prefix and a
+later interval using ordinary endpoints.
+[PackingIntervals.lean](PackingIntervals.lean) identifies their stable packing
+with list take/drop/take; nested-witness normalization uses this rule.
 [Position arithmetic][position arithmetic] compares ordinary coordinate values
 across dimensions or against an active-prefix size, using derived capacities.
 [PrefixFlags.lean](PrefixFlags.lean) selects runtime prefixes in fixed-length

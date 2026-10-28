@@ -26,6 +26,7 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 | Normalized Bézout coefficients | [NormalizedBezout.lean][norm] |
 | Shifts and magnitude bit length | [SignedShifts.lean][shifts], [length] |
 | Compare stored unary counts with polynomial sizes | [UnaryWidth.lean][unary] |
+| Read a unary count as a binary index | [UnaryToIndex.lean][unary-index] |
 
 [total]: SignedQuotient.lean
 [cyclic]: CyclicCoordinate.lean
@@ -47,6 +48,7 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 [extended]: SignedExtendedGcd.lean
 [norm]: NormalizedBezout.lean
 [unary]: UnaryWidth.lean
+[unary-index]: UnaryToIndex.lean
 
 `boundedUnaryEqualsPolynomial` compares a stored count with the requested
 mathematical size. Its shared unary capacity is derived internally by
