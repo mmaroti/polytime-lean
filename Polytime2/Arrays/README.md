@@ -12,6 +12,8 @@ whose element widths depend on runtime sizes. Start with
 | Combine two arrays pointwise | [ZipWith.lean](ZipWith.lean) |
 | Normalize actual cyclic/free coordinates | [CyclicCoordinates.lean][cyclic] |
 | Enumerate canonical bounded coordinates | [BoundedPositions.lean][bounded] |
+| Flatten arrays or fixed records | [FlattenRecords.lean][flatten] |
+| Reverse a finite coordinate | [PositionReverse.lean](PositionReverse.lean) |
 | Tabulate from finite coordinates | [Tabulate.lean](Tabulate.lean) |
 | Lift an operation over every element | [Transform.lean](Transform.lean) |
 | Use a named size parameter for a transform | [NamedTransform.lean][named] |
@@ -29,6 +31,7 @@ whose element widths depend on runtime sizes. Start with
 
 [cyclic]: CyclicCoordinates.lean
 [access]: Operations.lean
+[flatten]: FlattenRecords.lean
 [bounded]: BoundedPositions.lean
 [find]: FindFalse.lean
 [coordinates]: SearchCoordinates.lean
@@ -90,6 +93,21 @@ traversal and result collection. No default mathematical element is needed.
 See [Fold.lean](../Examples/Fold.lean) and
 [Transform.lean](../Examples/Transform.lean) for examples, including empty
 arrays and zero-width elements.
+
+[FlattenRecords.lean](FlattenRecords.lean) supplies `recordToArray`,
+`arrayFlatten`, and `arrayFlattenRecords`. Their list contracts retain the
+complete row-major sequence, and their realizations preserve canonical bits.
+`arrayPositionReverse` certifies `Fin.rev` at the existing coordinate width;
+the disjunction observer uses it for reversed suffix blocks.
+
+`arrayPosition_binary_bits` in [Indices.lean](Indices.lean) lets coordinate
+arithmetic reuse canonical unsigned words at the codec's derived width.
+
+`arrayOfLengthRename` and `arrayOfLengthRenameView` in [Capacity.lean][capacity]
+move size renaming into or out of a polynomial array codec, preserving its
+elements and bits. The word-circuit constructor uses the former.
+
+[capacity]: Capacity.lean
 
 [Fixed-array decoding](../Computation/FixedArrayDecode.lean) validates scalar
 codes and returns an optional array of actual values. The scalar codec is

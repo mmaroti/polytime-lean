@@ -42,6 +42,18 @@ noncomputable def arrayAppend (element : EncodedDomain.{0, 0} Parameter)
     (element.arrayOfLength (firstLength + secondLength)) (fun sizes value index =>
       Fin.append value.1 value.2 (Fin.cast (map_add (MvPolynomial.eval sizes) firstLength secondLength) index))
 
+/-- Concatenation retains the complete mathematical element order. -/
+theorem arrayAppend_list (element : EncodedDomain.{0, 0} Parameter)
+    (firstLength secondLength : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (arguments : {arguments : (arrayAppend element firstLength secondLength).Arguments sizes // True}) :
+    List.ofFn ((arrayAppend element firstLength secondLength).compute sizes arguments) =
+      List.ofFn (arguments.val ()).1 ++ List.ofFn (arguments.val ()).2 := by
+  change List.ofFn (fun index => Fin.append (arguments.val ()).1 (arguments.val ()).2
+    (index.cast (map_add (MvPolynomial.eval sizes) firstLength secondLength))) = _
+  rw [List.ofFn_congr (map_add (MvPolynomial.eval sizes) firstLength secondLength)]
+  simp only [Fin.cast_cast, Fin.cast_refl, id_eq]
+  exact List.ofFn_fin_append _ _
+
 /-- Concatenation reuses the existing consecutive product and array words. -/
 theorem arrayAppend_realizable (element : EncodedDomain.{0, 0} Parameter)
     (firstLength secondLength : MvPolynomial Parameter ℕ) :

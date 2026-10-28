@@ -37,6 +37,22 @@ theorem arrayPosition_value (length : MvPolynomial Parameter ℕ) (sizes : Param
     Binary.value (ArrayEncoding.bits ((arrayPosition length).encode sizes index)) = index.val :=
   boundedIndexOfWidth_value _ _ _ sizes index
 
+/-- Coordinate arithmetic can reuse the canonical unsigned word at the same
+derived width. Only the mathematical carrier bound changes. -/
+theorem arrayPosition_binary_bits (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (coordinate : (arrayPosition length).Carrier sizes)
+    (word : (binaryNaturalsOfWidth (length + 1)).Carrier sizes) (equal : word.val = coordinate.val) :
+    ArrayEncoding.bits ((arrayPosition length).encode sizes coordinate) =
+      ArrayEncoding.bits ((binaryNaturalsOfWidth (length + 1)).encode sizes word) := by
+  change Fin (MvPolynomial.eval sizes length) at coordinate
+  change Fin (2 ^ MvPolynomial.eval sizes (length + 1)) at word
+  simp [arrayPosition, boundedIndexOfWidth, binaryNaturalsOfWidth, BitVec.ofNatLT_eq_ofNat, equal]
+  funext index
+  simp [BitVec.getLsbD_ofNat]
+  have widthEval : MvPolynomial.eval sizes (length + 1) = MvPolynomial.eval sizes length + 1 := by simp
+  have indexBound := index.isLt
+  omega
+
 end Polytime2.EncodedDomain
 
 namespace Polytime2.Computation

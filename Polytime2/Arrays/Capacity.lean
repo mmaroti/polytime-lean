@@ -62,6 +62,26 @@ theorem arrayOfLengthRenameView_realizable (element : EncodedDomain HostParamete
     exact congrArg List.flatten (List.ofFn_congr (MvPolynomial.eval_rename names sizes length)
       (fun index => ArrayEncoding.bits (element.encode (sizes ∘ names) (values index))))
 
+/-- Move a size renaming inside a polynomial array while preserving every
+mathematical element and its canonical bits. -/
+noncomputable def arrayOfLengthRename (element : EncodedDomain HostParameter)
+    (length : MvPolynomial HostParameter ℕ) (names : HostParameter → Parameter) : Computation Parameter Unit :=
+  encodingMap ((element.arrayOfLength length).renameParameters names)
+    ((element.renameParameters names).arrayOfLength (MvPolynomial.rename names length))
+    (fun sizes values index => values (Fin.cast (MvPolynomial.eval_rename names sizes length) index))
+
+theorem arrayOfLengthRename_realizable (element : EncodedDomain HostParameter)
+    (length : MvPolynomial HostParameter ℕ) (names : HostParameter → Parameter) :
+    (arrayOfLengthRename element length names).Realizable := by
+  apply encodingMap_realizable
+  · intro sizes
+    simp [width, renameParameters_widthPolynomial]
+  · intro sizes values
+    rw [renameParameters_bits]
+    simp only [arrayOfLength_encode_bits, ArrayEncoding.bits_encode, renameParameters_bits]
+    exact congrArg List.flatten (List.ofFn_congr (MvPolynomial.eval_rename names sizes length).symm
+      (fun index => ArrayEncoding.bits (element.encode (sizes ∘ names) (values index))))
+
 /-- Increase a stored array's capacity, retaining its actual count and elements. -/
 noncomputable def boundedArrayResize (element : EncodedDomain Parameter)
     (source target : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=

@@ -1,7 +1,8 @@
 # Fixed-template CSP hardness from absence of a Taylor polymorphism
 
-Status: steps 1--5 implemented; see the [CSP guide](../CSP/README.md) and
-[complexity guide](../Complexity/README.md).
+Status: steps 1--6 implemented; see the [CSP guide](../CSP/README.md),
+[complexity guide](../Complexity/README.md), and [Cook-Levin guide][cook-levin].
+Step 7 is next.
 [Task index](../README.md#proposed-next-tasks).
 
 ## Statement and hypothesis correction
@@ -92,6 +93,16 @@ interfaces can be kept small.
    computation. Prove the transition simulation, acceptance equivalence, and
    polynomial circuit-size bound. Certify circuit construction using existing
    composition rules, including input preparation and output serialization.
+
+   Implemented. [UniformVerifier.lean][uniform-verifier]
+   exports `verifier_circuits_uniform`: every polynomial-time word verifier
+   has a certified uniform constructor, polynomial gate bounds, and acceptance
+   equivalence on every Boolean assignment. Invalid letter codes reject.
+   `verifierProgram_polynomialTime` includes canonical length-input preparation,
+   execution, and serialized output extraction. The time allowance is derived
+   internally from the verifier's polynomial bound. The
+   [construction guide](../Complexity/CookLevin/README.md) links the transition,
+   finite-window, initial-wiring, guard, and output-reference proofs.
 
 7. **Finish Cook-Levin through 3-SAT.** Implement and certify the Tseitin
    conversion from circuits to three-literal clauses, with both witness
@@ -191,3 +202,5 @@ Lean lines added and removed for every completed milestone.
 [appendix]: https://github.com/notzeb/all/blob/master/csp-append.tex
 [paper]: https://arxiv.org/abs/2210.07383
 [clique]: 3-sat-to-clique.md
+[cook-levin]: ../Complexity/CookLevin/README.md
+[uniform-verifier]: ../Complexity/CookLevin/UniformVerifier.lean

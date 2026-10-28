@@ -19,6 +19,7 @@ import Polytime2.Machine.Basic
 import Polytime2.CSP.Basic
 import Polytime2.CSP.Instance
 import Polytime2.CSP.ThreeSAT
+import Polytime2.Complexity.CookLevin.UniformVerifier
 import Polytime2.Complexity.BinaryDecoder
 import Polytime2.Computation.CodecDecode
 import Polytime2.Computation.FixedArrayDecode

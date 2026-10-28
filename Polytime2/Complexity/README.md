@@ -122,3 +122,9 @@ the public composition and bridge rules instead of constructing machines.
 The [CSP verifier](../CSP/VerifierRealizable.lean) is a complete application of
 `onWordDecision`, composing both parsers, strict field decoders, a computed
 variable-count call, and the assignment checker before proving membership in NP.
+
+[Cook-Levin foundations](CookLevin/README.md) develop the bounded-machine
+circuit construction. `verifier_circuits_uniform` includes the complete
+polynomial-time constructor, canonical serialization, polynomial gate bounds,
+and correctness on every Boolean assignment. Certified Tseitin conversion
+and SAT hardness remain separate tasks.
