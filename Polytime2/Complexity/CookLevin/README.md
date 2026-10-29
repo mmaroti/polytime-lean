@@ -37,16 +37,20 @@ The mathematical components are:
   [local dynamics](../../Circuit/Local.lean): fixed-arity local transitions
   have circuits linear in time and configuration width.
   [Unrolling](../../Circuit/Unroll.lean) shares wires across time steps.
-- [LocalMachine.lean](LocalMachine.lean): radius-one marked-cell updates
+- [LocalMachine.lean](../../TM0/LocalMachine.lean): radius-one marked-cell
+  updates
   simulate Mathlib TM0 steps, including absorbing halts. The head moves at
   most one cell per step.
-- [Trace.lean](Trace.lean): exact certified word-machine runs agree with the
+- [MachineTrace.lean](../MachineTrace.lean): exact certified word-machine runs
+  agree with the
   local evolution at the full time allowance.
-- [Window.lean](Window.lean): a window of radius twice the time allowance
+- [Window.lean](../../TM0/Window.lean): a window of radius twice the time
+  allowance
   preserves every possible final head position.
 - [CellCircuit.lean](CellCircuit.lean): one-hot encodings turn finite arrays
   of marked cells into fixed-arity Boolean dynamics and bounded circuits.
-- [FiniteWindow.lean](FiniteWindow.lean): finite array transitions agree with
+- [FiniteWindow.lean](../../TM0/FiniteWindow.lean): finite array transitions
+  agree with
   truncated tape evolution, including the finite boundary updates.
 - [Acceptance.lean](Acceptance.lean): the final observer returns exactly the
   certified verifier's Boolean answer, including early halts.
@@ -160,21 +164,10 @@ word framing and exports `np_reduces_threeSAT`. The total translation covers
 every raw word and targets the existing strict CSP language.
 `CSP.ThreeSAT.language_npComplete` combines hardness with its NP verifier.
 
-[NetworkEvaluation.lean](../../Circuit/NetworkEvaluation.lean) certifies circuit
-evaluation on ordinary finite Boolean wire arrays. It tabulates actual gate
-destinations, folds the existing gate lookup/update operations, and proves
-agreement with `Circuit.run`. This is the evaluator needed to call a verifier
-inside the high-level witness normalizer.
-[EvaluateCircuit.lean](../../Circuit/EvaluateCircuit.lean) takes exactly a
-circuit and its input assignment, preparing generated-wire storage internally.
-[VerifierDecision.lean](VerifierDecision.lean) exports
-`wordVerifier_realizable`:
-every polynomial-time word verifier can be called as a total computation on
-ordinary letter arrays with exactly the same answer. It composes the existing
-constructor, one-hot letter encoding, and circuit evaluator, and derives the
-time allowance from the verifier certificate.
-[FixedWitness.lean](../FixedWitness.lean) uses this bridge to certify exact
-polynomial witness lengths used by the complete reduction.
+[DirectVerifier.lean](../DirectVerifier.lean) supplies `wordVerifier_realizable`
+through direct finite-array simulation, independently of this circuit
+construction. [FixedWitness.lean](../FixedWitness.lean) uses that bridge to
+certify the exact polynomial witness lengths used by the complete reduction.
 
 [task]: ../../tasks/csp-taylor-hardness.md
 [relocation]: ../../Circuit/TemplateRelocation.lean

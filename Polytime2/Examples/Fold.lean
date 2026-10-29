@@ -73,8 +73,8 @@ theorem toggle_realizable : toggle.Realizable := by
   refine boundedIteration_realizable Empty.elim booleans (MvPolynomial.X true)
     (fun _ _ _ => True) (fun _ _ _ => True) (fun _ _ value => !value)
     ?_ (fun _ _ _ _ _ => True) ?_ ?_ ?_
-  · exact ((finitePredicate_realizable EncodedDomain.booleans
-      (fun value => !value)).withConstantSizes (Parameter := Bool)).withArguments _
+  · exact ((finiteOperation_realizable (fun _ : Unit => EncodedDomain.booleans) EncodedDomain.booleans
+      (fun values => !values ())).withConstantSizes (Parameter := Bool)).withArguments _
       ⟨Sum.inr, Sum.inr_injective⟩ (fun _ => rfl)
   · intros; trivial
   · intros; trivial

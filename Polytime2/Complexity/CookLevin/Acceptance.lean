@@ -1,6 +1,6 @@
 import Polytime2.Complexity.CookLevin.CellObservation
-import Polytime2.Complexity.CookLevin.FiniteWindow
-import Polytime2.Complexity.CookLevin.Trace
+import Polytime2.TM0.FiniteWindow
+import Polytime2.Complexity.MachineTrace
 
 /-! # Acceptance circuits for bounded word verifiers
 
@@ -139,27 +139,6 @@ theorem acceptanceCircuit_runs (machine : TM0.Machine Symbol State) (entry : Sta
       (encodeCells (windowArray (2 * allowance) (cells 0 ⟨entry, Tape.mk₁ (input.map letters)⟩))) = answer := by
   have equivalence := acceptanceCircuit_evolve machine (letters (Sum.inl true)) allowance
     (cells 0 ⟨entry, Tape.mk₁ (input.map letters)⟩)
-  obtain ⟨head, finalState, lower, upper, trace⟩ := runs_evolve machine entry letters input
-    [Sum.inl answer] allowance runs
-  have accepted : (∃ position, (-(allowance : ℤ) ≤ position ∧ position ≤ allowance) ∧
-      ∃ state, (evolve machine)^[allowance] (cells 0 ⟨entry, Tape.mk₁ (input.map letters)⟩) position =
-        (letters (Sum.inl true), some state)) ↔ answer = true := by
-    rw [trace]
-    constructor
-    · rintro ⟨position, _inside, state, equal⟩
-      have marker := congrArg Prod.snd equal
-      have here : position = head := by
-        by_contra different
-        simp [cells, different] at marker
-      subst position
-      have symbol := congrArg Prod.fst equal
-      have symbols : letters (Sum.inl answer) = letters (Sum.inl true) := by
-        simpa [cells, Tape.mk₁, Tape.mk₂, Tape.mk'] using symbol
-      exact Sum.inl.inj (letters.injective symbols)
-    · intro trueAnswer
-      subst answer
-      refine ⟨head, ⟨lower, upper⟩, finalState, ?_⟩
-      simp [cells, Tape.mk₁, Tape.mk₂, Tape.mk']
-  exact Bool.eq_iff_iff.mpr (equivalence.trans accepted)
+  exact Bool.eq_iff_iff.mpr (equivalence.trans (runs_accepting machine entry letters input answer allowance runs))
 
 end Polytime2.Complexity.CookLevin

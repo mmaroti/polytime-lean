@@ -150,11 +150,11 @@ variable-count call, and the assignment checker before proving membership in NP.
 circuit construction. `verifier_circuits_uniform` includes the complete
 polynomial-time constructor, canonical serialization, polynomial gate bounds,
 and correctness on every Boolean assignment.
-[VerifierDecision.lean](CookLevin/VerifierDecision.lean) supplies the reverse
-execution bridge, `wordVerifier_realizable`: a certified polynomial-time word
+[DirectVerifier.lean](DirectVerifier.lean) supplies the direct import bridge,
+`wordVerifier_realizable`: a certified polynomial-time word
 verifier becomes a total high-level computation on ordinary letter arrays.
-This permits composition with computed-size field parsing using the existing
-canonical codecs.
+It reuses finite-array TM0 simulation and the existing canonical codecs,
+independently of circuit construction or evaluation.
 [FixedFormulaProgram.lean](CookLevin/FixedFormulaProgram.lean) exports
 `np_formulas_uniform`, a certified three-CNF constructor for every NP language
 with exact membership through satisfiability.

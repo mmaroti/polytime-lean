@@ -1,5 +1,5 @@
 import Polytime2.Circuit.Local
-import Polytime2.Complexity.CookLevin.LocalMachine
+import Polytime2.TM0.LocalMachine
 import Mathlib.Data.Fintype.EquivFin
 
 /-! # Boolean circuits for finite marked-cell dynamics
@@ -76,12 +76,6 @@ noncomputable def cellTables (positions : ℕ)
     Fin (positions * cellWidth Symbol State) → (Fin (3 * cellWidth Symbol State) → Bool) → Bool :=
   fun output bits => encodeCell (update (finProdFinEquiv.symm output).1 (decodeNeighborhood bits))
     (finProdFinEquiv.symm output).2
-
-/-- Ordinary mathematical dynamics of a finite array of marked cells. -/
-def cellTransition {positions : ℕ} (neighbors : Fin positions → Fin 3 → Fin positions)
-    (update : Fin positions → (Fin 3 → Cell Symbol State) → Cell Symbol State)
-    (contents : Fin positions → Cell Symbol State) : Fin positions → Cell Symbol State :=
-  fun position => update position (fun argument => contents (neighbors position argument))
 
 theorem cellTables_encode (positions : ℕ) (neighbors : Fin positions → Fin 3 → Fin positions)
     (update : Fin positions → (Fin 3 → Cell Symbol State) → Cell Symbol State)

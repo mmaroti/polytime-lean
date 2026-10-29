@@ -142,7 +142,7 @@ theorem finalWire_realizable (bit : Fin (cellWidth Symbol State)) : (finalWire b
         polynomialIntegerSize, integerIsZero, unaryMap])
   · let allowed := fun sizes (arguments : ∀ name, (inputs name).Carrier sizes) =>
       computation.precondition sizes arguments ∧ condition sizes arguments = true
-    have constant := (wirePolynomial_realizable (MvPolynomial.C bit.val) (layoutWires Symbol State)).onResults
+    have constant := (positionPolynomial_realizable (MvPolynomial.C bit.val) (layoutWires Symbol State)).onResults
       inputs allowed (fun empty => nomatch empty) (by
         intro sizes arguments
         change MvPolynomial.eval sizes (MvPolynomial.C bit.val) < _
@@ -151,7 +151,7 @@ theorem finalWire_realizable (bit : Fin (cellWidth Symbol State)) : (finalWire b
     intro sizes arguments accepted
     have zero : sizes () = 0 := by simpa [condition] using accepted.2
     apply Fin.ext
-    simp [computation, finalWire, specification_compute, zero, onResults, wirePolynomial]
+    simp [computation, finalWire, specification_compute, zero, onResults, positionPolynomial]
   · let allowed := fun sizes (arguments : ∀ name, (inputs name).Carrier sizes) =>
       computation.precondition sizes arguments ∧ condition sizes arguments = false
     have positive : ∀ sizes (arguments : {arguments // allowed sizes arguments}), 0 < sizes () := by

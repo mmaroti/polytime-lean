@@ -65,7 +65,7 @@ theorem checkedGuardJoining_realizable (base output : MvPolynomial Bool ℕ)
     (fun port sizes _ => ⟨MvPolynomial.eval sizes (joiningCoordinates base output port),
       joiningCoordinate_fits base output outputBound sizes port⟩) (by intros; trivial) (by
         intro port
-        have coordinate := (wirePolynomial_realizable (joiningCoordinates base output port) (checkedGuardWires base)).onResults
+        have coordinate := (positionPolynomial_realizable (joiningCoordinates base output port) (checkedGuardWires base)).onResults
           (Empty.elim : Empty → EncodedDomain Bool) (fun _ _ => True) (fun empty => nomatch empty)
           (by intro sizes arguments; exact joiningCoordinate_fits base output outputBound sizes port)
           (fun empty => nomatch empty)

@@ -16,6 +16,8 @@ limitations under the License.
 -/
 
 import Polytime2.Computation.Layout
+import Polytime2.Computation.Constant
+import Polytime2.Computation.Reindex
 import Polytime2.Primitives.FiniteTable
 
 /-! # Specialization-fixed finite operations on mathematical arguments -/
@@ -112,14 +114,23 @@ theorem finiteTable_realizable
       outputDomain.Carrier Empty.elim) : (finiteTable firstDomain secondDomain outputDomain operation).Realizable :=
   finiteOperation_realizable _ _ _
 
-/-- A unary specialization-fixed predicate returns a single Boolean. -/
-noncomputable def finitePredicate (domain : EncodedDomain.{0, 0} Empty)
-    (predicate : domain.Carrier Empty.elim → Bool) : Computation Empty Unit :=
-  finiteOperation (fun _ => domain) EncodedDomain.booleans (fun values => predicate (values ()))
+/-- A specialization-fixed predicate with an ordinary Boolean result at any
+runtime size assignment. The caller supplies only its mathematical function. -/
+noncomputable def finitePredicate {Parameter : Type} [Fintype Parameter]
+    (domain : EncodedDomain.{0, 0} Empty) (predicate : domain.Carrier Empty.elim → Bool) :
+    Computation Parameter Unit :=
+  unaryMap domain.constant EncodedDomain.booleans (fun _ _ => True) (fun _ value => predicate value.val)
 
-theorem finitePredicate_realizable (domain : EncodedDomain.{0, 0} Empty)
-    (predicate : domain.Carrier Empty.elim → Bool) :
-    (finitePredicate domain predicate).Realizable := finiteOperation_realizable _ _ _
+set_option backward.isDefEq.respectTransparency false in
+theorem finitePredicate_realizable {Parameter : Type} [Fintype Parameter]
+    (domain : EncodedDomain.{0, 0} Empty) (predicate : domain.Carrier Empty.elim → Bool) :
+    (finitePredicate (Parameter := Parameter) domain predicate).Realizable := by
+  have raw := (finiteOperation_realizable (fun _ : Unit => domain) EncodedDomain.booleans
+    (fun values => predicate (values ()))).withConstantSizes (Parameter := Parameter)
+  exact raw.reinterpretOutput EncodedDomain.booleans (fun _ value => value)
+    (by intros; simp [withConstantSizes, finiteOperation, EncodedDomain.booleans, EncodedDomain.width])
+    (by intros; simp [withConstantSizes, finiteOperation, EncodedDomain.constant_encode_bits,
+      EncodedDomain.booleans, EncodedDomain.fixed_encode_bits])
 
 /-- Three separate arguments from one fixed domain compute one mathematical result. -/
 def finiteTernary (domain : EncodedDomain.{0, carrierLevel} Empty)

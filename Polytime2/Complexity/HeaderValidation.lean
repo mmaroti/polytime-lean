@@ -33,17 +33,13 @@ private theorem separatorCheck_realizable : separatorCheck.Realizable := by
     (by intros; rfl) (by intros; trivial)
   apply Realizable.ofCases (computation := computation) missing guard
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ missing sizes arguments = true
-    have raw := (finiteOperation_realizable (Empty.elim : Empty → EncodedDomain Empty)
-      booleans (fun _ => false)).withConstantSizes (Parameter := Unit)
-    have constant := raw.reinterpretOutput (booleans : EncodedDomain Unit) (fun _ value => value)
-      (by intros; simp [withConstantSizes, finiteOperation, booleans, width])
-      (by intros; simp [withConstantSizes, finiteOperation, constant_encode_bits, booleans, fixed_encode_bits])
+    have constant := booleanOperation_realizable (Parameter := Unit) (fun _ : Empty → Bool => false)
     have prepared := constant.onResults computation.inputDomains allowed (fun empty => empty.elim)
       (by intros; trivial) (fun empty => empty.elim)
     apply prepared.withSpecification allowed _ (by intros; trivial)
     intro sizes arguments valid
     have absent : arguments (.inr ()) = none := Option.isNone_iff_eq_none.mp valid.2
-    simp [separatorCheck, computation, absent, finiteOperation, withConstantSizes, reinterpretOutput, onResults]
+    simp [separatorCheck, computation, absent, booleanOperation, onResults]
   · let allowed sizes arguments := computation.precondition sizes arguments ∧ missing sizes arguments = false
     have found := (arraySearchFound_realizable (MvPolynomial.X ())).onArguments
       computation.inputDomains allowed (fun _ => .inr ()) (by intros; rfl) (by

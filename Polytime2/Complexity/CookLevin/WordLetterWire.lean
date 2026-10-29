@@ -59,13 +59,13 @@ theorem wordLetterWire_realizable (letter : Fin (Fintype.card Letter)) :
   have referenceReady : reference.Realizable :=
     (wireOfPosition_realizable wordPositions capacity
       (by intro sizes; simp only [capacity, map_add]; omega)).withPrecondition allowed (by intros; trivial)
-  let start := (wirePolynomial origin capacity).onResults inputs allowed (fun empty => nomatch empty) (by
+  let start := (positionPolynomial origin capacity).onResults inputs allowed (fun empty => nomatch empty) (by
     intro sizes arguments
     change MvPolynomial.eval sizes origin < MvPolynomial.eval sizes capacity
     simp only [origin, capacity, wordPositions, map_add, map_mul, map_ofNat, map_one, MvPolynomial.eval_X]
     omega)
   have startReady : start.Realizable := by
-    apply (wirePolynomial_realizable origin capacity).onResults
+    apply (positionPolynomial_realizable origin capacity).onResults
     intro empty
     exact nomatch empty
   let difference := (wireSubtract capacity).onResults inputs allowed

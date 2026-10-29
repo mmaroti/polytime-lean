@@ -62,7 +62,7 @@ theorem neighborCoordinate_realizable (direction : Fin 3) : (neighborCoordinate 
     · let inputs : Unit → EncodedDomain Unit := fun _ => arrayPosition layoutPositions
       let allowed := fun sizes (arguments : ∀ name, (inputs name).Carrier sizes) =>
         computation.precondition sizes arguments ∧ condition sizes arguments = false
-      let one := (wirePolynomial 1 layoutPositions).onResults inputs allowed (fun empty => nomatch empty) (by
+      let one := (positionPolynomial 1 layoutPositions).onResults inputs allowed (fun empty => nomatch empty) (by
         intro sizes arguments
         have nonzero : ¬ (arguments.val ()).val < 1 := by simpa [condition] using arguments.property.2
         have bounded : (arguments.val ()).val < MvPolynomial.eval sizes layoutPositions := (arguments.val ()).isLt
@@ -70,7 +70,7 @@ theorem neighborCoordinate_realizable (direction : Fin 3) : (neighborCoordinate 
         simp only [map_one]
         omega)
       have oneReady : one.Realizable := by
-        apply (wirePolynomial_realizable 1 layoutPositions).onResults
+        apply (positionPolynomial_realizable 1 layoutPositions).onResults
         intro empty
         exact nomatch empty
       have subtracted := (wireSubtract_realizable layoutPositions).onResults inputs allowed
@@ -88,7 +88,7 @@ theorem neighborCoordinate_realizable (direction : Fin 3) : (neighborCoordinate 
       intro sizes arguments accepted
       apply Fin.ext
       simp [computation, neighborCoordinate, unaryMap, onResults,
-        wireSubtract, one, wirePolynomial]
+        wireSubtract, one, positionPolynomial]
   · exact (copy_realizable (arrayPosition layoutPositions)).withSpecification
       (neighborCoordinate 1).precondition (neighborCoordinate 1).compute (by intros; trivial) (by intros; rfl)
   · let computation := neighborCoordinate 2

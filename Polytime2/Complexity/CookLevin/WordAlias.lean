@@ -94,7 +94,7 @@ theorem wordInitialAlias_realizable (entry : State) (letters : Letter ↪ Symbol
     | inl value =>
       let coordinate : MvPolynomial Bool ℕ := MvPolynomial.X true * MvPolynomial.C (Fintype.card Letter) +
         MvPolynomial.C (if value then 1 else 0)
-      have constant := (wirePolynomial_realizable coordinate wordPreparedWires).onResults
+      have constant := (positionPolynomial_realizable coordinate wordPreparedWires).onResults
         computation.inputDomains allowed (fun empty => nomatch empty) (by
           intro sizes arguments
           change MvPolynomial.eval sizes coordinate < MvPolynomial.eval sizes wordPreparedWires

@@ -1,4 +1,5 @@
-import Polytime2.Complexity.CookLevin.FiniteWindow
+import Polytime2.TM0.FiniteWindow
+import Polytime2.Complexity.CookLevin.CellCircuit
 import Polytime2.Circuit.ExpressionTemplate
 import Polytime2.Circuit.TemplateChoice
 import Polytime2.Circuit.UniformUnroll

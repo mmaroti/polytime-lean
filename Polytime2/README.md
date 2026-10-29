@@ -69,6 +69,8 @@ development because theorem statements may still need to be adapted.
    NP-completeness for rigid cores without Taylor polymorphisms.
 10. [Infrastructure next steps](tasks/NEXTSTEPS.md): finish the flexible
     computed-size result rules identified by the CSP review.
+11. [Cook–Levin cleanup](tasks/CLEANUP.md): certify bounded polynomial
+    expressions and remove repeated address arithmetic.
 
 These are proposals, not completed features. Each task records its prerequisites
 and acceptance criteria; remove completed entries and update the relevant guide.

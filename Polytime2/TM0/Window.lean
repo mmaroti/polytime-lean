@@ -1,4 +1,4 @@
-import Polytime2.Complexity.CookLevin.LocalMachine
+import Polytime2.TM0.LocalMachine
 
 /-! # Finite windows for bounded machine simulation
 
@@ -9,7 +9,7 @@ machine head could finish. No bound on the original input word length is
 needed for this locality argument.
 -/
 
-namespace Polytime2.Complexity.CookLevin
+namespace Polytime2
 
 open Turing
 
@@ -56,4 +56,23 @@ theorem windowEvolve_agree_head_range (machine : TM0.Machine Symbol State) (step
   apply windowEvolve_agree
   constructor <;> push_cast <;> omega
 
-end Polytime2.Complexity.CookLevin
+/-- Truncation cannot create a head outside the source's reachable interval. -/
+theorem windowEvolve_no_head_outside (machine : TM0.Machine Symbol State)
+    (radius steps : ℕ) (configuration : TM0.Cfg Symbol State) (position : ℤ)
+    (outside : position < -(steps : ℤ) ∨ (steps : ℤ) < position) :
+    (((windowEvolve machine radius)^[steps] (window radius (cells 0 configuration))) position).2 = none := by
+  induction steps generalizing position with
+  | zero =>
+    have away : position ≠ 0 := by omega
+    simp [window, cells, away]
+    split_ifs <;> rfl
+  | succ steps hypothesis =>
+    rw [Function.iterate_succ_apply']
+    simp only [windowEvolve, window]
+    split_ifs with inside
+    · simp only [evolve, localStep, hypothesis position (by omega), incoming,
+        hypothesis (position - 1) (by omega), hypothesis (position + 1) (by omega), Option.bind_none,
+        Option.or_none]
+    · rfl
+
+end Polytime2

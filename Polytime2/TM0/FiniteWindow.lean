@@ -1,5 +1,4 @@
-import Polytime2.Complexity.CookLevin.CellCircuit
-import Polytime2.Complexity.CookLevin.Window
+import Polytime2.TM0.Window
 
 /-! # Finite array realization of the mathematical tape window
 
@@ -9,7 +8,7 @@ blank, unmarked cells for the missing neighbors. These are mathematical
 coordinates, independently of a circuit codec or machine implementation.
 -/
 
-namespace Polytime2.Complexity.CookLevin
+namespace Polytime2
 
 open Turing
 
@@ -133,4 +132,4 @@ theorem windowArray_iterate [Inhabited State] (machine : TM0.Machine Symbol Stat
     rw [Function.iterate_succ_apply', induction, windowArray_step, windowEvolve_closed,
       Function.iterate_succ_apply']
 
-end Polytime2.Complexity.CookLevin
+end Polytime2

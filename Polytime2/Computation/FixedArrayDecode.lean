@@ -30,13 +30,8 @@ private noncomputable def valueValid : Computation Parameter Unit :=
     (fun _ bits => (element.decode Empty.elim bits.val).isSome)
 
 private theorem valueValid_realizable : (valueValid (Parameter := Parameter) element).Realizable := by
-  let source : EncodedDomain Empty := bitVectors element.widthPolynomial
-  let test := fun bits => (element.decode Empty.elim bits).isSome
-  have raw := (finitePredicate_realizable source test).withConstantSizes (Parameter := Parameter)
-  exact raw.reinterpretOutput (booleans : EncodedDomain Parameter) (fun _ value => value)
-    (by intros; simp [withConstantSizes, finitePredicate, finiteOperation, booleans, width])
-    (by intros; simp [withConstantSizes, finitePredicate, finiteOperation, constant_encode_bits,
-      booleans, fixed_encode_bits])
+  exact finitePredicate_realizable (bitVectors element.widthPolynomial)
+    (fun bits => (element.decode Empty.elim bits).isSome)
 
 /-- Validate every entry of an exactly framed scalar-code array. No default
 value or inhabitance hypothesis is needed, even for a zero-width carrier. -/

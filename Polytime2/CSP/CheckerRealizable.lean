@@ -61,41 +61,16 @@ private theorem relationComputation_realizable (arity : ℕ) :
   induction arity with
   | zero =>
     let inputs := relationInputs Carrier 0
-    let operation (predicate : (Fin 0 → Carrier) → Bool) (enabled : Bool) :=
-      !enabled || predicate Fin.elim0
-    have raw := (finiteTable_realizable (predicateCodec Carrier 0) booleans booleans operation).withConstantSizes
-      (Parameter := Unit)
-    let domains : Bool → EncodedDomain Unit := fun choice =>
-      if choice then booleans else (predicateCodec Carrier 0).constant
-    let inputMap (choice : Bool) (sizes : Unit → ℕ) :
-        (domains choice).Carrier sizes →
-          (((finiteTable (predicateCodec Carrier 0) booleans booleans operation).withConstantSizes
-            (Parameter := Unit)).inputDomains choice).Carrier sizes := by
-      cases choice <;> exact id
-    have normalized := raw.reinterpretInputs domains inputMap
-      (by intro choice sizes; cases choice <;>
-        simp [domains, withConstantSizes, finiteTable, finiteOperation, booleans, width])
-      (by intro choice sizes value; cases choice <;>
-        simp [domains, inputMap, withConstantSizes, finiteTable, finiteOperation,
-          constant_encode_bits, booleans, fixed_encode_bits])
-      (fun _ _ => True) (by intros; trivial)
-    have base := normalized.reinterpretOutput (booleans : EncodedDomain Unit) (fun _ value => value)
-      (by intros; simp [reinterpretInputs, withConstantSizes, finiteTable, finiteOperation, booleans, width])
-      (by intros; simp only [reinterpretInputs, withConstantSizes, finiteTable, finiteOperation,
-          constant_encode_bits, booleans, fixed_encode_bits])
-    let results (name : Bool) (sizes : Unit → ℕ)
-        (arguments : {arguments : (∀ name, (inputs name).Carrier sizes) // True}) :
-        (domains name).Carrier sizes := by
-      cases name
-      · exact arguments.val none
-      · exact arguments.val (some true) Fin.elim0
-    have assembled := base.onResults inputs (fun _ _ => True) results (by intros; trivial) (by
-      intro name
-      cases name
-      · exact Realizable.argument inputs none (fun _ _ => True)
-      · exact (nullaryTable_realizable.onArguments inputs (fun _ _ => True) (fun _ => some true)
-          (by intros; rfl) (by intros; trivial)))
-    exact assembled.withSpecification (fun _ _ => True) (relationComputation Carrier 0).compute
+    have predicate := (finitePredicate_realizable (predicateCodec Carrier 0)
+      (fun relation => relation Fin.elim0)).onArguments inputs (fun _ _ => True)
+      (fun _ => none) (by intros; rfl) (by intros; trivial)
+    have enabled := nullaryTable_realizable.onArguments inputs (fun _ _ => True) (fun _ => some true)
+      (by intros; rfl) (by intros; trivial)
+    have complete := (booleanOperation_realizable (fun flags : Bool → Bool => !flags true || flags false)).onResults
+      inputs (fun _ _ => True) (fun flag _ arguments => if flag then arguments.val (some true) Fin.elim0
+        else arguments.val none Fin.elim0) (by intros; trivial)
+      (by intro flag; cases flag; exact predicate; exact enabled)
+    exact complete.withSpecification (fun _ _ => True) (relationComputation Carrier 0).compute
       (by intros; trivial) (by intros; rfl)
   | succ arity hypothesis =>
     let context : Bool → EncodedDomain Unit := fun choice =>

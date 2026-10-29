@@ -48,19 +48,9 @@ theorem catalogueFlags_realizable (length : MvPolynomial Parameter ℕ) (entry :
   let image : EncodedDomain Parameter := (subalgebraDomain L Carrier).constant
   let predicate := fun (value : (subalgebraDomain L Carrier).Carrier Empty.elim) =>
     decide ((value : L.Substructure Carrier) = entry.1)
-  have predicateRealizable := (finitePredicate_realizable (subalgebraDomain L Carrier) predicate).withConstantSizes
-    (Parameter := Parameter)
-  have booleanResult := predicateRealizable.reinterpretOutput EncodedDomain.booleans
-    (fun _ value => value)
-    (by intros; simp [finitePredicate, finiteOperation, Computation.withConstantSizes,
-      EncodedDomain.booleans, EncodedDomain.fixed, EncodedDomain.constant])
-    (by
-      intro sizes value
-      simp only [finitePredicate, finiteOperation, Computation.withConstantSizes,
-        EncodedDomain.booleans, EncodedDomain.constant_encode_bits,
-        EncodedDomain.fixed_encode_bits])
   exact mapArray_realizable image EncodedDomain.booleans length
-    (fun _ value => decide ((value : L.Substructure Carrier) = entry.1)) booleanResult
+    (fun _ value => decide ((value : L.Substructure Carrier) = entry.1))
+    (finitePredicate_realizable (subalgebraDomain L Carrier) predicate)
 
 /-- Read image algebras from the already converted coordinate records. -/
 noncomputable def convertedImages (coordinates generators : MvPolynomial Parameter ℕ) :
@@ -117,8 +107,8 @@ theorem coordinateAccepted_realizable (generators : MvPolynomial Parameter ℕ) 
   let image : EncodedDomain Parameter := (subalgebraDomain L Carrier).constant
   let block : EncodedDomain Parameter := (elementDomain (Option (SIBlock L Carrier))).constant
   let payload := block.prod (block.arrayOfLength generators)
-  exact ((pairProjection_realizable image payload true).fst).followedBy ((finitePredicate_realizable (elementDomain (Option (SIBlock L Carrier)))
-    (fun value => value.isSome)).withConstantSizes (Parameter := Parameter)) rfl (by intros; trivial)
+  exact ((pairProjection_realizable image payload true).fst).followedBy ((finiteOperation_realizable (fun _ : Unit => elementDomain (Option (SIBlock L Carrier)))
+    EncodedDomain.booleans (fun values => (values ()).isSome)).withConstantSizes (Parameter := Parameter)) rfl (by intros; trivial)
 
 /-- Keep one target-acceptance bit per original coordinate. -/
 noncomputable def conversionAcceptance (coordinates generators : MvPolynomial Parameter ℕ) :

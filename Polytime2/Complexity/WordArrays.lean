@@ -1,6 +1,6 @@
 import Polytime2.Complexity.RawWords
 import Polytime2.Computation.RecordArguments
-import Polytime2.Arrays.Tabulate
+import Polytime2.Arrays.ZipWith
 import Polytime2.Arrays.Operations
 import Polytime2.Primitives.FiniteOperations
 
@@ -28,12 +28,7 @@ noncomputable def letterTest (test : Letter → Bool) : Computation Unit Unit :=
 
 /-- A letter test is a finite table, independent of the runtime word length. -/
 theorem letterTest_realizable (test : Letter → Bool) : (letterTest test).Realizable := by
-  have raw := (finitePredicate_realizable (fixed (Fintype.equivFin Letter)) test).withConstantSizes
-    (Parameter := Unit)
-  exact raw.reinterpretOutput (booleans : EncodedDomain Unit) (fun _ value => value)
-    (by intros; simp [withConstantSizes, finitePredicate, finiteOperation, booleans, width])
-    (by intros; simp [withConstantSizes, finitePredicate, finiteOperation, constant_encode_bits,
-      booleans, fixed_encode_bits])
+  exact finitePredicate_realizable (fixed (Fintype.equivFin Letter)) test
 
 private def decodeBits (bits : Fin 3 → Bool) : Letter :=
   if bits 2 then .inr 2 else
@@ -61,20 +56,13 @@ private theorem lettersFromBits_realizable : lettersFromBits.Realizable := by
     (fun _ _ => True) (by intros; trivial)
   let length : MvPolynomial Unit ℕ := MvPolynomial.X ()
   let inputs := fun _ : Fin 3 => (booleans : EncodedDomain Unit).arrayOfLength length
-  let operation (sizes : Unit → ℕ) (arguments : ∀ name, (inputs name).Carrier sizes)
-      (index : Fin (MvPolynomial.eval sizes length)) := decodeBits (fun bit => arguments bit index)
-  let step := arrayTransformStep inputs (arrayPosition length) letterDomain operation
-  have lookup (bit : Fin 3) :=
-    (Realizable.Internal.arrayLookupWithIndex_realizable booleans (arrayPosition length)
-      (fun _ index => index.val) (arrayPosition_value length) length).onArguments
-      step.inputDomains (fun _ _ => True)
-      (fun choice => match choice with | false => .inr () | true => .inl bit)
-      (by intro choice; cases choice <;> rfl)
-      (by intro sizes arguments; exact (arguments.val (.inr ())).isLt)
-  have stepReady : step.Realizable := normalized.onResults step.inputDomains (fun _ _ => True)
-    (fun bit _ arguments => arguments.val (.inl bit) (arguments.val (.inr ())))
-    (by intros; trivial) lookup
-  have tabulated := arrayTabulate_realizable inputs letterDomain length operation stepReady
+  have step := normalized.onArguments
+    (Sum.elim (Empty.elim : Empty → EncodedDomain Unit) (fun _ : Fin 3 => booleans))
+    (fun _ _ => True) Sum.inr (by intros; rfl) (by intros; trivial)
+  have zipped := arrayZip_realizable (Empty.elim : Empty → EncodedDomain Unit)
+    (fun _ : Fin 3 => booleans) letterDomain length (fun _ _ => decodeBits) step
+  have tabulated := zipped.onArguments inputs (fun _ _ => True)
+    (Sum.elim Empty.elim id) (by rintro (empty | index); cases empty; rfl) (by intros; trivial)
   have prepared := tabulated.reinterpretInputs lettersFromBits.inputDomains
     (fun _ sizes => arrayParameterEquiv booleans () sizes)
     (by intros; rfl)

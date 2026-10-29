@@ -19,9 +19,9 @@ import Polytime2.Arrays.Tabulate
 import Polytime2.Arrays.Operations
 import Polytime2.Computation.Conditional
 
-/-! # Combining two runtime arrays pointwise
+/-! # Combining runtime arrays pointwise
 
-A certified scalar operation with immutable context lifts to two arrays of the
+A certified scalar operation with immutable context lifts to arrays of the
 same mathematical length. Their element types and widths may differ. The
 realization prepares positions and reuses array lookup and tabulation.
 -/
@@ -29,6 +29,51 @@ realization prepares positions and reuses array lookup and tabulation.
 namespace Polytime2.Computation
 
 variable {Parameter Context : Type} [Fintype Parameter] [Fintype Context]
+
+/-- Combine a finite family of arrays pointwise, retaining immutable context. -/
+noncomputable def arrayZip {Argument : Type} [Fintype Argument]
+    (context : Context → EncodedDomain.{0, 0} Parameter)
+    (elements : Argument → EncodedDomain.{0, 0} Parameter) (target : EncodedDomain.{0, 0} Parameter)
+    (length : MvPolynomial Parameter ℕ)
+    (operation : ∀ sizes, (∀ name, (context name).Carrier sizes) →
+      (∀ name, (elements name).Carrier sizes) → target.Carrier sizes) :
+    Computation Parameter (Context ⊕ Argument) where
+  inputDomains := Sum.elim context (fun name => (elements name).arrayOfLength length)
+  outputDomain := target.arrayOfLength length
+  precondition _ _ := True
+  compute sizes arguments index := operation sizes (fun name => arguments.val (.inl name))
+    (fun name => arguments.val (.inr name) index)
+
+theorem arrayZip_realizable {Argument : Type} [Fintype Argument]
+    (context : Context → EncodedDomain.{0, 0} Parameter)
+    (elements : Argument → EncodedDomain.{0, 0} Parameter) (target : EncodedDomain.{0, 0} Parameter)
+    (length : MvPolynomial Parameter ℕ)
+    (operation : ∀ sizes, (∀ name, (context name).Carrier sizes) →
+      (∀ name, (elements name).Carrier sizes) → target.Carrier sizes)
+    (step : (Computation.mk (Sum.elim context elements) target (fun _ _ => True)
+      (fun sizes arguments => operation sizes (fun name => arguments.val (.inl name))
+        (fun name => arguments.val (.inr name)))).Realizable) :
+    (arrayZip context elements target length operation).Realizable := by
+  let computation := arrayZip context elements target length operation
+  let tabulateOperation sizes (arguments : computation.Arguments sizes) index :=
+    computation.compute sizes ⟨arguments, trivial⟩ index
+  let tabulateStep := arrayTransformStep computation.inputDomains (EncodedDomain.arrayPosition length)
+    target tabulateOperation
+  have entry (name : Argument) := (Realizable.Internal.arrayLookupWithIndex_realizable
+    (elements name) (EncodedDomain.arrayPosition length) (fun _ index => index.val)
+    (EncodedDomain.arrayPosition_value length) length).onArguments tabulateStep.inputDomains (fun _ _ => True)
+      (fun choice => match choice with | false => .inr () | true => .inl (.inr name))
+      (by intro choice; cases choice <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr ())).isLt)
+  have tabulateReady : tabulateStep.Realizable := step.onResults tabulateStep.inputDomains (fun _ _ => True)
+    (fun name _ arguments => match name with
+      | .inl original => arguments.val (.inl (.inl original))
+      | .inr name => arguments.val (.inl (.inr name)) (arguments.val (.inr ())))
+    (by intros; trivial) (by
+      intro name
+      cases name with
+      | inl original => exact Realizable.argument tabulateStep.inputDomains (.inl (.inl original)) (fun _ _ => True)
+      | inr name => exact entry name)
+  exact arrayTabulate_realizable computation.inputDomains target length tabulateOperation tabulateReady
 
 noncomputable def arrayZipWithStep (context : Context → EncodedDomain.{0, 0} Parameter)
     (first second target : EncodedDomain.{0, 0} Parameter)
@@ -59,28 +104,8 @@ theorem arrayZipWith_realizable (context : Context → EncodedDomain.{0, 0} Para
       first.Carrier sizes → second.Carrier sizes → target.Carrier sizes)
     (step : (arrayZipWithStep context first second target operation).Realizable) :
     (arrayZipWith context first second target length operation).Realizable := by
-  let computation := arrayZipWith context first second target length operation
-  let tabulateOperation sizes (arguments : computation.Arguments sizes) index :=
-    computation.compute sizes ⟨arguments, trivial⟩ index
-  let tabulateStep := arrayTransformStep computation.inputDomains (EncodedDomain.arrayPosition length)
-    target tabulateOperation
-  have entry (choice : Bool) := (Realizable.Internal.arrayLookupWithIndex_realizable
-    (if choice then second else first) (EncodedDomain.arrayPosition length) (fun _ index => index.val)
-    (EncodedDomain.arrayPosition_value length) length).onArguments tabulateStep.inputDomains (fun _ _ => True)
-      (fun name => match name with
-      | false => (.inr ())
-      | true => (.inl (.inr choice))) (by intro name; cases name <;> rfl) (by intro sizes arguments; exact (arguments.val (.inr ())).isLt)
-  have tabulateReady : tabulateStep.Realizable := step.onResults tabulateStep.inputDomains (fun _ _ => True)
-    (fun name _ arguments => match name with
-      | .inl original => arguments.val (.inl (.inl original))
-      | .inr false => arguments.val (.inl (.inr false)) (arguments.val (.inr ()))
-      | .inr true => arguments.val (.inl (.inr true)) (arguments.val (.inr ())))
-    (by intros; trivial) (by
-      intro name
-      cases name with
-      | inl original => exact Realizable.argument tabulateStep.inputDomains (.inl (.inl original)) (fun _ _ => True)
-      | inr choice => cases choice; exact entry false; exact entry true)
-  exact arrayTabulate_realizable computation.inputDomains target length tabulateOperation tabulateReady
+  exact arrayZip_realizable context (fun choice : Bool => if choice then second else first) target length
+    (fun sizes values entries => operation sizes values (entries false) (entries true)) step
 
 /-- Lift a certified total binary computation pointwise. Argument preparation
 is proved here rather than by unfolding the scalar answer at each caller. -/

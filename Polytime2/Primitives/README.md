@@ -35,6 +35,8 @@ Finite tables specialize ordinary functions on finite encoded carriers. The
 argument family and each field width are fixed by specialization; runtime
 selection does not require a new controller for each caller. See
 [FiniteTables.lean](../Examples/FiniteTables.lean).
+`finitePredicate domain predicate` lifts a fixed domain to runtime sizes and
+returns the native Boolean codec, with size transport inside its realization.
 
 `encodingMap_realizable` certifies total maps preserving canonical bits. It
 uses the existing copy realization because public inputs and outputs occupy

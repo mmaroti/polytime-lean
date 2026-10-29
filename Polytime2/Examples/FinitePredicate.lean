@@ -35,7 +35,7 @@ example : (isZero.compute Empty.elim
     ⟨(fun _ => (2 : Fin 3)), True.intro⟩ : Bool) = false := rfl
 
 -- The input may have zero width while the Boolean output still has one bit.
-example : (finitePredicate (EncodedDomain.fixed (Equiv.refl (Fin 1)))
+example : (finitePredicate (Parameter := Empty) (EncodedDomain.fixed (Equiv.refl (Fin 1)))
     (fun _ => true)).Realizable := finitePredicate_realizable _ _
 
 end Polytime2.Examples.FinitePredicate

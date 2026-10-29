@@ -1,6 +1,6 @@
 import Polytime2.Circuit.Construction
 import Polytime2.Arithmetic.NaturalArithmetic
-import Polytime2.Arrays.PositionArithmetic
+import Polytime2.Arrays.PositionPolynomial
 
 /-! # Certified wire-coordinate arithmetic
 
@@ -59,34 +59,6 @@ noncomputable def wireShift (wires : MvPolynomial Parameter ℕ) (offset : ℕ) 
     (fun sizes coordinate => coordinate.val + offset < MvPolynomial.eval sizes wires)
     (fun _ coordinate => ⟨coordinate.val.val + offset, coordinate.property⟩)
 
-/-- Read a polynomial mathematical size as a wire coordinate. Working word
-widths are derived internally; admissibility is precisely the coordinate bound. -/
-noncomputable def wirePolynomial (value wires : MvPolynomial Parameter ℕ) : Computation Parameter Empty where
-  inputDomains := Empty.elim
-  outputDomain := arrayPosition wires
-  precondition sizes _ := MvPolynomial.eval sizes value < MvPolynomial.eval sizes wires
-  compute sizes arguments := ⟨MvPolynomial.eval sizes value, arguments.property⟩
-
-theorem wirePolynomial_realizable (value wires : MvPolynomial Parameter ℕ) :
-    (wirePolynomial value wires).Realizable := by
-  have widened := (polynomialIntegerSize_realizable value).followedBy
-    (integerWiden_realizable (value + 1) (wires + 1)) rfl (by intros; trivial)
-  have allowed := widened.withPrecondition (wirePolynomial value wires).precondition (by intros; trivial)
-  have narrowed := allowed.followedBy
-    (integerNarrowAtWidths_realizable ((value + 1) + (wires + 1)) (wires + 1)
-      (by intro sizes; simp only [map_add]; omega)) rfl (by
-        intro sizes arguments allowed
-        change (MvPolynomial.eval sizes value : ℤ).natAbs < 2 ^ MvPolynomial.eval sizes (wires + 1)
-        simp only [Int.natAbs_natCast, map_add, map_one]
-        exact allowed.trans_le ((Nat.le_succ _).trans Nat.lt_two_pow_self.le))
-  have magnitude := narrowed.followedBy (integerMagnitude_realizable (wires + 1)) rfl (by intros; trivial)
-  exact magnitude.withEncodedOutput (arrayPosition wires) (wirePolynomial value wires).compute
-    (by intros; rfl) (by
-      intro sizes arguments
-      apply congrArg CallingConvention.tape
-      apply arrayPosition_binary_bits wires sizes
-      rfl)
-
 /-- Affine wire addressing with a specialization-fixed stride and a
 polynomial base. Admissibility is precisely the mathematical result bound. -/
 noncomputable def wireAffine (wires base : MvPolynomial Parameter ℕ) (stride : ℕ) : Computation Parameter Unit :=
@@ -104,14 +76,14 @@ theorem wireAffine_realizable (wires base : MvPolynomial Parameter ℕ) (stride 
     (wireAffine wires base stride).Realizable := by
   induction stride with
   | zero =>
-    have constant := (wirePolynomial_realizable base wires).onResults
+    have constant := (positionPolynomial_realizable base wires).onResults
       (wireAffine wires base 0).inputDomains (wireAffine wires base 0).precondition
       (fun empty => nomatch empty) (by
         intro sizes arguments
         change MvPolynomial.eval sizes base < MvPolynomial.eval sizes wires
         simpa only [wireAffine, unaryMap, Nat.zero_mul, Nat.add_zero] using arguments.property)
       (fun empty => nomatch empty)
-    exact constant.withSpecification _ _ (by intros; assumption) (by intros; apply Fin.ext; simp [onResults, wirePolynomial, wireAffine, unaryMap])
+    exact constant.withSpecification _ _ (by intros; assumption) (by intros; apply Fin.ext; simp [onResults, positionPolynomial, wireAffine, unaryMap])
   | succ stride induction =>
     let computation := wireAffine wires base (stride + 1)
     let previous := (wireAffine wires base stride).withPrecondition computation.precondition (by

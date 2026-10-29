@@ -1,4 +1,4 @@
-import Mathlib.Computability.TuringMachine.PostTuringMachine
+import Polytime2.TM0.SourceTrace
 import Lean.Elab.Tactic.Omega
 
 /-! # A local presentation of Mathlib TM0 transitions
@@ -9,14 +9,20 @@ Halting configurations stay fixed. This is mathematical simulation of the
 same machine used by `PolynomialTime`, not a replacement complexity model.
 -/
 
-namespace Polytime2.Complexity.CookLevin
+namespace Polytime2
 
-open Turing
+open Turing SourceTrace
 
 variable {Symbol State : Type} [Inhabited Symbol] [Inhabited State]
 
 /-- A tape symbol together with an optional head and state marker. -/
 abbrev Cell (Symbol State : Type) := Symbol × Option State
+
+/-- Ordinary mathematical dynamics of a finite array of marked cells. -/
+def cellTransition {positions : ℕ} (neighbors : Fin positions → Fin 3 → Fin positions)
+    (update : Fin positions → (Fin 3 → Cell Symbol State) → Cell Symbol State)
+    (contents : Fin positions → Cell Symbol State) : Fin positions → Cell Symbol State :=
+  fun position => update position (fun argument => contents (neighbors position argument))
 
 /-- Embed a head-relative Mathlib tape at an absolute integer position. -/
 def cells (head : ℤ) (configuration : TM0.Cfg Symbol State) : ℤ → Cell Symbol State :=
@@ -44,11 +50,6 @@ def localStep (machine : TM0.Machine Symbol State)
     | some (next, .write symbol) => (symbol, some next)
     | some (_, .move _) => (center.1, none)
   | none => (center.1, (incoming machine .right left).or (incoming machine .left right))
-
-/-- Perform one transition, leaving a halted configuration unchanged. -/
-def advance (machine : TM0.Machine Symbol State) (configuration : TM0.Cfg Symbol State) :
-    TM0.Cfg Symbol State :=
-  (TM0.step machine configuration).getD configuration
 
 /-- Update the absolute head position consistently with a TM0 transition. -/
 def advanceHead (machine : TM0.Machine Symbol State) (head : ℤ)
@@ -180,4 +181,4 @@ theorem locatedAdvance_head_bounds (machine : TM0.Machine Symbol State) (steps :
     push_cast
     omega
 
-end Polytime2.Complexity.CookLevin
+end Polytime2

@@ -18,30 +18,16 @@ open EncodedDomain Polytime2.Computation
 attribute [local instance] Classical.propDecidable
 
 private noncomputable def assignmentRows (length : MvPolynomial Unit ℕ) : Computation Unit Unit :=
-  (arrayTransform Empty.elim letterDomain (record (Fintype.card Letter) (fun _ => booleans)) length
-    (fun _ _ letter index => decide (letter = (Fintype.equivFin Letter).symm index))).onResults
-      (fun _ => letterDomain.arrayOfLength length) (fun _ _ => True)
-      (fun name _ arguments => match name with | .inl empty => nomatch empty | .inr () => arguments.val ())
-      (by intros; trivial)
+  mapArray letterDomain (record (Fintype.card Letter) (fun _ => booleans)) length
+    (fun _ letter index => decide (letter = (Fintype.equivFin Letter).symm index))
 
 private theorem assignmentRows_realizable (length : MvPolynomial Unit ℕ) : (assignmentRows length).Realizable := by
-  have step : (arrayTransformStep Empty.elim letterDomain (record (Fintype.card Letter) (fun _ => booleans))
-      (fun _ _ letter index => decide (letter = (Fintype.equivFin Letter).symm index))).Realizable := by
-    let context : Empty ⊕ Unit → EncodedDomain Unit := Sum.elim Empty.elim (fun _ => letterDomain)
-    apply Realizable.recordOutputs context (Fintype.card Letter) (fun _ => booleans) (fun _ _ => True)
-    intro index
-    have tested := (letterTest_realizable (fun letter => decide (letter = (Fintype.equivFin Letter).symm index))).onArguments
-      context (fun _ _ => True) (fun _ => .inr ()) (by intros; rfl) (by intros; trivial)
-    exact tested.withSpecification (fun _ _ => True) _ (by intros; trivial) (by
-      intros
-      simp only [onResults, letterTest, unaryMap]
-      exact Bool.decide_congr Iff.rfl)
-  apply (arrayTransform_realizable Empty.elim letterDomain (record (Fintype.card Letter) (fun _ => booleans))
-    length _ step).onResults
-  intro name
-  cases name with
-  | inl empty => cases empty
-  | inr singleton => exact Realizable.argument _ () (fun _ _ => True)
+  apply mapArray_realizable
+  apply Realizable.recordOutputs (fun _ : Unit => letterDomain) (Fintype.card Letter)
+    (fun _ => booleans) (fun _ _ => True)
+  intro index
+  exact (letterTest_realizable (fun letter => decide (letter = (Fintype.equivFin Letter).symm index))).withSpecification
+    (fun _ _ => True) _ (by intros; trivial) (by intros; exact Bool.decide_congr Iff.rfl)
 
 /-- Prepare exactly the one-hot assignment expected by a word-input circuit. -/
 noncomputable def wordAssignment (length : MvPolynomial Unit ℕ) : Computation Unit Unit :=
@@ -58,7 +44,7 @@ theorem wordAssignment_correct (length : MvPolynomial Unit ℕ) (sizes : Unit �
     (index : Fin (MvPolynomial.eval sizes (length * MvPolynomial.C (Fintype.card Letter)))) :
     (wordAssignment length).compute sizes ⟨arguments, trivial⟩ index =
       encodeWordBits (arguments ()) (index.cast (by simp)) := by
-  simp only [wordAssignment, followedBy, assignmentRows, onResults, arrayTransform,
+  simp only [wordAssignment, followedBy, assignmentRows, mapArray,
     arrayFlattenRecords, encodingMap, unaryMap, encodeWordBits, MatrixEncoding.flattenEquiv, Equiv.coe_fn_mk]
   exact Bool.decide_congr Iff.rfl
 

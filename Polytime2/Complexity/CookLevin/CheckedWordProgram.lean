@@ -68,7 +68,7 @@ private noncomputable def checkedWordImplementation (machine : TM0.Machine Symbo
 
 private theorem checkedWordImplementation_realizable (machine : TM0.Machine Symbol State) (entry : State)
     (letters : Letter ↪ Symbol) : (checkedWordImplementation machine entry letters).Realizable := by
-  have output := (wirePolynomial_realizable (checkedWordOutput Symbol State)
+  have output := (positionPolynomial_realizable (checkedWordOutput Symbol State)
     (checkedGuardWires (wordCircuitWires Symbol State))).onResults
       (Empty.elim : Empty → EncodedDomain Bool) (fun _ _ => True) (fun empty => nomatch empty)
       (by intro sizes arguments; exact output_fits sizes) (fun empty => nomatch empty)

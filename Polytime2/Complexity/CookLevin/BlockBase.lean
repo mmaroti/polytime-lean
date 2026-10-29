@@ -61,12 +61,12 @@ theorem blockBase_realizable (bit : Fin (cellWidth Symbol State)) : (blockBase b
   have readCellReady : readCell.Realizable :=
     (wireOfPosition_realizable layoutPositions wires (layoutPositions_le_wires (Symbol := Symbol) (State := State))).withArguments
       inputs (MultiTape.oneTape true) (fun _ => rfl)
-  let readLayer := (wirePolynomial (layoutLayerGates Symbol State) wires).onResults inputs allowed
+  let readLayer := (positionPolynomial (layoutLayerGates Symbol State) wires).onResults inputs allowed
     (fun empty => nomatch empty) (by
       intro sizes arguments
       exact layoutLayer_bounded sizes (blockTime sizes arguments.val))
   have readLayerReady : readLayer.Realizable := by
-    apply (wirePolynomial_realizable (layoutLayerGates Symbol State) wires).onResults
+    apply (positionPolynomial_realizable (layoutLayerGates Symbol State) wires).onResults
     intro empty
     exact nomatch empty
   let stride := cellWidth Symbol State * cellBlockSize Symbol State

@@ -79,7 +79,7 @@ private noncomputable def wordImplementation (machine : TM0.Machine Symbol State
 
 private theorem wordImplementation_realizable (machine : TM0.Machine Symbol State) (entry : State)
     (letters : Letter ↪ Symbol) : (wordImplementation machine entry letters).Realizable := by
-  have output := (wirePolynomial_realizable (wordPreparedWires + wordCoreOutputOffset Symbol State)
+  have output := (positionPolynomial_realizable (wordPreparedWires + wordCoreOutputOffset Symbol State)
     (wordPreparedWires + wordCoreGateCount Symbol State)).onResults
       (Empty.elim : Empty → EncodedDomain Bool) (fun _ _ => True) (fun empty => nomatch empty)
       (by intro sizes arguments; exact wordCircuitOutput_fits sizes) (fun empty => nomatch empty)

@@ -31,13 +31,7 @@ private noncomputable def matchesTag {count : ℕ} (candidate : Fin count) : Com
 private theorem matchesTag_realizable {count : ℕ} (candidate : Fin count) :
     (matchesTag (Parameter := Parameter) candidate).Realizable := by
   classical
-  let domain : EncodedDomain Empty := fixed (Equiv.refl (Fin count))
-  have raw := (finitePredicate_realizable domain (fun tag => decide (tag = candidate))).withConstantSizes
-    (Parameter := Parameter)
-  exact raw.reinterpretOutput booleans (fun _ bit => bit)
-    (by intros; simp [withConstantSizes, finitePredicate, finiteOperation, booleans, width])
-    (by intros; simp [withConstantSizes, finitePredicate, finiteOperation, constant_encode_bits,
-      booleans, fixed_encode_bits])
+  exact finitePredicate_realizable (fixed (Equiv.refl (Fin count))) (fun tag => decide (tag = candidate))
 
 private def pickTemplate {arity count : ℕ} (templates : Fin count → Bool ⊕ (Fin arity × Fin arity)) :
     List (Fin count) → Fin count → Bool ⊕ (Fin arity × Fin arity)

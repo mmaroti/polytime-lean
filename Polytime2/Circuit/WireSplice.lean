@@ -47,14 +47,14 @@ theorem freshWire_realizable (source target count : MvPolynomial Parameter ℕ) 
   have referenceReady : reference.Realizable :=
     (wireOfPosition_realizable (source + count) capacity
       (by intro sizes; simp only [capacity, map_add, map_one]; omega)).withPrecondition allowed (by intros; trivial)
-  let oldCount := (wirePolynomial source capacity).onResults inputs allowed (fun empty => nomatch empty)
+  let oldCount := (positionPolynomial source capacity).onResults inputs allowed (fun empty => nomatch empty)
     (by
       intro sizes arguments
       change MvPolynomial.eval sizes source < MvPolynomial.eval sizes capacity
       simp only [capacity, map_add, map_one]
       omega)
   have oldCountReady : oldCount.Realizable := by
-    apply (wirePolynomial_realizable source capacity).onResults
+    apply (positionPolynomial_realizable source capacity).onResults
     intro empty
     exact nomatch empty
   let difference := (wireSubtract capacity).onResults inputs allowed

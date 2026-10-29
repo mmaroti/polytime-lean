@@ -149,7 +149,7 @@ private noncomputable def acceptanceImplementation (machine : TM0.Machine Symbol
 
 private theorem acceptanceImplementation_realizable (machine : TM0.Machine Symbol State) (accepting : Symbol) :
     (acceptanceImplementation machine accepting).Realizable := by
-  have output := (wirePolynomial_realizable (layoutWires Symbol State + 5 * observationCount State)
+  have output := (positionPolynomial_realizable (layoutWires Symbol State + 5 * observationCount State)
     (disjunctionWires (layoutWires Symbol State) (observationCount State))).onResults
       (Empty.elim : Empty → EncodedDomain Unit) (fun _ _ => True) (fun empty => nomatch empty)
       (by intro sizes arguments; exact output_fits sizes) (fun empty => nomatch empty)

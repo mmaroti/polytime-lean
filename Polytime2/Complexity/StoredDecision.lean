@@ -1,5 +1,5 @@
 import Polytime2.Complexity.PairValidation
-import Polytime2.Complexity.CookLevin.VerifierDecision
+import Polytime2.Complexity.DirectVerifier
 import Polytime2.Arrays.FixedArrayCall
 import Polytime2.Computation.RetainBoolean
 
@@ -29,7 +29,7 @@ noncomputable def storedDecision (capacity : MvPolynomial Unit ℕ) (decision : 
 
 theorem storedDecision_realizable (capacity : MvPolynomial Unit ℕ) (decision : Word → Bool)
     (ready : PolynomialTime id encodeBool decision) : (storedDecision capacity decision).Realizable :=
-  ((CookLevin.wordVerifier_realizable decision ready).callFixedArray
+  ((wordVerifier_realizable decision ready).callFixedArray
     (fixed (Fintype.equivFin Letter)) capacity rfl (by intros; trivial)).followedBy
       (retainComputedBoolean_realizable (fun _ : Unit => capacity)) rfl (by intros; trivial)
 

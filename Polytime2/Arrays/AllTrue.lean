@@ -15,14 +15,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
-import Polytime2.Arrays.FoldContract
+import Polytime2.Arrays.Contains
 import Polytime2.Arithmetic.BitComparison
 import Polytime2.Computation.RecordArguments
 
 /-! # Testing every Boolean array entry
 
-Fold conjunction over the array with initial value true. This total predicate
-includes empty arrays and supplies a mathematical guard for bounded controllers.
+Test that false is absent from the array. This total predicate includes empty
+arrays and supplies a mathematical guard for bounded controllers.
 -/
 
 set_option backward.isDefEq.respectTransparency false
@@ -38,52 +38,25 @@ noncomputable def arrayAllTrue (length : MvPolynomial Parameter ℕ) : Computati
   unaryMap (booleans.arrayOfLength length) booleans (fun _ _ => True)
     (fun _ values => (List.ofFn values.val).all id)
 
-private theorem fold_and_all (flags : List Bool) (initial : Bool) :
-    flags.foldl (· && ·) initial = (initial && flags.all id) := by
-  induction flags generalizing initial with
-  | nil => simp
-  | cons flag flags hypothesis => simp [hypothesis, Bool.and_assoc]
-
 theorem arrayAllTrue_realizable (length : MvPolynomial Parameter ℕ) :
     (arrayAllTrue length).Realizable := by
-  let computation := arrayAllTrue length
-  let context : Empty → EncodedDomain Parameter := Empty.elim
-  let update (_sizes : Parameter → ℕ) (_context : ∀ name, (context name).Carrier _sizes)
-      (accumulator flag : Bool) := accumulator && flag
-  have step : (arrayFoldStep context booleans booleans (fun _ _ _ _ => True) update).Realizable := by
-    have ready := (booleanOperation_realizable (Parameter := Parameter)
-      (fun arguments : Bool → Bool => arguments false && arguments true)).withArguments
-        (arrayFoldStep context booleans booleans (fun _ _ _ _ => True) update).inputDomains
-        ⟨Sum.inr, Sum.inr_injective⟩ (by intro name; cases name <;> rfl)
-    exact ready.withSpecification (fun _ _ => True) _ (by intros; trivial) (by intros; rfl)
-  have folded := arrayFold_total_realizable context booleans booleans length update step
-  let results (name : Empty ⊕ Bool) (sizes : Parameter → ℕ)
-      (arguments : {arguments : computation.Arguments sizes // computation.precondition sizes arguments}) :
-      ((arrayFold context booleans booleans length (fun _ _ _ _ => True) update).inputDomains name).Carrier sizes :=
-    match name with
-    | .inl impossible => nomatch impossible
-    | .inr false => true
-    | .inr true => arguments.val ()
-  have complete := folded.onResults computation.inputDomains computation.precondition results
-    (by intros; trivial) (by
-      intro name
-      rcases name with impossible | flag
-      · exact impossible.elim
-      · cases flag
-        · exact ((booleanOperation_realizable (Parameter := Parameter) (fun _ : Empty → Bool => true)).onResults
-            computation.inputDomains computation.precondition (fun impossible => impossible.elim)
-            (by intros; trivial) (fun impossible => impossible.elim))
-        · exact Realizable.argument computation.inputDomains () computation.precondition)
-  apply complete.withSpecification computation.precondition computation.compute (by intros; trivial)
+  let inputs := (arrayAllTrue length).inputDomains
+  have absent := (arrayContains_realizable booleans length).onResults inputs (fun _ _ => True)
+    (fun choice _ arguments => match choice with | false => arguments.val () | true => false) (by intros; trivial) (by
+      intro choice; cases choice
+      · exact Realizable.argument inputs () (fun _ _ => True)
+      · exact (booleanOperation_realizable (fun _ : Empty → Bool => false)).onResults inputs
+          (fun _ _ => True) (fun empty => nomatch empty) (by intros; trivial) (fun empty => nomatch empty))
+  have complete := absent.followedBy
+    (booleanOperation_realizable (fun values : Unit → Bool => !values ())) rfl (by intros; trivial)
+  apply complete.withSpecification (fun _ _ => True) (arrayAllTrue length).compute (by intros; trivial)
   intro sizes arguments valid
+  classical
   change Unit → (Fin (MvPolynomial.eval sizes length) → Bool) at arguments
-  change ArrayFold.prefixValue (fun accumulator flag => accumulator && flag) (arguments ()) true
-    (MvPolynomial.eval sizes length) = (List.ofFn (arguments ())).all id
-  have taken : (List.ofFn (arguments ())).take (MvPolynomial.eval sizes length) =
-      List.ofFn (arguments ()) := List.take_of_length_le (by simp)
-  dsimp only [ArrayFold.prefixValue]
-  rw [taken]
-  simpa using fold_and_all (List.ofFn (arguments ())) true
+  apply Bool.eq_iff_iff.mpr
+  simp [followedBy, onResults, arrayContains, arrayAllTrue, unaryMap, booleanOperation,
+    decide_eq_false_iff_not, List.all_eq_true]
+  exact forall_congr' (fun _ => (Bool.not_eq_false _).to_iff)
 
 /-- The executable guard has the ordinary universal mathematical specification. -/
 theorem arrayAllTrue_correct (length : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)

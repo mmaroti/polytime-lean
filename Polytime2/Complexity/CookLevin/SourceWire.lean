@@ -102,12 +102,12 @@ theorem sourceWire_realizable (bit : Fin (cellWidth Symbol State)) : (sourceWire
       apply (wireShift_realizable wires (cellBlockSize Symbol State - 1)).onResults
       intro name
       exact (blockBase_realizable bit).withPrecondition allowed (by intros; trivial)
-    let layer := (wirePolynomial (layoutLayerGates Symbol State) wires).onResults inputs allowed
+    let layer := (positionPolynomial (layoutLayerGates Symbol State) wires).onResults inputs allowed
       (fun empty => nomatch empty) (by
         intro sizes arguments
         exact layoutLayer_bounded sizes ((arguments.val false).cast (by simp)))
     have layerReady : layer.Realizable := by
-      apply (wirePolynomial_realizable (layoutLayerGates Symbol State) wires).onResults
+      apply (positionPolynomial_realizable (layoutLayerGates Symbol State) wires).onResults
       intro empty
       exact nomatch empty
     have subtracted := (wireSubtract_realizable wires).onResults inputs allowed
@@ -131,6 +131,6 @@ theorem sourceWire_realizable (bit : Fin (cellWidth Symbol State)) : (sourceWire
     apply Fin.ext
     have nonzero : (arguments false).val ≠ 0 := by simpa [condition] using accepted.2
     simp [computation, sourceWire, specification_compute, onResults, wireSubtract,
-      layer, wirePolynomial, last, wireShift, unaryMap, nonzero]
+      layer, positionPolynomial, last, wireShift, unaryMap, nonzero]
 
 end Polytime2.Complexity.CookLevin

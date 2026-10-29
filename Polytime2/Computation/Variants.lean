@@ -126,16 +126,10 @@ theorem variantIs_realizable (count : ℕ) (alternatives : Fin count → Encoded
     (by intro sizes; simp [tag, EncodedDomain.constant, variantTag, fixed, ofCodec, width, unaryMap])
     (by intro sizes value; simp [tag, EncodedDomain.constant, variantTag, fixed, ofCodec,
       unaryMap, ArrayEncoding.bits_cast])
-  have predicate := (finitePredicate_realizable tag (fun (value : Fin count) => decide (value = index))).withConstantSizes
-    (Parameter := Parameter)
-  have composed := extracted.followedBy predicate rfl (by intros; trivial)
-  refine composed.reinterpretOutput EncodedDomain.booleans (fun _ value => value) ?_ ?_
-  · intro sizes
-    simp [EncodedDomain.constant, finitePredicate, finiteOperation, withConstantSizes, followedBy,
-      EncodedDomain.booleans, fixed, ofCodec, width]
-  · intro sizes value
-    simp [EncodedDomain.constant, finitePredicate, finiteOperation, withConstantSizes, followedBy,
-      variantTag, unaryMap, EncodedDomain.booleans, fixed, ofCodec, ArrayEncoding.bits_cast]
+  have complete := extracted.followedBy (finitePredicate_realizable tag (fun value => decide (value = index)))
+    rfl (by intros; trivial)
+  exact complete.withSpecification (variantIs count alternatives index).precondition
+    (variantIs count alternatives index).compute (by intros; trivial) (by intros; exact Bool.decide_congr Iff.rfl)
 
 /-- Case analysis calls only the selected alternative's certified algorithm. -/
 noncomputable def variantCases (count : ℕ) (alternatives : Fin count → EncodedDomain.{0, 0} Parameter)

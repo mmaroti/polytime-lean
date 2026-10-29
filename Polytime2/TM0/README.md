@@ -69,3 +69,8 @@ Sweeps, selected head-marker moves, interval extension, and action dispatch
 are certified separately in their source modules. Their markers, padding, and
 workspace sizes are backend implementation details. Exact transition costs and
 preservation obligations belong in those module contracts.
+
+The mathematical local simulation in [LocalMachine.lean](LocalMachine.lean),
+[Window.lean](Window.lean), and [FiniteWindow.lean](FiniteWindow.lean) is shared
+with Cook–Levin. [LocalComputation.lean](LocalComputation.lean) certifies its
+finite-array transition directly through shifts and finite tables.

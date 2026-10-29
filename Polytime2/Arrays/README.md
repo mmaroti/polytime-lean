@@ -9,7 +9,7 @@ whose element widths depend on runtime sizes. Start with
 | Task | Starting point |
 | --- | --- |
 | Read, replace, or copy an indexed element | [Operations.lean][access] |
-| Combine two arrays pointwise | [ZipWith.lean](ZipWith.lean) |
+| Combine arrays pointwise | [ZipWith.lean](ZipWith.lean) |
 | Normalize actual cyclic/free coordinates | [CyclicCoordinates.lean][cyclic] |
 | Enumerate canonical bounded coordinates | [BoundedPositions.lean][bounded] |
 | Flatten arrays or fixed records | [FlattenRecords.lean][flatten] |
@@ -66,6 +66,8 @@ later interval using ordinary endpoints.
 with list take/drop/take; nested-witness normalization uses this rule.
 [Position arithmetic][position arithmetic] compares ordinary coordinate values
 across dimensions or against an active-prefix size, using derived capacities.
+[PositionPolynomial.lean](PositionPolynomial.lean) constructs a polynomial
+coordinate under its mathematical interval bound.
 [PrefixFlags.lean](PrefixFlags.lean) selects runtime prefixes in fixed-length
 storage. [GuardedFold.lean](GuardedFold.lean) certifies selected updates and
 identifies every guarded prefix with the corresponding ordinary prefix.
@@ -92,6 +94,11 @@ Named-size `arrayZipWithAtParameter` and `arrayAllTrueAtParameter` retain
 ordinary `Fin (sizes parameter)` coordinates. The
 [CSP checker](../CSP/CheckerRealizable.lean) uses them for fixed-arity relation
 tables, including empty coordinate ranges.
+
+`arrayZip` combines any finite family of arrays with immutable context;
+`arrayZipWith` is its binary specialization.
+[Shift.lean](Shift.lean) reads left or right neighbors with a supplied boundary
+value, preserving array length and canonical element bits.
 
 For a transform, certify the element operation and let the array rule handle
 traversal and result collection. No default mathematical element is needed.

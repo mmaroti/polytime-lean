@@ -22,8 +22,7 @@ import Polytime2.CSP.ThreeSAT
 import Polytime2.CSP.ThreeSATClauses
 import Polytime2.SAT.FixedInputsProgram
 import Polytime2.Complexity.FixedWitness
-import Polytime2.Circuit.EvaluateCircuit
-import Polytime2.Complexity.CookLevin.VerifierDecision
+import Polytime2.Complexity.DirectVerifier
 import Polytime2.Complexity.CookLevin.FixedFormulaProgram
 import Polytime2.Complexity.CookLevin.FixedInstanceProgram
 import Polytime2.Complexity.CookLevin.Reduction
