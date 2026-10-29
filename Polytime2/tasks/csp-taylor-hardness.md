@@ -1,8 +1,8 @@
 # Fixed-template CSP hardness from absence of a Taylor polymorphism
 
-Status: steps 1--7 implemented; see the [CSP guide](../CSP/README.md),
+Status: steps 1--10 implemented; see the [CSP guide](../CSP/README.md),
 [complexity guide](../Complexity/README.md), and [Cook-Levin guide][cook-levin].
-Steps 8--15 remain.
+Steps 11--15 remain.
 [Task index](../README.md#proposed-next-tasks).
 
 ## Statement and hypothesis correction
@@ -130,27 +130,52 @@ interfaces can be kept small.
    native word framing, the all-word reduction `np_reduces_threeSAT`, and
    `CSP.ThreeSAT.language_npComplete` for the existing strict CSP word language.
 
-8. **Define polymorphisms and their algebra.** View an n-ary polymorphism as
-   a homomorphism from the relational power R^n to R. Prove closure under
-   projections and composition, and prove rigid cores have idempotent
-   polymorphisms. Reuse Mathlib's algebraic structures, substructures,
-   products, terms, and homomorphisms wherever they fit.
+8. **Define polymorphisms and their algebra (implemented).** View an n-ary
+   polymorphism as a homomorphism from the relational power R^n to R. Prove
+   closure under projections and composition, and prove rigid cores have
+   idempotent polymorphisms. Reuse Mathlib's algebraic structures,
+   substructures, products, terms, and homomorphisms wherever they fit.
 
-9. **Prove the required finite Inv-Pol theorem.** Define primitive-positive
-   formulas using conjunction, equality, and existential quantification.
+   [Polymorphism.lean](../CSP/Polymorphism.lean) supplies the power structures,
+   preservation/homomorphism equivalence, projection and composition closure,
+   and rigid-core idempotence. The full polymorphism algebra uses Mathlib's
+   language, structure, substructure, homomorphism, and term interfaces.
+   `isPolymorphism_iff_term` and `hasTaylorPolymorphism_iff_term` connect this
+   algebra to the existing mathematical predicates for subsequent steps.
+   Nullary operations and relations are included.
+
+9. **Prove the required finite Inv-Pol theorem (implemented).** Define
+   primitive-positive formulas using conjunction, equality, and existential
+   quantification.
    Prove preservation and the converse: every finite-arity relation on the
    finite carrier invariant under all polymorphisms of R is pp-definable
    over R. Treat empty relations and nullary cases explicitly; restrict the
    statement if their representation needs a separate argument.
 
-10. **Prove Taylor's algebraic criterion.** Formalize the needed part of
-    section 1.5: an idempotent algebra satisfying identities that cannot all
-    hold in projection algebras has a Taylor term. Apply the contrapositive
+   [PrimitivePositive.lean](../CSP/PrimitivePositive.lean) defines the fragment
+   on Mathlib formulas and proves homomorphism and power preservation.
+   [InvPol.lean](../CSP/InvPol.lean) proves `isPPDefinable_iff_invariant` on
+   finite carriers and finite variable sets, without requiring a finite
+   signature or an inhabited carrier. It includes operation arity zero;
+   `isPPDefinable_empty_iff` and `isPPDefinable_nullary_iff` give the exact
+   empty and nullary cases without adjoining falsehood to the syntax.
+
+10. **Prove Taylor's algebraic criterion (implemented).** Formalize the needed
+    part of section 1.5: an idempotent algebra satisfying identities that cannot
+    all hold in projection algebras has a Taylor term. Apply the contrapositive
     to the full polymorphism algebra. Keep operation symbols and identities
     mathematical; do not introduce executable tests for absence of terms.
 
-11. **Obtain a finite projection witness.** Prove the compactness and finite
-    Birkhoff steps needed to obtain a two-element projection algebra as a
+    [TaylorCriterion.lean](../CSP/TaylorCriterion.lean) proves the criterion
+    for arbitrary sets of identities, with no carrier or signature finiteness
+    assumptions. `hasProjectionModel_of_noTaylorPolymorphism` supplies a
+    two-element projection interpretation satisfying all identities of the
+    rigid core's full polymorphism algebra. The proof uses star composition,
+    compactness of finite coordinate choices, and preservation of substitution;
+    nullary symbols are excluded by idempotence in the non-Taylor case.
+
+11. **Obtain a finite projection witness.** Starting from milestone 10's
+    projection model, prove the finite Birkhoff steps needed to obtain it as a
     homomorphic image of a subalgebra of a finite power. Cover the possibly
     infinite operation signature of all polymorphisms. Use classical choice
     only to select data fixed by R, never an instance-dependent computation.

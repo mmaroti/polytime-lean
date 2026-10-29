@@ -17,6 +17,12 @@ limitations under the License.
 
 import Polytime2.Machine.Basic
 import Polytime2.CSP.Basic
+import Polytime2.CSP.Polymorphism
+import Polytime2.CSP.PrimitivePositive
+import Polytime2.CSP.InvPol
+import Polytime2.CSP.TaylorTerm
+import Polytime2.CSP.TaylorCoordinates
+import Polytime2.CSP.TaylorCriterion
 import Polytime2.CSP.Instance
 import Polytime2.CSP.ThreeSAT
 import Polytime2.CSP.ThreeSATClauses

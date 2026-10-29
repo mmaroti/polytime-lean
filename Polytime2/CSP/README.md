@@ -14,6 +14,40 @@ Mathlib's first-order structures and homomorphisms. It also proves that
 singleton unary relations imply rigidity and that reflexive templates admit
 constant homomorphisms.
 
+[Polymorphism.lean](Polymorphism.lean) identifies relation preservation with a
+Mathlib homomorphism from the coordinatewise relational power. It proves
+projection and composition closure and idempotence from rigidity, including
+zero operation arity and nullary relations, without finiteness assumptions.
+`polymorphismLanguage` and `polymorphismAlgebra` give the full operation
+signature and its Mathlib structure on the original carrier. Template relations
+are Mathlib substructures of its powers. `isPolymorphism_iff_term` identifies
+its term operations with polymorphisms; `hasTaylorPolymorphism_iff_term`
+connects the existing Taylor predicate to this algebra's terms. These
+foundations import no codecs, machines, or realization infrastructure.
+
+[PrimitivePositive.lean](PrimitivePositive.lean) defines the primitive-positive
+fragment on Mathlib formulas: atomic relations and equality, truth, conjunction,
+and existential quantification, without parameters or a falsehood constructor.
+`IsPPDefinable.invariant` proves preservation under all polymorphisms.
+[InvPol.lean](InvPol.lean) proves `isPPDefinable_iff_invariant` for finite
+carriers and finite variable sets, with no signature-finiteness or inhabitance
+assumptions. Its proof existentially quantifies a finite operation table.
+Operation arity zero is included: `isPPDefinable_empty_iff` characterizes empty
+relations by absence of nullary polymorphisms; `isPPDefinable_nullary_iff`
+handles the two nullary truth values. These are mathematical existence results,
+with no machine, codec, or algorithm certificate.
+
+[TaylorCriterion.lean](TaylorCriterion.lean) proves Taylor's criterion for
+idempotent algebras: a set of identities unsatisfiable by projections forces a
+Taylor term (`hasTaylorTerm_of_nontrivial_identities`). Its contrapositive,
+`hasProjectionModel_of_not_hasTaylorTerm`, supplies a projection interpretation
+on `Bool` satisfying the algebra's entire equational theory. The proof uses
+[star composition](TaylorTerm.lean) and
+[compactness of finite coordinate choices](TaylorCoordinates.lean), without
+carrier or signature finiteness. `hasProjectionModel_of_noTaylorPolymorphism`
+applies it to the full polymorphism algebra of a rigid core. The finite HSP
+witness and hardness gadgets remain to be constructed.
+
 [Instance.lean](Instance.lean) defines `Satisfiable` as existence of a Mathlib
 homomorphism and proves its characterization by relation-preserving
 assignments. `Instance L N` is Mathlib's structure on `Fin N`; use
