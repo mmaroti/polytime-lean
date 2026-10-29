@@ -67,7 +67,10 @@ with list take/drop/take; nested-witness normalization uses this rule.
 [Position arithmetic][position arithmetic] compares ordinary coordinate values
 across dimensions or against an active-prefix size, using derived capacities.
 [PositionPolynomial.lean](PositionPolynomial.lean) constructs a polynomial
-coordinate under its mathematical interval bound.
+coordinate under its mathematical interval bound. For expressions that also
+read runtime coordinates, see [natural polynomial evaluation][polynomial].
+`indexToPosition` in [PositionArithmetic.lean][position arithmetic] converts a
+bounded index to the prefix-count position codec without changing its value.
 [PrefixFlags.lean](PrefixFlags.lean) selects runtime prefixes in fixed-length
 storage. [GuardedFold.lean](GuardedFold.lean) certifies selected updates and
 identifies every guarded prefix with the corresponding ordinary prefix.
@@ -212,3 +215,5 @@ certificates.
 [pair fields]: ../Complexity/PairFields.lean
 [unary size]: ../Complexity/UnarySize.lean
 [instance reader]: ../CSP/ReadInstance.lean
+
+[polynomial]: ../Arithmetic/NaturalPolynomial.lean

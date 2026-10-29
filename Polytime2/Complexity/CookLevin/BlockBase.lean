@@ -48,80 +48,22 @@ theorem blockBase_result_fits (bit : Fin (cellWidth Symbol State)) (sizes : Unit
   exact cellBase_fits sizes (blockTime sizes arguments) (arguments true) bit
 
 theorem blockBase_realizable (bit : Fin (cellWidth Symbol State)) : (blockBase bit).Realizable := by
-  let wires := layoutWires Symbol State
-  let inputs := blockBaseInputs
-  let allowed : ∀ sizes, (∀ name, (inputs name).Carrier sizes) → Prop := fun _ _ => True
-  let readTime := (wireOfPosition (MvPolynomial.X ()) wires (layoutTime_le_wires (Symbol := Symbol) (State := State))).withArguments
-    inputs (MultiTape.oneTape false) (fun _ => rfl)
-  have readTimeReady : readTime.Realizable :=
-    (wireOfPosition_realizable (MvPolynomial.X ()) wires (layoutTime_le_wires (Symbol := Symbol) (State := State))).withArguments
-      inputs (MultiTape.oneTape false) (fun _ => rfl)
-  let readCell := (wireOfPosition layoutPositions wires (layoutPositions_le_wires (Symbol := Symbol) (State := State))).withArguments
-    inputs (MultiTape.oneTape true) (fun _ => rfl)
-  have readCellReady : readCell.Realizable :=
-    (wireOfPosition_realizable layoutPositions wires (layoutPositions_le_wires (Symbol := Symbol) (State := State))).withArguments
-      inputs (MultiTape.oneTape true) (fun _ => rfl)
-  let readLayer := (positionPolynomial (layoutLayerGates Symbol State) wires).onResults inputs allowed
-    (fun empty => nomatch empty) (by
+  let bounds : Bool → MvPolynomial Unit ℕ := fun name => if name then layoutPositions else MvPolynomial.X ()
+  let expression : MvPolynomial (Unit ⊕ Bool) ℕ :=
+    MvPolynomial.rename Sum.inl (layoutWidth Symbol State) +
+      MvPolynomial.X (Sum.inr false) * MvPolynomial.rename Sum.inl (layoutLayerGates Symbol State) +
+      MvPolynomial.X (Sum.inr true) * MvPolynomial.C (cellWidth Symbol State * cellBlockSize Symbol State) +
+      MvPolynomial.C (bit.val * cellBlockSize Symbol State)
+  have ready := (polynomialPosition_realizable bounds expression (layoutWires Symbol State)).onArguments
+    blockBaseInputs (fun _ _ => True) id (by intro name; cases name <;> rfl) (by
       intro sizes arguments
-      exact layoutLayer_bounded sizes (blockTime sizes arguments.val))
-  have readLayerReady : readLayer.Realizable := by
-    apply (positionPolynomial_realizable (layoutLayerGates Symbol State) wires).onResults
-    intro empty
-    exact nomatch empty
-  let stride := cellWidth Symbol State * cellBlockSize Symbol State
-  have fullBound (sizes : Unit → ℕ) (arguments : ∀ name, (inputs name).Carrier sizes) :
-      MvPolynomial.eval sizes (layoutWidth Symbol State) +
-        (arguments false).val * MvPolynomial.eval sizes (layoutLayerGates Symbol State) +
-        (arguments true).val * stride + bit.val * cellBlockSize Symbol State < MvPolynomial.eval sizes wires := by
-    simpa only [cellBaseValue, blockTime, Fin.val_cast, wires, stride] using
-      cellBase_bounded sizes (blockTime sizes arguments) (arguments true) bit
-  let timeOffset := (wireMultiply wires).onResults inputs allowed
-    (fun choice sizes arguments => if choice then readLayer.compute sizes arguments else readTime.compute sizes arguments)
-    (by
-      intro sizes arguments
-      change (arguments.val false).val * MvPolynomial.eval sizes (layoutLayerGates Symbol State) < MvPolynomial.eval sizes wires
-      have fits := fullBound sizes arguments.val
-      omega)
-  have timeOffsetReady : timeOffset.Realizable := by
-    apply (wireMultiply_realizable wires).onResults
-    intro choice
-    cases choice
-    · exact readTimeReady
-    · exact readLayerReady
-  let prefixValue := layoutWidth Symbol State + MvPolynomial.C (bit.val * cellBlockSize Symbol State)
-  let cellAddress := readCell.followedBy (wireAffine wires prefixValue stride) rfl (by
-    intro sizes arguments allowed
-    change MvPolynomial.eval sizes prefixValue + stride * (arguments true).val < MvPolynomial.eval sizes wires
-    have fits := fullBound sizes arguments
-    simp only [prefixValue, map_add, MvPolynomial.eval_C]
-    rw [Nat.mul_comm stride]
-    omega)
-  have cellAddressReady : cellAddress.Realizable :=
-    readCellReady.followedBy (wireAffine_realizable wires prefixValue stride) rfl _
-  have complete := (wireAdd_realizable wires).onResults inputs allowed
-    (fun choice sizes arguments => if choice then timeOffset.compute sizes arguments else cellAddress.compute sizes arguments)
-    (by
-      intro sizes arguments
-      change MvPolynomial.eval sizes prefixValue + stride * (arguments.val true).val +
-        (arguments.val false).val * MvPolynomial.eval sizes (layoutLayerGates Symbol State) < MvPolynomial.eval sizes wires
-      have fits := fullBound sizes arguments.val
-      simp only [prefixValue, map_add, MvPolynomial.eval_C]
-      rw [Nat.mul_comm stride]
-      omega)
-    (by
-      intro choice
-      cases choice
-      · exact cellAddressReady
-      · exact timeOffsetReady)
+      simpa [polynomialPosition, expression, MvPolynomial.eval_rename, Function.comp_def,
+        cellBaseValue, blockTime] using cellBase_bounded sizes (blockTime sizes arguments.val) (arguments.val true) bit)
   unfold blockBase
-  apply complete.specification
+  apply ready.specification
   intro sizes arguments valid
   apply Fin.ext
-  change MvPolynomial.eval sizes prefixValue + stride * (arguments true).val +
-    (arguments false).val * MvPolynomial.eval sizes (layoutLayerGates Symbol State) =
-      cellBaseValue sizes (blockTime sizes arguments) (arguments true) bit
-  simp only [prefixValue, stride, map_add, MvPolynomial.eval_C, cellBaseValue, blockTime, Fin.val_cast]
-  ring
+  simp [polynomialPosition, expression, MvPolynomial.eval_rename, Function.comp_def,
+    cellBaseValue, blockTime]
 
 end Polytime2.Complexity.CookLevin

@@ -59,6 +59,20 @@ theorem polynomialIntegerSize_realizable (length : MvPolynomial Parameter ℕ) :
   change (((countFlags length).compute sizes ⟨(fun _ => fun _ => true), trivial⟩).toNat : ℤ) = _
   exact congrArg (fun value : ℕ => (value : ℤ)) count
 
+/-- Convert an ordinary bounded index to the prefix-count position codec.
+The extra bit is derived internally, and the mathematical coordinate is unchanged. -/
+noncomputable def indexToPosition (length : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
+  unaryMap (boundedIndex length) (arrayPosition length) (fun _ _ => True) (fun _ value => value.val)
+
+theorem indexToPosition_realizable (length : MvPolynomial Parameter ℕ) : (indexToPosition length).Realizable := by
+  have widened := (naturalWiden_realizable length 1).reinterpretInputs (indexToPosition length).inputDomains
+    (fun _ _ index => ⟨index.val, index.isLt.trans_le Nat.lt_two_pow_self.le⟩)
+    (by intros; rfl) (by intros; rfl) (fun _ _ => True) (by intros; trivial)
+  exact widened.withEncodedOutput (arrayPosition length) (indexToPosition length).compute (by intros; rfl) (by
+    intro sizes arguments
+    apply congrArg CallingConvention.tape
+    exact arrayPosition_binary_bits length sizes _ _ rfl)
+
 /-- Read a coordinate's natural value at an internally widened signed width. -/
 noncomputable def positionInteger (length extra targetWidth : MvPolynomial Parameter ℕ)
     (sameWidth : targetWidth = (length + 1) + extra) : Computation Parameter Unit :=

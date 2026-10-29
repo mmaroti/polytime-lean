@@ -154,6 +154,7 @@ import Polytime2.Arithmetic.SignedConstruction
 import Polytime2.Arithmetic.SignedArithmetic
 import Polytime2.Arithmetic.SignedComparison
 import Polytime2.Arithmetic.NaturalArithmetic
+import Polytime2.Arithmetic.NaturalPolynomial
 import Polytime2.Arithmetic.SignedAddition
 import Polytime2.Arithmetic.SignedMultiplication
 import Polytime2.Arithmetic.SignedGcd

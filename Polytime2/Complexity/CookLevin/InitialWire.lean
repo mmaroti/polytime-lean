@@ -44,22 +44,15 @@ theorem initialWire_correct (bit : Fin (cellWidth Symbol State)) (sizes : Unit â
   simp only [initialWire, specification_compute]
 
 theorem initialWire_realizable (bit : Fin (cellWidth Symbol State)) : (initialWire bit).Realizable := by
-  let wires := layoutWires Symbol State
-  have readCell := (wireOfPosition_realizable layoutPositions wires
-    (layoutPositions_le_wires (Symbol := Symbol) (State := State))).withArguments
-      blockBaseInputs (MultiTape.oneTape true) (fun _ => rfl)
-  have complete := readCell.followedBy
-    (wireAffine_realizable wires (MvPolynomial.C bit.val) (cellWidth Symbol State)) rfl (by
-      intro sizes arguments allowed
-      change MvPolynomial.eval sizes (MvPolynomial.C bit.val) + cellWidth Symbol State *
-        (arguments true).val < MvPolynomial.eval sizes wires
-      simpa only [MvPolynomial.eval_C, Nat.mul_comm, Nat.add_comm] using initialWire_bounded bit sizes arguments)
-  apply complete.withSpecification (initialWire bit).precondition (initialWire bit).compute (by intros; trivial)
-  intro sizes arguments accepted
+  have ready := (polynomialPosition_realizable (fun _ : Unit => layoutPositions)
+    (MvPolynomial.X (Sum.inr ()) * MvPolynomial.C (cellWidth Symbol State) + MvPolynomial.C bit.val)
+    (layoutWires Symbol State)).onArguments blockBaseInputs (fun _ _ => True) (fun _ => true)
+    (by intros; rfl) (by
+      intro sizes arguments
+      simpa [polynomialPosition] using initialWire_bounded bit sizes arguments.val)
+  apply ready.withSpecification (initialWire bit).precondition (initialWire bit).compute (by intros; trivial)
+  intro sizes arguments valid
   apply Fin.ext
-  simp only [initialWire, specification_compute]
-  change MvPolynomial.eval sizes (MvPolynomial.C bit.val) + cellWidth Symbol State * (arguments true).val = _
-  rw [MvPolynomial.eval_C]
-  ring
+  simp [onResults, polynomialPosition, initialWire, specification_compute]
 
 end Polytime2.Complexity.CookLevin

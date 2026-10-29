@@ -1,4 +1,4 @@
-import Polytime2.Arrays.PositionArithmetic
+import Polytime2.Arithmetic.NaturalPolynomial
 
 /-! # Polynomial array coordinates
 
@@ -8,7 +8,7 @@ Arithmetic widths are derived by the realization.
 
 namespace Polytime2.Computation
 
-open EncodedDomain Realizable.Internal
+open EncodedDomain
 
 variable {Parameter : Type} [Fintype Parameter]
 
@@ -22,22 +22,15 @@ noncomputable def positionPolynomial (value wires : MvPolynomial Parameter ℕ) 
 
 theorem positionPolynomial_realizable (value wires : MvPolynomial Parameter ℕ) :
     (positionPolynomial value wires).Realizable := by
-  have widened := (polynomialIntegerSize_realizable value).followedBy
-    (integerWiden_realizable (value + 1) (wires + 1)) rfl (by intros; trivial)
-  have allowed := widened.withPrecondition (positionPolynomial value wires).precondition (by intros; trivial)
-  have narrowed := allowed.followedBy
-    (integerNarrowAtWidths_realizable ((value + 1) + (wires + 1)) (wires + 1)
-      (by intro sizes; simp only [map_add]; omega)) rfl (by
-        intro sizes arguments allowed
-        change (MvPolynomial.eval sizes value : ℤ).natAbs < 2 ^ MvPolynomial.eval sizes (wires + 1)
-        simp only [Int.natAbs_natCast, map_add, map_one]
-        exact allowed.trans_le ((Nat.le_succ _).trans Nat.lt_two_pow_self.le))
-  have magnitude := narrowed.followedBy (integerMagnitude_realizable (wires + 1)) rfl (by intros; trivial)
-  exact magnitude.withEncodedOutput (arrayPosition wires) (positionPolynomial value wires).compute
-    (by intros; rfl) (by
+  have ready := polynomialPosition_realizable (Empty.elim : Empty → MvPolynomial Parameter ℕ)
+    (MvPolynomial.rename Sum.inl value) wires
+  have prepared := ready.onArguments (positionPolynomial value wires).inputDomains
+    (positionPolynomial value wires).precondition (fun empty => nomatch empty)
+    (by intro empty; cases empty) (by
       intro sizes arguments
-      apply congrArg CallingConvention.tape
-      apply arrayPosition_binary_bits wires sizes
-      rfl)
+      simpa [polynomialPosition, positionPolynomial, MvPolynomial.eval_rename, Function.comp_def] using arguments.property)
+  exact prepared.withSpecification (positionPolynomial value wires).precondition (positionPolynomial value wires).compute
+    (by intros; assumption)
+    (by intros; apply Fin.ext; simp [onResults, polynomialPosition, positionPolynomial, MvPolynomial.eval_rename, Function.comp_def])
 
 end Polytime2.Computation

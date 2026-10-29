@@ -1,5 +1,6 @@
 import Polytime2.Circuit.Construction
 import Polytime2.Arithmetic.NaturalArithmetic
+import Polytime2.Arithmetic.NaturalPolynomial
 import Polytime2.Arrays.PositionPolynomial
 
 /-! # Certified wire-coordinate arithmetic
@@ -27,25 +28,11 @@ noncomputable def wireAdd (wires : MvPolynomial Parameter ℕ) : Computation Par
   compute _ arguments := ⟨(arguments.val false).val + (arguments.val true).val, arguments.property⟩
 
 theorem wireAdd_realizable (wires : MvPolynomial Parameter ℕ) : (wireAdd wires).Realizable := by
-  let computation := wireAdd wires
-  have raw := (naturalAdd_realizable (wires + 1)).reinterpretInputs computation.inputDomains
-    (fun _ sizes coordinate => ⟨coordinate.val, by
-      simp only [map_add, map_one]
-      exact coordinate.isLt.trans_le ((Nat.le_succ _).trans Nat.lt_two_pow_self.le)⟩)
-    (by intros; rfl)
-    (by
-      intro name sizes coordinate
-      exact arrayPosition_binary_bits wires sizes coordinate _ rfl)
-    computation.precondition (by
-      intro sizes arguments fits
-      change (arguments false).val + (arguments true).val < 2 ^ MvPolynomial.eval sizes (wires + 1)
-      simp only [map_add, map_one]
-      exact fits.trans_le ((Nat.le_succ _).trans Nat.lt_two_pow_self.le))
-  exact raw.withEncodedOutput (arrayPosition wires) computation.compute (by intros; rfl) (by
-    intro sizes arguments
-    apply congrArg CallingConvention.tape
-    apply arrayPosition_binary_bits wires sizes
-    rfl)
+  have ready := polynomialPosition_realizable (fun _ : Bool => wires)
+    (MvPolynomial.X (Sum.inr false) + MvPolynomial.X (Sum.inr true)) wires
+  exact ready.withSpecification (wireAdd wires).precondition (wireAdd wires).compute
+    (by intro sizes arguments fits; simpa [polynomialPosition, wireAdd] using fits)
+    (by intros; apply Fin.ext; simp [polynomialPosition, wireAdd])
 
 /-- Advance to the next mathematical wire coordinate. -/
 noncomputable def wireSuccessor (wires : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -74,42 +61,11 @@ theorem wireAffine_value (wires base : MvPolynomial Parameter ℕ) (stride : ℕ
 
 theorem wireAffine_realizable (wires base : MvPolynomial Parameter ℕ) (stride : ℕ) :
     (wireAffine wires base stride).Realizable := by
-  induction stride with
-  | zero =>
-    have constant := (positionPolynomial_realizable base wires).onResults
-      (wireAffine wires base 0).inputDomains (wireAffine wires base 0).precondition
-      (fun empty => nomatch empty) (by
-        intro sizes arguments
-        change MvPolynomial.eval sizes base < MvPolynomial.eval sizes wires
-        simpa only [wireAffine, unaryMap, Nat.zero_mul, Nat.add_zero] using arguments.property)
-      (fun empty => nomatch empty)
-    exact constant.withSpecification _ _ (by intros; assumption) (by intros; apply Fin.ext; simp [onResults, positionPolynomial, wireAffine, unaryMap])
-  | succ stride induction =>
-    let computation := wireAffine wires base (stride + 1)
-    let previous := (wireAffine wires base stride).withPrecondition computation.precondition (by
-      intro sizes arguments fits
-      change MvPolynomial.eval sizes base + stride * (arguments ()).val < MvPolynomial.eval sizes wires
-      have bound : MvPolynomial.eval sizes base + (stride + 1) * (arguments ()).val <
-          MvPolynomial.eval sizes wires := fits
-      rw [Nat.succ_mul] at bound
-      omega)
-    have previousReady : previous.Realizable := induction.withPrecondition _ _
-    have added := (wireAdd_realizable wires).onResults computation.inputDomains computation.precondition
-      (fun choice sizes arguments => if choice then arguments.val () else previous.compute sizes arguments) (by
-        intro sizes arguments
-        change MvPolynomial.eval sizes base + stride * (arguments.val ()).val + (arguments.val ()).val <
-          MvPolynomial.eval sizes wires
-        have bound : MvPolynomial.eval sizes base + (stride + 1) * (arguments.val ()).val <
-            MvPolynomial.eval sizes wires := arguments.property
-        rwa [Nat.succ_mul, ← Nat.add_assoc] at bound) (by
-        intro choice
-        cases choice
-        · exact previousReady
-        · exact Realizable.argument computation.inputDomains () computation.precondition)
-    exact added.withSpecification computation.precondition computation.compute (by intros; assumption) (by
-      intros
-      apply Fin.ext
-      simp [computation, onResults, wireAdd, previous, withPrecondition, wireAffine, unaryMap, Nat.succ_mul, Nat.add_assoc])
+  have ready := polynomialPosition_realizable (fun _ : Unit => wires)
+    (MvPolynomial.rename Sum.inl base + MvPolynomial.C stride * MvPolynomial.X (Sum.inr ())) wires
+  exact ready.withSpecification (wireAffine wires base stride).precondition (wireAffine wires base stride).compute
+    (by intro sizes arguments fits; simpa [polynomialPosition, wireAffine, unaryMap, MvPolynomial.eval_rename, Function.comp_def] using fits)
+    (by intros; apply Fin.ext; simp [polynomialPosition, wireAffine, unaryMap, MvPolynomial.eval_rename, Function.comp_def])
 
 theorem wireSuccessor_realizable (wires : MvPolynomial Parameter ℕ) : (wireSuccessor wires).Realizable := by
   apply (wireAffine_realizable wires 1 1).withSpecification (wireSuccessor wires).precondition
@@ -138,23 +94,11 @@ noncomputable def wireMultiply (wires : MvPolynomial Parameter ℕ) : Computatio
   compute _ arguments := ⟨(arguments.val false).val * (arguments.val true).val, arguments.property⟩
 
 theorem wireMultiply_realizable (wires : MvPolynomial Parameter ℕ) : (wireMultiply wires).Realizable := by
-  let computation := wireMultiply wires
-  have raw := (naturalMultiplyAtWidths_realizable (wires + 1) (wires + 1)).reinterpretInputs computation.inputDomains
-    (fun name sizes coordinate => by
-      cases name <;> exact ⟨coordinate.val,
-        coordinate.isLt.trans_le (by simp only [ite_self, map_add, map_one]; exact (Nat.le_succ _).trans Nat.lt_two_pow_self.le)⟩)
-    (by intro name sizes; cases name <;> rfl)
-    (by intro name sizes coordinate; cases name <;> exact arrayPosition_binary_bits wires sizes coordinate _ rfl)
-    computation.precondition (by
-      intro sizes arguments fits
-      change (arguments false).val * (arguments true).val < 2 ^ MvPolynomial.eval sizes (wires + 1)
-      simp only [map_add, map_one]
-      exact fits.trans_le ((Nat.le_succ _).trans Nat.lt_two_pow_self.le))
-  exact raw.withEncodedOutput (arrayPosition wires) computation.compute (by intros; rfl) (by
-    intro sizes arguments
-    apply congrArg CallingConvention.tape
-    apply arrayPosition_binary_bits wires sizes
-    rfl)
+  have ready := polynomialPosition_realizable (fun _ : Bool => wires)
+    (MvPolynomial.X (Sum.inr false) * MvPolynomial.X (Sum.inr true)) wires
+  exact ready.withSpecification (wireMultiply wires).precondition (wireMultiply wires).compute
+    (by intro sizes arguments fits; simpa [polynomialPosition, wireMultiply] using fits)
+    (by intros; apply Fin.ext; simp [polynomialPosition, wireMultiply])
 
 /-- Subtract an earlier coordinate, with its ordinary mathematical ordering
 condition. This supplies predecessor offsets after the zero case is handled. -/
@@ -210,24 +154,10 @@ theorem wireCast_value (length wires : MvPolynomial Parameter ℕ) (sizes : Para
 
 theorem wireCast_realizable (length wires : MvPolynomial Parameter ℕ) :
     (wireCast length wires).Realizable := by
-  have extended := positionInteger_realizable length (wires + 1) ((length + 1) + (wires + 1)) rfl
-  have permitted := extended.withPrecondition (wireCast length wires).precondition (by intros; trivial)
-  have narrowed := permitted.followedBy
-    (integerNarrowAtWidths_realizable ((length + 1) + (wires + 1)) (wires + 1)
-      (by intro sizes; simp only [map_add]; omega)) rfl (by
-        intro sizes arguments allowed
-        change ((arguments ()).val : ℤ).natAbs < 2 ^ MvPolynomial.eval sizes (wires + 1)
-        simp only [Int.natAbs_natCast, map_add, map_one]
-        exact allowed.trans_le
-          ((Nat.le_succ _).trans Nat.lt_two_pow_self.le))
-  have magnitude := narrowed.followedBy (integerMagnitude_realizable (wires + 1)) rfl (by intros; trivial)
-  exact magnitude.withEncodedOutput (arrayPosition wires) (wireCast length wires).compute
-    (by intros; rfl) (by
-      intro sizes arguments
-      apply congrArg CallingConvention.tape
-      apply arrayPosition_binary_bits wires sizes
-      rfl)
-
+  have ready := polynomialPosition_realizable (fun _ : Unit => length) (MvPolynomial.X (Sum.inr ())) wires
+  exact ready.withSpecification (wireCast length wires).precondition (wireCast length wires).compute
+    (by intro sizes arguments fits; simpa [polynomialPosition, wireCast, unaryMap] using fits)
+    (by intros; apply Fin.ext; simp [polynomialPosition, wireCast, unaryMap])
 
 theorem wireOfPosition_realizable (length wires : MvPolynomial Parameter ℕ)
     (bounded : ∀ sizes, MvPolynomial.eval sizes length ≤ MvPolynomial.eval sizes wires) :
@@ -246,19 +176,10 @@ noncomputable def gateOutputWire (inputs count : MvPolynomial Parameter ℕ) : C
       omega⟩)
 
 theorem gateOutputWire_realizable (inputs count : MvPolynomial Parameter ℕ) : (gateOutputWire inputs count).Realizable := by
-  have widened := wireOfPosition_realizable count (inputs + count) (by intro sizes; simp only [map_add]; omega)
-  have added := widened.followedBy (wireAffine_realizable (inputs + count) inputs 1) rfl (by
-    intro sizes arguments accepted
-    change MvPolynomial.eval sizes inputs + 1 *
-      ((wireOfPosition count (inputs + count) (by intro assignment; simp only [map_add]; omega)).compute sizes
-        ⟨arguments, accepted⟩).val < _
-    rw [wireOfPosition_value]
-    have bounded : (arguments ()).val < MvPolynomial.eval sizes count := (arguments ()).isLt
-    simp only [one_mul, map_add]
-    omega)
-  apply added.withSpecification (fun _ _ => True) (gateOutputWire inputs count).compute (by intros; trivial)
-  intro sizes arguments accepted
-  apply Fin.ext
-  simp only [followedBy, wireAffine_value, wireOfPosition_value, one_mul, gateOutputWire, unaryMap]
+  have ready := polynomialPosition_realizable (fun _ : Unit => count)
+    (MvPolynomial.rename Sum.inl inputs + MvPolynomial.X (Sum.inr ())) (inputs + count)
+  exact ready.withSpecification (fun _ _ => True) (gateOutputWire inputs count).compute
+    (by intro sizes arguments _; simp [polynomialPosition, MvPolynomial.eval_rename, Function.comp_def])
+    (by intros; apply Fin.ext; simp [polynomialPosition, gateOutputWire, unaryMap, MvPolynomial.eval_rename, Function.comp_def])
 
 end Polytime2.Circuit

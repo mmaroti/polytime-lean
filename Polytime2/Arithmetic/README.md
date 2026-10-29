@@ -8,6 +8,7 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 
 | Need | Interface modules |
 | --- | --- |
+| Bounded natural polynomial evaluation | [NaturalPolynomial.lean][poly] |
 | Unsigned addition, subtraction, multiplication | [Operations.lean][unsigned] |
 | Unsigned quotient and remainder together | [DivisionOperations.lean][div] |
 | A remainder projection | [RemainderOperations.lean][rem] |
@@ -28,6 +29,7 @@ preconditions and result bounds live in their Lean declarations and docstrings.
 | Compare stored unary counts with polynomial sizes | [UnaryWidth.lean][unary] |
 | Read a unary count as a binary index | [UnaryToIndex.lean][unary-index] |
 
+[poly]: NaturalPolynomial.lean
 [total]: SignedQuotient.lean
 [cyclic]: CyclicCoordinate.lean
 [unsigned]: Operations.lean
@@ -81,6 +83,20 @@ Shift counts are mathematical size polynomials, not arbitrary binary-encoded
 runtime operands. Right shift uses floor division. Magnitude bit length returns
 a bounded mathematical natural. See each module's contract for width-zero and
 negative-input behavior.
+
+`polynomialPosition bounds expression limit` evaluates a fixed Mathlib
+`MvPolynomial (Parameter ⊕ Argument) ℕ`. Left variables read mathematical sizes;
+right variables read runtime coordinates in the supplied intervals. Its result
+is the exact natural value below `limit`. Only the final fit inequality is a
+precondition; intermediate widths are derived inside the realization.
+
+Use `MvPolynomial.rename Sum.inl` to embed an existing size polynomial.
+Simplify concrete formulas with the specialized `MvPolynomial.eval_add`,
+`eval_mul`, `eval_C`, and `eval_X` lemmas.
+[WitnessEndpoints.lean](../Complexity/WitnessEndpoints.lean) evaluates several
+formulas under one mathematical fit condition;
+[BlockBase.lean](../Complexity/CookLevin/BlockBase.lean) combines runtime
+coordinates with polynomial size values. Both retain their original codecs.
 
 ## Reuse and examples
 
