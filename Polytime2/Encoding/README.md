@@ -73,6 +73,13 @@ then transport realizability between mathematical domains.
 `substitute_comp` normalize successive parameter changes; `substitute_X`
 identifies variable substitution with direct renaming. Renaming also commutes
 with fixed codecs, products, records, named arrays, and optional codecs.
+[ConstructorSubstitution.lean](ConstructorSubstitution.lean) gives
+`prod_substitute`, `boundedIndex_substitute`, and `arrayOfLength_substitute`
+for exact polynomial specialization of whole codecs. The gadget compiler uses
+these equalities to match generated equations to the quotient compiler.
+`substitute_namedRecord_encode_bits` transports a whole named record through
+size substitution using fieldwise canonical bits; dense CSP assembly and its
+Three-SAT specialization share this lemma.
 For dependent values, use `renameParameters_comp_bits` or
 `encode_bits_cast_sizes` instead of rewriting their entire codec.
 

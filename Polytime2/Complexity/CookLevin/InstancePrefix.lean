@@ -19,14 +19,11 @@ namespace Polytime2.Complexity.CookLevin
 open EncodedDomain Polytime2.Computation
 
 private noncomputable def repeatedLetters (length : MvPolynomial Unit ℕ) (letter : Letter) : Computation Unit Empty :=
-  arrayTabulate Empty.elim letterDomain length (fun _ _ _ => letter)
+  arrayReplicate (fixed (Fintype.equivFin Letter)) length letter
 
 private theorem repeatedLetters_realizable (length : MvPolynomial Unit ℕ) (letter : Letter) :
-    (repeatedLetters length letter).Realizable := by
-  have value := (constant_realizable (fixed (Fintype.equivFin Letter)) (fun _ => letter)).withConstantSizes (Parameter := Unit)
-  apply arrayTabulate_realizable
-  exact value.onResults _ (fun _ _ => True) (fun empty => nomatch empty)
-    (by intros; trivial) (fun empty => nomatch empty)
+    (repeatedLetters length letter).Realizable :=
+  arrayReplicate_realizable (fixed (Fintype.equivFin Letter)) length letter
 
 private noncomputable def pairHeader : Computation Unit Empty :=
   (arrayAppend letterDomain (MvPolynomial.X ()) 1).onResults Empty.elim (fun _ _ => True)
@@ -46,7 +43,7 @@ private theorem pairHeader_correct (sizes : Unit → ℕ) (arguments : pairHeade
       List.replicate (sizes ()) (.inr 1) ++ [.inr 0] := by
   simp only [pairHeader, onResults]
   rw [arrayAppend_list]
-  simp [repeatedLetters, arrayTabulate, List.ofFn_const]
+  simp [repeatedLetters, arrayReplicate, arrayTabulate, List.ofFn_const]
 
 /-- The exact number of letters before the witness in the existing pair frame. -/
 noncomputable def instancePrefixLength : MvPolynomial Unit ℕ := (MvPolynomial.X () + 1) + MvPolynomial.X ()

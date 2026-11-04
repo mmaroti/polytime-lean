@@ -42,6 +42,17 @@ them. An admissible-input certificate alone does not supply a parser or justify
 a total word reduction. The size-to-length bridge uses existing unary headers
 and exact output widths, including zero sizes and empty parameter families.
 
+[NativeStream.lean](NativeStream.lean) constructs exact unary-header words as
+arrays of optional native letters, followed by an absent sentinel.
+[ComputedNativeStream.lean](ComputedNativeStream.lean) calls it at stored sizes
+and retains host capacity through existing zero padding.
+[CodedArrayOutput.lean](CodedArrayOutput.lean) exports these arrays to exact
+native words; its stream contract need only hold on the represented inputs.
+[BlockDecode.lean](BlockDecode.lean) certifies the standalone decoder, including
+raw preparation, simulation, extraction, and erasure of sentinel and padding.
+`PolynomialTime.encodedResult` retains a source as a mathematical index of its
+computed output encoding when composing such a decoder.
+
 [WordArrays.lean](WordArrays.lean) supplies `ready.onWordArrays` for total
 Boolean decisions on ordinary arrays of external letters. Use `letterDomain`
 for the fixed alphabet codec. The rule includes arbitrary raw-input

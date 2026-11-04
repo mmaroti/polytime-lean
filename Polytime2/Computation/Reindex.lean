@@ -235,6 +235,16 @@ theorem reinterpretOutput {computation : Computation.{carrierLevel} Parameter In
   exact ready.withEncodedOutput output _ sameWidth
     (fun sizes arguments => congrArg tape (sameBits sizes (computation.compute sizes arguments)))
 
+/-- Equal output codecs require only the equality's carrier transport.
+Use constructor equalities to specialize a certified producer for composition. -/
+theorem castOutput {computation : Computation.{carrierLevel} Parameter InputName}
+    (ready : computation.Realizable) (output : EncodedDomain.{0, carrierLevel} Parameter)
+    (same : computation.outputDomain = output) :
+    (computation.reinterpretOutput output
+      (fun sizes value => cast (congrArg (fun domain => domain.Carrier sizes) same) value)).Realizable := by
+  cases same
+  exact ready
+
 /-- Reuse the canonical codec when the output carrier is given by an equivalence. -/
 theorem reindexOutput {computation : Computation.{carrierLevel} Parameter InputName}
     (ready : computation.Realizable)

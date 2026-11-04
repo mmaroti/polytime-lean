@@ -1,8 +1,8 @@
 # Fixed-template CSP hardness from absence of a Taylor polymorphism
 
-Status: steps 1--10 implemented; see the [CSP guide](../CSP/README.md),
+Status: steps 1--14 implemented; see the [CSP guide](../CSP/README.md),
 [complexity guide](../Complexity/README.md), and [Cook-Levin guide][cook-levin].
-Steps 11--15 remain.
+Step 15 remains.
 [Task index](../README.md#proposed-next-tasks).
 
 ## Statement and hypothesis correction
@@ -174,32 +174,114 @@ interfaces can be kept small.
     compactness of finite coordinate choices, and preservation of substitution;
     nullary symbols are excluded by idempotence in the non-Taylor case.
 
-11. **Obtain a finite projection witness.** Starting from milestone 10's
-    projection model, prove the finite Birkhoff steps needed to obtain it as a
-    homomorphic image of a subalgebra of a finite power. Cover the possibly
-    infinite operation signature of all polymorphisms. Use classical choice
-    only to select data fixed by R, never an instance-dependent computation.
+11. **Obtain a finite projection witness (implemented).** Starting from
+    milestone 10's projection model, prove the finite Birkhoff steps needed to
+    obtain it as a homomorphic image of a subalgebra of a finite power. Cover
+    the possibly infinite operation signature of all polymorphisms. Use
+    classical choice only to select data fixed by R, never an instance-dependent
+    computation.
 
-12. **Extract finitely many gadgets over R.** Transfer the Boolean clause
-    relations through the witness from milestone 11. Use milestone 9 to
-    replace the resulting invariant relations by fixed pp-formulas in R's
-    actual finite signature. Prove the Boolean-domain representation and
-    clause contracts, including quotient representatives and equality.
-    Output a finite gadget family independent of the input formula.
+    [FiniteBirkhoff.lean](../CSP/FiniteBirkhoff.lean) constructs the finite
+    single-source Birkhoff witness, with power dimension `|A| ^ |B|`. It uses
+    term tables and identity satisfaction and requires no signature finiteness.
+    [ProjectionWitness.lean](../CSP/ProjectionWitness.lean) supplies
+    `exists_finite_projection_witness_of_noTaylorPolymorphism`: a projection
+    interpretation on `Bool`, a substructure of the `|R|²`-fold power of the
+    full polymorphism algebra, and a surjective Mathlib homomorphism. The
+    choices depend only on the fixed template; compactness was proved in
+    milestone 10.
 
-13. **Prove mathematical gadget expansion correct.** Replace each clause by
-    its fixed gadget, allocating fresh auxiliary variables. Prove that an
-    assignment extends to a target homomorphism iff it satisfies the source
-    formula. Bound variable and constraint counts. This module must not
-    import machines, codecs, runtime bounds, or realization infrastructure.
+12. **Extract finitely many gadgets over R (implemented).** Transfer the Boolean
+    clause relations through the witness from milestone 11. Use milestone 9 to
+    replace the resulting invariant relations by fixed pp-formulas in R's actual
+    finite signature. Prove the Boolean-domain representation and clause
+    contracts, including quotient representatives and equality. Output a finite
+    gadget family independent of the input formula.
+
+    [QuotientRelation.lean](../CSP/QuotientRelation.lean) proves preservation
+    and pp-definability of lifted Boolean relations, with exact representation
+    contracts. [BooleanGadgets.lean](../CSP/BooleanGadgets.lean) supplies
+    `exists_boolean_gadgets_of_noTaylorPolymorphism`: the domain, equality,
+    and eight clause formulas over the original language, together with a
+    quotient section. `IsBooleanGadgetFamily` states correctness on arbitrary
+    blocks; its representative theorems identify equality and the existing
+    Three-SAT clause relations. All data is fixed by the template.
+
+13. **Prove mathematical gadget expansion correct (implemented).** Replace each
+    clause by its fixed gadget, allocating fresh auxiliary variables. Prove that
+    an assignment extends to a target homomorphism iff it satisfies the source
+    formula. Bound variable and constraint counts. This module must not import
+    machines, codecs, runtime bounds, or realization infrastructure.
+
+    [CanonicalGadget.lean](../CSP/CanonicalGadget.lean) realizes the fixed pp
+    definitions as relational-power gadgets; [GadgetGluing.lean][gluing]
+    combines fresh copies by boundary identification.
+    [GadgetExpansion.lean](../CSP/GadgetExpansion.lean) proves the assignment
+    extension and satisfiability equivalences, including repeated scopes and
+    empty formulas. [GadgetExpansionBounds.lean][expansion-bounds] supplies
+    uniform linear bounds on variables and distinct asserted constraints and
+    `exists_bounded_expansion_of_noTaylorPolymorphism`. The target carrier is
+    the mathematical quotient of the fresh variable sets; these modules have
+    no codec, machine, or realization imports.
 
 14. **Certify a generic fixed-gadget compiler.** Attach canonical encodings
     and a `Computation` specification to milestone 13. Certify renaming,
     allocation, and constraint insertion through existing array, traversal,
-    and composition rules. Output the dense relational tables specified in
+    and composition rules. Implement boundary identification and numbering of
+    quotient variables. Output the dense relational tables specified in
     EXAMPLES.md; fixed arities make their widths polynomial. Prove bounds
     relative to source input length, including unary size headers, and export
     a standalone TM0 realization. Keep tape arguments in foundational rules.
+
+    Implemented; the standalone native export is
+    `gadgetCompilerInstance_polynomialTime` in
+    [GadgetExport.lean](../CSP/GadgetExport.lean).
+    `Arrays/QuotientNumbering.lean` certifies equation-class labels and packs
+    exactly one representative per class. `CSP/QuotientProgram.lean` certifies
+    canonical dense relation images at a supplied class count and proves their
+    satisfiability contract. `CSP/QuotientCompiler.lean` connects label and
+    representative preparation to dense output at the actual class count;
+    `CSP/QuotientExport.lean` exports this component with serialized-input
+    bounds. `quotientCompiler_satisfiable_iff` connects its computed output to
+    the mathematical solution contract. `CSP/GadgetExpansionAllocation.lean`
+    proves that a uniform pool and collapse equations give exactly the
+    original variable quotient, with a linear raw allocation size.
+    `CSP/GadgetRawInstance.lean` now certifies canonical dense raw tables,
+    with exactly the placed domain and clause relations. Its address programs
+    reuse the polynomial evaluator; fact insertion uses shared array and
+    table materialization rules. `allocatedEquations_respects_iff` reduces
+    the mathematical equation contract to pool projections and boundary
+    endpoints. `CSP/GadgetEquationArrays.lean` certifies the complete equation
+    array at a fixed multiple of the raw allocation size and proves its exact
+    assignment contract. `CSP/GadgetCompiler.lean` composes both generators
+    with quotient compilation and proves that its solutions are exactly
+    assignments preserving the raw relations and equations. The mathematical
+    `allocated_satisfiable_iff_assignments` gives the matching universal
+    property of the original allocated quotient. `CSP/GadgetSourceLayout.lean`
+    connects the clause-array and list layouts, including scopes and equation
+    assignments. `CSP/GadgetCompilerCorrect.lean` proves the complete Boolean
+    satisfiability correspondence through that mathematical quotient.
+    `CSP/GadgetCompilerCardinality.lean` proves that the computed class count
+    is exactly the mathematical expansion cardinality.
+    `CSP/GadgetWordBounds.lean` exposes the ordinary sized-instance result and
+    bounds its native word by a polynomial in the complete serialized source,
+    including unary headers. `CSP/GadgetWordCompiler.lean` reuses the original
+    argument preparation with `CSP/QuotientWordCompiler.lean`, producing the
+    exact native instance word through the shared coded-stream export.
+    `TM0/TrackOutput.lean` now shares one nonblank-symbol extraction proof
+    between native symbols and the existing binary formatter.
+    `TM0/BlockDecoder.lean` certifies fixed-block decoding to native symbols,
+    stopping at a rejected sentinel, with output-head restoration and a
+    linear time bound. `TM0/NativeTrackOutput.lean` extracts the native tape
+    from simulator rows. `Complexity/BlockDecode.lean` composes the standalone
+    decoder with raw preparation, simulation, and extraction under one
+    word-length polynomial. `Complexity/NativeStream.lean` certifies the exact
+    header, canonical payload, and absent sentinel. The computed-size variant
+    retains capacity through `Arrays/ComputedPadding.lean`, interpreting
+    existing zero padding as absent letters. `codedArray_polynomialTime`
+    exports the resulting array to the exact mathematical instance word.
+    Its finite TM0 witness bounds execution and output length in the complete
+    serialized source. No internal frame or capacity padding survives.
 
 15. **Assemble and audit NP-completeness.** Compose milestones 7 and 14 for
     hardness, and use milestone 5 for membership. Export the theorem with
@@ -252,3 +334,6 @@ Lean lines added and removed for every completed milestone.
 [fixed-formulas]: ../Complexity/CookLevin/FixedFormulaProgram.lean
 [fixed-instances]: ../Complexity/CookLevin/FixedInstanceProgram.lean
 [reduction]: ../Complexity/CookLevin/Reduction.lean
+
+[gluing]: ../CSP/GadgetGluing.lean
+[expansion-bounds]: ../CSP/GadgetExpansionBounds.lean

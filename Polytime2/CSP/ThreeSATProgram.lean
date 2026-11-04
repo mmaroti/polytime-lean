@@ -115,31 +115,6 @@ private theorem tableProgram_realizable (wires count : MvPolynomial Parameter �
   funext position
   fin_cases position <;> rfl
 
-private theorem instanceTables_bits (wires : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
-    (tables : ∀ symbol : RelationSymbol language,
-      (Fin symbol.1 → Fin (MvPolynomial.eval sizes wires)) → Bool) :
-    ArrayEncoding.bits (((instanceDomain language).substitute (fun _ => wires)).encode sizes
-      ((instanceTablesEquiv language (MvPolynomial.eval sizes wires)).symm tables)) =
-    ArrayEncoding.bits ((namedRecord (fun symbol : RelationSymbol language =>
-      (scopeDomain symbol.1).substitute (fun _ => wires))).encode sizes tables) := by
-  rw [substitute_encode_bits]
-  change ArrayEncoding.bits ((namedRecord (fun symbol : RelationSymbol language => scopeDomain symbol.1)).encode
-    (SizeSubstitution.assignment (fun _ => wires) sizes)
-    ((instanceTablesEquiv language (MvPolynomial.eval sizes wires))
-      ((instanceTablesEquiv language (MvPolynomial.eval sizes wires)).symm tables))) = _
-  rw [Equiv.apply_symm_apply]
-  change ArrayEncoding.bits ((record (Fintype.card (RelationSymbol language))
-    (fun index => scopeDomain ((Fintype.equivFin (RelationSymbol language)).symm index).1)).encode
-    (SizeSubstitution.assignment (fun _ => wires) sizes)
-    (fun index => tables ((Fintype.equivFin (RelationSymbol language)).symm index))) =
-    ArrayEncoding.bits ((record (Fintype.card (RelationSymbol language))
-    (fun index => (scopeDomain ((Fintype.equivFin (RelationSymbol language)).symm index).1).substitute
-      (fun _ => wires))).encode sizes
-    (fun index => tables ((Fintype.equivFin (RelationSymbol language)).symm index)))
-  apply record_encode_bits_congr
-  intro index
-  exact (substitute_encode_bits _ _ _ _).symm
-
 /-- Convert the clause array to the existing dense relational instance on
 exactly its finite variable set. No assumptions on clauses are required. -/
 noncomputable def instanceProgram (wires count : MvPolynomial Parameter ℕ) : Computation Parameter Unit :=
@@ -172,10 +147,10 @@ theorem instanceProgram_realizable (wires count : MvPolynomial Parameter ℕ) :
     (fun sizes tables => (instanceTablesEquiv language (MvPolynomial.eval sizes wires)).symm tables)
     (by
       intro sizes
-      have lengths := congrArg List.length (instanceTables_bits wires sizes (fun _ _ => false))
+      have lengths := congrArg List.length (instanceDomain_substitute_bits language wires sizes (fun _ _ => false))
       simp only [ArrayEncoding.bits, List.length_ofFn] at lengths
       exact lengths)
-    (instanceTables_bits wires)
+    (instanceDomain_substitute_bits language wires)
   apply converted.withSpecification (fun _ _ => True) (instanceProgram wires count).compute
     (by intros; trivial)
   intro sizes arguments valid

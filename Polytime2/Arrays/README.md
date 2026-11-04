@@ -29,6 +29,7 @@ whose element widths depend on runtime sizes. Start with
 | Share selected positions across related fields | [PackingResult.lean][pos] |
 | Call a consumer at the retained length | [PackingCall.lean][call] |
 | Read a stored packed array at its exact size | [PackingRead.lean][read] |
+| Pad a computed array with zero-coded fillers | [ComputedPadding.lean][pad] |
 
 [cyclic]: CyclicCoordinates.lean
 [access]: Operations.lean
@@ -42,6 +43,13 @@ whose element widths depend on runtime sizes. Start with
 [pos]: PackingResult.lean
 [call]: PackingCall.lean
 [read]: PackingRead.lean
+[pad]: ComputedPadding.lean
+
+`arrayReplicate` in [Tabulate.lean](Tabulate.lean) repeats a fixed encoded value
+at a polynomial length. [ComputedPadding.lean][pad] retains a computed-length
+array at its polynomial host capacity when a fixed filler encodes as zero.
+It interprets the frame's existing padding and discards its count header.
+[PadValues.lean](PadValues.lean) supplies the mathematical list and map laws.
 
 ## Access and traversal
 
@@ -217,3 +225,12 @@ certificates.
 [instance reader]: ../CSP/ReadInstance.lean
 
 [polynomial]: ../Arithmetic/NaturalPolynomial.lean
+
+[QuotientLabels.lean](QuotientLabels.lean) computes equivalence-class labels
+from an array of vertex equations using certified folds and value replacement.
+[QuotientNumbering.lean](QuotientNumbering.lean) packs their fixed points;
+`quotientRepresentatives_count` proves that the retained count equals the
+actual quotient cardinality. Its mathematical numbering equivalence and
+[QuotientLabelsMath.lean](QuotientLabelsMath.lean) expose the quotient contract
+without tape arguments. Dense relation images use these representatives in
+the [CSP compiler](../CSP/QuotientProgram.lean).

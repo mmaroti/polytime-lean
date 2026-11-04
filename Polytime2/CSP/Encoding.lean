@@ -1,5 +1,6 @@
 import Polytime2.CSP.Instance
 import Polytime2.Encoding.Records
+import Polytime2.Encoding.SizeSubstitution
 import Polytime2.Encoding.BinaryEncoding
 
 /-! # Canonical dense relational instances and assignments
@@ -139,6 +140,32 @@ theorem instanceDomain_decode_total (sizes : Unit → ℕ)
     ∃ input, (instanceDomain L).decode sizes bits = some input :=
   ((instanceDomain L).encode_surjective_iff_decode_total sizes).mp
     (instanceDomain_encode_surjective L sizes) bits
+
+section Substitution
+
+variable {Parameter : Type} [Fintype Parameter]
+
+set_option backward.isDefEq.respectTransparency false in
+/-- Scope-table fields assemble the existing dense-instance codec with exactly
+the same bits after polynomial size substitution. -/
+theorem instanceDomain_substitute_bits (vertices : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (tables : ∀ symbol : RelationSymbol L,
+      (Fin symbol.1 → Fin (MvPolynomial.eval sizes vertices)) → Bool) :
+    ArrayEncoding.bits (((instanceDomain L).substitute (fun _ => vertices)).encode sizes
+      ((instanceTablesEquiv L (MvPolynomial.eval sizes vertices)).symm tables)) =
+      ArrayEncoding.bits ((namedRecord (fun symbol : RelationSymbol L =>
+        (scopeDomain symbol.1).substitute (fun _ => vertices))).encode sizes tables) := by
+  simp only [substitute_encode_bits]
+  change ArrayEncoding.bits ((namedRecord (fun symbol : RelationSymbol L => scopeDomain symbol.1)).encode
+    (SizeSubstitution.assignment (fun _ => vertices) sizes)
+    ((instanceTablesEquiv L (MvPolynomial.eval sizes vertices))
+      ((instanceTablesEquiv L (MvPolynomial.eval sizes vertices)).symm tables))) = _
+  rw [Equiv.apply_symm_apply]
+  simpa only [substitute_encode_bits] using
+    (substitute_namedRecord_encode_bits (fun symbol : RelationSymbol L => scopeDomain symbol.1)
+      (fun _ => vertices) sizes tables).symm
+
+end Substitution
 
 /-- Assignment values are ordinary carrier elements with the existing finite
 codec. Invalid element codes are rejected by the array decoder. -/

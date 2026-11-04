@@ -59,11 +59,21 @@ Lower-level `CallingConvention.Realizes.tm0` retains simulator track frames;
 storage. `tm0_delimited` adds ordinary input preparation. Application proofs
 should use the computation-level export rather than prepare tracks themselves.
 
-`TrackOutput.Stateful` formats bits with finite controller memory during the
-existing extraction pass. Binary extraction specializes it with unit memory;
-both share the same linear bound, frame erasure, and head restoration proof.
+`TrackOutput.Symbolic` extracts any contiguous word of nonblank source symbols
+with finite formatter memory. `TrackOutput.Stateful` specializes this to binary
+symbols, and stateless binary extraction uses unit memory. All share the same
+linear bound, frame erasure, and head-restoration proof. Symbol-level extraction
+supports the decoded native letters needed by variable-length word output.
 The [word export rules](../Complexity/WordArrays.lean) keep that controller and
 the simulator representation out of application proofs.
+[BlockDecoder.lean](BlockDecoder.lean) reuses the fixed-width reader and head
+movement to decode accepted blocks into actual native symbols until a rejected
+sentinel. Its whole-stream trace includes a linear input-length bound and
+output-head restoration. [NativeTrackOutput.lean](NativeTrackOutput.lean)
+extracts that native tape from simulator rows with the shared erasure bound.
+[Complexity/BlockDecode.lean](../Complexity/BlockDecode.lean) composes the
+standalone decoder. The [coded-stream rules](../Complexity/README.md) connect
+computed results to exact native words without exposing simulator storage.
 
 Sweeps, selected head-marker moves, interval extension, and action dispatch
 are certified separately in their source modules. Their markers, padding, and

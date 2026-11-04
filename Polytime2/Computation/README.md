@@ -149,6 +149,8 @@ Use `reindexDomains` for equivalences on inputs and output, or `reindexOutput`
 when the target output codec is constructed by reindexing. Matching widths are
 separate obligations, including when a carrier is empty. These rules change
 mathematical meaning without requiring a new calling convention.
+`ready.castOutput` specializes `reinterpretOutput` when a constructor equality
+already identifies the codecs; it supplies the carrier transport internally.
 
 [FullCodec.lean](FullCodec.lean) provides `decodeFullCodec` when every
 exact-width bit pattern is valid, proved by surjectivity of the canonical

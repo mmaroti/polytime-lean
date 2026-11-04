@@ -17,6 +17,9 @@ limitations under the License.
 
 import Polytime2.Arrays.Indices
 import Polytime2.Arrays.Transform
+import Polytime2.Primitives.ConstantOperations
+import Polytime2.Computation.Constant
+import Polytime2.Computation.RecordArguments
 
 /-! # Tabulating arrays from certified mathematical functions
 
@@ -52,5 +55,23 @@ theorem arrayTabulate_realizable (context : Context → EncodedDomain.{0, 0} Par
   have transformed := arrayTransform_realizable context (EncodedDomain.arrayPosition length) target
     length operation step
   exact positions.letThen transformed (by intros; rfl) rfl (by intros; trivial)
+
+
+/-- Repeat a specialization-fixed value at a polynomial array length. -/
+noncomputable def arrayReplicate (element : EncodedDomain Empty)
+    (length : MvPolynomial Parameter ℕ) (value : element.Carrier Empty.elim) :
+    Computation Parameter Empty :=
+  arrayTabulate Empty.elim element.constant length (fun _ _ _ => value)
+
+theorem arrayReplicate_realizable (element : EncodedDomain Empty)
+    (length : MvPolynomial Parameter ℕ) (value : element.Carrier Empty.elim) :
+    (arrayReplicate element length value).Realizable := by
+  have scalar := (constant_realizable element (fun sizes => by
+    cases Subsingleton.elim sizes Empty.elim
+    exact value)).withConstantSizes
+    (Parameter := Parameter)
+  apply arrayTabulate_realizable
+  exact scalar.onResults _ (fun _ _ => True) (fun empty => nomatch empty)
+    (by intros; trivial) (fun empty => nomatch empty)
 
 end Polytime2.Computation

@@ -193,4 +193,23 @@ theorem substitute_prod_encode_bits
     (substitute_encode_bits left substitution sizes value.1)
     (substitute_encode_bits right substitution sizes value.2)
 
+/-- Exact size substitution commutes with every field of a named record,
+including records with no fields. -/
+theorem substitute_namedRecord_encode_bits {IndexName : Type} [Fintype IndexName]
+    (fields : IndexName → EncodedDomain.{0, carrierLevel} NewParameter)
+    (substitution : NewParameter → MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (values : ∀ name, (fields name).Carrier (SizeSubstitution.assignment substitution sizes)) :
+    ArrayEncoding.bits ((namedRecord (fun name => (fields name).substitute substitution)).encode sizes values) =
+      ArrayEncoding.bits (((namedRecord fields).substitute substitution).encode sizes values) := by
+  rw [substitute_encode_bits]
+  change ArrayEncoding.bits ((record (Fintype.card IndexName)
+    (fun index => (fields ((Fintype.equivFin IndexName).symm index)).substitute substitution)).encode sizes
+      (fun index => values ((Fintype.equivFin IndexName).symm index))) =
+    ArrayEncoding.bits ((record (Fintype.card IndexName)
+      (fun index => fields ((Fintype.equivFin IndexName).symm index))).encode
+        (SizeSubstitution.assignment substitution sizes) (fun index => values ((Fintype.equivFin IndexName).symm index)))
+  apply record_encode_bits_congr
+  intro index
+  exact substitute_encode_bits _ _ _ _
+
 end Polytime2.EncodedDomain

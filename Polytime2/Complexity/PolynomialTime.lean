@@ -106,6 +106,31 @@ theorem PolynomialTime.id {Source : Type*} (encode : Source → Word) : Polynomi
   · intro value
     exact ⟨⟨0, (), by simp, rfl, rfl⟩, by simp⟩
 
+/-- Restrict a certificate along a mathematical input map, without executing
+that map: its encoded value is already the machine's input. -/
+theorem PolynomialTime.precomp {Source Target NewSource : Type*}
+    {encodeSource : Source → Word} {encodeTarget : Target → Word}
+    {function : Source → Target}
+    (ready : PolynomialTime encodeSource encodeTarget function)
+    (map : NewSource → Source) :
+    PolynomialTime (encodeSource ∘ map) encodeTarget (function ∘ map) := by
+  obtain ⟨Symbol, symbols, symbolInhabited, State, states, stateInhabited,
+    letters, machine, entry, bound, nonblank, execute⟩ := ready
+  exact ⟨Symbol, symbols, symbolInhabited, State, states, stateInhabited,
+    letters, machine, entry, bound, nonblank, fun value => execute (map value)⟩
+
+/-- Retain the source as a mathematical index for its encoded computed result.
+This executes the original function; the resulting word is unchanged. -/
+theorem PolynomialTime.encodedResult {Source Target : Type*}
+    {encodeSource : Source → Word} {encodeTarget : Target → Word}
+    {function : Source → Target}
+    (ready : PolynomialTime encodeSource encodeTarget function) :
+    PolynomialTime encodeSource (encodeTarget ∘ function) _root_.id := by
+  obtain ⟨Symbol, symbols, symbolInhabited, State, states, stateInhabited,
+    letters, machine, entry, bound, nonblank, execute⟩ := ready
+  exact ⟨Symbol, symbols, symbolInhabited, State, states, stateInhabited,
+    letters, machine, entry, bound, nonblank, execute⟩
+
 /-- Composition uses the existing exact TM0 transport and handover rules.
 The product alphabet identifies the common external letters without changing
 either machine's work symbols or transition count. -/

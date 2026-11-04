@@ -79,6 +79,18 @@ theorem Instance.satisfiable_iff_exists_assignment
   let _ : L.Structure (Fin variableCount) := input
   exact CSP.satisfiable_iff_exists_assignment L (Fin variableCount) Carrier
 
+omit [L.IsRelational] in
+/-- Transport along equal finite variable counts changes neither the instance
+nor its solutions. -/
+theorem Instance.satisfiable_heq {firstCount secondCount : ℕ}
+    (sameCount : firstCount = secondCount) {first : Instance L firstCount}
+    {second : Instance L secondCount} (sameInstance : HEq first second)
+    (Carrier : Type carrierLevel) [L.Structure Carrier] :
+    Instance.Satisfiable L first Carrier ↔ Instance.Satisfiable L second Carrier := by
+  cases sameCount
+  cases sameInstance
+  rfl
+
 /-- With no variables, the unique empty assignment is a solution precisely
 when every asserted nullary relation holds in the template. This also applies
 to empty templates and requires no artificial inhabitant for the assignment. -/

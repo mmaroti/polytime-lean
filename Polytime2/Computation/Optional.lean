@@ -54,6 +54,22 @@ private noncomputable def optionalEquiv (domain : EncodedDomain.{0, 0} Parameter
 noncomputable def optional (domain : EncodedDomain.{0, 0} Parameter) : EncodedDomain Parameter :=
   (variant 2 (alternatives domain)).reindex (fun sizes => Option (domain.Carrier sizes)) (optionalEquiv domain)
 
+/-- The absent value is precisely an all-zero canonical block. -/
+theorem optional_none_bits (domain : EncodedDomain.{0, 0} Parameter)
+    (sizes : Parameter → ℕ) :
+    ArrayEncoding.bits ((optional domain).encode sizes none) =
+      List.replicate ((optional domain).width sizes) false := by
+  apply List.eq_replicate_iff.mpr
+  constructor
+  · simp [ArrayEncoding.bits]
+  · intro bit member
+    change bit ∈ ArrayEncoding.bits ((variant 2 (alternatives domain)).encode sizes
+      ⟨0, (0 : Fin 1)⟩) at member
+    rw [bits_variant_encode] at member
+    simp [alternatives, VariantEncoding.fields, List.ofFn_succ,
+      ArrayEncoding.bits, fixed, ofCodec] at member
+    rcases member with equal | ⟨_, equal⟩ <;> exact equal
+
 /-- Optional encodings preserve an element conversion with equal widths and
 identical canonical bits, including the inactive payload of none. -/
 theorem optional_encode_bits_congr {TargetParameter : Type} [Fintype TargetParameter]
