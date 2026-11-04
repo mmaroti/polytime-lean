@@ -2,8 +2,8 @@ import Mathlib.ModelTheory.Basic
 
 /-! # Mathematical contract for fixed-template CSP hardness
 
-The target theorem is the following, to be formalized after the complexity
-interface exists. Fix a relational language `L` with
+The theorem `language_npComplete_of_noTaylorPolymorphism` in `TaylorHardness`
+formalizes the following contract. Fix a relational language `L` with
 `Finite (Σ arity, L.Relations arity)` and a nonempty finite carrier `Carrier`
 with an `L.Structure`. If `IsRigidCore L Carrier` and
 `¬ HasTaylorPolymorphism L Carrier`, then the language of finite structures
@@ -20,7 +20,7 @@ asserting a nullary symbol false in the template is unsatisfiable, even with no
 variables. An empty instance has its unique empty assignment precisely when
 all its asserted nullary relations hold in the template.
 
-The future encoding uses the dense tables specified in `EXAMPLES.md`, including
+The encoding uses the dense tables specified in `EXAMPLES.md`, including
 one bit per nullary symbol (`variableCount ^ 0 = 1`). Total relation-symbol
 finiteness, not merely finiteness at each arity, gives a fixed maximum arity.
 The serialized input includes unary variable-count headers; complexity is
@@ -34,8 +34,9 @@ rigidity in place of the originally requested reflexivity.
 
 Mathematical source: Zarathustra Brady, *Notes on CSPs and Polymorphisms*,
 sections 1.4 (cores and idempotent reducts) and 1.5 (Taylor algebras), especially
-Theorem 1.5.2 and Corollary 1.5.7. See `Polytime2/tasks/csp-taylor-hardness.md`
-for the TeX source and remaining proof obligations.
+Theorem 1.5.2 and Corollary 1.5.7. See the author's
+[TeX source](https://github.com/notzeb/all/blob/master/csp.tex) and the complete
+formal theorem in `Polytime2/CSP/TaylorHardness.lean`.
 -/
 
 namespace Polytime2.CSP

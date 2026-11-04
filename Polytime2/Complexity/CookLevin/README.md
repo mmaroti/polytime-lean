@@ -1,10 +1,10 @@
 # Bounded-machine circuit construction
 
-[Complexity guide](../README.md) · [Hardness task][task]
+[Complexity guide](../README.md) · [CSP guide](../../CSP/README.md)
 
-This implements steps 6 and 7 of the CSP hardness task: bounded simulation,
-certified uniform circuit construction, and the complete polynomial word
-reduction proving NP-completeness of relational three-SAT.
+These modules certify bounded simulation, uniform circuit construction, and
+the total polynomial word reduction proving NP-completeness of relational
+three-SAT.
 
 [VerifierCircuit.lean](VerifierCircuit.lean) exports `verifier_circuits`:
 every certified polynomial-time word verifier has a polynomial-size circuit
@@ -163,13 +163,16 @@ the dense binary output. [Reduction.lean](Reduction.lean) adds native instance
 word framing and exports `np_reduces_threeSAT`. The total translation covers
 every raw word and targets the existing strict CSP language.
 `CSP.ThreeSAT.language_npComplete` combines hardness with its NP verifier.
+[CSP/GadgetReduction.lean](../../CSP/GadgetReduction.lean) also composes the
+clause constructor directly with fixed Boolean pp gadgets. The resulting
+[Taylor hardness theorem](../../CSP/TaylorHardness.lean) reduces every NP
+language to the fixed template on all raw words.
 
 [DirectVerifier.lean](../DirectVerifier.lean) supplies `wordVerifier_realizable`
 through direct finite-array simulation, independently of this circuit
 construction. [FixedWitness.lean](../FixedWitness.lean) uses that bridge to
 certify the exact polynomial witness lengths used by the complete reduction.
 
-[task]: ../../tasks/csp-taylor-hardness.md
 [relocation]: ../../Circuit/TemplateRelocation.lean
 
 [fixed-inputs]: ../../SAT/FixedInputsProgram.lean

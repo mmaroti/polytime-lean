@@ -52,6 +52,8 @@ native words; its stream contract need only hold on the represented inputs.
 raw preparation, simulation, extraction, and erasure of sentinel and padding.
 `PolynomialTime.encodedResult` retains a source as a mathematical index of its
 computed output encoding when composing such a decoder.
+`codedArray_substitute_polynomialTime` keeps polynomial size substitution and
+its codec transport inside this export rule.
 
 [WordArrays.lean](WordArrays.lean) supplies `ready.onWordArrays` for total
 Boolean decisions on ordinary arrays of external letters. Use `letterDomain`
@@ -64,8 +66,10 @@ entry rule; application parsers need no physical track representation.
 Use `ready.onWordDecision` when the specification already gives the answer as
 a function of `List.ofFn letters`; this rule handles the length transport.
 `ready.onWordOutput` exports any encoded result as its canonical binary word;
-its width is polynomial in input length. The Boolean rules specialize this
-bridge. `ready.onWordFormattedOutput` supports a fixed finite-memory formatter.
+its width is polynomial in input length. `onWordResult` accepts the existing
+computation result function, avoiding caller-side Unit-size normalization.
+The Boolean rules specialize this bridge. `ready.onWordFormattedOutput`
+supports a fixed finite-memory formatter.
 [FramedOutput.lean](FramedOutput.lean) uses it for `onWordOutputWithHeader`,
 emitting a polynomial unary count, native separator, and canonical payload.
 [CSP/WordOutput.lean](../CSP/WordOutput.lean) specializes this to the existing
@@ -172,3 +176,8 @@ with exact membership through satisfiability.
 [Reduction.lean](CookLevin/Reduction.lean) proves `np_reduces_threeSAT`, the
 total polynomial many-one reduction to the existing dense Boolean CSP language.
 `CSP.ThreeSAT.language_npComplete` combines it with CSP membership in NP.
+
+[CSP/TaylorHardness.lean](../CSP/TaylorHardness.lean) composes the uniform
+clause constructor with fixed Boolean pp gadgets to prove NP-completeness for
+finite nonempty rigid cores without Taylor polymorphisms. Its reduction works
+on every source word and emits the target CSP's exact native instance word.

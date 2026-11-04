@@ -1,5 +1,6 @@
 import Polytime2.Encoding.EncodedArray
 import Polytime2.Encoding.ParameterRename
+import Polytime2.Encoding.SizeSubstitution
 import Polytime2.Complexity.Languages
 
 /-! # Canonical encoded fields as external words
@@ -21,6 +22,16 @@ variable {Parameter : Type} [Fintype Parameter]
 /-- External binary letters for one canonical field. -/
 noncomputable def word (domain : EncodedDomain Parameter) (sizes : Parameter → ℕ)
     (value : domain.Carrier sizes) : Word := (ArrayEncoding.bits (domain.encode sizes value)).map Sum.inl
+
+/-- Polynomial size substitution preserves the exact canonical native word. -/
+theorem substitute_word {NewParameter : Type} [Fintype NewParameter]
+    (domain : EncodedDomain NewParameter)
+    (substitution : NewParameter → MvPolynomial Parameter ℕ)
+    (sizes : Parameter → ℕ)
+    (value : domain.Carrier (SizeSubstitution.assignment substitution sizes)) :
+    (domain.substitute substitution).word sizes value =
+      domain.word (SizeSubstitution.assignment substitution sizes) value := by
+  exact congrArg (List.map Sum.inl) (substitute_encode_bits domain substitution sizes value)
 
 namespace Internal
 

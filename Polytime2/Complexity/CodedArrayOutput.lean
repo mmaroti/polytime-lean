@@ -71,4 +71,31 @@ theorem codedArray_polynomialTime {Parameter : Type} [Fintype Parameter]
   rw [sameEncoding] at decoder
   exact decoder
 
+
+/-- Polynomial size substitution preserves the coded stream's native export.
+The codec transport is shared by specialized compiler applications. -/
+theorem codedArray_substitute_polynomialTime
+    {Parameter HostParameter : Type} [Fintype Parameter] [Fintype HostParameter]
+    {Source : Type*} (capacity : MvPolynomial Parameter ℕ)
+    (substitution : Parameter → MvPolynomial HostParameter ℕ)
+    (sizes : Source → HostParameter → ℕ)
+    (values : ∀ source, ((codedLetterDomain.arrayOfLength capacity).substitute substitution).Carrier (sizes source))
+    (output : Source → Word)
+    (stream : ∀ source, ∃ padding : List (Option Letter),
+      List.ofFn (values source) = (output source).map some ++ none :: padding) :
+    PolynomialTime
+      (fun source => ((codedLetterDomain.arrayOfLength capacity).substitute substitution).word
+        (sizes source) (values source)) id output := by
+  have decoded := codedArray_polynomialTime capacity
+    (fun source => SizeSubstitution.assignment substitution (sizes source)) values output stream
+  have encoded : (fun source => (codedLetterDomain.arrayOfLength capacity).word
+      (SizeSubstitution.assignment substitution (sizes source)) (values source)) =
+      (fun source => ((codedLetterDomain.arrayOfLength capacity).substitute substitution).word
+        (sizes source) (values source)) := by
+    funext source
+    exact (substitute_word (codedLetterDomain.arrayOfLength capacity) substitution
+      (sizes source) (values source)).symm
+  rw [encoded] at decoded
+  exact decoded
+
 end Polytime2.Complexity

@@ -526,9 +526,9 @@ interface are in [CSP/Instance.lean](Polytime2/CSP/Instance.lean); see the
 [CSP guide](Polytime2/CSP/README.md) for current implementation status.
 Membership in NP is certified in
 [CSP/VerifierRealizable.lean](Polytime2/CSP/VerifierRealizable.lean).
-The [Taylor hardness task](Polytime2/tasks/csp-taylor-hardness.md) targets
-NP-completeness for rigid cores without Taylor polymorphisms, separately from
-the polynomial-time solver requirements below.
+[CSP/TaylorHardness.lean](Polytime2/CSP/TaylorHardness.lean) proves
+NP-completeness for finite nonempty rigid cores without Taylor polymorphisms,
+separately from the polynomial-time solver requirements below.
 
 CSP is a decision problem for a fixed finite relational structure R over a
 fixed finite carrier A. R includes finitely many named relation symbols, their

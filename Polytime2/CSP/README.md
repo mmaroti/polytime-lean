@@ -8,6 +8,16 @@ its total word verifier, including malformed-input rejection. Canonical
 assignment witnesses have linear length. Empty templates, empty instances,
 empty relations, and nullary constraints need no extra hypotheses.
 
+[TaylorHardness.lean](TaylorHardness.lean) proves
+`language_npComplete_of_noTaylorPolymorphism`: a finite nonempty rigid core
+without a Taylor polymorphism has an NP-complete CSP under total polynomial
+many-one word reductions. Its hypotheses contain no gadget or algorithm
+certificate. [GadgetReduction.lean](GadgetReduction.lean) composes a certified
+clause constructor with the fixed-gadget compiler on every raw input word.
+The hardness proof uses the Cook-Levin constructor directly; it needs no
+intermediate relational-instance parser. Target words use the existing strict
+decoder and native instance format.
+
 [Basic.lean](Basic.lean) states the fixed-template hardness contract and defines
 Taylor operations, relation-preserving polymorphisms, and rigid cores using
 Mathlib's first-order structures and homomorphisms. It also proves that
@@ -96,8 +106,8 @@ unused slots, and `allocatedQuotientEquiv` identifies the resulting variable
 quotient with the original expansion. `allocatedVariables_card` gives its
 linear raw size. [GadgetAllocation.lean](GadgetAllocation.lean) supplies the
 underlying retraction and quotient proofs. These modules are mathematical;
-constructing and certifying the raw relation tables and equation arrays
-remains open.
+their certified relation-table and equation-array consumers are described
+below.
 
 [QuotientProgram.lean](QuotientProgram.lean) certifies dense relation images
 from a raw instance, vertex labels, and output representatives. Its
@@ -246,10 +256,7 @@ with that stored-pair check and exports the all-word runtime certificate.
 `language_inNP` combines it with malformed-pair rejection and
 `wordVerifier_witnesses`.
 
-These are mathematical definitions and proofs. Generic polynomial reductions
-and NP definitions are in the [complexity guide](../Complexity/README.md).
-Solvers and the Taylor-hardness proof remain open.
-The [hardness task](../tasks/csp-taylor-hardness.md) records the remaining
-steps.
+Generic polynomial reductions and NP definitions are in the
+[complexity guide](../Complexity/README.md). CSP solvers remain open.
 The target problems and instance representation live in
 [EXAMPLES.md](../../EXAMPLES.md#further-application-fixed-template-csp).

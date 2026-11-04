@@ -3,6 +3,7 @@ import Polytime2.Computation.RecordArguments
 import Polytime2.Arrays.ZipWith
 import Polytime2.Arrays.Operations
 import Polytime2.Primitives.FiniteOperations
+import Polytime2.Encoding.Word
 
 /-! # Total word execution on ordinary letter arrays
 
@@ -121,6 +122,29 @@ theorem onWordArrays
       (fun word => operation word.length (fun index => word[index])) := by
   have raw := onWordOutput booleans operation ready
   simpa only [WordBits.boolean_bits, List.map_singleton, PolynomialTime, encodeBool, id_eq] using raw
+
+/-- Export a total computation whose output depends on the full size
+assignment. The only public input size is the original word length. -/
+theorem onWordResult (outputDomain : EncodedDomain Unit)
+    (compute : ∀ sizes : Unit → ℕ,
+      {_arguments : (Unit → Fin (sizes ()) → Letter) // True} → outputDomain.Carrier sizes)
+    (ready : (Computation.mk (fun _ : Unit => letterDomain.array ()) outputDomain
+      (fun _ _ => True) compute).Realizable) :
+    PolynomialTime id id (fun word => outputDomain.word (fun _ => word.length)
+      (compute (fun _ => word.length) ⟨fun _ index => word[index], trivial⟩)) := by
+  let operation (size : ℕ) (input : Fin size → Letter) :=
+    compute (fun _ => size) ⟨fun _ => input, trivial⟩
+  have normalized := ready.withSpecification (fun _ _ => True)
+    (fun sizes arguments => operation (sizes ()) (arguments.val ())) (by intros; trivial) (by
+      intro sizes arguments valid
+      obtain ⟨size, rfl⟩ : ∃ size, sizes = fun _ : Unit => size :=
+        ⟨sizes (), by funext name; cases name; rfl⟩
+      apply congrArg (compute (fun _ => size))
+      apply Subtype.ext
+      funext name
+      cases name
+      rfl)
+  exact onWordOutput outputDomain operation normalized
 
 /-- Export a total word decision specified on the ordinary list of letters.
 The polynomial-array and named-array codecs are transported here once, so

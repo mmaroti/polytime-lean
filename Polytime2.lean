@@ -40,6 +40,7 @@ import Polytime2.CSP.GadgetCompilerCorrect
 import Polytime2.CSP.GadgetCompilerCardinality
 import Polytime2.CSP.GadgetWordBounds
 import Polytime2.CSP.GadgetExport
+import Polytime2.CSP.TaylorHardness
 import Polytime2.CSP.QuotientProgram
 import Polytime2.CSP.QuotientExport
 import Polytime2.Arrays.QuotientNumbering

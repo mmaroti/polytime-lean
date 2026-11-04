@@ -100,7 +100,8 @@ interfaces continue to require exact polynomial widths.
 [Word.lean](Word.lean) presents canonical fields as external binary letters.
 Its decoder rejects nonbinary symbols, incorrect widths, and invalid codec
 values. Both round trips are proved; polynomial-time parsing remains a
-separate realization obligation.
+separate realization obligation. `substitute_word` transports canonical field
+words across polynomial size changes without changing their bits.
 
 `decodeBinaryWord` isolates strict binary-letter validation, and
 `decodeWord_eq_decodeBinaryWord` factors canonical field decoding through it.

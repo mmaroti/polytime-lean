@@ -82,8 +82,8 @@ theorem gadgetWordCompiler_polynomialTime (wires clauses : MvPolynomial Paramete
     funext input
     change _ = (ArrayEncoding.bits (((codedLetterDomain.arrayOfLength capacity).substitute substitution).encode
       input.1 (computation.compute input.1 input.2))).map Sum.inl
-    rw [substitute_encode_bits]
-    rfl
+    exact (substitute_word (codedLetterDomain.arrayOfLength capacity) substitution input.1
+      (computation.compute input.1 input.2)).symm
   rw [encoded] at decoded
   exact decoded.comp (gadgetWordCompiler_realizable domainFormula clauseFormulas enumeration wires clauses).polynomialTime.encodedResult
 
