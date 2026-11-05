@@ -14,12 +14,16 @@ specifications; polynomial-time realization is a separate obligation.
 | Finite types, equivalent carriers, subtypes | [EncodedDomain.lean][base] |
 | Words, bounded naturals, coordinates, signed integers | [binary], [integers] |
 | Arrays and row-major matrices | [EncodedArray.lean][arrays] |
+| Finite subsets of a coordinate interval | [FiniteSubsets.lean][subsets] |
+| Ordinary finite simple graphs | [Graph/Encoding.lean][graphs] |
 | Products, heterogeneous records, variants | [Records.lean](Records.lean) |
 | Ordinary mathematical sums | [Computation/Sums.lean][sums] |
 | An index with a dependent payload | [Dependent.lean](Dependent.lean) |
 | A count with an exact-length array | [BoundedArray.lean][bounded] |
 | Bounded cyclic/free coordinates and their modulus | [Cyclic.lean][cyclic] |
 
+[subsets]: FiniteSubsets.lean
+[graphs]: ../Graph/Encoding.lean
 [cyclic]: Cyclic.lean
 [base]: EncodedDomain.lean
 [binary]: BinaryEncoding.lean

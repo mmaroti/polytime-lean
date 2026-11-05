@@ -15,6 +15,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -/
 
+import Polytime2.Graph.ForwardClique
+import Polytime2.Graph.LiteralCompatibility
+import Polytime2.Graph.OccurrenceEdge
+import Polytime2.Graph.AdjacencyTables
+import Polytime2.Graph.LiteralEvaluation
+import Polytime2.Arrays.FiniteSubsets
+import Polytime2.Graph.WitnessSelection
+import Polytime2.Graph.ThreeSATClique
+import Polytime2.Graph.Encoding
+import Polytime2.Encoding.FiniteSubsets
+import Polytime2.Graph.Construction
+import Polytime2.Graph.ReverseClique
+import Polytime2.Graph.Reduction
+import Polytime2.Graph.Examples
 import Polytime2.Machine.Basic
 import Polytime2.CSP.Basic
 import Polytime2.CSP.Polymorphism

@@ -23,6 +23,7 @@ explain how to find and combine them.
 | Find a worked application | [Examples][examples] |
 | Prepare or consume an SMP instance | [SMP][smp] |
 | Use relational CSP mathematical contracts | [CSP][csp] |
+| Use finite graphs and clique reductions | [Graph](Graph/README.md) |
 | State polynomial reductions and NP contracts | [Complexity][complexity] |
 
 [comp]: Computation/README.md
@@ -61,11 +62,9 @@ development because theorem statements may still need to be adapted.
    unsatisfiability witness.
 6. [Edmonds–Karp maximum flow](tasks/maximum-flow.md): certify integral flows
    and minimum cuts with polynomial bit costs.
-7. [3-SAT to CLIQUE](tasks/3-sat-to-clique.md): certify a polynomial reduction
-   and both witness conversions.
-8. [Exact rational linear programming](tasks/linear-programming.md): a
+7. [Exact rational linear programming](tasks/linear-programming.md): a
    longer-term solver project requiring a full precision and bit-cost analysis.
-9. [Infrastructure next steps](tasks/NEXTSTEPS.md): finish the flexible
+8. [Infrastructure next steps](tasks/NEXTSTEPS.md): finish the flexible
     computed-size result rules identified by the CSP review.
 
 These are proposals, not completed features. Each task records its prerequisites

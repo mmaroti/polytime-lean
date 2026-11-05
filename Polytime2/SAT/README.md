@@ -9,8 +9,8 @@ convention and exact contracts are in the declaration docstrings.
 
 The library covers the empty conjunction, repeated literals, and changes to
 unused variables. The [relational interpretation](../CSP/ThreeSAT.lean) proves
-equivalence with the eight-relation Boolean CSP. Reuse these definitions for
-the planned [3-SAT-to-CLIQUE reduction](../tasks/3-sat-to-clique.md).
+equivalence with the eight-relation Boolean CSP. The certified
+[3-SAT-to-CLIQUE reduction](../Graph/README.md) reuses these definitions.
 `Formula.satisfiable_ofFn_rename` transports satisfiability of clause arrays
 along injective variable renamings. The canonical clause-array interface uses
 it to forget variable bounds.

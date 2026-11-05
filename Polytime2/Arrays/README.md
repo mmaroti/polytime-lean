@@ -51,6 +51,10 @@ array at its polynomial host capacity when a fixed filler encodes as zero.
 It interprets the frame's existing padding and discards its count header.
 [PadValues.lean](PadValues.lean) supplies the mathematical list and map laws.
 
+[FiniteSubsets.lean](FiniteSubsets.lean) supplies certified membership and
+construction from flags for ordinary finite subsets of an interval. These
+operations reuse the canonical Boolean-array codec and existing machines.
+
 ## Access and traversal
 
 Public lookup and update take coordinates in the mathematical index type.
@@ -120,6 +124,8 @@ arrays and zero-width elements.
 [FlattenRecords.lean](FlattenRecords.lean) supplies `recordToArray`,
 `arrayFlatten`, and `arrayFlattenRecords`. Their list contracts retain the
 complete row-major sequence, and their realizations preserve canonical bits.
+`arrayFlattenRecords_apply` reads a flattened value at its original row and
+column without unfolding the indexing equivalence.
 `arrayPositionReverse` certifies `Fin.rev` at the existing coordinate width;
 the disjunction observer uses it for reversed suffix blocks.
 

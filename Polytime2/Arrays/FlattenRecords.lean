@@ -101,6 +101,18 @@ theorem arrayFlattenRecords_realizable (element : EncodedDomain Parameter) (colu
       rw [bits_record_encode, ArrayEncoding.bits_encode]
     exact nested.trans (MatrixEncoding.bits_encode_nested (element.encode sizes) matrix)
 
+/-- Read a flattened record at its original row and column. -/
+theorem arrayFlattenRecords_apply (element : EncodedDomain Parameter) (columns : ℕ)
+    (rows : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
+    (matrix : Fin (MvPolynomial.eval sizes rows) → Fin columns → element.Carrier sizes)
+    (position : Fin (MvPolynomial.eval sizes rows) × Fin columns) :
+    (arrayFlattenRecords element columns rows).compute sizes ⟨fun _ => matrix, trivial⟩
+      ((finProdFinEquiv position).cast (by simp)) = matrix position.1 position.2 := by
+  change MatrixEncoding.flattenEquiv matrix
+    (((finProdFinEquiv position).cast _).cast _) = _
+  simp only [Fin.cast_cast, Fin.cast_eq_self, MatrixEncoding.flattenEquiv,
+    Equiv.coe_fn_mk, Equiv.symm_apply_apply]
+
 /-- Flattening preserves the complete row-major sequence of values. -/
 theorem arrayFlattenRecords_list (element : EncodedDomain Parameter) (columns : ℕ)
     (rows : MvPolynomial Parameter ℕ) (sizes : Parameter → ℕ)
